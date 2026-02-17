@@ -1,6 +1,5 @@
 """Tests for standardized error response utilities."""
 
-import pytest
 
 from shared.utils.error_responses import (
     ErrorCode,

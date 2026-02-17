@@ -20,6 +20,13 @@ AGENT_SERVICE_TOKEN = os.getenv(
 )
 AUTH_HEADERS = {"X-Service-Token": AGENT_SERVICE_TOKEN}
 
+
+@pytest.fixture(autouse=True)
+def setup_mock_agents(mock_unified_loader_env):
+    """Use the standard mock loader from conftest for all tests."""
+    yield
+
+
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
 
@@ -180,3 +187,47 @@ class TestErrorHandling:
         """Test 404 on invalid API path."""
         response = client.get("/api/invalid/path")
         assert response.status_code == 404
+
+
+class TestTracingHeaders:
+    """Test trace propagation through API."""
+
+    def test_trace_id_returned_on_health(self):
+        """Test that X-Trace-Id header is returned on health endpoint."""
+        response = client.get("/health")
+        assert response.status_code == 200
+        assert "X-Trace-Id" in response.headers
+
+    def test_trace_id_returned_on_api_request(self):
+        """Test that X-Trace-Id header is returned on API requests."""
+        response = client.get("/api/agents", headers=AUTH_HEADERS)
+        assert response.status_code == 200
+        assert "X-Trace-Id" in response.headers
+
+    def test_incoming_trace_id_preserved(self):
+        """Test that incoming X-Trace-Id is preserved in response."""
+        incoming_trace = "trace_agent_test_123"
+        headers = {**AUTH_HEADERS, "X-Trace-Id": incoming_trace}
+
+        response = client.get("/api/agents", headers=headers)
+
+        assert response.status_code == 200
+        assert response.headers.get("X-Trace-Id") == incoming_trace
+
+    def test_trace_id_on_error_response(self):
+        """Test that X-Trace-Id is returned even on error responses."""
+        response = client.get("/api/agents/nonexistent", headers=AUTH_HEADERS)
+
+        assert response.status_code == 404
+        assert "X-Trace-Id" in response.headers
+
+    def test_trace_id_on_validation_error(self):
+        """Test that X-Trace-Id is returned on validation errors."""
+        response = client.post(
+            "/api/agents/help/invoke",
+            json={"context": {}},  # Missing required query field
+            headers=AUTH_HEADERS,
+        )
+
+        assert response.status_code == 422
+        assert "X-Trace-Id" in response.headers

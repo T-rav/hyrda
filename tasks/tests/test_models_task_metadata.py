@@ -130,9 +130,38 @@ class TestToDict:
 
         result = metadata.to_dict()
 
-        expected_keys = ["job_id", "task_name", "created_at", "updated_at"]
+        expected_keys = [
+            "job_id",
+            "task_name",
+            "group_name",
+            "created_at",
+            "updated_at",
+        ]
         assert all(key in result for key in expected_keys)
-        assert len(result) == 4
+        assert len(result) == 5
+
+    def test_to_dict_with_group_name(self):
+        """Test to_dict includes group_name when set."""
+        metadata = TaskMetadata(
+            job_id="test-job-9",
+            task_name="With Group",
+            group_name="Podcast Scrapes",
+        )
+
+        result = metadata.to_dict()
+
+        assert result["group_name"] == "Podcast Scrapes"
+
+    def test_to_dict_without_group_name(self):
+        """Test to_dict includes group_name as None when not set."""
+        metadata = TaskMetadata(
+            job_id="test-job-10",
+            task_name="No Group",
+        )
+
+        result = metadata.to_dict()
+
+        assert result["group_name"] is None
 
 
 class TestTaskMetadataFields:
@@ -170,3 +199,60 @@ class TestTaskMetadataFields:
         )
 
         assert metadata.task_name == unicode_name
+
+
+class TestGroupNameField:
+    """Test group_name field behaviors."""
+
+    def test_group_name_optional(self):
+        """Test that group_name is optional (nullable)."""
+        metadata = TaskMetadata(
+            job_id="test-no-group",
+            task_name="No Group Task",
+        )
+
+        assert metadata.group_name is None
+
+    def test_group_name_can_be_set(self):
+        """Test that group_name can be set."""
+        metadata = TaskMetadata(
+            job_id="test-with-group",
+            task_name="With Group Task",
+            group_name="Data Syncs",
+        )
+
+        assert metadata.group_name == "Data Syncs"
+
+    def test_group_name_max_length(self):
+        """Test group_name with maximum length (100 chars)."""
+        long_group = "x" * 100
+        metadata = TaskMetadata(
+            job_id="test-long-group",
+            task_name="Long Group Task",
+            group_name=long_group,
+        )
+
+        assert metadata.group_name == long_group
+        assert len(metadata.group_name) == 100
+
+    def test_group_name_special_characters(self):
+        """Test group_name with special characters."""
+        special_group = "Podcast Scrapes (v2) - Production!"
+        metadata = TaskMetadata(
+            job_id="test-special-group",
+            task_name="Special Group Task",
+            group_name=special_group,
+        )
+
+        assert metadata.group_name == special_group
+
+    def test_group_name_unicode(self):
+        """Test group_name with unicode characters."""
+        unicode_group = "データ同期"
+        metadata = TaskMetadata(
+            job_id="test-unicode-group",
+            task_name="Unicode Group Task",
+            group_name=unicode_group,
+        )
+
+        assert metadata.group_name == unicode_group

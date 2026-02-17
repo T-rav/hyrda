@@ -654,7 +654,8 @@ class TestServicesHealthEndpoint:
 
         call_count = [0]
 
-        async def mock_get(url, **kwargs):
+        def mock_get(*_args, **_kwargs):
+            """Return async context manager directly (not a coroutine)."""
             result = [mock_scheduler_resp, mock_jobs_resp][call_count[0]]
             call_count[0] += 1
             return result
@@ -684,8 +685,17 @@ class TestServicesHealthEndpoint:
         mock_request = Mock()
 
         # Mock aiohttp to raise connection error for task scheduler
-        async def mock_get(url, **kwargs):
-            raise aiohttp.ClientConnectorError(Mock(), Mock())
+        # Create a context manager that raises on entry
+        class ErrorContextManager:
+            async def __aenter__(self):
+                raise aiohttp.ClientConnectorError(Mock(), Mock())
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(*_args, **_kwargs):
+            """Return async context manager that raises on entry."""
+            return ErrorContextManager()
 
         mock_session = MagicMock()
         mock_session.get = mock_get
@@ -715,10 +725,22 @@ class TestServicesHealthEndpoint:
         # Arrange
         mock_request = Mock()
 
-        mock_session = AsyncMock()
+        # Create a context manager that raises on entry
+        class ErrorContextManager:
+            async def __aenter__(self):
+                raise Exception("Connection error")
+
+            async def __aexit__(self, *args):
+                pass
+
+        def mock_get(*args, **kwargs):
+            """Return async context manager that raises on entry."""
+            return ErrorContextManager()
+
+        mock_session = MagicMock()
+        mock_session.get = mock_get
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock()
-        mock_session.get = AsyncMock(side_effect=Exception("Connection error"))
 
         with (
             patch("aiohttp.ClientSession", return_value=mock_session),

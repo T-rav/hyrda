@@ -147,85 +147,47 @@ class TestGetAgentIntegration:
     """Integration tests for get_agent with real registry."""
 
     @pytest.mark.integration
-    def test_get_agent_with_external_loader(self, tmp_path):
-        """Test get_agent with external agent loader integration."""
-        # Create external_agents directory structure
-        external_agents_dir = tmp_path / "external_agents"
-        external_agents_dir.mkdir()
-        (external_agents_dir / "__init__.py").write_text("")  # Make it a package
+    def test_get_agent_with_unified_loader(
+        self, mock_agent_builder, mock_loader_builder
+    ):
+        """Test get_agent with unified agent loader integration.
 
-        agent_dir = external_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        (agent_dir / "__init__.py").write_text("")  # Make it a package
+        Uses builder pattern for creating mock fixtures.
+        """
+        # Build test agent using builder
+        test_agent = (
+            mock_agent_builder()
+            .with_name("test_agent")
+            .with_display_name("Test Agent")
+            .with_invoke_response({"response": "Echo test", "metadata": {}})
+            .build()
+        )
 
-        agent_code = """
-class Agent:
-    def __init__(self):
-        self.name = "test"
+        # Build loader using builder
+        mock_loader = (
+            mock_loader_builder().with_agents({"test_agent": test_agent}).build()
+        )
 
-    async def invoke(self, query: str, context: dict) -> dict:
-        return {"response": f"Echo: {query}", "metadata": {}}
-"""
-        (agent_dir / "agent.py").write_text(agent_code)
+        # Clear cache to force reload
+        from services.agent_registry import clear_cache  # noqa: PLC0415
 
-        # Mock control-plane to return agent metadata
-        mock_control_plane_response = [
-            {
-                "name": "test_agent",
-                "display_name": "Test Agent",
-                "description": "Test",
-                "aliases": [],
-                "is_enabled": True,
-                "is_public": True,
-                "requires_admin": False,
-            }
-        ]
+        clear_cache()
 
-        # Add tmp_path to sys.path so imports work
-        import sys  # noqa: PLC0415
+        # Also clear the agent_classes cache
+        import services.agent_registry as registry_module  # noqa: PLC0415
 
-        sys.path.insert(0, str(tmp_path))
+        registry_module._agent_classes = {}
 
-        try:
-            with patch("requests.get") as mock_get:
-                mock_response = MagicMock()
-                mock_response.status_code = 200
-                mock_response.json.return_value = {
-                    "agents": mock_control_plane_response
-                }
-                mock_get.return_value = mock_response
+        # Patch where the loader is imported
+        with patch(
+            "services.unified_agent_loader.get_unified_loader",
+            return_value=mock_loader,
+        ):
+            # Get agent
+            agent = get_agent("test_agent")
 
-                # Set external agents path
-                with patch("os.getenv") as mock_getenv:
-
-                    def getenv_side_effect(key, default=None):
-                        if key == "EXTERNAL_AGENTS_PATH":
-                            return str(external_agents_dir)
-                        elif key == "CONTROL_PLANE_URL":
-                            return "http://control_plane:6001"
-                        return default
-
-                    mock_getenv.side_effect = getenv_side_effect
-
-                    # Clear cache to force reload
-                    from services.agent_registry import clear_cache  # noqa: PLC0415
-
-                    clear_cache()
-
-                    # Reset loader
-                    import services.external_agent_loader as loader_module  # noqa: PLC0415
-
-                    loader_module._external_loader = None
-
-                    # Get agent
-                    agent = get_agent("test_agent")
-
-                    assert agent is not None
-                    assert hasattr(agent, "invoke")
-                    assert agent.name == "test"
-        finally:
-            # Clean up sys.path
-            sys.path.remove(str(tmp_path))
+            assert agent is not None
+            assert hasattr(agent, "invoke")
 
     @pytest.mark.integration
     def test_get_agent_embedded_cloud_consistency(self):

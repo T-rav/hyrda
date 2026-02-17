@@ -1,6 +1,6 @@
 """Tests for agent metadata decorator."""
 
-from agents.metadata import agent_metadata
+from agents.metadata import GoalBotConfig, agent_metadata
 
 
 class TestAgentMetadataDecorator:
@@ -258,3 +258,147 @@ class TestAgentMetadataDecorator:
         assert metadata["is_system"] is False
         assert "help" in metadata["aliases"]
         assert "agents" in metadata["aliases"]
+
+
+class TestGoalBotConfig:
+    """Test suite for GoalBotConfig dataclass."""
+
+    def test_default_values(self):
+        """Test that GoalBotConfig has correct default values."""
+        config = GoalBotConfig(goal_prompt="Test goal")
+
+        assert config.goal_prompt == "Test goal"
+        assert config.schedule_type == "interval"
+        assert config.schedule_config == {"interval_seconds": 86400}
+        assert config.max_runtime_seconds == 3600
+        assert config.max_iterations == 10
+        assert config.notification_channel is None
+        assert config.is_enabled is True
+        assert config.is_paused is False
+        assert config.tools == []
+
+    def test_custom_values(self):
+        """Test GoalBotConfig with custom values."""
+        config = GoalBotConfig(
+            goal_prompt="Custom goal prompt",
+            schedule_type="cron",
+            schedule_config={"cron_expression": "0 9 * * *"},
+            max_runtime_seconds=7200,
+            max_iterations=20,
+            notification_channel="#alerts",
+            is_enabled=False,
+            is_paused=True,
+            tools=["web_search", "knowledge_base"],
+        )
+
+        assert config.goal_prompt == "Custom goal prompt"
+        assert config.schedule_type == "cron"
+        assert config.schedule_config == {"cron_expression": "0 9 * * *"}
+        assert config.max_runtime_seconds == 7200
+        assert config.max_iterations == 20
+        assert config.notification_channel == "#alerts"
+        assert config.is_enabled is False
+        assert config.is_paused is True
+        assert config.tools == ["web_search", "knowledge_base"]
+
+
+class TestGoalBotMetadata:
+    """Test suite for goal bot metadata integration."""
+
+    def test_decorator_with_goal_bot_config(self):
+        """Test that decorator correctly attaches goal_bot metadata."""
+
+        @agent_metadata(
+            display_name="Test Goal Bot",
+            description="A test goal bot",
+            goal_bot=GoalBotConfig(
+                goal_prompt="Find and process test data",
+                schedule_type="interval",
+                schedule_config={"interval_seconds": 3600},
+                max_runtime_seconds=1800,
+            ),
+        )
+        def test_goal_bot():
+            return "mock_graph"
+
+        metadata = test_goal_bot.__agent_metadata__
+
+        assert "goal_bot" in metadata
+        assert metadata["goal_bot"]["goal_prompt"] == "Find and process test data"
+        assert metadata["goal_bot"]["schedule_type"] == "interval"
+        assert metadata["goal_bot"]["schedule_config"] == {"interval_seconds": 3600}
+        assert metadata["goal_bot"]["max_runtime_seconds"] == 1800
+
+    def test_goal_bot_metadata_structure(self):
+        """Test that goal_bot metadata has correct structure."""
+
+        @agent_metadata(
+            display_name="Structure Test Bot",
+            description="Test structure",
+            goal_bot=GoalBotConfig(goal_prompt="Structure test goal"),
+        )
+        def test_func():
+            return None
+
+        metadata = test_func.__agent_metadata__
+        goal_bot = metadata["goal_bot"]
+
+        # Check all expected keys exist
+        assert "goal_prompt" in goal_bot
+        assert "schedule_type" in goal_bot
+        assert "schedule_config" in goal_bot
+        assert "max_runtime_seconds" in goal_bot
+        assert "max_iterations" in goal_bot
+        assert "notification_channel" in goal_bot
+        assert "is_enabled" in goal_bot
+        assert "is_paused" in goal_bot
+        assert "tools" in goal_bot
+
+    def test_goal_bot_with_cron_schedule(self):
+        """Test goal bot with cron schedule."""
+
+        @agent_metadata(
+            display_name="Cron Bot",
+            description="Runs on cron schedule",
+            goal_bot=GoalBotConfig(
+                goal_prompt="Run scheduled task on weekdays",
+                schedule_type="cron",
+                schedule_config={"cron_expression": "0 9 * * MON-FRI"},
+            ),
+        )
+        def cron_bot():
+            return "cron_graph"
+
+        metadata = cron_bot.__agent_metadata__
+        assert metadata["goal_bot"]["schedule_type"] == "cron"
+        assert (
+            metadata["goal_bot"]["schedule_config"]["cron_expression"]
+            == "0 9 * * MON-FRI"
+        )
+
+    def test_regular_agent_has_no_goal_bot_key(self):
+        """Test that regular agents don't have goal_bot metadata."""
+
+        @agent_metadata(
+            display_name="Regular Agent",
+            description="Not a goal bot",
+        )
+        def regular_agent():
+            return "regular_graph"
+
+        metadata = regular_agent.__agent_metadata__
+        assert "goal_bot" not in metadata
+
+    def test_goal_bot_remains_callable(self):
+        """Test that goal bot decorated function remains callable."""
+
+        @agent_metadata(
+            display_name="Callable Goal Bot",
+            description="Test callable",
+            goal_bot=GoalBotConfig(goal_prompt="Callable test goal"),
+        )
+        def test_func(x, y):
+            return x * y
+
+        result = test_func(5, 3)
+        assert result == 15

@@ -13,6 +13,7 @@ class TaskMetadata(Base):
 
     job_id = Column(String(191), primary_key=True)
     task_name = Column(String(255), nullable=False)
+    group_name = Column(String(100), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -21,6 +22,7 @@ class TaskMetadata(Base):
         return {
             "job_id": self.job_id,
             "task_name": self.task_name,
+            "group_name": self.group_name,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

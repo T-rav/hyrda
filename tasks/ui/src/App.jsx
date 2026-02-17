@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, ChevronDown, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User, Folder } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
@@ -196,6 +196,8 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
   const recordsPerPage = 20
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
+  const [taskRunsPagination, setTaskRunsPagination] = useState({ total: 0, page: 1, has_next: false })
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -217,6 +219,7 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
 
       setJobs(jobsRes.jobs || [])
       setTaskRuns(runsRes.task_runs || [])
+      setTaskRunsPagination(runsRes.pagination || { total: 0, page: 1, has_next: false })
       setScheduler(schedulerRes)
     } catch (error) {
       logError('Error loading data:', error)
@@ -225,6 +228,27 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
       setScheduler({ running: false })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load more task runs (next page)
+  const loadMoreRuns = async () => {
+    if (!taskRunsPagination.has_next || loadingMore) return
+
+    setLoadingMore(true)
+    try {
+      const nextPage = taskRunsPagination.page + 1
+      const response = await fetchWithTokenRefresh(`/api/task-runs?page=${nextPage}`)
+      if (!response.ok) throw new Error(`Failed to load more runs: ${response.status}`)
+      const data = await response.json()
+
+      // Append new runs to existing
+      setTaskRuns(prev => [...prev, ...(data.task_runs || [])])
+      setTaskRunsPagination(data.pagination || { total: 0, page: nextPage, has_next: false })
+    } catch (error) {
+      logError('Error loading more runs:', error)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -277,10 +301,11 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
     return minutes > 0 ? `${minutes}m` : 'Now'
   })() : 'None'
 
-  // Calculate success rate
-  const totalRuns = taskRuns.length
+  // Calculate success rate (use actual total from pagination, success rate from loaded data)
+  const totalRuns = taskRunsPagination.total || taskRuns.length
   const successfulRuns = taskRuns.filter(run => run.status === 'success').length
-  const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0
+  const loadedRuns = taskRuns.length
+  const successRate = loadedRuns > 0 ? Math.round((successfulRuns / loadedRuns) * 100) : 0
 
   return (
     <div className="dashboard">
@@ -336,7 +361,7 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
               successRate >= 70 ? 'bg-warning' :
               'bg-danger'
             }`}>
-              {successRate}% ({successfulRuns}/{totalRuns})
+              {successRate}% ({successfulRuns}/{loadedRuns} loaded)
             </span>
           </div>
         </div>
@@ -369,6 +394,9 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
           onPageChange={setCurrentPage}
+          pagination={taskRunsPagination}
+          onLoadMore={loadMoreRuns}
+          loadingMore={loadingMore}
         />
       </div>
     </div>
@@ -383,6 +411,7 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
   const [selectedTask, setSelectedTask] = useState(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
+  const [expandedGroups, setExpandedGroups] = useState({})
 
   const loadTasks = async () => {
     setLoading(true)
@@ -548,6 +577,93 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
     return `${minutes}m`
   }
 
+  // Group jobs by group_name
+  const groupedJobs = React.useMemo(() => {
+    const groups = {}
+    jobs.forEach(job => {
+      const groupKey = job.group_name || '__ungrouped__'
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
+      }
+      groups[groupKey].push(job)
+    })
+    // Sort groups alphabetically, with ungrouped last (at bottom)
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === '__ungrouped__') return 1
+      if (b === '__ungrouped__') return -1
+      return a.localeCompare(b)
+    })
+    return sortedKeys.map(key => ({
+      name: key === '__ungrouped__' ? null : key,
+      tasks: groups[key]
+    }))
+  }, [jobs])
+
+  const toggleGroup = (groupName) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName || '__ungrouped__']: !prev[groupName || '__ungrouped__']
+    }))
+  }
+
+  const isGroupExpanded = (groupName) => {
+    return expandedGroups[groupName || '__ungrouped__'] || false
+  }
+
+  // Handle group actions (pause/resume/run-once/delete all tasks in group)
+  const handleGroupAction = async (action, groupTasks) => {
+    const groupName = groupTasks[0]?.group_name || 'Ungrouped'
+
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete all ${groupTasks.length} tasks in "${groupName}"?`)) {
+        return
+      }
+    }
+
+    setActionLoading(prev => ({ ...prev, [`group_${groupName}`]: action }))
+
+    try {
+      for (const task of groupTasks) {
+        let response
+        switch (action) {
+          case 'pause':
+            if (task.next_run_time) { // Only pause active tasks
+              response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/pause`, { method: 'POST' })
+              if (!response.ok) throw new Error(`Failed to pause ${task.name}`)
+            }
+            break
+          case 'resume':
+            if (!task.next_run_time) { // Only resume paused tasks
+              response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/resume`, { method: 'POST' })
+              if (!response.ok) throw new Error(`Failed to resume ${task.name}`)
+            }
+            break
+          case 'run-once':
+            response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/run-once`, { method: 'POST' })
+            if (!response.ok) throw new Error(`Failed to run ${task.name}`)
+            break
+          case 'delete':
+            response = await fetchWithTokenRefresh(`/api/jobs/${task.id}`, { method: 'DELETE' })
+            if (!response.ok) throw new Error(`Failed to delete ${task.name}`)
+            break
+          default:
+            break
+        }
+      }
+
+      const actionVerb = action === 'pause' ? 'paused' :
+                         action === 'resume' ? 'resumed' :
+                         action === 'run-once' ? 'triggered' : 'deleted'
+      showNotification(`All tasks in "${groupName}" ${actionVerb} successfully`, 'success')
+      await loadTasks()
+    } catch (error) {
+      logError(`Error ${action} group:`, error)
+      showNotification(`Error: ${error.message}`, 'error')
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`group_${groupName}`]: null }))
+    }
+  }
+
   return (
     <div className="tasks-list">
       {/* Task Management Header */}
@@ -623,14 +739,44 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onAction={handleTaskAction}
-                    actionLoading={actionLoading}
-                    formatNextRun={formatNextRun}
-                  />
+                {groupedJobs.map((group) => (
+                  <React.Fragment key={group.name || '__ungrouped__'}>
+                    {/* Ungrouped tasks render directly without a group header */}
+                    {!group.name ? (
+                      group.tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onAction={handleTaskAction}
+                          actionLoading={actionLoading}
+                          formatNextRun={formatNextRun}
+                          isGrouped={false}
+                        />
+                      ))
+                    ) : (
+                      <>
+                        {/* Group Header Row */}
+                        <GroupRow
+                          group={group}
+                          isExpanded={isGroupExpanded(group.name)}
+                          onToggle={() => toggleGroup(group.name)}
+                          onGroupAction={handleGroupAction}
+                          actionLoading={actionLoading}
+                        />
+                        {/* Task Rows (when expanded) */}
+                        {isGroupExpanded(group.name) && group.tasks.map((task) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            onAction={handleTaskAction}
+                            actionLoading={actionLoading}
+                            formatNextRun={formatNextRun}
+                            isGrouped={true}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -664,8 +810,82 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
   )
 }
 
+// Group Row Component (collapsible header)
+function GroupRow({ group, isExpanded, onToggle, onGroupAction, actionLoading }) {
+  const groupName = group.name || 'Ungrouped'
+  const taskCount = group.tasks.length
+  const activeCount = group.tasks.filter(t => t.next_run_time).length
+  const pausedCount = taskCount - activeCount
+  const currentAction = actionLoading[`group_${groupName}`]
+
+  // Determine if we should show pause or resume based on majority
+  const showPause = activeCount > pausedCount
+
+  return (
+    <tr className="group-row" style={{ backgroundColor: group.name ? 'rgba(99, 102, 241, 0.1)' : 'rgba(156, 163, 175, 0.1)' }}>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={onToggle}>
+          {isExpanded ? (
+            <ChevronDown size={18} className="me-2" />
+          ) : (
+            <ChevronRight size={18} className="me-2" />
+          )}
+          {group.name ? (
+            <Folder size={16} className="me-2" style={{ color: '#6366f1' }} />
+          ) : null}
+          <strong style={{ fontSize: '1rem' }}>{groupName}</strong>
+          <span className="badge bg-primary ms-2">{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+          {!isExpanded && (
+            <>
+              {activeCount > 0 && <span className="badge bg-success ms-2">{activeCount} active</span>}
+              {pausedCount > 0 && <span className="badge bg-warning ms-2">{pausedCount} paused</span>}
+            </>
+          )}
+        </div>
+      </td>
+      <td></td>
+      <td></td>
+      <td>
+        <div className="btn-group btn-group-sm" role="group">
+          <button
+            className="btn btn-outline-primary btn-sm"
+            disabled={true}
+            title="View (select individual task)"
+          >
+            <Eye size={12} />
+          </button>
+          <button
+            className={`btn ${showPause ? 'btn-outline-warning' : 'btn-outline-success'} btn-sm`}
+            onClick={(e) => { e.stopPropagation(); onGroupAction(showPause ? 'pause' : 'resume', group.tasks) }}
+            disabled={currentAction === 'pause' || currentAction === 'resume'}
+            title={showPause ? 'Pause All' : 'Resume All'}
+          >
+            {showPause ? <Pause size={12} /> : <Play size={12} />}
+          </button>
+          <button
+            className="btn btn-outline-info btn-sm"
+            onClick={(e) => { e.stopPropagation(); onGroupAction('run-once', group.tasks) }}
+            disabled={currentAction === 'run-once'}
+            title="Run All Once"
+          >
+            <PlayCircle size={12} />
+          </button>
+          <button
+            className="btn btn-outline-danger btn-sm"
+            onClick={(e) => { e.stopPropagation(); onGroupAction('delete', group.tasks) }}
+            disabled={currentAction === 'delete'}
+            title="Delete All"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // Task Row Component
-function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
+function TaskRow({ task, onAction, actionLoading, formatNextRun, isGrouped = false }) {
   const isActive = !!task.next_run_time
   const currentAction = actionLoading[task.id]
 
@@ -684,8 +904,8 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const taskDescription = taskTypeDescriptions[taskType] || taskType
 
   return (
-    <tr>
-      <td>
+    <tr style={isGrouped ? { backgroundColor: 'rgba(99, 102, 241, 0.03)' } : {}}>
+      <td style={isGrouped ? { paddingLeft: '2.5rem' } : {}}>
         <div>
           <strong>{task.name && task.name !== task.id ? task.name : taskDescription}</strong>
           {isActive ? (
@@ -769,7 +989,10 @@ function StatCard({ title, value, variant = 'primary' }) {
 
 
 // Recent Runs Table Component with Pagination
-function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, onPageChange }) {
+function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, onPageChange, pagination, onLoadMore, loadingMore }) {
+  const totalFromServer = pagination?.total || taskRuns.length
+  const hasMore = pagination?.has_next || false
+
   if (!taskRuns || taskRuns.length === 0) {
     return (
       <div className="table-container">
@@ -791,7 +1014,7 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
     displayedRuns = taskRuns.slice(0, 5)
   }
 
-  // Pagination info
+  // Pagination info (use loaded count for local pagination)
   const totalPages = Math.ceil(taskRuns.length / recordsPerPage)
   const startRecord = (currentPage - 1) * recordsPerPage + 1
   const endRecord = Math.min(currentPage * recordsPerPage, taskRuns.length)
@@ -815,11 +1038,11 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
       </table>
 
       {/* Pagination Controls */}
-      {showAllRuns && totalPages > 1 && (
+      {showAllRuns && (
         <div className="pagination-controls">
           <div className="pagination-info">
             <span className="text-muted">
-              Showing {startRecord}-{endRecord} of {taskRuns.length} runs
+              Showing {startRecord}-{endRecord} of {taskRuns.length} loaded ({totalFromServer} total)
             </span>
           </div>
           <nav className="pagination-nav">
@@ -863,6 +1086,17 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
               Next
               <ChevronRight size={16} />
             </button>
+
+            {/* Load More button when at last page of loaded data but more exists on server */}
+            {currentPage === totalPages && hasMore && (
+              <button
+                className="btn btn-sm btn-outline-primary ms-3"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Loading...' : 'Load 50 more'}
+              </button>
+            )}
           </nav>
         </div>
       )}
@@ -897,6 +1131,9 @@ function TaskRunRow({ run }) {
     <tr>
         <td>
           <div className="task-name">
+            {run.group_name && (
+              <span className="badge bg-secondary me-2">{run.group_name}</span>
+            )}
             <strong>{run.job_name || 'Unknown Job'}</strong>
             {run.triggered_by === 'manual' && (
               <span className="badge bg-primary ms-1">MANUAL</span>

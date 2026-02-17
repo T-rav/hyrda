@@ -1,4 +1,5 @@
 import logging
+import sys
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -7,6 +8,10 @@ from aiohttp import web
 from aiohttp.web_runner import AppRunner, TCPSite
 from config.settings import Settings
 from services.metrics_service import get_metrics_service
+
+# Add shared to path for tracing middleware
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared.middleware.aiohttp_tracing import create_tracing_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +46,10 @@ class HealthChecker:
 
     async def start_server(self, port: int = 8080):
         """Start health check HTTP server"""
-        app = web.Application()
+        # Create app with tracing middleware for distributed tracing
+        app = web.Application(
+            middlewares=[create_tracing_middleware("dashboard-service")]
+        )
 
         # API routes with /api prefix
         app.router.add_get("/api/health", self.health_check)

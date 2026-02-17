@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, X, Activity, CalendarClock, Play } from 'lucide-react'
+import { Plus, X, Activity, CalendarClock, Play, Folder } from 'lucide-react'
 import TaskParameters from './TaskParameters'
 import { logError } from '../utils/logger'
 
@@ -15,6 +15,8 @@ import { logError } from '../utils/logger'
 function CreateTaskModal({ onClose, onTaskCreated }) {
   const [taskType, setTaskType] = useState('')
   const [taskName, setTaskName] = useState('')
+  const [groupName, setGroupName] = useState('')
+  const [groups, setGroups] = useState([])
   const [triggerType, setTriggerType] = useState('interval')
   const [hours, setHours] = useState('1')
   const [minutes, setMinutes] = useState('0')
@@ -25,7 +27,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
   const [loading, setLoading] = useState(false)
   const [parameters, setParameters] = useState({})
 
-  // Load task types on component mount
+  // Load task types and groups on component mount
   useEffect(() => {
     const loadTaskTypes = async () => {
       try {
@@ -36,7 +38,17 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         logError('Error loading task types:', error)
       }
     }
+    const loadGroups = async () => {
+      try {
+        const response = await fetch('/api/groups', { credentials: 'include' })
+        const data = await response.json()
+        setGroups(data.groups || [])
+      } catch (error) {
+        logError('Error loading groups:', error)
+      }
+    }
     loadTaskTypes()
+    loadGroups()
   }, [])
 
   // Reset parameters when task type changes
@@ -104,6 +116,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
       const taskData = {
         job_type: taskType,
         task_name: taskName,
+        group_name: groupName.trim() || null,
         schedule: schedule,
         parameters: parameters,
       }
@@ -205,6 +218,34 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                     placeholder="Enter a name for this task"
                     required
                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="row">
+              <div className="col-md-6">
+                <div className="mb-4">
+                  <label htmlFor="groupName" className="form-label">
+                    <Folder size={16} className="me-1" />
+                    Group (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    id="groupName"
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="e.g., Podcast Scrapes"
+                    list="groupSuggestions"
+                  />
+                  <datalist id="groupSuggestions">
+                    {groups.map((group) => (
+                      <option key={group} value={group} />
+                    ))}
+                  </datalist>
+                  <div className="form-text">
+                    <small>Organize related tasks together</small>
+                  </div>
                 </div>
               </div>
             </div>

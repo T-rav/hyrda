@@ -29,6 +29,7 @@ dependencies = [
     "opentelemetry-sdk>=1.20.0",
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-exporter-otlp>=1.20.0",
+    "croniter>=2.0.0",  # Cron expression parsing for goal bots
 ]
 
 [project.optional-dependencies]

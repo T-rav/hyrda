@@ -9,6 +9,7 @@ from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
 from .gdrive_ingest import GDriveIngestJob
+from .goal_bot_scheduler import GoalBotSchedulerJob
 from .hubspot_sync import HubSpotSyncJob
 from .metric_sync import MetricSyncJob
 from .slack_user_import import SlackUserImportJob
@@ -64,6 +65,7 @@ def execute_job_by_type(
         "hubspot_sync": HubSpotSyncJob,
         "website_scrape": WebsiteScrapeJob,
         "youtube_ingest": YouTubeIngestJob,
+        "goal_bot_scheduler": GoalBotSchedulerJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -74,8 +76,9 @@ def execute_job_by_type(
     settings = TasksSettings()
     job_instance = job_class(settings, **job_params)
 
-    # Get task name from metadata if available
+    # Get task name and group from metadata if available
     task_name = None
+    group_name = None
     if job_id:
         try:
             with get_db_session() as session:
@@ -86,6 +89,7 @@ def execute_job_by_type(
                 )
                 if metadata:
                     task_name = metadata.task_name
+                    group_name = metadata.group_name
         except Exception as e:
             logger.error(f"Error loading task metadata: {e}")
 
@@ -96,6 +100,8 @@ def execute_job_by_type(
         config_snapshot["job_id"] = job_id
     if task_name:
         config_snapshot["task_name"] = task_name
+    if group_name:
+        config_snapshot["group_name"] = group_name
 
     task_run = TaskRun(
         run_id=run_id,
@@ -177,6 +183,7 @@ class JobRegistry:
             "hubspot_sync": HubSpotSyncJob,
             "website_scrape": WebsiteScrapeJob,
             "youtube_ingest": YouTubeIngestJob,
+            "goal_bot_scheduler": GoalBotSchedulerJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:

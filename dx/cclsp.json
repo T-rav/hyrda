@@ -3,7 +3,7 @@
     {
       "extensions": ["py", "pyi"],
       "command": ["pyright-langserver", "--stdio"],
-      "rootDir": "/Users/travisf/Documents/projects/insightmesh",
+      "rootDir": "/Users/travisfrisinger/Documents/projects/insightmesh",
       "initializationOptions": {
         "settings": {
           "python": {

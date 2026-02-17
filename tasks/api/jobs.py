@@ -38,10 +38,11 @@ async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
     for job in jobs:
         job_info = scheduler_service.get_job_info(job.id)
         if job_info:
-            # Add custom task name if available
+            # Add custom task name and group if available
             metadata = metadata_map.get(job.id)
             if metadata:
                 job_info["name"] = metadata.task_name
+                job_info["group_name"] = metadata.group_name
             jobs_data.append(job_info)
 
     return {"jobs": jobs_data}
@@ -58,6 +59,15 @@ async def get_job(
     job_info = scheduler_service.get_job_info(job_id)
     if not job_info:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Add metadata (name, group) if available
+    with get_db_session() as db_session:
+        metadata = (
+            db_session.query(TaskMetadata).filter(TaskMetadata.job_id == job_id).first()
+        )
+        if metadata:
+            job_info["name"] = metadata.task_name
+            job_info["group_name"] = metadata.group_name
 
     return job_info
 
@@ -142,9 +152,11 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
         schedule = data.get("schedule", {})
         job_params = data.get("parameters", {})
         task_name = data.get("task_name")
+        group_name = data.get("group_name")
 
         logger.info(
-            f"Creating job: type={job_type}, task_name={task_name}, data={data}"
+            f"Creating job: type={job_type}, task_name={task_name}, "
+            f"group_name={group_name}, data={data}"
         )
 
         if not job_type:
@@ -165,14 +177,17 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
             job_type=job_type, job_id=job_id, schedule=schedule, **validated_params
         )
 
-        # Save task metadata (custom name)
+        # Save task metadata (custom name and group)
         if task_name:
             try:
                 logger.info(
-                    f"Saving task metadata: job_id={job.id}, task_name={task_name}"
+                    f"Saving task metadata: job_id={job.id}, task_name={task_name}, "
+                    f"group_name={group_name}"
                 )
                 with get_db_session() as db_session:
-                    metadata = TaskMetadata(job_id=job.id, task_name=task_name)
+                    metadata = TaskMetadata(
+                        job_id=job.id, task_name=task_name, group_name=group_name
+                    )
                     db_session.add(metadata)
                     db_session.commit()
                     logger.info(f"Task metadata saved successfully for job {job.id}")
@@ -203,10 +218,33 @@ async def update_job(request: Request, job_id: str):
         if not data:
             raise HTTPException(status_code=400, detail="No data provided")
 
-        # Remove job_id from changes if present
-        changes = {k: v for k, v in data.items() if k != "job_id"}
+        # Handle metadata updates (task_name, group_name)
+        metadata_fields = {"task_name", "group_name"}
+        metadata_updates = {k: v for k, v in data.items() if k in metadata_fields}
 
-        scheduler_service.modify_job(job_id, **changes)
+        if metadata_updates:
+            with get_db_session() as db_session:
+                metadata = (
+                    db_session.query(TaskMetadata)
+                    .filter(TaskMetadata.job_id == job_id)
+                    .first()
+                )
+                if metadata:
+                    for key, value in metadata_updates.items():
+                        setattr(metadata, key, value)
+                    db_session.commit()
+                    logger.info(
+                        f"Updated metadata for job {job_id}: {metadata_updates}"
+                    )
+
+        # Remove metadata fields and job_id from scheduler changes
+        scheduler_changes = {
+            k: v for k, v in data.items() if k not in metadata_fields and k != "job_id"
+        }
+
+        if scheduler_changes:
+            scheduler_service.modify_job(job_id, **scheduler_changes)
+
         return {"message": f"Job {job_id} updated successfully"}
 
     except HTTPException:
@@ -326,3 +364,25 @@ async def list_job_types(request: Request, user: dict = Depends(get_current_user
         raise HTTPException(status_code=500, detail="Job registry not initialized")
 
     return {"job_types": job_registry.get_available_job_types()}
+
+
+@router.get("/groups")
+async def list_groups(request: Request, user: dict = Depends(get_current_user)):
+    """List all unique group names from task metadata."""
+    try:
+        with get_db_session() as db_session:
+            # Get distinct non-null group names
+            groups = (
+                db_session.query(TaskMetadata.group_name)
+                .filter(TaskMetadata.group_name.isnot(None))
+                .filter(TaskMetadata.group_name != "")
+                .distinct()
+                .all()
+            )
+            group_names = sorted([g[0] for g in groups])
+
+        return {"groups": group_names}
+
+    except Exception as e:
+        logger.error(f"Error listing groups: {e}")
+        raise HTTPException(status_code=400, detail=str(e)) from e

@@ -45,7 +45,7 @@ def get_app_version() -> str:
 
 
 # Import agents after logging is configured
-from api import agents_router  # noqa: E402
+from api import agents_router, goal_bots_router  # noqa: E402
 
 
 @asynccontextmanager
@@ -109,6 +109,9 @@ app.add_middleware(
 app.include_router(
     agents_router, prefix="/api"
 )  # Auth/routing layer - validates auth, invokes embedded LangGraph or proxies to cloud
+app.include_router(
+    goal_bots_router, prefix="/api"
+)  # Goal bot execution endpoints (called by tasks service)
 
 
 @app.get("/health")

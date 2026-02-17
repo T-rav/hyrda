@@ -24,7 +24,7 @@ from .exceptions import (
     RetrievalServiceError,
     RetrievalTimeoutError,
 )
-from .models import Chunk, RetrievalMetadata, RetrievalRequest, RetrievalResponse
+from .models import RetrievalRequest
 
 logger = logging.getLogger(__name__)
 
