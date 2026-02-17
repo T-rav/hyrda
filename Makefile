@@ -257,7 +257,7 @@ version-bump:
 # ===== DOCKER BUILD & PUBLISH =====
 
 # Build with version args injected
-docker-build-versioned: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
+docker-build-versioned: health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building versioned Docker images (v$(VERSION))...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && \
 	DOCKER_BUILDKIT=1 docker compose build \
@@ -373,7 +373,7 @@ setup-ssl:
 		echo "$(GREEN)✅ SSL certificates ready!$(RESET)"; \
 	fi
 
-docker-build: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
+docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
 	@echo "$(YELLOW)Version: $(VERSION) | SHA: $(GIT_SHA) | Date: $(BUILD_DATE)$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose build \
