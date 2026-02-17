@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Check, AlertCircle, ExternalLink } from 'lucide-react'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 /**
  * Google Drive OAuth Authentication Button Component
@@ -33,7 +34,7 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
   const checkAuthStatus = async () => {
     try {
       setAuthStatus({ authenticated: false, loading: true })
-      const response = await fetch(`/api/gdrive/auth/status/${taskId}`)
+      const response = await fetch(withBasePath(`/api/gdrive/auth/status/${taskId}`))
       const data = await response.json()
 
       setAuthStatus({
@@ -62,7 +63,7 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
       setAuthError(null)
 
       // Initiate OAuth flow
-      const response = await fetch('/api/gdrive/auth/initiate', {
+      const response = await fetch(withBasePath('/api/gdrive/auth/initiate'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

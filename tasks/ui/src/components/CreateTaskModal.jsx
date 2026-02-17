@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, X, Activity, CalendarClock, Play, Folder } from 'lucide-react'
 import TaskParameters from './TaskParameters'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 /**
  * CreateTaskModal Component
@@ -31,7 +32,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
   useEffect(() => {
     const loadTaskTypes = async () => {
       try {
-        const response = await fetch('/api/job-types', { credentials: 'include' })
+        const response = await fetch(withBasePath('/api/job-types'), { credentials: 'include' })
         const data = await response.json()
         setTaskTypes(data.job_types || [])
       } catch (error) {
@@ -40,7 +41,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
     }
     const loadGroups = async () => {
       try {
-        const response = await fetch('/api/groups', { credentials: 'include' })
+        const response = await fetch(withBasePath('/api/groups'), { credentials: 'include' })
         const data = await response.json()
         setGroups(data.groups || [])
       } catch (error) {
@@ -121,7 +122,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         parameters: parameters,
       }
 
-      const response = await fetch('/api/jobs', {
+      const response = await fetch(withBasePath('/api/jobs'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

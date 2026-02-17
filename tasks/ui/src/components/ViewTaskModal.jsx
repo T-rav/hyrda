@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Eye, X, Activity, CalendarClock, Folder } from 'lucide-react'
 import TaskParameters from './TaskParameters'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 /**
  * ViewTaskModal Component
@@ -19,7 +20,7 @@ function ViewTaskModal({ task, onClose }) {
   useEffect(() => {
     const loadTaskTypes = async () => {
       try {
-        const response = await fetch('/api/job-types', { credentials: 'include' })
+        const response = await fetch(withBasePath('/api/job-types'), { credentials: 'include' })
         const data = await response.json()
         setTaskTypes(data.job_types || [])
       } catch (error) {

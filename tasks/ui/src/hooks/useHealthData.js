@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { isTestMode, getTestScenario } from '../utils/testMockData'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 export function useHealthData() {
   const [data, setData] = useState({
@@ -47,9 +48,9 @@ export function useHealthData() {
 
       // Real API calls
       const [healthRes, metricsRes, readyRes] = await Promise.all([
-        fetch('/api/health'),
-        fetch('/api/metrics'),
-        fetch('/api/ready')
+        fetch(withBasePath('/api/health')),
+        fetch(withBasePath('/api/metrics')),
+        fetch(withBasePath('/api/ready'))
       ])
 
       // Check if responses are ok
