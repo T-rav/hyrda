@@ -1614,6 +1614,95 @@ class TestVectorMemory:
         assert "Acme Corp" in summary
         assert "Found 2 qualified" in summary
 
+    def test_tokenization(self):
+        """Test text tokenization for BM25."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        tokens = memory._tokenize("AI Infrastructure Companies with funding")
+
+        # Should have meaningful tokens, no stopwords
+        assert "infrastructure" in tokens
+        assert "companies" in tokens
+        assert "funding" in tokens
+        # Stopwords should be filtered
+        assert "with" not in tokens
+
+    def test_bm25_scoring(self):
+        """Test BM25 relevance scoring."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        query_tokens = memory._tokenize("AI infrastructure funding")
+
+        # Document with matching terms should score higher
+        doc_relevant = "AI infrastructure company with recent funding round"
+        doc_irrelevant = "Healthcare services and medical equipment"
+
+        score_relevant = memory._bm25_score(query_tokens, doc_relevant)
+        score_irrelevant = memory._bm25_score(query_tokens, doc_irrelevant)
+
+        assert score_relevant > score_irrelevant
+        assert score_relevant > 0
+        assert score_irrelevant == 0  # No matching terms
+
+    def test_jaccard_similarity(self):
+        """Test Jaccard similarity calculation."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        # Identical texts should have similarity 1.0
+        text = "AI infrastructure companies"
+        sim = memory._jaccard_similarity(text, text)
+        assert sim == 1.0
+
+        # Different texts should have lower similarity
+        text1 = "AI infrastructure companies with funding"
+        text2 = "Healthcare services and medical equipment"
+        sim = memory._jaccard_similarity(text1, text2)
+        assert sim < 0.2
+
+        # Partially overlapping texts
+        text1 = "AI infrastructure companies"
+        text2 = "AI technology companies"
+        sim = memory._jaccard_similarity(text1, text2)
+        assert 0.3 < sim < 0.7  # Some overlap
+
+    def test_mmr_reranking(self):
+        """Test MMR re-ranking for diversity."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        # Create candidates with some duplicates
+        candidates = [
+            {"score": 0.9, "summary": "AI infrastructure company with funding"},
+            {
+                "score": 0.85,
+                "summary": "AI infrastructure startup with series A",
+            },  # Similar to first
+            {"score": 0.8, "summary": "Healthcare technology platform"},  # Different
+            {
+                "score": 0.75,
+                "summary": "AI infrastructure services",
+            },  # Similar to first
+            {"score": 0.7, "summary": "Fintech payment processing"},  # Different
+        ]
+
+        # MMR should prefer diversity
+        reranked = memory._mmr_rerank(candidates, limit=3)
+
+        assert len(reranked) == 3
+        # First item should still be highest relevance
+        assert reranked[0]["score"] == 0.9
+        # Should include diverse items, not just top 3 by score
+        summaries = [r["summary"] for r in reranked]
+        # Healthcare or Fintech should be included for diversity
+        assert any("Healthcare" in s or "Fintech" in s for s in summaries)
+
 
 class TestYouTubeSkill:
     """Tests for YouTubeSkill."""

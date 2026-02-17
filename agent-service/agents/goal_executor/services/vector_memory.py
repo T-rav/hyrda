@@ -1,23 +1,27 @@
 """Vector memory service for goal executors using Qdrant.
 
-Provides semantic search over goal bot memories:
+Provides semantic search over goal bot memories following the OpenClaw pattern:
 
 1. **Session compaction**: When a run completes, LLM summarizes key findings
    and embeds them for future semantic search.
 
-2. **Semantic search**: "What do we know about AI infrastructure?"
-   searches across all past summaries and findings.
+2. **Hybrid search**: Combines vector similarity + BM25 keyword matching
+   for both semantic understanding and exact token matches.
 
-3. **Temporal decay**: Recent findings rank higher than old ones.
+3. **Temporal decay**: Recent findings rank higher (30-day half-life).
 
-4. **Hybrid retrieval**: Vector similarity + keyword matching.
+4. **MMR re-ranking**: Maximal Marginal Relevance reduces duplicate results.
 
 Architecture:
     Session ends → LLM summarizes → Embed summary → Store in Qdrant
                                                   → Full markdown in MinIO
 
-    Future search → Qdrant semantic search → Get matching summaries
-                 → Fetch full details from MinIO if needed
+    Search query → Vector search (semantic)
+                → BM25 search (keywords)
+                → Weighted merge
+                → Temporal decay
+                → MMR diversity
+                → Top-K results
 
 Usage:
     memory = VectorMemory(bot_id="prospect_bot")
@@ -29,8 +33,12 @@ Usage:
         outcome="Found 3 qualified prospects in AI infrastructure"
     )
 
-    # Semantic search across all past runs
-    results = await memory.search("companies with recent funding rounds")
+    # Hybrid search across all past runs
+    results = await memory.search(
+        "companies with recent funding rounds",
+        use_hybrid=True,   # BM25 + vector
+        use_mmr=True,      # Diversity re-ranking
+    )
 """
 
 import asyncio
@@ -81,6 +89,13 @@ class VectorMemory:
 
         # Temporal decay settings (30-day half-life like OpenClaw)
         self.decay_half_life_days = 30
+
+        # Hybrid search weights (OpenClaw defaults)
+        self.vector_weight = 0.7  # Semantic similarity
+        self.text_weight = 0.3  # BM25 keyword relevance
+
+        # MMR settings (lambda=0.7 balances relevance vs diversity)
+        self.mmr_lambda = 0.7  # 1.0 = pure relevance, 0.0 = max diversity
 
     async def _ensure_initialized(self) -> bool:
         """Ensure Qdrant client and embedding provider are ready."""
@@ -355,7 +370,7 @@ Write a concise summary that would help find this session when searching for rel
         return str(uuid.UUID(hash_hex))
 
     # =========================================================================
-    # Semantic Search
+    # Hybrid Search (Vector + BM25 + MMR)
     # =========================================================================
 
     async def search(
@@ -364,16 +379,27 @@ Write a concise summary that would help find this session when searching for rel
         limit: int = 10,
         include_other_bots: bool = False,
         apply_temporal_decay: bool = True,
-        min_score: float = 0.5,
+        use_hybrid: bool = True,
+        use_mmr: bool = True,
+        min_score: float = 0.3,
     ) -> list[dict[str, Any]]:
-        """Semantic search across past session summaries.
+        """Hybrid search across past session summaries.
+
+        Combines vector similarity with BM25 keyword matching,
+        applies temporal decay, and uses MMR for diversity.
+
+        Pipeline:
+            Vector search → BM25 scoring → Weighted merge
+            → Temporal decay → MMR re-ranking → Top-K
 
         Args:
             query: Natural language query
             limit: Maximum results
             include_other_bots: Search across all bots (default: only this bot)
             apply_temporal_decay: Apply recency boost (default: True)
-            min_score: Minimum similarity score
+            use_hybrid: Combine vector + BM25 (default: True)
+            use_mmr: Apply MMR diversity re-ranking (default: True)
+            min_score: Minimum combined score
 
         Returns:
             List of matching memories with metadata
@@ -381,7 +407,7 @@ Write a concise summary that would help find this session when searching for rel
         if not await self._ensure_initialized():
             return []
 
-        # Embed query
+        # Embed query for vector search
         query_embedding = await self._embed_text(query)
         if not query_embedding:
             return []
@@ -401,14 +427,17 @@ Write a concise summary that would help find this session when searching for rel
                     ]
                 )
 
-            # Search
+            # Get more candidates for hybrid/MMR processing
+            candidate_limit = limit * 4 if (use_hybrid or use_mmr) else limit * 2
+
+            # Vector search
             results = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: (
                     self._client.query_points(
                         collection_name=GOAL_MEMORY_COLLECTION,
                         query=query_embedding,
-                        limit=limit * 2,  # Get extra for filtering
+                        limit=candidate_limit,
                         query_filter=query_filter,
                         with_payload=True,
                         with_vectors=False,
@@ -416,25 +445,52 @@ Write a concise summary that would help find this session when searching for rel
                 ),
             )
 
-            # Process results
-            memories = []
-            for point in results:
-                if point.score < min_score:
-                    continue
+            # Build candidate list with scores
+            candidates = []
+            query_tokens = self._tokenize(query)
 
+            for point in results:
                 payload = point.payload or {}
-                score = point.score
+                vector_score = point.score
+
+                # Calculate BM25 text score if hybrid
+                text_score = 0.0
+                if use_hybrid:
+                    searchable_text = " ".join(
+                        [
+                            payload.get("summary", ""),
+                            payload.get("outcome", ""),
+                            payload.get("goal", ""),
+                            " ".join(payload.get("companies", [])),
+                            " ".join(payload.get("queries", [])),
+                        ]
+                    )
+                    text_score = self._bm25_score(query_tokens, searchable_text)
+
+                # Combine scores
+                if use_hybrid and text_score > 0:
+                    combined_score = (
+                        self.vector_weight * vector_score
+                        + self.text_weight * text_score
+                    )
+                else:
+                    combined_score = vector_score
 
                 # Apply temporal decay
                 if apply_temporal_decay:
                     created_at = payload.get("created_at")
                     if created_at:
-                        score = self._apply_decay(score, created_at)
+                        combined_score = self._apply_decay(combined_score, created_at)
 
-                memories.append(
+                if combined_score < min_score:
+                    continue
+
+                candidates.append(
                     {
                         "id": point.id,
-                        "score": score,
+                        "score": combined_score,
+                        "vector_score": vector_score,
+                        "text_score": text_score,
                         "summary": payload.get("summary", ""),
                         "outcome": payload.get("outcome", ""),
                         "goal": payload.get("goal", ""),
@@ -447,10 +503,16 @@ Write a concise summary that would help find this session when searching for rel
                     }
                 )
 
-            # Re-sort by decayed score
-            memories.sort(key=lambda x: x["score"], reverse=True)
+            # Sort by combined score
+            candidates.sort(key=lambda x: x["score"], reverse=True)
 
-            return memories[:limit]
+            # Apply MMR re-ranking for diversity
+            if use_mmr and len(candidates) > limit:
+                candidates = self._mmr_rerank(candidates, limit)
+            else:
+                candidates = candidates[:limit]
+
+            return candidates
 
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
@@ -482,6 +544,198 @@ Write a concise summary that would help find this session when searching for rel
             return score * decay_factor
         except Exception:
             return score
+
+    def _tokenize(self, text: str) -> set[str]:
+        """Tokenize text for BM25 scoring.
+
+        Simple whitespace tokenization with lowercasing and filtering.
+
+        Args:
+            text: Text to tokenize
+
+        Returns:
+            Set of tokens
+        """
+        import re
+
+        # Lowercase and split on non-alphanumeric
+        tokens = re.findall(r"\b[a-z0-9]+\b", text.lower())
+        # Filter short tokens and stopwords
+        stopwords = {
+            "the",
+            "a",
+            "an",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "from",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "this",
+            "that",
+            "these",
+            "those",
+            "it",
+            "its",
+        }
+        return {t for t in tokens if len(t) > 2 and t not in stopwords}
+
+    def _bm25_score(
+        self,
+        query_tokens: set[str],
+        document: str,
+        k1: float = 1.5,
+        b: float = 0.75,
+        avg_doc_len: float = 100.0,
+    ) -> float:
+        """Calculate BM25 relevance score.
+
+        Simplified BM25 without IDF (single document context).
+        Uses term frequency with length normalization.
+
+        Args:
+            query_tokens: Tokenized query terms
+            document: Document text to score
+            k1: Term frequency saturation parameter
+            b: Length normalization parameter
+            avg_doc_len: Average document length estimate
+
+        Returns:
+            BM25 score (0.0 to ~1.0 normalized)
+        """
+        if not query_tokens or not document:
+            return 0.0
+
+        doc_tokens = self._tokenize(document)
+        doc_len = len(doc_tokens)
+
+        if doc_len == 0:
+            return 0.0
+
+        # Count term frequencies
+        term_freq: dict[str, int] = {}
+        for token in doc_tokens:
+            term_freq[token] = term_freq.get(token, 0) + 1
+
+        # Calculate BM25 score
+        score = 0.0
+        for term in query_tokens:
+            if term in term_freq:
+                tf = term_freq[term]
+                # BM25 term score (simplified without IDF)
+                numerator = tf * (k1 + 1)
+                denominator = tf + k1 * (1 - b + b * (doc_len / avg_doc_len))
+                score += numerator / denominator
+
+        # Normalize to 0-1 range (divide by query length)
+        normalized = score / len(query_tokens) if query_tokens else 0.0
+
+        # Cap at 1.0
+        return min(normalized, 1.0)
+
+    def _mmr_rerank(
+        self,
+        candidates: list[dict[str, Any]],
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Apply Maximal Marginal Relevance re-ranking for diversity.
+
+        Iteratively selects items that balance relevance with diversity
+        from already-selected items.
+
+        Score: λ * relevance - (1-λ) * max_similarity_to_selected
+
+        Args:
+            candidates: List of candidate results with scores
+            limit: Number of results to return
+
+        Returns:
+            Re-ranked list with diversity
+        """
+        if len(candidates) <= limit:
+            return candidates
+
+        selected: list[dict[str, Any]] = []
+        remaining = candidates.copy()
+
+        # Select first item (highest relevance)
+        if remaining:
+            selected.append(remaining.pop(0))
+
+        while len(selected) < limit and remaining:
+            best_idx = 0
+            best_mmr_score = float("-inf")
+
+            for i, candidate in enumerate(remaining):
+                relevance = candidate["score"]
+
+                # Calculate max similarity to selected items
+                max_sim = 0.0
+                candidate_text = candidate.get("summary", "")
+                for sel in selected:
+                    sel_text = sel.get("summary", "")
+                    sim = self._jaccard_similarity(candidate_text, sel_text)
+                    max_sim = max(max_sim, sim)
+
+                # MMR score
+                mmr_score = (
+                    self.mmr_lambda * relevance - (1 - self.mmr_lambda) * max_sim
+                )
+
+                if mmr_score > best_mmr_score:
+                    best_mmr_score = mmr_score
+                    best_idx = i
+
+            selected.append(remaining.pop(best_idx))
+
+        return selected
+
+    def _jaccard_similarity(self, text1: str, text2: str) -> float:
+        """Calculate Jaccard similarity between two texts.
+
+        Args:
+            text1: First text
+            text2: Second text
+
+        Returns:
+            Jaccard similarity (0.0 to 1.0)
+        """
+        tokens1 = self._tokenize(text1)
+        tokens2 = self._tokenize(text2)
+
+        if not tokens1 or not tokens2:
+            return 0.0
+
+        intersection = len(tokens1 & tokens2)
+        union = len(tokens1 | tokens2)
+
+        return intersection / union if union > 0 else 0.0
 
     # =========================================================================
     # Memory Management
