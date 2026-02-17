@@ -58,7 +58,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status librechat-build setup-ssl version version-bump docker-tag docker-push docker-push-latest release
+.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status setup-ssl version version-bump docker-tag docker-push docker-push-latest release
 
 help:
 	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
@@ -264,11 +264,6 @@ docker-build-versioned: health-ui tasks-ui control-plane-ui dashboard-health-ui
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_SHA=$(GIT_SHA) \
 		--build-arg BUILD_DATE=$(BUILD_DATE)
-	cd $(PROJECT_ROOT_DIR) && \
-	docker compose -f docker-compose.librechat.yml build \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_DATE=$(BUILD_DATE)
 	@echo "$(GREEN)✅ All images built with version $(VERSION)$(RESET)"
 
 # Tag local images with registry prefix and version
@@ -374,13 +369,9 @@ setup-ssl:
 	fi
 
 docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
-	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
+	@echo "$(BLUE)🔨 Building all Docker images...$(RESET)"
 	@echo "$(YELLOW)Version: $(VERSION) | SHA: $(GIT_SHA) | Date: $(BUILD_DATE)$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose build \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_DATE=$(BUILD_DATE)
-	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.librechat.yml build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_SHA=$(GIT_SHA) \
 		--build-arg BUILD_DATE=$(BUILD_DATE)
@@ -460,7 +451,7 @@ security-full: security
 	@echo ""
 	@echo "$(BLUE)4/5 Infrastructure security scan (Checkov)...$(RESET)"
 	@if $(VENV)/bin/checkov --help >/dev/null 2>&1; then \
-		$(VENV)/bin/checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
+		$(VENV)/bin/checkov --file docker-compose.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
 	else \
 		echo "$(YELLOW)⚠️  Checkov not installed. Run: $(PIP) install checkov$(RESET)"; \
 	fi
@@ -573,11 +564,5 @@ db-status: $(VENV)
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
 
 # ===== LIBRECHAT UI =====
-
-# Build custom LibreChat Docker image with InsightMesh UI
-librechat-build:
-	@echo "$(BLUE)🔨 Building custom LibreChat with InsightMesh UI...$(RESET)"
-	docker compose -f docker-compose.librechat.yml build
-	@echo "$(GREEN)✅ LibreChat image built successfully!$(RESET)"
-	@echo "$(YELLOW)To start: docker compose -f docker-compose.librechat.yml up -d$(RESET)"
-	@echo "$(YELLOW)To stop:  docker compose -f docker-compose.librechat.yml down$(RESET)"
+# LibreChat is now included in main docker-compose.yml
+# Use 'make start' to run full stack including LibreChat
