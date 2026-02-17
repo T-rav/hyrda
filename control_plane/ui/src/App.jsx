@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, Bot, LogOut, User, Key } from 'lucide-react'
+import { Shield, Users, Bot, LogOut, User, Key, Target } from 'lucide-react'
 import './App.css'
 import AgentsView from './components/AgentsView'
 import UsersView from './components/UsersView'
 import GroupsView from './components/GroupsView'
 import ServiceAccountsView from './components/ServiceAccountsView'
+import GoalBotsView from './components/GoalBotsView'
 import Toast from './components/Toast'
 import { useAgents } from './hooks/useAgents'
 import { useUsers } from './hooks/useUsers'
 import { useGroups } from './hooks/useGroups'
 import { usePermissions } from './hooks/usePermissions'
 import { useServiceAccounts } from './hooks/useServiceAccounts'
+import { useGoalBots } from './hooks/useGoalBots'
 import { useToast } from './hooks/useToast'
 
 function App() {
@@ -20,6 +22,7 @@ function App() {
     if (path === '/users') return 'users'
     if (path === '/groups') return 'groups'
     if (path === '/service-accounts') return 'service-accounts'
+    if (path === '/goal-bots') return 'goal-bots'
     return 'agents' // default
   }
 
@@ -101,6 +104,30 @@ function App() {
     toggleActiveStatus,
   } = useServiceAccounts(toast)
 
+  const {
+    goalBots,
+    loading: goalBotsLoading,
+    error: goalBotsError,
+    selectedBot,
+    selectedBotDetails,
+    showCreateModal: showGoalBotCreateModal,
+    setSelectedBot,
+    setShowCreateModal: setShowGoalBotCreateModal,
+    fetchGoalBots,
+    fetchBotDetails,
+    createGoalBot,
+    updateGoalBot,
+    deleteGoalBot,
+    toggleGoalBot,
+    pauseGoalBot,
+    resumeGoalBot,
+    triggerGoalBot,
+    cancelGoalBot,
+    fetchBotRuns,
+    fetchRunDetails,
+    resetBotState,
+  } = useGoalBots(toast)
+
   // Check authentication on mount to prevent back-button access after logout
   // Note: This is NOT aggressive - skips auth paths and let server-side auth handle it
   useEffect(() => {
@@ -138,6 +165,7 @@ function App() {
     fetchGroups()
     fetchUsers()
     fetchServiceAccounts()
+    fetchGoalBots()
   }, [])
 
   // Logout handler
@@ -176,11 +204,18 @@ function App() {
               Agents
             </button>
             <button
-              className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => handleTabChange('users')}
+              className={`nav-link ${activeTab === 'service-accounts' ? 'active' : ''}`}
+              onClick={() => handleTabChange('service-accounts')}
             >
-              <Users size={20} />
-              Users
+              <Key size={20} />
+              API Keys
+            </button>
+            <button
+              className={`nav-link ${activeTab === 'goal-bots' ? 'active' : ''}`}
+              onClick={() => handleTabChange('goal-bots')}
+            >
+              <Target size={20} />
+              Goals
             </button>
             <button
               className={`nav-link ${activeTab === 'groups' ? 'active' : ''}`}
@@ -190,11 +225,11 @@ function App() {
               Groups
             </button>
             <button
-              className={`nav-link ${activeTab === 'service-accounts' ? 'active' : ''}`}
-              onClick={() => handleTabChange('service-accounts')}
+              className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
+              onClick={() => handleTabChange('users')}
             >
-              <Key size={20} />
-              API Keys
+              <Users size={20} />
+              Users
             </button>
             <div className="logout-dropdown">
               <button
@@ -282,6 +317,32 @@ function App() {
             onToggleActive={toggleActiveStatus}
             createdApiKey={createdApiKey}
             setCreatedApiKey={setCreatedApiKey}
+          />
+        )}
+        {activeTab === 'goal-bots' && (
+          <GoalBotsView
+            goalBots={goalBots}
+            agents={agents}
+            loading={goalBotsLoading}
+            error={goalBotsError}
+            selectedBot={selectedBot}
+            selectedBotDetails={selectedBotDetails}
+            showCreateModal={showGoalBotCreateModal}
+            setSelectedBot={setSelectedBot}
+            setShowCreateModal={setShowGoalBotCreateModal}
+            onRefresh={fetchGoalBots}
+            onFetchDetails={fetchBotDetails}
+            onCreate={createGoalBot}
+            onUpdate={updateGoalBot}
+            onDelete={deleteGoalBot}
+            onToggle={toggleGoalBot}
+            onPause={pauseGoalBot}
+            onResume={resumeGoalBot}
+            onTrigger={triggerGoalBot}
+            onCancel={cancelGoalBot}
+            onFetchRuns={fetchBotRuns}
+            onFetchRunDetails={fetchRunDetails}
+            onResetState={resetBotState}
           />
         )}
       </main>

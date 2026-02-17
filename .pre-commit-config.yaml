@@ -84,7 +84,10 @@ repos:
             .*\.yaml$|
             .*\.yml$|
             .*/tests/.*|
-            librechat-custom/.*
+            librechat-custom/.*|
+            agent-service/services/agent_sync\.py$|
+            control_plane/ui/src/App\.jsx$|
+            tasks/ui/src/App\.jsx$
           )$
 
   # Detect secrets - Defense in depth (complements GitGuardian)

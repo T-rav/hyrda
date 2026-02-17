@@ -1853,6 +1853,393 @@ textarea.form-control.no-resize {
   justify-content: center;
 }
 
+/* ============================================================================
+   GOAL BOTS
+   ============================================================================ */
+
+.stat-badge.paused {
+  background: #fbbf24;
+  color: #1a202c;
+}
+
+.stat-badge.running {
+  background: #3b82f6;
+  color: white;
+}
+
+.stat-badge.schedule {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.stat-badge.next-run {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.stat-badge.last-run {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Modal tabs */
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0 1.5rem;
+  background: #f8fafc;
+}
+
+.tab-btn {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: #9f7aea;
+}
+
+.tab-btn.active {
+  color: #9f7aea;
+  border-bottom-color: #9f7aea;
+}
+
+/* Details view */
+.details-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.detail-section {
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.detail-section h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-item label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+}
+
+.detail-item span {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.code-block {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 8px;
+  font-family: 'Fira Code', 'Monaco', monospace;
+  font-size: 0.875rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.code-block.error {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* Runs list */
+.runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.run-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.run-status {
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.run-time {
+  color: #64748b;
+}
+
+.run-duration {
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+/* Runs table */
+.runs-table {
+  overflow-x: auto;
+}
+
+.runs-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.runs-table th,
+.runs-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.runs-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.runs-table tr.clickable:hover {
+  background: #f1f5f9;
+  cursor: pointer;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-badge.completed {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.status-badge.failed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-badge.running {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.status-badge.cancelled,
+.status-badge.timeout {
+  background: #fefce8;
+  color: #ca8a04;
+}
+
+.status-badge.pending {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* Run details panel */
+.run-details-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.run-details-panel h4 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.detail-section.error {
+  background: #fef2f2;
+}
+
+.detail-section.error label {
+  color: #dc2626;
+}
+
+/* Logs timeline */
+.logs-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.log-entry {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: white;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  border-left: 3px solid #e2e8f0;
+}
+
+.log-entry.plan_created,
+.log-entry.plan_updated {
+  border-left-color: #3b82f6;
+}
+
+.log-entry.action_taken {
+  border-left-color: #9f7aea;
+}
+
+.log-entry.progress_check {
+  border-left-color: #06b6d4;
+}
+
+.log-entry.goal_achieved {
+  border-left-color: #10b981;
+}
+
+.log-entry.goal_blocked,
+.log-entry.error {
+  border-left-color: #ef4444;
+}
+
+.log-type {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #f1f5f9;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  color: #64748b;
+}
+
+.log-name {
+  flex: 1;
+  color: #1e293b;
+}
+
+.log-time {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+/* State view */
+.state-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.state-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.state-header button {
+  margin-left: auto;
+}
+
+/* Modal footer layout */
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-left,
+.footer-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Text helpers */
+.text-success {
+  color: #10b981;
+}
+
+.text-error {
+  color: #ef4444;
+}
+
+.text-warning {
+  color: #f59e0b;
+}
+
+.text-info {
+  color: #3b82f6;
+}
+
+/* Form improvements */
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.help-text {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+/* Empty state small variant */
+.empty-state.small {
+  padding: 2rem;
+}
+
+.empty-state.small p {
+  margin: 0;
+  color: #64748b;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .main-content {

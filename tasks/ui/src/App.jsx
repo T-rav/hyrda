@@ -823,7 +823,7 @@ function GroupRow({ group, isExpanded, onToggle, onGroupAction, actionLoading })
 
   return (
     <tr className="group-row" style={{ backgroundColor: group.name ? 'rgba(99, 102, 241, 0.1)' : 'rgba(156, 163, 175, 0.1)' }}>
-      <td colSpan={4}>
+      <td>
         <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={onToggle}>
           {isExpanded ? (
             <ChevronDown size={18} className="me-2" />
@@ -843,6 +843,8 @@ function GroupRow({ group, isExpanded, onToggle, onGroupAction, actionLoading })
           )}
         </div>
       </td>
+      <td></td>
+      <td></td>
       <td>
         <div className="btn-group btn-group-sm" role="group">
           <button

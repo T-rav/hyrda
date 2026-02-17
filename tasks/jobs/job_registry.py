@@ -9,6 +9,7 @@ from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
 from .gdrive_ingest import GDriveIngestJob
+from .goal_bot_scheduler import GoalBotSchedulerJob
 from .hubspot_sync import HubSpotSyncJob
 from .metric_sync import MetricSyncJob
 from .slack_user_import import SlackUserImportJob
@@ -64,6 +65,7 @@ def execute_job_by_type(
         "hubspot_sync": HubSpotSyncJob,
         "website_scrape": WebsiteScrapeJob,
         "youtube_ingest": YouTubeIngestJob,
+        "goal_bot_scheduler": GoalBotSchedulerJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -181,6 +183,7 @@ class JobRegistry:
             "hubspot_sync": HubSpotSyncJob,
             "website_scrape": WebsiteScrapeJob,
             "youtube_ingest": YouTubeIngestJob,
+            "goal_bot_scheduler": GoalBotSchedulerJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:

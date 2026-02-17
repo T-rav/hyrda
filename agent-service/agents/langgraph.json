@@ -5,7 +5,8 @@
   ],
   "graphs": {
     "research": "agents.research.research_agent:research_agent",
-    "help": "agents.help.help_agent:help_agent"
+    "help": "agents.help.help_agent:help_agent",
+    "prospect_research": "agents.prospect_research.prospect_research_agent:prospect_research"
   },
   "env": "../../../.env"
 }

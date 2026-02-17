@@ -3,6 +3,9 @@
 On startup, agent-service dynamically discovers all available agents and
 registers them with control plane. This allows control plane UI to enable/disable
 agents dynamically without code changes.
+
+Goal bots (agents with goal_bot metadata) are also registered with the
+goal-bots API for autonomous scheduled execution.
 """
 
 import json
@@ -93,6 +96,10 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 "is_system": metadata.get("is_system", False),
             }
 
+            # Include goal_bot config if present
+            if "goal_bot" in metadata:
+                agent_data["goal_bot"] = metadata["goal_bot"]
+
             agents.append(agent_data)
 
         logger.info(
@@ -131,6 +138,10 @@ def sync_agents_to_control_plane() -> None:
         # Build registration payloads with endpoint URLs
         agents_to_register = []
         for agent_data in discovered_agents:
+            # Skip goal bots from regular agent registration - they're registered separately
+            if agent_data.get("goal_bot"):
+                continue
+
             agent_data["endpoint_url"] = (
                 f"http://{agent_service_host}:8000/api/agents/{agent_data['name']}/invoke"
             )
@@ -177,6 +188,94 @@ def sync_agents_to_control_plane() -> None:
             f"Agent sync complete - registered {len(agents_to_register)} agents"
         )
 
+        # Now register goal bots
+        _register_goal_bots(discovered_agents, control_plane_url, service_token)
+
     except Exception as e:
         logger.error(f"Error syncing agents to control plane: {e}")
         # Don't fail startup if sync fails - agents can still work
+
+
+def _register_goal_bots(
+    discovered_agents: list[dict], control_plane_url: str, service_token: str
+) -> None:
+    """Register goal bots with control plane.
+
+    Goal bots are agents that have goal_bot metadata attached via the
+    @agent_metadata decorator. They run autonomously on schedules.
+    """
+    import requests
+
+    goal_bots = [a for a in discovered_agents if a.get("goal_bot")]
+
+    if not goal_bots:
+        logger.info("No goal bots to register")
+        return
+
+    logger.info(f"Registering {len(goal_bots)} goal bots...")
+
+    for agent_data in goal_bots:
+        goal_bot_config = agent_data["goal_bot"]
+
+        # Build goal bot registration payload
+        payload = {
+            "name": agent_data["name"],
+            "description": agent_data.get("description", ""),
+            "agent_name": agent_data["name"],  # The underlying agent to use
+            "goal_prompt": goal_bot_config["goal_prompt"],
+            "schedule_type": goal_bot_config["schedule_type"],
+            "schedule_config": goal_bot_config["schedule_config"],
+            "max_runtime_seconds": goal_bot_config.get("max_runtime_seconds", 3600),
+            "max_iterations": goal_bot_config.get("max_iterations", 10),
+            "notification_channel": goal_bot_config.get("notification_channel"),
+            "tools": goal_bot_config.get("tools", []),
+        }
+
+        try:
+            headers = {"Content-Type": "application/json"}
+            if service_token:
+                headers["Authorization"] = f"Bearer {service_token}"
+
+            # First check if goal bot already exists
+            check_response = requests.get(
+                f"{control_plane_url}/api/goal-bots",
+                headers=headers,
+                timeout=5,
+                verify=False,  # nosec B501 - Internal Docker network with self-signed certs  # nosemgrep: python.requests.security.disabled-cert-validation.disabled-cert-validation, python.lang.security.audit.insecure-transport.requests.request-with-http.request-with-http
+            )
+
+            existing_bots = []
+            if check_response.status_code == 200:
+                data = check_response.json()
+                existing_bots = [b["name"] for b in data.get("goal_bots", [])]
+
+            if agent_data["name"] in existing_bots:
+                logger.info(
+                    f"Goal bot '{agent_data['name']}' already registered, skipping"
+                )
+                continue
+
+            # Register new goal bot via service auth endpoint
+            response = requests.post(
+                f"{control_plane_url}/api/goal-bots/register",
+                json=payload,
+                headers=headers,
+                timeout=10,
+                verify=False,  # nosec B501 - Internal Docker network with self-signed certs  # nosemgrep: python.requests.security.disabled-cert-validation.disabled-cert-validation, python.lang.security.audit.insecure-transport.requests.request-with-http.request-with-http
+            )
+
+            if response.status_code in (200, 201):
+                logger.info(
+                    f"✓ Registered goal bot '{agent_data['name']}' with control plane"
+                )
+            elif response.status_code == 409:
+                logger.info(
+                    f"Goal bot '{agent_data['name']}' already exists (conflict)"
+                )
+            else:
+                logger.warning(
+                    f"Failed to register goal bot '{agent_data['name']}': "
+                    f"HTTP {response.status_code} - {response.text}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to register goal bot '{agent_data['name']}': {e}")

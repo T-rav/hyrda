@@ -652,6 +652,45 @@ describe('Authentication', () => {
   })
 })
 
+// Mock jobs with groups for testing GroupRow
+const mockJobsWithGroups = {
+  jobs: [
+    {
+      id: 'test-job-1',
+      name: 'Test Job 1',
+      group_name: 'System',
+      func: 'test_function',
+      trigger: 'interval[1:00:00]',
+      next_run_time: '2025-09-24T18:00:00+00:00',
+      pending: false,
+      args: ['slack_user_import'],
+      kwargs: {}
+    },
+    {
+      id: 'test-job-2',
+      name: 'Test Job 2',
+      group_name: 'System',
+      func: 'test_function',
+      trigger: 'interval[0:30:00]',
+      next_run_time: null,
+      pending: false,
+      args: ['metric_sync'],
+      kwargs: {}
+    },
+    {
+      id: 'test-job-3',
+      name: 'Ungrouped Task',
+      group_name: null,
+      func: 'test_function',
+      trigger: 'interval[2:00:00]',
+      next_run_time: '2025-09-24T20:00:00+00:00',
+      pending: false,
+      args: ['website_scrape'],
+      kwargs: {}
+    }
+  ]
+}
+
 describe('Tasks Content', () => {
   beforeEach(() => {
     global.fetch = vi.fn().mockImplementation((url) => {
@@ -708,5 +747,209 @@ describe('Tasks Content', () => {
 
     // Modal should open
     expect(screen.getByText('Create New Task')).toBeInTheDocument()
+  })
+})
+
+describe('Task Grouping and Column Alignment', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobsWithGroups)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+  })
+
+  test('displays grouped tasks with folder icons', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      // Should show the System group
+      expect(screen.getByText('System')).toBeInTheDocument()
+    })
+
+    // Should show task count badge
+    expect(screen.getByText(/2 tasks/i)).toBeInTheDocument()
+  })
+
+  test('expands and collapses task groups', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('System')).toBeInTheDocument()
+    })
+
+    // Initially group should be collapsed - tasks not visible
+    expect(screen.queryByText('Test Job 1')).not.toBeInTheDocument()
+
+    // Click to expand the group
+    await user.click(screen.getByText('System'))
+
+    // Now tasks should be visible
+    await waitFor(() => {
+      expect(screen.getByText('Test Job 1')).toBeInTheDocument()
+      expect(screen.getByText('Test Job 2')).toBeInTheDocument()
+    })
+
+    // Click again to collapse
+    await user.click(screen.getByText('System'))
+
+    // Tasks should be hidden again
+    await waitFor(() => {
+      expect(screen.queryByText('Test Job 1')).not.toBeInTheDocument()
+    })
+  })
+
+  test('REGRESSION: group rows have 4 columns for proper alignment', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('System')).toBeInTheDocument()
+    })
+
+    // Find the group row
+    const groupRow = screen.getByText('System').closest('tr')
+    expect(groupRow).toBeInTheDocument()
+
+    // Count the number of td elements - should be exactly 4 for alignment
+    const cells = groupRow.querySelectorAll('td')
+    expect(cells.length).toBe(4)
+
+    // First cell should contain the group name
+    expect(cells[0].textContent).toContain('System')
+
+    // Last cell should contain action buttons
+    const actionButtons = cells[3].querySelectorAll('button')
+    expect(actionButtons.length).toBeGreaterThan(0)
+  })
+
+  test('REGRESSION: task rows have 4 columns matching header', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('System')).toBeInTheDocument()
+    })
+
+    // Expand the group
+    await user.click(screen.getByText('System'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Job 1')).toBeInTheDocument()
+    })
+
+    // Find a task row
+    const taskRow = screen.getByText('Test Job 1').closest('tr')
+    expect(taskRow).toBeInTheDocument()
+
+    // Count the number of td elements - should be exactly 4
+    const cells = taskRow.querySelectorAll('td')
+    expect(cells.length).toBe(4)
+  })
+
+  test('table header has 4 columns', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('All Tasks')).toBeInTheDocument()
+    })
+
+    // Find the table header
+    const table = document.querySelector('.table')
+    expect(table).toBeInTheDocument()
+
+    const headerCells = table.querySelectorAll('thead th')
+    expect(headerCells.length).toBe(4)
+  })
+
+  test('ungrouped tasks render without group header', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      // Ungrouped task should be visible directly (not inside a collapsed group)
+      expect(screen.getByText('Ungrouped Task')).toBeInTheDocument()
+    })
+  })
+
+  test('group row action buttons are aligned with task row action buttons', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Switch to tasks tab
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('System')).toBeInTheDocument()
+    })
+
+    // Get group row
+    const groupRow = screen.getByText('System').closest('tr')
+    const groupCells = groupRow.querySelectorAll('td')
+
+    // Expand group
+    await user.click(screen.getByText('System'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Job 1')).toBeInTheDocument()
+    })
+
+    // Get task row
+    const taskRow = screen.getByText('Test Job 1').closest('tr')
+    const taskCells = taskRow.querySelectorAll('td')
+
+    // Both should have same number of columns
+    expect(groupCells.length).toBe(taskCells.length)
+    expect(groupCells.length).toBe(4)
+
+    // Actions should be in the 4th column (index 3) for both
+    expect(groupCells[3].querySelectorAll('button').length).toBeGreaterThan(0)
+    expect(taskCells[3].querySelectorAll('button').length).toBeGreaterThan(0)
   })
 })

@@ -215,6 +215,7 @@ def register_routers(app: FastAPI) -> None:
     """Register all API routers."""
     from api.agents import router as agents_router
     from api.auth import router as auth_router
+    from api.goal_bots import router as goal_bots_router
     from api.groups import router as groups_router
     from api.health import router as health_router
     from api.service_accounts import router as service_accounts_router
@@ -227,6 +228,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(agents_router)
     app.include_router(groups_router)
     app.include_router(users_router)
+    app.include_router(goal_bots_router)
 
     logger.info("Registered all API routers")
 
