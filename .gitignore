@@ -230,3 +230,9 @@ dx/qdrant/volumes/
 *.mp3
 # CodeQL databases
 *-codeql-db/
+
+# Hydra (parallel issue processor)
+.hydra-state.json
+.hydra-logs/
+dx/hydra/ui/dist/
+dx/hydra/ui/node_modules/

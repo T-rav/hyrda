@@ -1,0 +1,482 @@
+"""Tests for dx/hydra/pr_manager.py."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from events import EventType
+from pr_manager import PRManager
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_manager(config, event_bus):
+    return PRManager(config=config, event_bus=event_bus)
+
+
+def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = ""):
+    """Build a mock for asyncio.create_subprocess_exec."""
+    mock_proc = AsyncMock()
+    mock_proc.returncode = returncode
+    mock_proc.communicate = AsyncMock(return_value=(stdout.encode(), stderr.encode()))
+    mock_proc.wait = AsyncMock(return_value=returncode)
+    return AsyncMock(return_value=mock_proc)
+
+
+# ---------------------------------------------------------------------------
+# push_branch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_push_branch_calls_git_push(config, event_bus, tmp_path):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.push_branch(tmp_path, "agent/issue-42")
+
+    assert result is True
+    args = mock_create.call_args[0]
+    assert args[0] == "git"
+    assert args[1] == "push"
+    assert "-u" in args
+    assert "origin" in args
+    assert "agent/issue-42" in args
+
+
+@pytest.mark.asyncio
+async def test_push_branch_failure_returns_false(config, event_bus, tmp_path):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="error: failed to push")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.push_branch(tmp_path, "agent/issue-99")
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
+# create_pr
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_pr_constructs_correct_gh_command(config, event_bus, issue):
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/55"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.create_pr(issue, "agent/issue-42")
+
+    args = mock_create.call_args[0]
+    assert args[0] == "gh"
+    assert "pr" in args
+    assert "create" in args
+    assert "--repo" in args
+    assert config.repo in args
+    assert "--head" in args
+    assert "agent/issue-42" in args
+    assert "--title" in args
+    assert "--body" in args
+
+
+@pytest.mark.asyncio
+async def test_create_pr_parses_pr_number_from_url(config, event_bus, issue):
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/123"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        pr_info = await manager.create_pr(issue, "agent/issue-42")
+
+    assert pr_info.number == 123
+    assert pr_info.url == pr_url
+    assert pr_info.issue_number == issue.number
+    assert pr_info.branch == "agent/issue-42"
+
+
+@pytest.mark.asyncio
+async def test_create_pr_with_draft_flag(config, event_bus, issue):
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/77"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        pr_info = await manager.create_pr(issue, "agent/issue-42", draft=True)
+
+    args = mock_create.call_args[0]
+    assert "--draft" in args
+    assert pr_info.draft is True
+
+
+@pytest.mark.asyncio
+async def test_create_pr_title_not_truncated_when_short(config, event_bus):
+    from models import GitHubIssue
+
+    short_issue = GitHubIssue(
+        number=1,
+        title="Fix it",
+        body="Short issue",
+        labels=["ready"],
+        url="https://github.com/test-org/test-repo/issues/1",
+    )
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/10"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.create_pr(short_issue, "agent/issue-1")
+
+    args = mock_create.call_args[0]
+    title_idx = list(args).index("--title") + 1
+    title = args[title_idx]
+    # "Fixes #1: Fix it" is well under 70 chars
+    assert len(title) <= 70
+    assert "Fix it" in title
+    assert not title.endswith("...")
+
+
+@pytest.mark.asyncio
+async def test_create_pr_title_truncated_at_70_chars(config, event_bus):
+    from models import GitHubIssue
+
+    long_title = "A" * 80
+    long_issue = GitHubIssue(
+        number=99,
+        title=long_title,
+        body="Some body text",
+        labels=["ready"],
+        url="https://github.com/test-org/test-repo/issues/99",
+    )
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/200"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.create_pr(long_issue, "agent/issue-99")
+
+    args = mock_create.call_args[0]
+    title_idx = list(args).index("--title") + 1
+    title = args[title_idx]
+    assert len(title) <= 70
+    assert title.endswith("...")
+
+
+@pytest.mark.asyncio
+async def test_create_pr_failure_returns_pr_info_with_number_zero(
+    config, event_bus, issue
+):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="gh: error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        pr_info = await manager.create_pr(issue, "agent/issue-42")
+
+    assert pr_info.number == 0
+    assert pr_info.issue_number == issue.number
+    assert pr_info.branch == "agent/issue-42"
+
+
+@pytest.mark.asyncio
+async def test_create_pr_publishes_pr_created_event(config, event_bus, issue):
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/55"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.create_pr(issue, "agent/issue-42")
+
+    events = event_bus.get_history()
+    pr_created_events = [e for e in events if e.type == EventType.PR_CREATED]
+    assert len(pr_created_events) == 1
+    event_data = pr_created_events[0].data
+    assert event_data["pr"] == 55
+    assert event_data["issue"] == issue.number
+    assert event_data["branch"] == "agent/issue-42"
+    assert event_data["url"] == pr_url
+
+
+@pytest.mark.asyncio
+async def test_create_pr_dry_run_skips_command(dry_config, event_bus, issue):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        pr_info = await manager.create_pr(issue, "agent/issue-42")
+
+    mock_create.assert_not_called()
+    assert pr_info.number == 0
+    assert pr_info.issue_number == issue.number
+
+
+# ---------------------------------------------------------------------------
+# merge_pr
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_merge_pr_calls_gh_pr_merge_with_correct_flags(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.merge_pr(101)
+
+    assert result is True
+    args = mock_create.call_args[0]
+    assert args[0] == "gh"
+    assert "pr" in args
+    assert "merge" in args
+    assert "101" in args
+    assert "--squash" in args
+    assert "--auto" in args
+    assert "--delete-branch" in args
+
+
+@pytest.mark.asyncio
+async def test_merge_pr_failure_returns_false(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="merge failed")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.merge_pr(101)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_merge_pr_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.merge_pr(101)
+
+    mock_create.assert_not_called()
+    assert result is True
+
+
+# ---------------------------------------------------------------------------
+# add_labels
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_add_labels_calls_gh_issue_edit_for_each_label(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_labels(42, ["bug", "enhancement"])
+
+    assert mock_create.call_count == 2
+
+    first_args = mock_create.call_args_list[0][0]
+    assert first_args[0] == "gh"
+    assert "issue" in first_args
+    assert "edit" in first_args
+    assert "--add-label" in first_args
+
+    second_args = mock_create.call_args_list[1][0]
+    assert "--add-label" in second_args
+
+
+@pytest.mark.asyncio
+async def test_add_labels_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_labels(42, ["bug"])
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_labels_empty_list_skips_command(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_labels(42, [])
+
+    mock_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# remove_label
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remove_label_calls_gh_issue_edit(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_label(42, "ready")
+
+    assert mock_create.call_count == 1
+    args = mock_create.call_args[0]
+    assert args[0] == "gh"
+    assert "issue" in args
+    assert "edit" in args
+    assert "42" in args
+    assert "--remove-label" in args
+    assert "ready" in args
+
+
+@pytest.mark.asyncio
+async def test_remove_label_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_label(42, "ready")
+
+    mock_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# get_pr_diff
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_pr_diff_returns_diff_content(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    expected_diff = "diff --git a/foo.py b/foo.py\n+added line"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=expected_diff)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        diff = await manager.get_pr_diff(101)
+
+    assert diff == expected_diff
+
+    args = mock_create.call_args[0]
+    assert args[0] == "gh"
+    assert "pr" in args
+    assert "diff" in args
+    assert "101" in args
+
+
+@pytest.mark.asyncio
+async def test_get_pr_diff_failure_returns_empty_string(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="not found")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        diff = await manager.get_pr_diff(999)
+
+    assert diff == ""
+
+
+# ---------------------------------------------------------------------------
+# get_pr_status
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_pr_status_returns_parsed_json(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    status_json = '{"number": 101, "state": "OPEN", "mergeable": "MERGEABLE", "title": "Fix bug", "isDraft": false}'
+    mock_create = _make_subprocess_mock(returncode=0, stdout=status_json)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        status = await manager.get_pr_status(101)
+
+    assert status["number"] == 101
+    assert status["state"] == "OPEN"
+    assert status["isDraft"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_pr_status_failure_returns_empty_dict(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="not found")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        status = await manager.get_pr_status(999)
+
+    assert status == {}
+
+
+# ---------------------------------------------------------------------------
+# pull_main
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_pull_main_calls_git_pull(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="Already up to date.")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.pull_main()
+
+    assert result is True
+    args = mock_create.call_args[0]
+    assert args[0] == "git"
+    assert args[1] == "pull"
+    assert "origin" in args
+    assert config.main_branch in args
+
+
+@pytest.mark.asyncio
+async def test_pull_main_failure_returns_false(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="fatal: pull failed")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.pull_main()
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_pull_main_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.pull_main()
+
+    mock_create.assert_not_called()
+    assert result is True
+
+
+# ---------------------------------------------------------------------------
+# _run static method
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_returns_stdout_on_success(tmp_path):
+    mock_create = _make_subprocess_mock(returncode=0, stdout="hello world\n")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        output = await PRManager._run("echo", "hello world", cwd=tmp_path)
+
+    assert output == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_run_raises_runtime_error_on_nonzero_exit(tmp_path):
+    mock_create = _make_subprocess_mock(returncode=1, stderr="command not found")
+
+    with (
+        patch("asyncio.create_subprocess_exec", mock_create),
+        pytest.raises(RuntimeError, match="failed"),
+    ):
+        await PRManager._run("false", cwd=tmp_path)
