@@ -114,8 +114,6 @@ class VectorMemory:
                 host=self.qdrant_host,
                 port=self.qdrant_port,
                 timeout=60,
-                https=os.getenv("QDRANT_HTTPS", "true").lower() == "true",
-                verify=os.getenv("QDRANT_VERIFY_SSL", "false").lower() == "true",
             )
 
             # Create collection if needed

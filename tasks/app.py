@@ -158,7 +158,7 @@ def create_app() -> FastAPI:
     # Enable CORS
     allowed_origins = os.getenv(
         "ALLOWED_ORIGINS",
-        "https://localhost:5001,https://localhost:6001,https://localhost:3000",
+        "http://localhost:5001,http://localhost:6001,http://localhost:3000",
     )
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(
@@ -196,7 +196,7 @@ def main():
         settings = get_settings()
 
         logger.info(f"Starting Tasks Service on {settings.host}:{settings.port}")
-        logger.info(f"Dashboard available at: https://localhost:{settings.port}/")
+        logger.info(f"Dashboard available at: http://localhost:{settings.port}/")
 
         # Run with uvicorn
         uvicorn.run(

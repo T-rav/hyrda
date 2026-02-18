@@ -58,7 +58,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status setup-ssl version version-bump docker-tag docker-push docker-push-latest release
+.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status version version-bump docker-tag docker-push docker-push-latest release
 
 help:
 	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
@@ -359,17 +359,6 @@ dashboard-health-ui:
 	@echo "$(BLUE)Building React dashboard health UI...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Dashboard Health UI built successfully!$(RESET)"
-
-# Setup SSL certificates (skip if USE_SSL=false)
-setup-ssl:
-	@if [ "$(USE_SSL)" = "false" ]; then \
-		echo "$(YELLOW)⏭️  Skipping SSL setup (USE_SSL=false)$(RESET)"; \
-	else \
-		echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"; \
-		rm -rf $(PROJECT_ROOT_DIR)/.ssl/*-cert.pem $(PROJECT_ROOT_DIR)/.ssl/*-key.pem; \
-		bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh; \
-		echo "$(GREEN)✅ SSL certificates ready!$(RESET)"; \
-	fi
 
 docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images...$(RESET)"

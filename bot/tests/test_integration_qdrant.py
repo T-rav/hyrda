@@ -10,7 +10,6 @@ They will skip if Qdrant is not available or auth fails.
 """
 
 import os
-import ssl
 
 import pytest
 from qdrant_client import QdrantClient
@@ -27,29 +26,18 @@ def qdrant_client():
     port = int(os.getenv("VECTOR_PORT", "6333"))
     api_key = os.getenv("VECTOR_API_KEY")
 
-    # Path to CA certificate for SSL validation
-    # The mkcert CA signs all local certificates
-    ca_cert_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        ".ssl",
-        "mkcert-ca.crt",
-    )
-
-    # Create SSL context with mkcert CA certificate
-    if os.path.exists(ca_cert_path):
-        ssl_context = ssl.create_default_context(cafile=ca_cert_path)
-        # Create client with proper SSL context
+    if api_key:
         client = QdrantClient(
-            url=f"https://{host}:{port}",
+            url=f"http://{host}:{port}",
             api_key=api_key,
             timeout=10.0,
-            prefer_grpc=False,  # Use REST API
-            https=True,
-            verify=ssl_context,  # Use SSL context with mkcert CA
         )
     else:
-        # Fallback if CA cert not found
-        pytest.skip(f"mkcert CA certificate not found at {ca_cert_path}")
+        client = QdrantClient(
+            host=host,
+            port=port,
+            timeout=10.0,
+        )
 
     # Test connection - skip if auth fails
     try:

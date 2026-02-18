@@ -17,7 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
     ca-certificates \
-    libnss3-tools \
     libgobject-2.0-0 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
@@ -26,11 +25,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
-
-# Install mkcert for locally-trusted SSL certificates
-RUN curl -sL https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64 \
-    -o /usr/local/bin/mkcert && \
-    chmod +x /usr/local/bin/mkcert
 
 # Set working directory
 WORKDIR /app
@@ -41,10 +35,6 @@ RUN useradd -m -u 1000 appuser
 # Create logs directory with proper permissions
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
-
-# Trust all self-signed certificates for inter-service communication
-# SSL certificates are mounted as volumes at runtime via docker-compose.yml
-# No need to copy during build - handled at runtime
 
 # Copy shared library first
 COPY --chown=appuser:appuser ./shared /app/shared
@@ -98,12 +88,12 @@ LABEL org.opencontainers.image.title="InsightMesh Agent Service" \
 # Expose agent service port
 EXPOSE 8000
 
-# Add health check (HTTPS)
+# Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f -k https://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Switch to non-root user
 USER appuser
 
-# Run startup script (generates SSL certs and starts Gunicorn with HTTPS)
+# Run startup script
 CMD ["sh", "/app/startup.sh"]

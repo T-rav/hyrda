@@ -29,11 +29,6 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Trust all self-signed certificates for inter-service communication (optional)
-# Trust all self-signed certificates for inter-service communication
-# SSL certificates are mounted as volumes at runtime via docker-compose.yml
-# No need to copy during build - handled at runtime
-
 # Copy shared library first (required for common utilities)
 COPY --chown=appuser:appuser ./shared /app/shared
 

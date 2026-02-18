@@ -36,20 +36,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-mysql-client \
     default-libmysqlclient-dev \
     pkg-config \
-    openssl \
     curl \
     ca-certificates \
-    libnss3-tools \
     && rm -rf /var/lib/apt/lists/*
-
-# Install mkcert for locally-trusted SSL certificates (optional but recommended)
-RUN curl -sL https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64 \
-    -o /usr/local/bin/mkcert && \
-    chmod +x /usr/local/bin/mkcert
-
-# Trust all self-signed certificates for inter-service communication
-# SSL certificates are mounted as volumes at runtime via docker-compose.yml
-# No need to copy during build - handled at runtime
 
 # Copy shared library first
 COPY shared/ /app/shared/
@@ -80,7 +69,7 @@ EXPOSE 6001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request, ssl; urllib.request.urlopen('https://localhost:6001/health', context=ssl._create_unverified_context())"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:6001/health')"
 
-# Run startup script (generates SSL certs if missing, then starts uvicorn)
+# Run startup script
 CMD ["sh", "startup.sh"]

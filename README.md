@@ -57,18 +57,7 @@ cd insightmesh
 cp .env.example .env
 ```
 
-### 2. **Generate and Trust SSL Certificates**
-```bash
-# Generate self-signed certificates for HTTPS services
-./scripts/setup-ssl.sh
-
-# Trust certificates locally (macOS only - one-time setup)
-./scripts/trust-local-certs.sh
-```
-
-> **Note**: Docker containers automatically trust certificates during build. Local trust is only needed for running tests or CLI tools on macOS. See [docs/SSL_SETUP.md](docs/SSL_SETUP.md) for details.
-
-### 3. **Set Up Your Environment**
+### 2. **Set Up Your Environment**
 Edit `.env` with your credentials:
 
 ```bash
@@ -362,35 +351,19 @@ InsightMesh includes [LibreChat](https://librechat.ai) - a ChatGPT-like web inte
 # LIBRECHAT_CREDS_KEY, LIBRECHAT_CREDS_IV
 # See .env.example for details
 
-# 2. Start LibreChat
-docker compose -f docker-compose.librechat.yml up -d
+# 2. Start the full stack (includes LibreChat)
+docker compose up -d
 
 # 3. Access the UI
-open https://localhost:3443  # HTTPS (recommended)
-# OR
-open http://localhost:3080   # HTTP (redirects to HTTPS)
-```
-
-### HTTPS Setup (Local Development)
-
-LibreChat uses nginx with SSL certificates for local HTTPS:
-
-```bash
-# Generate trusted local certificates (one-time setup)
-brew install mkcert
-mkcert -install  # Adds local CA to system trust store
-mkcert localhost 127.0.0.1 ::1  # Creates certs in .ssl/
-
-# Restart LibreChat to pick up new certificates
-docker compose -f docker-compose.librechat.yml restart librechat-nginx
+open http://localhost:3080  # Local development
+# In production, access via /chat/ path behind nginx proxy
 ```
 
 ### Service Ports
 
 | Service | URL | Protocol | Notes |
 |---------|-----|----------|-------|
-| LibreChat UI | `https://localhost:3443` | HTTPS | Main access (no cert warnings with mkcert) |
-| LibreChat HTTP | `http://localhost:3080` | HTTP | Redirects to HTTPS |
+| LibreChat UI | `http://localhost:3080` | HTTP | Local dev access |
 | RAG API | `http://localhost:8002` | HTTP | Internal API |
 
 ### Authentication Flow
