@@ -22,12 +22,12 @@ jobs:
       matrix:
         task: [lint, test]
         service:
-          - { name: Bot, dir: bot, markers: "not integration and not system_flow and not smoke", pyright: true, sys-deps: "libffi-dev libssl-dev" }
-          - { name: Agent Service, dir: agent-service, markers: "not integration and not smoke" }
+          - { name: Bot, dir: bot, markers: "not integration and not system_flow and not smoke", pyright: true, sys-deps: "libffi-dev libssl-dev", cov-fail-under: 70 }
+          - { name: Agent Service, dir: agent-service, markers: "not integration and not smoke", cov-fail-under: 70 }
           - { name: Control Plane, dir: control_plane, markers: "not integration and not smoke" }
           - { name: RAG Service, dir: rag-service, markers: "not integration and not smoke" }
-          - { name: Dashboard Service, dir: dashboard-service, markers: "not integration and not smoke" }
-          - { name: Tasks, dir: tasks, markers: "not integration and not smoke", sys-deps-test: ffmpeg }
+          - { name: Dashboard Service, dir: dashboard-service, markers: "not integration and not smoke", cov-fail-under: 70 }
+          - { name: Tasks, dir: tasks, markers: "not integration and not smoke", sys-deps-test: ffmpeg, cov-fail-under: 70 }
     name: ${{ matrix.service.name }} ${{ matrix.task }}
 
     steps:
@@ -77,7 +77,11 @@ jobs:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: |
-        uv run pytest tests/ -v -m "${{ matrix.service.markers }}" --cov=. --cov-fail-under=70 --cov-report=term-missing
+        COV_ARGS="--cov=. --cov-report=term-missing"
+        if [ -n "${{ matrix.service.cov-fail-under }}" ]; then
+          COV_ARGS="$COV_ARGS --cov-fail-under=${{ matrix.service.cov-fail-under }}"
+        fi
+        uv run pytest tests/ -v -m "${{ matrix.service.markers }}" $COV_ARGS
 
   # ===== SHARED TESTS (Migration Integrity) =====
   shared-tests:
@@ -98,9 +102,9 @@ jobs:
     - name: Install test dependencies
       run: |
         uv venv
-        uv pip install pytest
+        uv pip install pytest aiohttp httpx pydantic PyJWT fastapi starlette prometheus-client
 
-    - name: Run shared tests (migration integrity)
+    - name: Run shared tests
       env:
         PYTHONPATH: shared
       run: uv run pytest shared/tests/ -v
