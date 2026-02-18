@@ -1,6 +1,5 @@
 """Tests for standardized error response utilities."""
 
-
 from shared.utils.error_responses import (
     ErrorCode,
     error_response,
@@ -60,25 +59,20 @@ class TestErrorResponse:
         """Test error response with error code."""
         result = error_response("Not found", ErrorCode.NOT_FOUND)
 
-        assert result == {
-            "error": "Not found",
-            "error_code": "NOT_FOUND"
-        }
+        assert result == {"error": "Not found", "error_code": "NOT_FOUND"}
         assert "details" not in result
 
     def test_error_response_with_details(self):
         """Test error response with details."""
         details = {"field": "email", "reason": "Invalid format"}
         result = error_response(
-            "Validation failed",
-            ErrorCode.VALIDATION_ERROR,
-            details
+            "Validation failed", ErrorCode.VALIDATION_ERROR, details
         )
 
         assert result == {
             "error": "Validation failed",
             "error_code": "VALIDATION_ERROR",
-            "details": {"field": "email", "reason": "Invalid format"}
+            "details": {"field": "email", "reason": "Invalid format"},
         }
 
     def test_error_response_with_none_code(self):
@@ -90,16 +84,9 @@ class TestErrorResponse:
 
     def test_error_response_with_none_details(self):
         """Test error response explicitly passes None for details."""
-        result = error_response(
-            "Error message",
-            ErrorCode.INTERNAL_ERROR,
-            details=None
-        )
+        result = error_response("Error message", ErrorCode.INTERNAL_ERROR, details=None)
 
-        assert result == {
-            "error": "Error message",
-            "error_code": "INTERNAL_ERROR"
-        }
+        assert result == {"error": "Error message", "error_code": "INTERNAL_ERROR"}
         assert "details" not in result
 
 
@@ -121,7 +108,7 @@ class TestValidationError:
         assert result == {
             "error": "Email is required",
             "error_code": "VALIDATION_ERROR",
-            "details": {"field": "email"}
+            "details": {"field": "email"},
         }
 
     def test_validation_error_with_kwargs(self):
@@ -130,7 +117,7 @@ class TestValidationError:
             "Invalid email format",
             field="email",
             pattern="^[a-z]+@[a-z]+\\.[a-z]+$",
-            value="not-an-email"
+            value="not-an-email",
         )
 
         assert result["error"] == "Invalid email format"
@@ -141,18 +128,11 @@ class TestValidationError:
 
     def test_validation_error_without_field_but_with_kwargs(self):
         """Test validation error with kwargs but no field."""
-        result = validation_error(
-            "Request too large",
-            max_size=1024,
-            actual_size=2048
-        )
+        result = validation_error("Request too large", max_size=1024, actual_size=2048)
 
         assert result["error"] == "Request too large"
         assert result["error_code"] == "VALIDATION_ERROR"
-        assert result["details"] == {
-            "max_size": 1024,
-            "actual_size": 2048
-        }
+        assert result["details"] == {"max_size": 1024, "actual_size": 2048}
 
 
 class TestNotFoundError:
@@ -164,17 +144,14 @@ class TestNotFoundError:
 
         assert result == {
             "error": "Agent 'profile' not found",
-            "error_code": "NOT_FOUND"
+            "error_code": "NOT_FOUND",
         }
 
     def test_not_found_error_without_identifier(self):
         """Test not found error without identifier."""
         result = not_found_error("User")
 
-        assert result == {
-            "error": "User not found",
-            "error_code": "NOT_FOUND"
-        }
+        assert result == {"error": "User not found", "error_code": "NOT_FOUND"}
 
     def test_not_found_error_various_resources(self):
         """Test not found error with various resource types."""
@@ -190,19 +167,13 @@ class TestUnauthorizedError:
         """Test unauthorized error with default message."""
         result = unauthorized_error()
 
-        assert result == {
-            "error": "Not authenticated",
-            "error_code": "UNAUTHORIZED"
-        }
+        assert result == {"error": "Not authenticated", "error_code": "UNAUTHORIZED"}
 
     def test_unauthorized_error_custom_message(self):
         """Test unauthorized error with custom message."""
         result = unauthorized_error("Invalid API key")
 
-        assert result == {
-            "error": "Invalid API key",
-            "error_code": "UNAUTHORIZED"
-        }
+        assert result == {"error": "Invalid API key", "error_code": "UNAUTHORIZED"}
 
 
 class TestForbiddenError:
@@ -212,10 +183,7 @@ class TestForbiddenError:
         """Test forbidden error with default message."""
         result = forbidden_error()
 
-        assert result == {
-            "error": "Access denied",
-            "error_code": "FORBIDDEN"
-        }
+        assert result == {"error": "Access denied", "error_code": "FORBIDDEN"}
 
     def test_forbidden_error_custom_message(self):
         """Test forbidden error with custom message."""
@@ -223,7 +191,7 @@ class TestForbiddenError:
 
         assert result == {
             "error": "Only admins can perform this action",
-            "error_code": "FORBIDDEN"
+            "error_code": "FORBIDDEN",
         }
 
 
@@ -236,7 +204,7 @@ class TestInternalError:
 
         assert result == {
             "error": "Internal server error",
-            "error_code": "INTERNAL_ERROR"
+            "error_code": "INTERNAL_ERROR",
         }
         assert "details" not in result
 
@@ -246,7 +214,7 @@ class TestInternalError:
 
         assert result == {
             "error": "Database connection failed",
-            "error_code": "INTERNAL_ERROR"
+            "error_code": "INTERNAL_ERROR",
         }
         assert "details" not in result
 
@@ -254,7 +222,7 @@ class TestInternalError:
         """Test internal error with debugging details."""
         details = {
             "traceback": "File main.py, line 42",
-            "error_type": "ConnectionError"
+            "error_type": "ConnectionError",
         }
         result = internal_error("Database connection failed", details=details)
 
@@ -263,8 +231,8 @@ class TestInternalError:
             "error_code": "INTERNAL_ERROR",
             "details": {
                 "traceback": "File main.py, line 42",
-                "error_type": "ConnectionError"
-            }
+                "error_type": "ConnectionError",
+            },
         }
 
 
@@ -277,7 +245,7 @@ class TestServiceUnavailableError:
 
         assert result == {
             "error": "Service unavailable: agent-service",
-            "error_code": "SERVICE_UNAVAILABLE"
+            "error_code": "SERVICE_UNAVAILABLE",
         }
 
     def test_service_unavailable_error_various_services(self):
@@ -306,7 +274,7 @@ class TestIntegration:
             unauthorized_error(),
             forbidden_error("No access"),
             internal_error("Server error", {"key": "value"}),
-            service_unavailable_error("api")
+            service_unavailable_error("api"),
         ]
 
         for error in errors:
@@ -323,7 +291,7 @@ class TestIntegration:
             unauthorized_error(),
             forbidden_error(),
             internal_error(),
-            service_unavailable_error("service")
+            service_unavailable_error("service"),
         ]
 
         for error in errors:

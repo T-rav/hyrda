@@ -76,7 +76,11 @@ def trace_agent_node(node_name: str):
 
                 langfuse_service = get_langfuse_service()
 
-                if langfuse_service and langfuse_service.enabled and langfuse_service.client:
+                if (
+                    langfuse_service
+                    and langfuse_service.enabled
+                    and langfuse_service.client
+                ):
                     try:
                         # Create a span linked to parent trace
                         span = langfuse_service.client.span(
@@ -123,7 +127,11 @@ def trace_agent_node(node_name: str):
 
                 langfuse_service = get_langfuse_service()
 
-                if langfuse_service and langfuse_service.enabled and langfuse_service.client:
+                if (
+                    langfuse_service
+                    and langfuse_service.enabled
+                    and langfuse_service.client
+                ):
                     try:
                         # Create a span linked to parent trace
                         span = langfuse_service.client.span(

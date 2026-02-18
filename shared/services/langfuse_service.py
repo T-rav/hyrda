@@ -47,6 +47,7 @@ except ImportError:
             self.host = host
             self.debug = debug
 
+
 if TYPE_CHECKING:
     from langfuse import Langfuse  # type: ignore[reportMissingImports]
 

@@ -141,14 +141,14 @@ class InternalSearchToolHTTP(BaseTool):
             )
         except RetrievalServiceError as e:
             logger.error(f"Service error: {e}")
-            return (
-                f"Retrieval service returned error {e.status_code}: {e.detail}"
-            )
+            return f"Retrieval service returned error {e.status_code}: {e.detail}"
         except Exception as e:
             logger.error(f"Unexpected internal search error: {e}")
             return f"Internal search error: {str(e)}"
 
-    def _run(self, query: str, max_chunks: int = 10, similarity_threshold: float = 0.7) -> str:
+    def _run(
+        self, query: str, max_chunks: int = 10, similarity_threshold: float = 0.7
+    ) -> str:
         """Sync wrapper - not implemented (use async version)."""
         return "Internal search requires async execution. Use ainvoke() instead."
 

@@ -54,10 +54,13 @@ if not JWT_SECRET_KEY:
     )
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "15"))  # 15 minutes for access tokens
-REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))  # 7 days for refresh tokens
+JWT_EXPIRATION_MINUTES = int(
+    os.getenv("JWT_EXPIRATION_MINUTES", "15")
+)  # 15 minutes for access tokens
+REFRESH_TOKEN_DAYS = int(
+    os.getenv("REFRESH_TOKEN_DAYS", "7")
+)  # 7 days for refresh tokens
 JWT_ISSUER = "insightmesh"
-
 
 
 class JWTAuthError(Exception):
@@ -430,7 +433,17 @@ def refresh_access_token_with_refresh(
         additional_claims={
             k: v
             for k, v in payload.items()
-            if k not in ("sub", "email", "name", "picture", "iat", "exp", "iss", "token_type")
+            if k
+            not in (
+                "sub",
+                "email",
+                "name",
+                "picture",
+                "iat",
+                "exp",
+                "iss",
+                "token_type",
+            )
         },
     )
 
