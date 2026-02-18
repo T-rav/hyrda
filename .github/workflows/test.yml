@@ -102,7 +102,7 @@ jobs:
     - name: Install test dependencies
       run: |
         uv venv
-        uv pip install pytest pytest-asyncio aiohttp httpx pydantic pydantic-settings PyJWT fastapi starlette prometheus-client
+        uv pip install pytest pytest-asyncio aiohttp httpx pydantic pydantic-settings PyJWT fastapi starlette prometheus-client "langfuse>=3.3.0"
 
     - name: Run shared tests
       env:
