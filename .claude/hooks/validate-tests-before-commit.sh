@@ -28,13 +28,26 @@ fi
 PROJECT_ROOT=$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null || echo "$CWD")
 cd "$PROJECT_ROOT"
 
+# Get staged files early — skip expensive checks for non-source commits
+STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0  # Nothing staged, let git handle it
+fi
+
+# Fast exit: if no source code is staged, skip lint and tests entirely
+HAS_SOURCE=$(echo "$STAGED_FILES" | grep -E '\.(py|ts|tsx|js|jsx)$' || true)
+if [ -z "$HAS_SOURCE" ]; then
+  exit 0  # Config/docs/YAML/Dockerfile-only commit, no lint or test needed
+fi
+
 # Require uv for running Python
 if ! command -v uv &>/dev/null; then
   echo "BLOCKED: uv is not installed. Install it: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
   exit 2
 fi
 
-# Run lint checks first (fastest gate)
+# Run lint checks (only reached for commits with source code)
 echo "Running lint checks..." >&2
 if ! make -C "$PROJECT_ROOT" lint-check > /dev/null 2>&1; then
   echo "BLOCKED: Lint check failed." >&2
@@ -42,13 +55,6 @@ if ! make -C "$PROJECT_ROOT" lint-check > /dev/null 2>&1; then
   exit 2
 fi
 echo "Lint checks passed." >&2
-
-# Get staged files
-STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
-
-if [ -z "$STAGED_FILES" ]; then
-  exit 0  # Nothing staged, let git handle it
-fi
 
 # Get staged Python source files (excluding tests, configs, migrations, __init__)
 SOURCE_FILES=$(echo "$STAGED_FILES" | grep '\.py$' \
