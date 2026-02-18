@@ -171,8 +171,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/gate-stop-agents.sh",
-            "timeout": 5,
-            "statusMessage": "Checking if code was changed this session..."
+            "timeout": 5
           },
           {
             "type": "agent",
