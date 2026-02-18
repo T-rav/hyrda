@@ -2,6 +2,9 @@
 requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+exclude = ["ui*", "templates*", "tests*"]
+
 [project]
 name = "insightmesh-hydra"
 version = "1.0.0"

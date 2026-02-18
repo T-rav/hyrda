@@ -102,12 +102,14 @@ class AgentRunner:
         )
 
     def _build_command(self, worktree_path: Path) -> list[str]:
-        """Construct the ``claude`` CLI invocation."""
+        """Construct the ``claude`` CLI invocation.
+
+        The working directory is set via ``cwd`` in the subprocess call,
+        not via a CLI flag.
+        """
         return [
             "claude",
             "-p",
-            "--cwd",
-            str(worktree_path),
             "--output-format",
             "text",
             "--model",

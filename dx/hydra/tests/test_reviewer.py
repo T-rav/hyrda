@@ -53,13 +53,11 @@ def test_build_command_uses_review_model_and_budget(config, tmp_path):
     assert cmd[budget_idx + 1] == str(config.review_budget_usd)
 
 
-def test_build_command_includes_cwd(config, tmp_path):
+def test_build_command_does_not_include_cwd(config, tmp_path):
     runner = _make_runner(config, None)
     cmd = runner._build_command(tmp_path)
 
-    assert "--cwd" in cmd
-    cwd_idx = cmd.index("--cwd")
-    assert cmd[cwd_idx + 1] == str(tmp_path)
+    assert "--cwd" not in cmd
 
 
 def test_build_command_includes_output_format(config, tmp_path):

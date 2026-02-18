@@ -56,15 +56,13 @@ class TestBuildCommand:
         cmd = runner._build_command(tmp_path)
         assert "-p" in cmd
 
-    def test_build_command_includes_cwd(
+    def test_build_command_does_not_include_cwd(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        """Command should pass --cwd pointing to the worktree path."""
+        """Command should not include --cwd; cwd is set on the subprocess."""
         runner = AgentRunner(config, event_bus)
         cmd = runner._build_command(tmp_path)
-        assert "--cwd" in cmd
-        cwd_index = cmd.index("--cwd")
-        assert cmd[cwd_index + 1] == str(tmp_path)
+        assert "--cwd" not in cmd
 
     def test_build_command_includes_model(
         self, config, event_bus: EventBus, tmp_path: Path
