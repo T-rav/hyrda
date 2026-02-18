@@ -1,0 +1,150 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-destructive-git.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for destructive git commands..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-tests-before-commit.sh",
+            "timeout": 120,
+            "statusMessage": "Validating lint + tests before commit..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scan-secrets-before-commit.sh",
+            "timeout": 30,
+            "statusMessage": "Scanning for secrets in staged files..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-test-counterpart.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for test counterpart..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-migrations.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for direct DB schema changes..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-plan-and-explore.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for exploration and planning..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-migrations.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for direct DB schema changes..."
+          }
+        ]
+      },
+      {
+        "matcher": "claude-context",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-reindex-needed.sh",
+            "timeout": 5,
+            "statusMessage": "Checking if claude-context index is stale..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-reindex-needed.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-planning.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "claude-context",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-indexed.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "cclsp",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "You are a test quality reviewer. Check if the current session involved writing or modifying code (Python, TypeScript, or JavaScript). If it did, review the test files that were written or modified.\n\nSteps:\n1. Run `git diff --cached --name-only` and `git diff --name-only` to find changed files\n2. If no Python, TypeScript/JavaScript, or Dockerfile files were changed, return {\"ok\": true}\n3. For each changed source file, find corresponding test files\n4. Read the test files and evaluate them against these criteria:\n\n**Test Completeness (all languages):**\n- Are there tests for the happy path (normal operation)?\n- Are there tests for edge cases (empty inputs, None/null/undefined values, boundary conditions, large inputs)?\n- Are there tests for exception/error handling (invalid inputs, network failures, missing data)?\n- Do tests cover all public functions/methods/components in the changed source files?\n\n**Python Test Quality:**\n- Do tests use proper assertions (not just `assert True`)?\n- Are error messages tested (checking exception types and messages)?\n- Are tests isolated (using mocks/fixtures appropriately)?\n\n**React/TypeScript Test Quality:**\n- Are components tested with Testing Library (`@testing-library/react`)?\n- Do tests use `screen` queries and prefer accessible queries (`getByRole`, `getByLabelText`, `getByText`) over `getByTestId`?\n- Are user interactions tested with `userEvent` instead of `fireEvent`?\n- Are async operations tested with `waitFor`?\n- Do tests verify rendered output and behavior, not internal state?\n- Are error states and loading states tested?\n- Don't flag librechat-custom files — that's an upstream fork\n- Don't flag generated/dist files\n\n**Dockerfile Test Coverage:**\n- If a Dockerfile was changed, check that any new COPY, RUN, or ENTRYPOINT logic has corresponding integration or smoke tests\n- Don't require test coverage for CSS or HTML template changes — these are presentation-only\n\nIf tests are missing edge cases or exception handling:\n1. Before creating an issue, check for duplicates by running:\n   gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search \"<key terms from title>\"\n   If a matching open issue already exists for the same file and finding, skip it.\n2. Create a GitHub issue for each distinct NEW finding by running:\n   gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title \"<concise title>\" --body \"<details with file paths, line numbers, and what's missing>\"\n3. Return {\"ok\": false, \"reason\": \"Tests for [file] are missing: [specific list]. GitHub issue(s) created.\"}\n\nIf tests are adequate, return {\"ok\": true}\n\nBe practical - not every function needs exhaustive edge case tests. Focus on:\n- Functions/components that handle user input or external data\n- Functions with conditional logic or error handling paths\n- Functions that could receive None/null/undefined, empty, or malformed data",
+            "timeout": 120,
+            "statusMessage": "Reviewing test quality (edge cases & exception handling)..."
+          },
+          {
+            "type": "agent",
+            "prompt": "You are a code quality reviewer for a project with Python microservices, React/TypeScript UIs, Docker containers, and server-rendered HTML templates. Check if the current session involved writing or modifying code. If it did, review the changed files for language best practices, clean code, and test patterns.\n\nSteps:\n1. Run `git diff --cached --name-only` and `git diff --name-only` to find changed files\n2. If no Python, TypeScript/JavaScript, Dockerfile, CSS, or HTML files were changed, return {\"ok\": true}\n3. Read each changed file and evaluate against the criteria below (use the Python section for .py files, the React/TypeScript section for .ts/.tsx/.js/.jsx files)\n\n---\n\n## Consistency with Existing Codebase Patterns (ALL languages)\n\n- Before flagging, read 2-3 neighboring files in the same service/package to understand established patterns\n- Does the new code follow the same patterns used elsewhere? (e.g., error handling style, class/component structure, dependency injection, config access, state management)\n- Are imports organized the same way as other files in the service?\n- Does it use the same abstractions/base classes/hooks that sibling modules use?\n- Flag deviations from established patterns — consistency matters more than theoretical best practice\n\n---\n\n## Python Clean Code Review\n\nFor each changed Python SOURCE file (not tests), check:\n\n**Python Best Practices:**\n- Use type hints on all function signatures (parameters and return types)\n- Use `dataclass` or `Pydantic BaseModel` for data containers instead of raw dicts\n- Prefer `pathlib.Path` over `os.path` for file operations\n- Use context managers (`with`) for resource management (files, connections, locks)\n- Use `Enum` for fixed sets of values instead of string constants\n- Use list/dict/set comprehensions where they improve readability over loops\n- Prefer `logging` module over `print()` for output\n- Use `__all__` in public modules to define the public API\n- Async functions should use `async/await` consistently — don't mix sync and async I/O\n\n**Naming:**\n- Are function/method names verbs that describe what they do? (e.g., `process_message`, not `handler2`)\n- Are variable names descriptive? No single-letter names except loop counters\n- Are class names nouns that describe what they are?\n\n**Function length & complexity:**\n- Functions should do ONE thing. Flag any function longer than ~25 lines\n- Flag deeply nested code (3+ levels of indentation) — suggest extracting helper functions\n- Flag functions with more than 3-4 parameters — suggest a config object or builder\n\n**Single Responsibility Principle:**\n- Does each class/module have ONE clear reason to change?\n- Flag classes that mix concerns (e.g., a service class that also does formatting, or a handler that also does database queries)\n- Flag functions that do multiple unrelated things (e.g., validate + transform + persist in one function)\n- If a file has grown beyond ~200 lines, consider whether it should be split\n\n---\n\n## React/TypeScript Clean Code Review\n\nFor each changed .ts/.tsx/.js/.jsx SOURCE file (not tests), check:\n\n**TypeScript Best Practices:**\n- Use explicit TypeScript types/interfaces for props, state, and function signatures — no `any`\n- Use `interface` for object shapes and component props, `type` for unions/intersections\n- Use `const` by default, `let` only when reassignment is needed, never `var`\n- Use optional chaining (`?.`) and nullish coalescing (`??`) instead of manual null checks\n- Use template literals over string concatenation\n- Prefer `unknown` over `any` when the type is truly unknown\n- Export types/interfaces that are used across files\n\n**React Best Practices:**\n- Functional components only (no class components)\n- Use proper hooks: `useMemo`/`useCallback` for expensive computations and stable references passed as props\n- Custom hooks for reusable stateful logic — extract when logic is shared across 2+ components\n- Props destructuring in function signature\n- Use React.FC or explicit return types for components\n- Keep components focused — if a component renders multiple distinct sections, extract child components\n- Event handlers named `handleX` (e.g., `handleClick`, `handleSubmit`)\n- Avoid inline object/array literals in JSX props (causes unnecessary re-renders)\n\n**Component Structure:**\n- Components should do ONE thing. Flag components longer than ~100 lines of JSX\n- Separate data fetching from presentation (container/presenter or custom hooks)\n- Flag components mixing API calls with rendering logic — extract to custom hooks\n- Co-locate related files (component, tests, styles, types) in the same directory\n\n---\n\n## Python Test Pattern Review\n\nFor each changed Python TEST file, check:\n\n**Test Data Builders (fluent syntax):**\nThis project uses builder pattern with fluent `.with_*()` syntax for test data. Example:\n```python\nagent = (\n    MockAgentBuilder()\n    .with_name(\"research\")\n    .with_display_name(\"Research Agent\")\n    .with_aliases([\"researcher\"])\n    .as_system_agent()\n    .build()\n)\n```\n- Flag tests that construct complex objects inline with many raw keyword arguments — suggest a builder instead\n- Builders should live in conftest.py or a shared test utilities module\n- Builders MUST return `self` from `.with_*()` methods for chaining\n- Builders MUST have a `.build()` method that returns the final object\n\n**Test Factory Methods:**\nThis project uses factory classes with static methods for common fixtures. Example:\n```python\nclass AgentFixtureFactory:\n    @staticmethod\n    def help_agent() -> MagicMock:\n        return MockAgentBuilder().with_name(\"help\").build()\n```\n- Flag repeated test setup code that creates similar objects — suggest a factory method\n- Factories should group related creation methods in a class\n- Factories belong in conftest.py for shared access\n\n**Test Structure:**\n- Tests should follow Arrange-Act-Assert (3As) pattern with clear separation\n- Flag tests with more than one logical assertion group (test should test ONE behavior)\n- Flag tests where setup/arrangement dominates — push setup into builders/factories\n\n## React Test Pattern Review\n\nFor each changed React/TS TEST file (.spec.tsx, .test.tsx, .spec.ts, .test.ts), check:\n\n**Testing Library Best Practices:**\n- Use `screen` queries (not destructured from `render`)\n- Prefer `getByRole`, `getByLabelText`, `getByText` over `getByTestId` — test like a user\n- Use `userEvent` over `fireEvent` for user interactions\n- Use `waitFor` for async assertions, not manual timeouts\n- Test behavior and output, not implementation details (don't test state directly)\n\n**Test Structure:**\n- Same Arrange-Act-Assert pattern as Python tests\n- Flag tests that test implementation details (checking internal state, spying on private methods)\n- Flag missing cleanup or act() warnings\n\n---\n\n## Dockerfile Best Practices\n\nFor each changed Dockerfile, check:\n\n- Pin base image versions (no `latest` tags)\n- Use multi-stage builds where a build step exists\n- Minimize layers — combine related RUN commands with `&&`\n- COPY before RUN for better layer caching (deps before source)\n- Run as non-root user (`USER appuser`)\n- Set `HEALTHCHECK` instruction\n- Use `.dockerignore` to exclude unnecessary files\n- No secrets or credentials in build args or environment\n- Use `SHELL [\"/bin/bash\", \"-o\", \"pipefail\", \"-c\"]` for safe piping\n- Check consistency with existing Dockerfiles in the project (this project uses `public.ecr.aws` mirrors, OCI labels, `useradd -m -u 1000 appuser`, `PYTHONUNBUFFERED=1`)\n\n---\n\n## CSS Review (Plain CSS Files)\n\nFor each changed .css file (not in librechat-custom/ or dist/), check:\n\n- No inline `!important` unless overriding third-party styles\n- Use consistent naming convention (check neighboring CSS files — this project uses lowercase-hyphenated BEM-style class names)\n- No hardcoded colors — check if the value already exists elsewhere (this project uses a consistent purple-to-violet gradient theme: `#667eea` to `#764ba2`)\n- No duplicate selectors or properties\n- Use relative units (`rem`, `em`) over fixed `px` for font sizes\n- Media queries for responsive design where applicable\n- Check consistency with existing CSS files in the same UI\n\n---\n\n## HTML Template Review (Jinja2/Server-Rendered)\n\nFor each changed .html file, check:\n\n- Valid HTML structure (`DOCTYPE`, `html`, `head`, `body`)\n- Proper meta charset and viewport tags\n- No inline JavaScript (use separate files or `<script>` blocks at end of body)\n- Accessible: form labels, alt text for images, proper heading hierarchy\n- Escape user-provided data to prevent XSS (use Jinja2 auto-escaping)\n- Check consistency with existing templates in the same service\n\n---\n\n## Response Format\n\nIf issues are found:\n1. Before creating an issue, check for duplicates by running:\n   gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search \"<key terms from title>\"\n   If a matching open issue already exists for the same file and finding, skip it.\n2. Create a GitHub issue for each distinct NEW finding by running:\n   gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title \"<concise title>\" --body \"<details with file paths, line numbers, and what needs to change>\"\n3. Return {\"ok\": false, \"reason\": \"<concise list of issues with file paths and line numbers>. GitHub issue(s) created.\"}\n\nGroup issues by category:\n- **Python Best Practices**: [file:line - description]\n- **React/TS Best Practices**: [file:line - description]\n- **Pattern Inconsistency**: [file:line - how it deviates from established pattern in neighboring files]\n- **SRP Violations**: [file:line - description]\n- **Long/Complex Functions or Components**: [file:line - name, line count]\n- **Missing Builders**: [test file:line - suggest builder for X]\n- **Missing Factories**: [test file:line - repeated setup for X]\n- **Test Structure**: [test file:line - issue]\n- **Dockerfile Best Practices**: [file:line - description]\n- **CSS Issues**: [file:line - description]\n- **HTML Template Issues**: [file:line - description]\n\nIf code is clean, return {\"ok\": true}\n\nBe pragmatic:\n- Small utility functions don't need builders\n- Simple dataclass construction doesn't need a factory\n- Focus on complex objects with 4+ fields or objects reused across 3+ tests\n- Don't flag code that wasn't changed in this session\n- Don't flag librechat-custom files — that's an upstream fork\n- Don't flag generated/dist files\n- Dockerfile review only applies to project Dockerfiles, not base images",
+            "timeout": 120,
+            "statusMessage": "Reviewing clean code, SRP, and test patterns..."
+          }
+        ]
+      }
+    ]
+  }
+}
