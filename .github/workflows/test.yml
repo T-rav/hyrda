@@ -102,7 +102,7 @@ jobs:
     - name: Install test dependencies
       run: |
         uv venv
-        uv pip install pytest aiohttp httpx pydantic PyJWT fastapi starlette prometheus-client
+        uv pip install pytest pytest-asyncio aiohttp httpx pydantic pydantic-settings PyJWT fastapi starlette prometheus-client
 
     - name: Run shared tests
       env:
@@ -263,7 +263,8 @@ jobs:
     - name: Install security tools and service dependencies
       run: |
         uv venv
-        uv pip install "bandit[toml]" pip-audit checkov semgrep
+        uv pip install "bandit[toml]" pip-audit checkov
+        uv pip install semgrep || echo "Semgrep pip install failed; will use returntocorp/semgrep-action instead"
         for service in bot agent-service control_plane tasks rag-service dashboard-service; do
           if [ -f "$service/pyproject.toml" ]; then
             uv pip install -e "$service/" 2>/dev/null || true
@@ -289,9 +290,9 @@ jobs:
       continue-on-error: true
 
     - name: Run Semgrep on all services
-      run: |
-        uv run semgrep --config=auto --error \
-          bot/ agent-service/ control_plane/ tasks/ rag-service/ dashboard-service/
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: auto
       continue-on-error: true
 
     - name: Upload security scan results
