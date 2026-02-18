@@ -33,6 +33,188 @@ def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = "
 
 
 # ---------------------------------------------------------------------------
+# post_comment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_comment_calls_gh_issue_comment(config, event_bus, tmp_path):
+    """post_comment should call gh issue comment with correct args."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.post_comment(42, "This is a plan comment")
+
+    mock_create.assert_awaited_once()
+    call_args = mock_create.call_args
+    cmd = call_args.args if call_args.args else call_args[0]
+    assert "gh" in cmd
+    assert "issue" in cmd
+    assert "comment" in cmd
+    assert "42" in cmd
+    assert "--body" in cmd
+    assert "This is a plan comment" in cmd
+
+
+@pytest.mark.asyncio
+async def test_post_comment_dry_run(dry_config, event_bus):
+    """In dry-run mode, post_comment should not call subprocess."""
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.post_comment(42, "This is a plan comment")
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_comment_handles_error(config, event_bus, tmp_path):
+    """post_comment should log warning on failure without raising."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="permission denied")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await mgr.post_comment(42, "comment body")
+
+
+# ---------------------------------------------------------------------------
+# create_issue
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_issue_calls_gh_issue_create(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    issue_url = "https://github.com/test-org/test-repo/issues/99"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=issue_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        number = await mgr.create_issue("Bug found", "Details here", ["bug"])
+
+    assert number == 99
+    args = mock_create.call_args[0]
+    assert "gh" in args
+    assert "issue" in args
+    assert "create" in args
+    assert "--title" in args
+    assert "Bug found" in args
+    assert "--label" in args
+    assert "bug" in args
+
+
+@pytest.mark.asyncio
+async def test_create_issue_publishes_event(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    issue_url = "https://github.com/test-org/test-repo/issues/55"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=issue_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.create_issue("Tech debt", "Needs refactor", ["tech-debt"])
+
+    events = event_bus.get_history()
+    from events import EventType
+
+    issue_events = [e for e in events if e.type == EventType.ISSUE_CREATED]
+    assert len(issue_events) == 1
+    assert issue_events[0].data["number"] == 55
+    assert issue_events[0].data["title"] == "Tech debt"
+
+
+@pytest.mark.asyncio
+async def test_create_issue_dry_run(dry_config, event_bus):
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        number = await mgr.create_issue("Bug", "Details")
+
+    mock_create.assert_not_called()
+    assert number == 0
+
+
+@pytest.mark.asyncio
+async def test_create_issue_failure_returns_zero(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="permission denied")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        number = await mgr.create_issue("Bug", "Details")
+
+    assert number == 0
+
+
+@pytest.mark.asyncio
+async def test_create_issue_no_labels(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    issue_url = "https://github.com/test-org/test-repo/issues/10"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=issue_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        number = await mgr.create_issue("Bug", "Details")
+
+    assert number == 10
+    args = mock_create.call_args[0]
+    assert "--label" not in args
+
+
+# ---------------------------------------------------------------------------
 # push_branch
 # ---------------------------------------------------------------------------
 
@@ -52,6 +234,91 @@ async def test_push_branch_calls_git_push(config, event_bus, tmp_path):
     assert "-u" in args
     assert "origin" in args
     assert "agent/issue-42" in args
+
+
+# ---------------------------------------------------------------------------
+# remote_branch_exists
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remote_branch_exists_returns_true_when_found(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    manager = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(
+        returncode=0, stdout="abc123\trefs/heads/agent/issue-42"
+    )
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.remote_branch_exists("agent/issue-42")
+
+    assert result is True
+    args = mock_create.call_args[0]
+    assert "ls-remote" in args
+    assert "--heads" in args
+    assert "agent/issue-42" in args
+
+
+@pytest.mark.asyncio
+async def test_remote_branch_exists_returns_false_when_not_found(
+    config, event_bus, tmp_path
+):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    manager = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.remote_branch_exists("agent/issue-99")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_remote_branch_exists_returns_false_on_error(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    manager = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="fatal: network error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.remote_branch_exists("agent/issue-42")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_remote_branch_exists_dry_run_returns_false(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.remote_branch_exists("agent/issue-42")
+
+    mock_create.assert_not_called()
+    assert result is False
 
 
 @pytest.mark.asyncio

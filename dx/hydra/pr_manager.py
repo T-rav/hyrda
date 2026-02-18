@@ -46,6 +46,23 @@ class PRManager:
             logger.error("Push failed for %s: %s", branch, exc)
             return False
 
+    async def remote_branch_exists(self, branch: str) -> bool:
+        """Check whether *branch* exists on the remote."""
+        if self._config.dry_run:
+            return False
+        try:
+            output = await self._run(
+                "git",
+                "ls-remote",
+                "--heads",
+                "origin",
+                branch,
+                cwd=self._config.repo_root,
+            )
+            return bool(output.strip())
+        except RuntimeError:
+            return False
+
     async def create_pr(
         self,
         issue: GitHubIssue,
@@ -179,6 +196,30 @@ class PRManager:
             logger.error("Merge failed for PR #%d: %s", pr_number, exc)
             return False
 
+    async def post_comment(self, issue_number: int, body: str) -> None:
+        """Post a comment on a GitHub issue."""
+        if self._config.dry_run:
+            logger.info("[dry-run] Would post comment on issue #%d", issue_number)
+            return
+        try:
+            await self._run(
+                "gh",
+                "issue",
+                "comment",
+                str(issue_number),
+                "--repo",
+                self._repo,
+                "--body",
+                body,
+                cwd=self._config.repo_root,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not post comment on issue #%d: %s",
+                issue_number,
+                exc,
+            )
+
     async def add_labels(self, issue_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub issue."""
         if self._config.dry_run or not labels:
@@ -227,6 +268,76 @@ class PRManager:
                 issue_number,
                 exc,
             )
+
+    async def add_pr_labels(self, pr_number: int, labels: list[str]) -> None:
+        """Add *labels* to a GitHub pull request."""
+        if self._config.dry_run or not labels:
+            return
+        for label in labels:
+            try:
+                await self._run(
+                    "gh",
+                    "pr",
+                    "edit",
+                    str(pr_number),
+                    "--repo",
+                    self._repo,
+                    "--add-label",
+                    label,
+                    cwd=self._config.repo_root,
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Could not add label %r to PR #%d: %s",
+                    label,
+                    pr_number,
+                    exc,
+                )
+
+    async def create_issue(
+        self,
+        title: str,
+        body: str,
+        labels: list[str] | None = None,
+    ) -> int:
+        """Create a new GitHub issue. Returns the issue number (0 on failure)."""
+        if self._config.dry_run:
+            logger.info("[dry-run] Would create issue: %s", title)
+            return 0
+
+        cmd = [
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            self._repo,
+            "--title",
+            title,
+            "--body",
+            body,
+        ]
+        for label in labels or []:
+            cmd.extend(["--label", label])
+
+        try:
+            output = await self._run(*cmd, cwd=self._config.repo_root)
+            # gh issue create prints the issue URL
+            issue_number = int(output.strip().rstrip("/").split("/")[-1])
+
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.ISSUE_CREATED,
+                    data={
+                        "number": issue_number,
+                        "title": title,
+                        "labels": labels or [],
+                    },
+                )
+            )
+            return issue_number
+        except (RuntimeError, ValueError) as exc:
+            logger.error("Issue creation failed for %r: %s", title, exc)
+            return 0
 
     async def get_pr_diff(self, pr_number: int) -> str:
         """Fetch the diff for *pr_number*."""

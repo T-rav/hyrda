@@ -29,11 +29,20 @@ def make_state(tmp_path: Path) -> StateTracker:
     return StateTracker(tmp_path / "state.json")
 
 
-def make_orchestrator_mock(requests: dict | None = None) -> MagicMock:
+def make_orchestrator_mock(
+    requests: dict | None = None,
+    running: bool = False,
+    run_status: str = "idle",
+) -> MagicMock:
     """Return a minimal orchestrator mock."""
     orch = MagicMock()
     orch.human_input_requests = requests or {}
     orch.provide_human_input = MagicMock()
+    orch.running = running
+    orch.run_status = run_status
+    orch.stop = MagicMock()
+    orch.request_stop = MagicMock()
+    orch._publish_status = AsyncMock()
     return orch
 
 
@@ -166,7 +175,7 @@ class TestIndexRoute:
             response = client.get("/")
 
         assert response.status_code == 200
-        assert "Template not found" in response.text or "<h1>" in response.text
+        assert "<h1>" in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -210,8 +219,24 @@ class TestStateRoute:
 
         body = response.json()
         assert isinstance(body, dict)
-        # The state dict should contain the processed_issues key
         assert "processed_issues" in body
+
+    def test_get_state_includes_lifetime_stats(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/state")
+
+        body = response.json()
+        assert "lifetime_stats" in body
 
     def test_get_state_reflects_current_state(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
@@ -230,6 +255,56 @@ class TestStateRoute:
         body = response.json()
 
         assert body["processed_issues"].get("7") == "failed"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stats
+# ---------------------------------------------------------------------------
+
+
+class TestStatsRoute:
+    """Tests for the GET /api/stats route."""
+
+    def test_stats_endpoint_returns_lifetime_stats(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/stats")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+
+    def test_stats_endpoint_reflects_incremented_values(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.record_pr_merged()
+        state.record_issue_completed()
+        state.record_issue_created()
+        state.record_issue_created()
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/stats")
+
+        body = response.json()
+        assert body["prs_merged"] == 1
+        assert body["issues_completed"] == 1
+        assert body["issues_created"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -301,11 +376,10 @@ class TestEventsRoute:
         dashboard = HydraDashboard(config, bus, state)
         app = dashboard.create_app()
 
-        # Publish an event synchronously by running in an event loop
         async def publish() -> None:
             await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"batch": 1}))
 
-        asyncio.get_event_loop().run_until_complete(publish())
+        asyncio.run(publish())
 
         client = TestClient(app)
         response = client.get("/api/events")
@@ -371,7 +445,6 @@ class TestHumanInputGetRoute:
         response = client.get("/api/human-input")
 
         body = response.json()
-        # Keys are serialised as strings in JSON
         assert "42" in body
         assert body["42"] == "Which approach?"
 
@@ -497,7 +570,6 @@ class TestStartStop:
         assert dashboard._server_task is not None
         assert isinstance(dashboard._server_task, asyncio.Task)
 
-        # Clean up the running task
         if dashboard._server_task and not dashboard._server_task.done():
             dashboard._server_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -516,11 +588,7 @@ class TestStartStop:
             patch.dict("sys.modules", {"uvicorn": None}),
             contextlib.suppress(ImportError),
         ):
-            # Import error should be caught gracefully
             await dashboard.start()
-
-        # _server_task should remain None (uvicorn not available)
-        # If it was set before the mock, ignore; what matters is no unhandled exception
 
     @pytest.mark.asyncio
     async def test_stop_cancels_server_task(
@@ -531,12 +599,11 @@ class TestStartStop:
         state = make_state(tmp_path)
         dashboard = HydraDashboard(config, event_bus, state)
 
-        # Simulate a running task
         async def long_running() -> None:
             await asyncio.sleep(3600)
 
         dashboard._server_task = asyncio.create_task(long_running())
-        await asyncio.sleep(0)  # Let it start
+        await asyncio.sleep(0)
 
         await dashboard.stop()
 
@@ -552,7 +619,6 @@ class TestStartStop:
         dashboard = HydraDashboard(config, event_bus, state)
         assert dashboard._server_task is None
 
-        # Should not raise
         await dashboard.stop()
 
     @pytest.mark.asyncio
@@ -568,10 +634,9 @@ class TestStartStop:
             return
 
         task = asyncio.create_task(quick_task())
-        await task  # Let it complete
+        await task
         dashboard._server_task = task
 
-        # Should not raise
         await dashboard.stop()
 
 
@@ -653,3 +718,190 @@ class TestInit:
         dashboard = HydraDashboard(config, event_bus, state)
 
         assert dashboard._app is None
+
+    def test_run_task_starts_as_none(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        assert dashboard._run_task is None
+
+
+# ---------------------------------------------------------------------------
+# POST /api/control/start
+# ---------------------------------------------------------------------------
+
+
+class TestControlStartEndpoint:
+    """Tests for the POST /api/control/start route."""
+
+    def test_start_returns_started(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+
+        with patch("orchestrator.HydraOrchestrator") as MockOrch:
+            mock_orch_inst = AsyncMock()
+            mock_orch_inst.run = AsyncMock(return_value=None)
+            mock_orch_inst.running = False
+            mock_orch_inst.stop = MagicMock()
+            MockOrch.return_value = mock_orch_inst
+
+            response = client.post("/api/control/start")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "started"
+
+    def test_start_returns_409_when_already_running(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock(running=True, run_status="running")
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/control/start")
+
+        assert response.status_code == 409
+        assert "already running" in response.json()["error"]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/control/stop
+# ---------------------------------------------------------------------------
+
+
+class TestControlStopEndpoint:
+    """Tests for the POST /api/control/stop route."""
+
+    def test_stop_returns_400_when_not_running(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/control/stop")
+
+        assert response.status_code == 400
+        assert "not running" in response.json()["error"]
+
+    def test_stop_returns_stopping_when_running(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock(running=True, run_status="running")
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/control/stop")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "stopping"
+        orch.request_stop.assert_called_once()
+
+    def test_stop_returns_400_when_orchestrator_not_running(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock(running=False, run_status="idle")
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/control/stop")
+
+        assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# GET /api/control/status
+# ---------------------------------------------------------------------------
+
+
+class TestControlStatusEndpoint:
+    """Tests for the GET /api/control/status route."""
+
+    def test_status_returns_idle_when_no_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/control/status")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["status"] == "idle"
+
+    def test_status_returns_running_when_orchestrator_active(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock(running=True, run_status="running")
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/control/status")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "running"
+
+    def test_status_includes_config_info(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/control/status")
+
+        body = response.json()
+        assert body["config"]["repo"] == config.repo
+        assert body["config"]["label"] == config.label

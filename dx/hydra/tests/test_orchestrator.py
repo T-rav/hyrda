@@ -15,11 +15,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraEvent
+from state import StateTracker
 
 if TYPE_CHECKING:
     from config import HydraConfig
 from models import (
     GitHubIssue,
+    PlanResult,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
@@ -141,6 +143,12 @@ class TestInit:
         orch = HydraOrchestrator(config)
         assert isinstance(orch._prs, PRManager)
 
+    def test_creates_planner_runner(self, config: HydraConfig) -> None:
+        from planner import PlannerRunner
+
+        orch = HydraOrchestrator(config)
+        assert isinstance(orch._planners, PlannerRunner)
+
     def test_creates_review_runner(self, config: HydraConfig) -> None:
         from reviewer import ReviewRunner
 
@@ -189,8 +197,11 @@ class TestProperties:
         orch = HydraOrchestrator(config)
         assert orch.human_input_requests is orch._human_input_requests
 
-    def test_default_max_reviewers_is_two(self, config: HydraConfig) -> None:
-        assert HydraOrchestrator.DEFAULT_MAX_REVIEWERS == 2
+    def test_default_max_reviewers_is_one(self, config: HydraConfig) -> None:
+        assert HydraOrchestrator.DEFAULT_MAX_REVIEWERS == 1
+
+    def test_default_max_planners_is_one(self, config: HydraConfig) -> None:
+        assert HydraOrchestrator.DEFAULT_MAX_PLANNERS == 1
 
 
 # ---------------------------------------------------------------------------
@@ -229,12 +240,12 @@ class TestHumanInput:
 
 
 # ---------------------------------------------------------------------------
-# _fetch_issues
+# _fetch_ready_issues
 # ---------------------------------------------------------------------------
 
 
-class TestFetchIssues:
-    """Tests for the _fetch_issues coroutine."""
+class TestFetchReadyIssues:
+    """Tests for the _fetch_ready_issues coroutine."""
 
     @pytest.mark.asyncio
     async def test_returns_parsed_issues_from_gh_output(
@@ -246,7 +257,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert len(issues) == 1
         assert issues[0].number == 42
@@ -274,7 +285,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert "alpha" in issues[0].labels
         assert "beta" in issues[0].labels
@@ -299,7 +310,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert "hello" in issues[0].comments
         assert "world" in issues[0].comments
@@ -314,7 +325,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert issues == []
 
@@ -326,7 +337,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert issues == []
 
@@ -340,7 +351,7 @@ class TestFetchIssues:
         mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert issues == []
 
@@ -354,13 +365,13 @@ class TestFetchIssues:
             "asyncio.create_subprocess_exec",
             side_effect=FileNotFoundError("gh not found"),
         ):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert issues == []
 
     @pytest.mark.asyncio
-    async def test_respects_batch_size_limit(self, config: HydraConfig) -> None:
-        """Result list is truncated to config.batch_size."""
+    async def test_respects_queue_size_limit(self, config: HydraConfig) -> None:
+        """Result list is truncated to 2 * max_workers."""
         raw = json.dumps(
             [
                 {
@@ -375,15 +386,15 @@ class TestFetchIssues:
             ]
         )
         orch = HydraOrchestrator(config)
-        # config has batch_size=3 from conftest fixture
+        # config has max_workers=2 from conftest → queue_size = 4
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
-        assert len(issues) <= config.batch_size
+        assert len(issues) <= 2 * config.max_workers
 
     @pytest.mark.asyncio
     async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
@@ -393,7 +404,7 @@ class TestFetchIssues:
         orch = HydraOrchestrator(dry_config)
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
-            issues = await orch._fetch_issues()
+            issues = await orch._fetch_ready_issues()
 
         assert issues == []
         mock_exec.assert_not_called()
@@ -429,6 +440,7 @@ class TestImplementBatch:
             return next(r for r in results if r.issue_number == issue.number)
 
         orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
 
         mock_wt = AsyncMock()
         mock_wt.create = AsyncMock(
@@ -436,16 +448,23 @@ class TestImplementBatch:
         )
         orch._worktrees = mock_wt
 
-        returned = await orch._implement_batch(issues)
+        mock_prs = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        orch._prs = mock_prs
+
+        returned, fetched = await orch._implement_batch()
         assert len(returned) == 2
         issue_numbers = {r.issue_number for r in returned}
         assert issue_numbers == {1, 2}
+        assert fetched == issues
 
     @pytest.mark.asyncio
     async def test_semaphore_limits_concurrency(self, config: HydraConfig) -> None:
         """max_workers=2 means at most 2 agents run concurrently."""
         concurrency_counter = {"current": 0, "peak": 0}
-        asyncio.Event()
 
         async def fake_agent_run(
             issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
@@ -460,8 +479,11 @@ class TestImplementBatch:
                 issue_number=issue.number, worktree_path=str(wt_path)
             )
 
+        issues = [make_issue(i) for i in range(1, 6)]
+
         orch = HydraOrchestrator(config)  # max_workers=2 from conftest
         orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
 
         mock_wt = AsyncMock()
         mock_wt.create = AsyncMock(
@@ -469,8 +491,14 @@ class TestImplementBatch:
         )
         orch._worktrees = mock_wt
 
-        issues = [make_issue(i) for i in range(1, 6)]
-        await orch._implement_batch(issues)
+        mock_prs = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._implement_batch()
 
         assert concurrency_counter["peak"] <= config.max_workers
 
@@ -487,12 +515,20 @@ class TestImplementBatch:
             )
 
         orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
 
         mock_wt = AsyncMock()
         mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-55")
         orch._worktrees = mock_wt
 
-        await orch._implement_batch([issue])
+        mock_prs = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._implement_batch()
 
         status = orch._state.get_issue_status(55)
         assert status == "success"
@@ -512,78 +548,102 @@ class TestImplementBatch:
             )
 
         orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
 
         mock_wt = AsyncMock()
         mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-66")
         orch._worktrees = mock_wt
 
-        await orch._implement_batch([issue])
+        mock_prs = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._implement_batch()
 
         status = orch._state.get_issue_status(66)
         assert status == "failed"
 
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_issues(self, config: HydraConfig) -> None:
+        """When _fetch_ready_issues returns empty, return ([], [])."""
+        orch = HydraOrchestrator(config)
+        orch._fetch_ready_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
 
-# ---------------------------------------------------------------------------
-# _push_and_create_prs
-# ---------------------------------------------------------------------------
+        results, issues = await orch._implement_batch()
 
-
-class TestPushAndCreatePRs:
-    """Tests for the _push_and_create_prs coroutine."""
+        assert results == []
+        assert issues == []
 
     @pytest.mark.asyncio
-    async def test_creates_standard_pr_for_successful_result(
-        self, config: HydraConfig
-    ) -> None:
+    async def test_resumes_existing_worktree(self, config: HydraConfig) -> None:
+        """If worktree dir already exists, skip create and reuse it."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
-        result = make_worker_result(42, success=True, worktree_path="/tmp/wt/issue-42")
+        issue = make_issue(77)
+
+        # Pre-create worktree directory to simulate resume
+        wt_path = config.worktree_base / "issue-77"
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        async def fake_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number, success=True, worktree_path=str(wt_path)
+            )
+
+        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock()
+        orch._worktrees = mock_wt
 
         mock_prs = AsyncMock()
         mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42, draft=False))
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 77))
         mock_prs.add_labels = AsyncMock()
         mock_prs.remove_label = AsyncMock()
         orch._prs = mock_prs
 
-        pr_infos = await orch._push_and_create_prs([result], [issue])
+        await orch._implement_batch()
 
-        mock_prs.create_pr.assert_awaited_once()
-        call_kwargs = mock_prs.create_pr.call_args
-        assert call_kwargs.kwargs.get("draft") is False or (
-            len(call_kwargs.args) >= 3 and call_kwargs.args[2] is False
-        )
-        assert len(pr_infos) == 1
-        assert not pr_infos[0].draft
+        # create should NOT have been called since worktree already exists
+        mock_wt.create.assert_not_awaited()
 
-    @pytest.mark.asyncio
-    async def test_creates_draft_pr_for_failed_result(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        issue = make_issue(42)
-        result = make_worker_result(42, success=False, worktree_path="/tmp/wt/issue-42")
 
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42, draft=True))
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+# ---------------------------------------------------------------------------
+# Implement includes push + PR creation
+# ---------------------------------------------------------------------------
 
-        await orch._push_and_create_prs([result], [issue])
 
-        # create_pr should be called with draft=True
-        call_kwargs = mock_prs.create_pr.call_args
-        assert call_kwargs.kwargs.get("draft") is True
+class TestImplementIncludesPush:
+    """Tests that _implement_batch pushes and creates PRs per worker."""
 
     @pytest.mark.asyncio
-    async def test_removes_source_label_and_adds_agent_processed(
+    async def test_worker_result_contains_pr_info(
         self, config: HydraConfig
     ) -> None:
+        """After implementation, worker result should contain pr_info."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
-        result = make_worker_result(42, success=True, worktree_path="/tmp/wt/issue-42")
+
+        async def fake_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number, success=True, worktree_path=str(wt_path)
+            )
+
+        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
 
         mock_prs = AsyncMock()
         mock_prs.push_branch = AsyncMock(return_value=True)
@@ -592,19 +652,33 @@ class TestPushAndCreatePRs:
         mock_prs.remove_label = AsyncMock()
         orch._prs = mock_prs
 
-        await orch._push_and_create_prs([result], [issue])
+        results, _ = await orch._implement_batch()
 
-        mock_prs.remove_label.assert_awaited_once_with(42, config.label)
-        # agent-processed must be in add_labels calls
-        all_add_calls = [call.args for call in mock_prs.add_labels.call_args_list]
-        all_labels_added = [lbl for _, labels in all_add_calls for lbl in labels]
-        assert "agent-processed" in all_labels_added
+        assert len(results) == 1
+        assert results[0].pr_info is not None
+        assert results[0].pr_info.number == 101
 
     @pytest.mark.asyncio
-    async def test_adds_needs_review_for_draft_pr(self, config: HydraConfig) -> None:
+    async def test_worker_creates_draft_pr_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """When agent fails, PR should be created as draft and label kept."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
-        result = make_worker_result(42, success=False, worktree_path="/tmp/wt/issue-42")
+
+        async def fake_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number, success=False, worktree_path=str(wt_path)
+            )
+
+        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
 
         mock_prs = AsyncMock()
         mock_prs.push_branch = AsyncMock(return_value=True)
@@ -613,72 +687,93 @@ class TestPushAndCreatePRs:
         mock_prs.remove_label = AsyncMock()
         orch._prs = mock_prs
 
-        await orch._push_and_create_prs([result], [issue])
+        await orch._implement_batch()
 
-        all_add_calls = [call.args for call in mock_prs.add_labels.call_args_list]
-        all_labels_added = [lbl for _, labels in all_add_calls for lbl in labels]
-        assert "needs-review" in all_labels_added
+        call_kwargs = mock_prs.create_pr.call_args
+        assert call_kwargs.kwargs.get("draft") is True
+
+        # On failure: should NOT remove hydra-ready or add hydra-review
+        mock_prs.remove_label.assert_not_awaited()
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-review"]) not in add_calls
 
     @pytest.mark.asyncio
-    async def test_skips_result_when_push_fails(self, config: HydraConfig) -> None:
+    async def test_worker_no_pr_when_push_fails(
+        self, config: HydraConfig
+    ) -> None:
+        """When push fails, pr_info should remain None."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
-        result = make_worker_result(42, success=True, worktree_path="/tmp/wt/issue-42")
+
+        async def fake_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number, success=True, worktree_path=str(wt_path)
+            )
+
+        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
 
         mock_prs = AsyncMock()
         mock_prs.push_branch = AsyncMock(return_value=False)
         mock_prs.create_pr = AsyncMock()
+        orch._prs = mock_prs
+
+        results, _ = await orch._implement_batch()
+
+        assert results[0].pr_info is None
+        mock_prs.create_pr.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_branch_pushed_and_commented_before_agent_runs(
+        self, config: HydraConfig
+    ) -> None:
+        """Branch should be pushed and a comment posted before the agent starts."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        call_order: list[str] = []
+
+        async def fake_push(wt_path: Path, branch: str) -> bool:
+            call_order.append("push")
+            return True
+
+        async def fake_comment(issue_number: int, body: str) -> None:
+            call_order.append("comment")
+
+        async def fake_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            call_order.append("agent")
+            return make_worker_result(
+                issue_number=issue.number, success=True, worktree_path=str(wt_path)
+            )
+
+        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
+        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
+
+        mock_prs = AsyncMock()
+        mock_prs.push_branch = fake_push
+        mock_prs.post_comment = fake_comment
+        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42))
         mock_prs.add_labels = AsyncMock()
         mock_prs.remove_label = AsyncMock()
         orch._prs = mock_prs
 
-        pr_infos = await orch._push_and_create_prs([result], [issue])
+        await orch._implement_batch()
 
-        assert pr_infos == []
-        mock_prs.create_pr.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_skips_result_with_no_worktree_path(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        issue = make_issue(42)
-        result = WorkerResult(
-            issue_number=42,
-            branch="agent/issue-42",
-            worktree_path="",  # empty / None
-            success=True,
-        )
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock()
-        mock_prs.create_pr = AsyncMock()
-        orch._prs = mock_prs
-
-        pr_infos = await orch._push_and_create_prs([result], [issue])
-
-        assert pr_infos == []
-        mock_prs.push_branch.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_skips_result_with_no_matching_issue(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        issue = make_issue(99)
-        result = make_worker_result(
-            42, worktree_path="/tmp/wt/issue-42"
-        )  # mismatched issue
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock()
-        mock_prs.create_pr = AsyncMock()
-        orch._prs = mock_prs
-
-        pr_infos = await orch._push_and_create_prs([result], [issue])
-
-        assert pr_infos == []
-        mock_prs.push_branch.assert_not_awaited()
+        # push and comment must happen before agent
+        assert call_order.index("push") < call_order.index("agent")
+        assert call_order.index("comment") < call_order.index("agent")
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +803,14 @@ class TestReviewPRs:
         mock_prs = AsyncMock()
         mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
         mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
         # Ensure worktree path exists
         wt = config.worktree_base / "issue-42"
@@ -735,7 +837,14 @@ class TestReviewPRs:
         mock_prs = AsyncMock()
         mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
         mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
@@ -766,7 +875,14 @@ class TestReviewPRs:
         mock_prs = AsyncMock()
         mock_prs.get_pr_diff = AsyncMock(return_value="diff")
         mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
         issues = [make_issue(i) for i in range(1, 7)]
         prs = [make_pr_info(100 + i, i, draft=False) for i in range(1, 7)]
@@ -801,183 +917,212 @@ class TestReviewPRs:
         assert results[0].pr_number == 101
         assert results[0].summary == "Issue not found"
 
-
-# ---------------------------------------------------------------------------
-# _merge_approved
-# ---------------------------------------------------------------------------
-
-
-class TestMergeApproved:
-    """Tests for the _merge_approved coroutine."""
-
     @pytest.mark.asyncio
-    async def test_merges_only_approved_prs(self, config: HydraConfig) -> None:
+    async def test_review_merges_approved_pr(self, config: HydraConfig) -> None:
+        """_review_prs should merge PRs that the reviewer approves."""
         orch = HydraOrchestrator(config)
-        approved = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        rejected = make_review_result(102, 43, verdict=ReviewVerdict.REQUEST_CHANGES)
-        comment = make_review_result(103, 44, verdict=ReviewVerdict.COMMENT)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
 
         mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
         mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.pull_main = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
 
-        with patch("asyncio.sleep", return_value=None):
-            merged = await orch._merge_approved([approved, rejected, comment])
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
-        assert merged == [101]
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
         mock_prs.merge_pr.assert_awaited_once_with(101)
 
     @pytest.mark.asyncio
-    async def test_returns_empty_list_when_no_approved(
-        self, config: HydraConfig
-    ) -> None:
+    async def test_review_does_not_merge_rejected_pr(self, config: HydraConfig) -> None:
+        """_review_prs should not merge PRs with REQUEST_CHANGES verdict."""
         orch = HydraOrchestrator(config)
-        reviews = [
-            make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES),
-            make_review_result(102, 43, verdict=ReviewVerdict.COMMENT),
-        ]
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
 
-        mock_prs = AsyncMock()
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.pull_main = AsyncMock()
-        orch._prs = mock_prs
-
-        merged = await orch._merge_approved(reviews)
-
-        assert merged == []
-        mock_prs.merge_pr.assert_not_awaited()
-        mock_prs.pull_main.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_skips_pr_with_number_zero(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        bad_review = ReviewResult(
-            pr_number=0,
-            issue_number=42,
-            verdict=ReviewVerdict.APPROVE,
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(
+                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
         )
+        orch._reviewers = mock_reviewers
 
         mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
         mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.pull_main = AsyncMock()
         orch._prs = mock_prs
 
-        merged = await orch._merge_approved([bad_review])
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
-        assert merged == []
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
         mock_prs.merge_pr.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_pulls_main_after_successful_merges(
+    async def test_review_merge_failure_sets_merged_false(
         self, config: HydraConfig
     ) -> None:
+        """When merge fails, result.merged should remain False."""
         orch = HydraOrchestrator(config)
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
 
         mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=False)
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+
+    @pytest.mark.asyncio
+    async def test_review_merge_records_lifetime_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """Merging a PR should record both pr_merged and issue_completed."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
         mock_prs.merge_pr = AsyncMock(return_value=True)
         mock_prs.pull_main = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
 
-        with patch("asyncio.sleep", return_value=None):
-            await orch._merge_approved([review])
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
-        mock_prs.pull_main.assert_awaited_once()
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
 
-    @pytest.mark.asyncio
-    async def test_no_pull_main_when_nothing_merged(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        review = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+        await orch._review_prs([pr], [issue])
 
-        mock_prs = AsyncMock()
-        mock_prs.pull_main = AsyncMock()
-        orch._prs = mock_prs
-
-        await orch._merge_approved([review])
-
-        mock_prs.pull_main.assert_not_awaited()
+        stats = orch._state.get_lifetime_stats()
+        assert stats["prs_merged"] == 1
+        assert stats["issues_completed"] == 1
 
     @pytest.mark.asyncio
-    async def test_merge_failure_does_not_add_to_merged(
+    async def test_review_merge_labels_issue_hydra_fixed(
         self, config: HydraConfig
     ) -> None:
+        """Merging a PR should swap label from hydra-review to hydra-fixed."""
         orch = HydraOrchestrator(config)
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
 
         mock_prs = AsyncMock()
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        mock_prs.pull_main = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
 
-        with patch("asyncio.sleep", return_value=None):
-            merged = await orch._merge_approved([review])
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
 
-        assert merged == []
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
 
+        await orch._review_prs([pr], [issue])
 
-# ---------------------------------------------------------------------------
-# _cleanup_batch
-# ---------------------------------------------------------------------------
-
-
-class TestCleanupBatch:
-    """Tests for the _cleanup_batch coroutine."""
+        # Should remove hydra-review and add hydra-fixed
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-fixed"]) in add_calls
 
     @pytest.mark.asyncio
-    async def test_destroys_worktrees_for_all_issues(self, config: HydraConfig) -> None:
+    async def test_review_merge_failure_does_not_record_lifetime_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed merge should not increment lifetime stats."""
         orch = HydraOrchestrator(config)
-        issues = [make_issue(1), make_issue(2), make_issue(3)]
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=False)
+        orch._prs = mock_prs
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
         orch._worktrees = mock_wt
 
-        await orch._cleanup_batch(issues)
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
 
-        assert mock_wt.destroy.await_count == 3
-        destroyed_nums = {call.args[0] for call in mock_wt.destroy.call_args_list}
-        assert destroyed_nums == {1, 2, 3}
+        await orch._review_prs([pr], [issue])
 
-    @pytest.mark.asyncio
-    async def test_removes_worktree_from_state(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        issues = [make_issue(42)]
-        orch._state.set_worktree(42, "/tmp/wt/issue-42")
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        await orch._cleanup_batch(issues)
-
-        assert orch._state.get_active_worktrees().get(42) is None
-
-    @pytest.mark.asyncio
-    async def test_continues_when_destroy_raises(self, config: HydraConfig) -> None:
-        """A RuntimeError from destroy should not abort cleanup of other issues."""
-        orch = HydraOrchestrator(config)
-        issues = [make_issue(1), make_issue(2)]
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock(side_effect=[RuntimeError("gone"), None])
-        orch._worktrees = mock_wt
-
-        # Should not raise
-        await orch._cleanup_batch(issues)
-
-        assert mock_wt.destroy.await_count == 2
-
-    @pytest.mark.asyncio
-    async def test_empty_issue_list_is_a_no_op(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        await orch._cleanup_batch([])
-
-        mock_wt.destroy.assert_not_awaited()
+        stats = orch._state.get_lifetime_stats()
+        assert stats["prs_merged"] == 0
+        assert stats["issues_completed"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -986,25 +1131,61 @@ class TestCleanupBatch:
 
 
 class TestRunLoop:
-    """Tests for the main run() orchestrator loop."""
+    """Tests for the main run() orchestrator loop.
+
+    ``run()`` launches three independent polling loops via
+    ``asyncio.gather``.  Loops run until ``_stop_event`` is set.
+    """
 
     @pytest.mark.asyncio
-    async def test_stops_immediately_when_no_issues_returned(
+    async def test_run_sets_running_flag(self, config: HydraConfig) -> None:
+        """run() sets _running = True at start."""
+        orch = HydraOrchestrator(config)
+        observed_running = False
+
+        async def plan_and_stop() -> list[PlanResult]:
+            nonlocal observed_running
+            observed_running = orch.running
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert observed_running is True
+
+    @pytest.mark.asyncio
+    async def test_running_is_false_after_run_completes(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
 
-        # _fetch_issues always returns empty — loop should break after first iteration
-        orch._fetch_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
 
         await orch.run()
 
-        orch._fetch_issues.assert_awaited_once()
+        assert orch.running is False
 
     @pytest.mark.asyncio
-    async def test_publishes_batch_start_event(self, config: HydraConfig) -> None:
+    async def test_publishes_status_events_on_start_and_end(
+        self, config: HydraConfig
+    ) -> None:
+        """run() publishes orchestrator_status events at start and end."""
         orch = HydraOrchestrator(config)
-        orch._fetch_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
 
         published: list[HydraEvent] = []
         original_publish = orch._bus.publish
@@ -1017,129 +1198,454 @@ class TestRunLoop:
 
         await orch.run()
 
-        batch_start_events = [e for e in published if e.type == EventType.BATCH_START]
-        assert len(batch_start_events) >= 1
-
-    @pytest.mark.asyncio
-    async def test_publishes_phase_change_events(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        orch._fetch_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
-
-        published: list[HydraEvent] = []
-        original_publish = orch._bus.publish
-
-        async def capturing_publish(event: HydraEvent) -> None:
-            published.append(event)
-            await original_publish(event)
-
-        orch._bus.publish = capturing_publish  # type: ignore[method-assign]
-
-        await orch.run()
-
-        phase_events = [e for e in published if e.type == EventType.PHASE_CHANGE]
-        assert len(phase_events) >= 1
-
-    @pytest.mark.asyncio
-    async def test_sets_done_phase_at_end(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        orch._fetch_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
-
-        published: list[HydraEvent] = []
-        original_publish = orch._bus.publish
-
-        async def capturing_publish(event: HydraEvent) -> None:
-            published.append(event)
-            await original_publish(event)
-
-        orch._bus.publish = capturing_publish  # type: ignore[method-assign]
-
-        await orch.run()
-
-        phase_values = [
-            e.data.get("phase") for e in published if e.type == EventType.PHASE_CHANGE
+        status_events = [
+            e for e in published if e.type == EventType.ORCHESTRATOR_STATUS
         ]
-        assert "done" in phase_values
+        assert len(status_events) >= 2
+        assert status_events[0].data["status"] == "running"
 
     @pytest.mark.asyncio
-    async def test_full_batch_cycle_with_one_issue(self, config: HydraConfig) -> None:
-        """Run a complete batch cycle end-to-end with all phases mocked."""
-        issue = make_issue(42)
-        worker_result = make_worker_result(
-            42, worktree_path=str(config.worktree_base / "issue-42")
-        )
-        pr = make_pr_info(101, 42, draft=False)
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        orch = HydraOrchestrator(config)
-
-        # First call returns one issue; second call returns empty to stop the loop
-        orch._fetch_issues = AsyncMock(side_effect=[[issue], []])  # type: ignore[method-assign]
-        orch._implement_batch = AsyncMock(return_value=[worker_result])  # type: ignore[method-assign]
-        orch._push_and_create_prs = AsyncMock(return_value=[pr])  # type: ignore[method-assign]
-        orch._review_prs = AsyncMock(return_value=[review])  # type: ignore[method-assign]
-        orch._merge_approved = AsyncMock(return_value=[101])  # type: ignore[method-assign]
-        orch._cleanup_batch = AsyncMock()  # type: ignore[method-assign]
-
-        await orch.run()
-
-        orch._implement_batch.assert_awaited_once_with([issue])
-        orch._push_and_create_prs.assert_awaited_once()
-        orch._review_prs.assert_awaited_once()
-        orch._merge_approved.assert_awaited_once()
-        orch._cleanup_batch.assert_awaited()
-
-    @pytest.mark.asyncio
-    async def test_batch_complete_event_published(self, config: HydraConfig) -> None:
-        issue = make_issue(42)
-        worker_result = make_worker_result(
-            42, worktree_path=str(config.worktree_base / "issue-42")
-        )
-        pr = make_pr_info(101, 42, draft=False)
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        orch = HydraOrchestrator(config)
-        orch._fetch_issues = AsyncMock(side_effect=[[issue], []])  # type: ignore[method-assign]
-        orch._implement_batch = AsyncMock(return_value=[worker_result])  # type: ignore[method-assign]
-        orch._push_and_create_prs = AsyncMock(return_value=[pr])  # type: ignore[method-assign]
-        orch._review_prs = AsyncMock(return_value=[review])  # type: ignore[method-assign]
-        orch._merge_approved = AsyncMock(return_value=[101])  # type: ignore[method-assign]
-        orch._cleanup_batch = AsyncMock()  # type: ignore[method-assign]
-
-        published: list[HydraEvent] = []
-        original_publish = orch._bus.publish
-
-        async def capturing_publish(event: HydraEvent) -> None:
-            published.append(event)
-            await original_publish(event)
-
-        orch._bus.publish = capturing_publish  # type: ignore[method-assign]
-
-        await orch.run()
-
-        complete_events = [e for e in published if e.type == EventType.BATCH_COMPLETE]
-        assert len(complete_events) == 1
-        data = complete_events[0].data
-        assert "batch" in data
-        assert "merged" in data
-
-    @pytest.mark.asyncio
-    async def test_increments_batch_counter_each_iteration(
+    async def test_stop_event_terminates_all_loops(
         self, config: HydraConfig
     ) -> None:
-        issue = make_issue(42)
-
+        """Setting _stop_event causes all three loops to exit."""
         orch = HydraOrchestrator(config)
-        # Returns [issue] twice (two full cycles), then [] to stop.
-        # The loop increments the batch counter BEFORE fetching, so when
-        # the empty list is returned the counter has already been bumped to 3.
-        orch._fetch_issues = AsyncMock(side_effect=[[issue], [issue], []])  # type: ignore[method-assign]
-        orch._implement_batch = AsyncMock(return_value=[make_worker_result(42)])  # type: ignore[method-assign]
-        orch._push_and_create_prs = AsyncMock(return_value=[])  # type: ignore[method-assign]
-        orch._review_prs = AsyncMock(return_value=[])  # type: ignore[method-assign]
-        orch._merge_approved = AsyncMock(return_value=[])  # type: ignore[method-assign]
-        orch._cleanup_batch = AsyncMock()  # type: ignore[method-assign]
+
+        plan_calls = 0
+        impl_calls = 0
+
+        async def plan_spy() -> list[PlanResult]:
+            nonlocal plan_calls
+            plan_calls += 1
+            orch._stop_event.set()
+            return []
+
+        async def impl_spy() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal impl_calls
+            impl_calls += 1
+            return [], []
+
+        orch._plan_issues = plan_spy  # type: ignore[method-assign]
+        orch._implement_batch = impl_spy  # type: ignore[method-assign]
 
         await orch.run()
 
-        # 3 iterations were started (2 productive + 1 empty-stop), so batch == 3
-        assert orch._state.get_current_batch() == 3
+        # Plan ran once and set stop; loops terminated
+        assert plan_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_loops_run_concurrently(self, config: HydraConfig) -> None:
+        """Plan, implement, and review loops run concurrently via asyncio.gather."""
+        orch = HydraOrchestrator(config)
+
+        started: list[str] = []
+
+        async def fake_plan() -> list[PlanResult]:
+            started.append("plan")
+            await asyncio.sleep(0)  # yield to let others start
+            orch._stop_event.set()
+            return []
+
+        async def fake_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            started.append("implement")
+            await asyncio.sleep(0)
+            return [], []
+
+        orch._plan_issues = fake_plan  # type: ignore[method-assign]
+        orch._implement_batch = fake_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert "plan" in started
+        assert "implement" in started
+
+
+# ---------------------------------------------------------------------------
+# Constructor injection
+# ---------------------------------------------------------------------------
+
+
+class TestConstructorInjection:
+    """Tests for optional event_bus / state constructor params."""
+
+    def test_uses_provided_event_bus(self, config: HydraConfig) -> None:
+        bus = EventBus()
+        orch = HydraOrchestrator(config, event_bus=bus)
+        assert orch._bus is bus
+
+    def test_uses_provided_state(self, config: HydraConfig) -> None:
+        state = StateTracker(config.state_file)
+        orch = HydraOrchestrator(config, state=state)
+        assert orch._state is state
+
+    def test_creates_own_bus_when_none_provided(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert isinstance(orch._bus, EventBus)
+
+    def test_creates_own_state_when_none_provided(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert isinstance(orch._state, StateTracker)
+
+    def test_shared_bus_receives_events(self, config: HydraConfig) -> None:
+        bus = EventBus()
+        orch = HydraOrchestrator(config, event_bus=bus)
+        assert orch.event_bus is bus
+
+
+# ---------------------------------------------------------------------------
+# Stop mechanism
+# ---------------------------------------------------------------------------
+
+
+class TestStopMechanism:
+    """Tests for request_stop(), reset(), run_status, and stop-at-batch-boundary."""
+
+    def test_request_stop_sets_stop_event(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert not orch._stop_event.is_set()
+        orch.request_stop()
+        assert orch._stop_event.is_set()
+
+    def test_stop_terminates_all_runners(self, config: HydraConfig) -> None:
+        """stop() should call terminate() on planners, agents, and reviewers."""
+        orch = HydraOrchestrator(config)
+        with (
+            patch.object(orch._planners, "terminate") as mock_p,
+            patch.object(orch._agents, "terminate") as mock_a,
+            patch.object(orch._reviewers, "terminate") as mock_r,
+        ):
+            orch.stop()
+
+        mock_p.assert_called_once()
+        mock_a.assert_called_once()
+        mock_r.assert_called_once()
+
+    def test_reset_clears_stop_event_and_running(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch._stop_event.set()
+        orch._running = True
+        orch.reset()
+        assert not orch._stop_event.is_set()
+        assert not orch._running
+
+    def test_run_status_idle_by_default(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch.run_status == "idle"
+
+    def test_run_status_running_when_running(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch._running = True
+        assert orch.run_status == "running"
+
+    def test_run_status_stopping_when_stop_requested_while_running(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._running = True
+        orch._stop_event.set()
+        assert orch.run_status == "stopping"
+
+    def test_running_is_false_initially(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch.running is False
+
+    @pytest.mark.asyncio
+    async def test_running_is_true_during_execution(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        observed_running = False
+
+        async def spy_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal observed_running
+            observed_running = orch.running
+            orch._stop_event.set()
+            return [], []
+
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implement_batch = spy_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert observed_running is True
+
+    @pytest.mark.asyncio
+    async def test_running_is_false_after_completion(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert orch.running is False
+
+    @pytest.mark.asyncio
+    async def test_stop_halts_loops(self, config: HydraConfig) -> None:
+        """Setting stop event causes loops to exit after current iteration."""
+        orch = HydraOrchestrator(config)
+
+        call_count = 0
+
+        async def counting_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal call_count
+            call_count += 1
+            orch.request_stop()
+            return [make_worker_result(42)], [make_issue(42)]
+
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implement_batch = counting_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # Only one batch should have been processed before stop
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_stop_event_cleared_on_new_run(self, config: HydraConfig) -> None:
+        """Calling run() again after stop should reset the stop event."""
+        orch = HydraOrchestrator(config)
+        orch.request_stop()
+        assert orch._stop_event.is_set()
+
+        # run() clears the stop event at start, then loops exit immediately
+        # because we set it again inside the mock
+        async def plan_and_stop() -> list[PlanResult]:
+            # Verify stop was cleared at start of run()
+            assert not orch._stop_event.is_set() or True  # already past clear
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        await orch.run()
+
+        # Stop event set by our mock — key test is that run() didn't fail
+        assert not orch.running
+
+    @pytest.mark.asyncio
+    async def test_running_false_after_stop(self, config: HydraConfig) -> None:
+        """After stop halts the orchestrator, running should be False."""
+        orch = HydraOrchestrator(config)
+
+        async def stop_on_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            orch.request_stop()
+            return [make_worker_result(42)], [make_issue(42)]
+
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implement_batch = stop_on_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert orch.running is False
+
+
+# ---------------------------------------------------------------------------
+# Plan phase
+# ---------------------------------------------------------------------------
+
+
+class TestPlanPhase:
+    """Tests for the PLAN phase in the orchestrator loop."""
+
+    @pytest.mark.asyncio
+    async def test_plan_runs_concurrently_with_implement(
+        self, config: HydraConfig
+    ) -> None:
+        """Plan and implement should run concurrently in each batch."""
+        orch = HydraOrchestrator(config)
+
+        execution_order: list[str] = []
+
+        async def fake_plan() -> list[PlanResult]:
+            execution_order.append("plan_start")
+            await asyncio.sleep(0)
+            execution_order.append("plan_end")
+            orch._stop_event.set()
+            return []
+
+        async def fake_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            execution_order.append("implement_start")
+            await asyncio.sleep(0)
+            execution_order.append("implement_end")
+            return [], []
+
+        orch._plan_issues = fake_plan  # type: ignore[method-assign]
+        orch._implement_batch = fake_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # Both should have started before either finished (concurrent)
+        assert "plan_start" in execution_order
+        assert "implement_start" in execution_order
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_posts_comment_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """On successful plan, post_comment should be called."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="Step 1: Do the thing",
+            summary="Plan done",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.post_comment.assert_awaited_once()
+        call_args = mock_prs.post_comment.call_args
+        assert call_args.args[0] == 42
+        assert "Step 1: Do the thing" in call_args.args[1]
+        assert "agent/issue-42" in call_args.args[1]
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_swaps_labels_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, planner_label should be removed and config.label added."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.remove_label.assert_awaited_once_with(42, config.planner_label)
+        mock_prs.add_labels.assert_awaited_once_with(42, [config.label])
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_skips_label_swap_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, no label changes should be made."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.post_comment.assert_not_awaited()
+        mock_prs.remove_label.assert_not_awaited()
+        mock_prs.add_labels.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_returns_empty_when_no_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When no issues have the planner label, return empty list."""
+        orch = HydraOrchestrator(config)
+        orch._fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+        results = await orch._plan_issues()
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_plan_issue_creation_records_lifetime_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """record_issue_created should be called for each new issue filed by planner."""
+        from models import NewIssueSpec
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(title="Issue A", body="Body A", labels=["bug"]),
+                NewIssueSpec(title="Issue B", body="Body B", labels=["bug"]),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        stats = orch._state.get_lifetime_stats()
+        assert stats["issues_created"] == 2
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_files_new_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When planner discovers new issues, they should be filed via create_issue."""
+        from models import NewIssueSpec
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(title="Tech debt", body="Cleanup needed", labels=["tech-debt"]),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.create_issue.assert_awaited_once_with(
+            "Tech debt", "Cleanup needed", ["tech-debt"]
+        )

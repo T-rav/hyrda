@@ -11,16 +11,16 @@ class HydraConfig(BaseModel):
     """Configuration for the Hydra orchestrator."""
 
     # Issue selection
-    label: str = Field(default="ready", description="GitHub issue label to filter by")
+    label: str = Field(default="hydra-ready", description="GitHub issue label to filter by")
     batch_size: int = Field(default=15, ge=1, le=50, description="Issues per batch")
     repo: str = Field(
         default="8thlight/insightmesh", description="GitHub repo (owner/name)"
     )
 
     # Worker configuration
-    max_workers: int = Field(default=5, ge=1, le=10, description="Concurrent agents")
+    max_workers: int = Field(default=2, ge=1, le=10, description="Concurrent agents")
     max_budget_usd: float = Field(
-        default=5.0, gt=0, description="USD cap per implementation agent"
+        default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
     )
     model: str = Field(default="sonnet", description="Model for implementation agents")
 
@@ -29,7 +29,16 @@ class HydraConfig(BaseModel):
         default="opus", description="Model for review agents (higher quality)"
     )
     review_budget_usd: float = Field(
-        default=3.0, gt=0, description="USD cap per review agent"
+        default=0, ge=0, description="USD cap per review agent (0 = unlimited)"
+    )
+
+    # Planner configuration
+    planner_label: str = Field(
+        default="claude-find", description="Label for issues needing plans"
+    )
+    planner_model: str = Field(default="opus", description="Model for planning agents")
+    planner_budget_usd: float = Field(
+        default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
     )
 
     # Git configuration
@@ -50,6 +59,11 @@ class HydraConfig(BaseModel):
         default=True, description="Enable the live web dashboard"
     )
 
+    # Polling
+    poll_interval: int = Field(
+        default=30, ge=5, le=300, description="Seconds between work-queue polls"
+    )
+
     # Execution mode
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
@@ -65,7 +79,7 @@ class HydraConfig(BaseModel):
         if self.worktree_base == Path("."):
             self.worktree_base = self.repo_root.parent / "insightmesh-hydra"
         if self.state_file == Path("."):
-            self.state_file = self.repo_root / ".hydra-state.json"
+            self.state_file = self.repo_root / ".hydra" / "state.json"
         return self
 
 

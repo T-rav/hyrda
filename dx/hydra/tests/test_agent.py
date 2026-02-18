@@ -7,16 +7,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from agent import AgentRunner
+from tests.helpers import make_streaming_proc
 from events import EventBus, EventType
 from models import WorkerStatus
 
+
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers (agent-specific)
 # ---------------------------------------------------------------------------
 
 
@@ -25,7 +27,7 @@ def _make_proc(
     stdout: bytes = b"",
     stderr: bytes = b"",
 ) -> AsyncMock:
-    """Build a minimal mock subprocess object."""
+    """Build a minimal mock subprocess object (communicate style)."""
     proc = AsyncMock()
     proc.returncode = returncode
     proc.communicate = AsyncMock(return_value=(stdout, stderr))
@@ -84,6 +86,22 @@ class TestBuildCommand:
         budget_index = cmd.index("--max-budget-usd")
         assert cmd[budget_index + 1] == str(config.max_budget_usd)
 
+    def test_build_command_omits_budget_when_zero(
+        self, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Command should omit --max-budget-usd when budget is 0 (unlimited)."""
+        from tests.conftest import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_budget_usd=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        runner = AgentRunner(cfg, event_bus)
+        cmd = runner._build_command(tmp_path)
+        assert "--max-budget-usd" not in cmd
+
     def test_build_command_includes_output_format_text(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
@@ -92,7 +110,7 @@ class TestBuildCommand:
         cmd = runner._build_command(tmp_path)
         assert "--output-format" in cmd
         fmt_index = cmd.index("--output-format")
-        assert cmd[fmt_index + 1] == "text"
+        assert cmd[fmt_index + 1] == "stream-json"
 
     def test_build_command_includes_verbose(
         self, config, event_bus: EventBus, tmp_path: Path
@@ -164,6 +182,63 @@ class TestBuildPrompt:
         runner = AgentRunner(config, event_bus)
         prompt = runner._build_prompt(issue)
         assert "Discussion" not in prompt
+
+    def test_prompt_extracts_plan_comment_as_dedicated_section(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """When a comment contains '## Implementation Plan', it should be rendered
+        as a dedicated plan section with follow-this-plan instruction."""
+        from models import GitHubIssue
+
+        issue = GitHubIssue(
+            number=10,
+            title="Add feature X",
+            body="We need feature X",
+            comments=[
+                "## Implementation Plan\n\nStep 1: Do this\nStep 2: Do that\n\n**Branch:** `agent/issue-10`",
+                "Please also handle edge case Y",
+            ],
+        )
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+
+        assert "## Implementation Plan" in prompt
+        assert "Follow this plan closely" in prompt
+        assert "Step 1: Do this" in prompt
+        assert "Step 2: Do that" in prompt
+        # The other comment should be in Discussion
+        assert "Discussion" in prompt
+        assert "Please also handle edge case Y" in prompt
+
+    def test_prompt_plan_comment_excluded_from_discussion(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """The plan comment should NOT appear in the Discussion section."""
+        from models import GitHubIssue
+
+        issue = GitHubIssue(
+            number=10,
+            title="Add feature X",
+            body="We need feature X",
+            comments=[
+                "## Implementation Plan\n\nStep 1: Do this",
+            ],
+        )
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+
+        # Plan is in dedicated section, no Discussion section at all
+        assert "## Implementation Plan" in prompt
+        assert "Discussion" not in prompt
+
+    def test_prompt_no_plan_section_when_no_plan_comment(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """When no comment contains a plan, no plan section should appear."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+
+        assert "Follow this plan closely" not in prompt
 
     def test_prompt_instructs_no_push_or_pr(
         self, config, event_bus: EventBus, issue
@@ -379,28 +454,66 @@ class TestVerifyResult:
         assert "commit" in msg.lower()
 
     @pytest.mark.asyncio
-    async def test_verify_runs_make_test_fast_when_commits_exist(
+    async def test_verify_runs_best_available_target(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        """_verify_result should run 'make test-fast' when at least one commit exists."""
+        """_verify_result should probe for test-fast, then run it if available."""
         runner = AgentRunner(config, event_bus)
 
-        success_proc = _make_proc(returncode=0, stdout=b"All tests passed")
+        # --question returns 0 (target exists and is up-to-date) for test-fast
+        probe_proc = _make_proc(returncode=0, stdout=b"")
+        run_proc = _make_proc(returncode=0, stdout=b"All tests passed")
+
+        call_count = 0
+
+        async def _mock_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if "--question" in args:
+                return probe_proc
+            return run_proc
 
         with (
             patch.object(
                 runner, "_count_commits", new_callable=AsyncMock, return_value=1
             ),
-            patch(
-                "asyncio.create_subprocess_exec", return_value=success_proc
-            ) as mock_exec,
+            patch("asyncio.create_subprocess_exec", side_effect=_mock_exec) as mock_exec,
         ):
             success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
 
         assert success is True
         assert msg == "OK"
-        # Ensure 'make test-fast' was invoked
-        assert mock_exec.call_args.args[:2] == ("make", "test-fast")
+        # Probe + run = at least 2 calls
+        assert mock_exec.call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_verify_falls_back_to_lint_when_test_fast_missing(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_verify_result should fall back to make lint if test-fast doesn't exist."""
+        runner = AgentRunner(config, event_bus)
+
+        target_missing_proc = _make_proc(returncode=2, stdout=b"")
+        target_exists_proc = _make_proc(returncode=0, stdout=b"")
+        run_proc = _make_proc(returncode=0, stdout=b"OK")
+
+        async def _mock_exec(*args, **kwargs):
+            if "--question" in args:
+                if "test-fast" in args:
+                    return target_missing_proc
+                return target_exists_proc
+            return run_proc
+
+        with (
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch("asyncio.create_subprocess_exec", side_effect=_mock_exec),
+        ):
+            success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
+
+        assert success is True
+        assert msg == "OK"
 
     @pytest.mark.asyncio
     async def test_verify_returns_false_when_tests_fail(
@@ -409,20 +522,26 @@ class TestVerifyResult:
         """_verify_result should return (False, ...) when tests exit non-zero."""
         runner = AgentRunner(config, event_bus)
 
+        probe_proc = _make_proc(returncode=0, stdout=b"")
         fail_proc = _make_proc(
             returncode=1, stdout=b"FAILED test_foo.py::test_bar", stderr=b""
         )
+
+        async def _mock_exec(*args, **kwargs):
+            if "--question" in args:
+                return probe_proc
+            return fail_proc
 
         with (
             patch.object(
                 runner, "_count_commits", new_callable=AsyncMock, return_value=1
             ),
-            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
+            patch("asyncio.create_subprocess_exec", side_effect=_mock_exec),
         ):
             success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
 
         assert success is False
-        assert "Tests failed" in msg or "failed" in msg.lower()
+        assert "failed" in msg.lower()
 
     @pytest.mark.asyncio
     async def test_verify_returns_false_when_make_not_found(
@@ -467,18 +586,18 @@ class TestSaveTranscript:
         )
         runner._save_transcript(result)
 
-        expected_path = config.repo_root / ".hydra-logs" / "issue-42.txt"
+        expected_path = config.repo_root / ".hydra" / "logs" / "issue-42.txt"
         assert expected_path.exists()
         assert expected_path.read_text() == "This is the agent transcript"
 
     def test_save_transcript_creates_log_directory(
         self, config, event_bus: EventBus
     ) -> None:
-        """_save_transcript should create .hydra-logs/ if it does not exist."""
+        """_save_transcript should create .hydra/logs/ if it does not exist."""
         from models import WorkerResult
 
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        log_dir = config.repo_root / ".hydra-logs"
+        log_dir = config.repo_root / ".hydra" / "logs"
         assert not log_dir.exists()
 
         runner = AgentRunner(config, event_bus)
@@ -507,7 +626,7 @@ class TestSaveTranscript:
         )
         runner._save_transcript(result)
 
-        log_file = config.repo_root / ".hydra-logs" / "issue-123.txt"
+        log_file = config.repo_root / ".hydra" / "logs" / "issue-123.txt"
         assert log_file.exists()
 
 
@@ -676,6 +795,38 @@ class TestEventPublishing:
             assert event.data.get("worker") == 3
 
     @pytest.mark.asyncio
+    async def test_worker_update_events_include_implementer_role(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """WORKER_UPDATE events should carry role='implementer'."""
+        runner = AgentRunner(config, event_bus)
+        queue = event_bus.subscribe()
+
+        with (
+            patch.object(runner, "_execute", new_callable=AsyncMock, return_value=""),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(True, "OK"),
+            ),
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch.object(runner, "_save_transcript"),
+        ):
+            await runner.run(issue, tmp_path, "agent/issue-42")
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        worker_updates = [e for e in events if e.type == EventType.WORKER_UPDATE]
+        assert len(worker_updates) > 0
+        for event in worker_updates:
+            assert event.data.get("role") == "implementer"
+
+    @pytest.mark.asyncio
     async def test_dry_run_emits_running_and_done_events(
         self, dry_config, event_bus: EventBus, issue, tmp_path: Path
     ) -> None:
@@ -693,3 +844,143 @@ class TestEventPublishing:
         statuses = [e.data.get("status") for e in worker_updates]
         assert WorkerStatus.RUNNING.value in statuses
         assert WorkerStatus.DONE.value in statuses
+
+    @pytest.mark.asyncio
+    async def test_dry_run_events_include_implementer_role(
+        self, dry_config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """In dry-run mode, WORKER_UPDATE events should still carry role='implementer'."""
+        runner = AgentRunner(dry_config, event_bus)
+        queue = event_bus.subscribe()
+
+        await runner.run(issue, tmp_path, "agent/issue-42")
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        worker_updates = [e for e in events if e.type == EventType.WORKER_UPDATE]
+        assert len(worker_updates) > 0
+        for event in worker_updates:
+            assert event.data.get("role") == "implementer"
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._execute — streaming
+# ---------------------------------------------------------------------------
+
+
+class TestTerminate:
+    """Tests for AgentRunner.terminate."""
+
+    def test_terminate_kills_active_processes(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """terminate() should call kill() on all tracked processes."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = MagicMock()
+        runner._active_procs.add(mock_proc)
+
+        runner.terminate()
+
+        mock_proc.kill.assert_called_once()
+
+    def test_terminate_handles_process_lookup_error(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """terminate() should not raise when a process has already exited."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = MagicMock()
+        mock_proc.kill.side_effect = ProcessLookupError
+        runner._active_procs.add(mock_proc)
+
+        runner.terminate()  # Should not raise
+
+    def test_terminate_with_no_active_processes(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """terminate() with empty _active_procs should be a no-op."""
+        runner = AgentRunner(config, event_bus)
+        runner.terminate()  # Should not raise
+
+
+class TestExecuteStreaming:
+    """Tests for AgentRunner._execute with line-by-line streaming."""
+
+    @pytest.mark.asyncio
+    async def test_execute_returns_transcript(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should return the full transcript from stdout lines."""
+        runner = AgentRunner(config, event_bus)
+        output = "Line one\nLine two\nLine three"
+        mock_create = make_streaming_proc(returncode=0, stdout=output)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            transcript = await runner._execute(
+                ["claude", "-p"], "prompt", tmp_path, issue.number
+            )
+
+        assert transcript == output
+
+    @pytest.mark.asyncio
+    async def test_execute_publishes_transcript_line_events(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should publish a TRANSCRIPT_LINE event per non-empty line."""
+        runner = AgentRunner(config, event_bus)
+        output = "Line one\nLine two\nLine three"
+        mock_create = make_streaming_proc(returncode=0, stdout=output)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await runner._execute(
+                ["claude", "-p"], "prompt", tmp_path, issue.number
+            )
+
+        events = event_bus.get_history()
+        transcript_events = [e for e in events if e.type == EventType.TRANSCRIPT_LINE]
+        assert len(transcript_events) == 3
+        lines = [e.data["line"] for e in transcript_events]
+        assert "Line one" in lines
+        assert "Line two" in lines
+        assert "Line three" in lines
+        for ev in transcript_events:
+            assert ev.data["issue"] == issue.number
+
+    @pytest.mark.asyncio
+    async def test_execute_skips_empty_lines_for_events(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should not publish events for blank/whitespace-only lines."""
+        runner = AgentRunner(config, event_bus)
+        output = "Line one\n\n   \nLine two"
+        mock_create = make_streaming_proc(returncode=0, stdout=output)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await runner._execute(
+                ["claude", "-p"], "prompt", tmp_path, issue.number
+            )
+
+        events = event_bus.get_history()
+        transcript_events = [e for e in events if e.type == EventType.TRANSCRIPT_LINE]
+        assert len(transcript_events) == 2
+
+    @pytest.mark.asyncio
+    async def test_execute_logs_warning_on_nonzero_exit(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should log a warning when the process exits non-zero."""
+        runner = AgentRunner(config, event_bus)
+        mock_create = make_streaming_proc(
+            returncode=1, stdout="output", stderr="error details"
+        )
+
+        with (
+            patch("asyncio.create_subprocess_exec", mock_create),
+            patch("agent.logger") as mock_logger,
+        ):
+            await runner._execute(
+                ["claude", "-p"], "prompt", tmp_path, issue.number
+            )
+
+        mock_logger.warning.assert_called_once()

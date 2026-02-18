@@ -374,7 +374,7 @@
     let currentTab = 'transcript';
 
     // WebSocket
-    const wsUrl = `ws://${location.host}/ws`;
+    const wsUrl = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
     let ws = null;
 
     function connect() {
@@ -510,10 +510,10 @@
              onclick="selectWorker(${num})">
           <div class="worker-header">
             <span class="worker-issue">#${num}</span>
-            <span class="worker-status ${w.status}">${w.status}</span>
+            <span class="worker-status ${escapeHtml(w.status)}">${escapeHtml(w.status)}</span>
           </div>
-          <div class="worker-title">${w.title}</div>
-          <div class="worker-meta">${w.branch} &middot; W${w.worker}</div>
+          <div class="worker-title">${escapeHtml(w.title)}</div>
+          <div class="worker-meta">${escapeHtml(w.branch)} &middot; W${w.worker}</div>
         </div>
       `).join('');
     }
@@ -551,9 +551,9 @@
       const tbody = document.getElementById('pr-tbody');
       tbody.innerHTML = prs.map(p => `
         <tr>
-          <td><a href="${p.url || '#'}" target="_blank" style="color:var(--accent)">#${p.pr}</a></td>
+          <td><a href="${escapeHtml(p.url || '#')}" target="_blank" style="color:var(--accent)">#${p.pr}</a></td>
           <td>#${p.issue}</td>
-          <td>${p.branch}</td>
+          <td>${escapeHtml(p.branch)}</td>
           <td>${p.draft ? '📝 Draft' : '✅ Ready'}</td>
         </tr>
       `).join('');
@@ -563,11 +563,12 @@
       const tbody = document.getElementById('review-tbody');
       tbody.innerHTML = reviews.map(r => {
         const colors = { approve: 'var(--green)', 'request-changes': 'var(--red)', comment: 'var(--yellow)' };
+        const verdictStr = escapeHtml(r.verdict || '');
         return `
           <tr>
             <td>#${r.pr}</td>
-            <td style="color:${colors[r.verdict] || 'inherit'}">${r.verdict}</td>
-            <td>${r.summary || ''}</td>
+            <td style="color:${colors[r.verdict] || 'inherit'}">${verdictStr}</td>
+            <td>${escapeHtml(r.summary || '')}</td>
           </tr>
         `;
       }).join('');
@@ -576,11 +577,12 @@
     function addEventLog(type, data, timestamp) {
       const el = document.getElementById('event-log');
       const time = new Date(timestamp).toLocaleTimeString();
-      const summary = eventSummary(type, data);
+      const summary = escapeHtml(eventSummary(type, data));
+      const safeType = escapeHtml(type);
       const div = document.createElement('div');
       div.className = 'event-item';
-      div.innerHTML = `<span class="event-time">${time}</span>` +
-        `<span class="event-type ${type}">${type.replace('_', ' ')}</span>` +
+      div.innerHTML = `<span class="event-time">${escapeHtml(time)}</span>` +
+        `<span class="event-type ${safeType}">${safeType.replace('_', ' ')}</span>` +
         `<span>${summary}</span>`;
       el.prepend(div);
 
@@ -596,14 +598,14 @@
     function eventSummary(type, data) {
       switch (type) {
         case 'batch_start': return `Batch ${data.batch} started`;
-        case 'phase_change': return data.phase;
-        case 'worker_update': return `#${data.issue} → ${data.status}`;
+        case 'phase_change': return String(data.phase);
+        case 'worker_update': return `#${data.issue} → ${String(data.status)}`;
         case 'transcript_line': return `#${data.issue || data.pr}`;
         case 'pr_created': return `PR #${data.pr} for #${data.issue}${data.draft ? ' (draft)' : ''}`;
-        case 'review_update': return `PR #${data.pr} → ${data.verdict || data.status}`;
-        case 'merge_update': return `PR #${data.pr} ${data.status}`;
+        case 'review_update': return `PR #${data.pr} → ${String(data.verdict || data.status)}`;
+        case 'merge_update': return `PR #${data.pr} ${String(data.status)}`;
         case 'batch_complete': return `${data.merged} merged, ${data.implemented} implemented`;
-        case 'error': return data.message || 'Error';
+        case 'error': return String(data.message || 'Error');
         default: return JSON.stringify(data).slice(0, 80);
       }
     }

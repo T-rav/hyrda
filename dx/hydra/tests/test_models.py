@@ -8,7 +8,10 @@ import pytest
 from models import (
     BatchResult,
     GitHubIssue,
+    NewIssueSpec,
     Phase,
+    PlannerStatus,
+    PlanResult,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
@@ -109,6 +112,142 @@ class TestGitHubIssue:
 
 
 # ---------------------------------------------------------------------------
+# PlannerStatus
+# ---------------------------------------------------------------------------
+
+
+class TestPlannerStatus:
+    """Tests for the PlannerStatus enum."""
+
+    @pytest.mark.parametrize(
+        "member, expected_value",
+        [
+            (PlannerStatus.QUEUED, "queued"),
+            (PlannerStatus.PLANNING, "planning"),
+            (PlannerStatus.DONE, "done"),
+            (PlannerStatus.FAILED, "failed"),
+        ],
+    )
+    def test_enum_values(self, member: PlannerStatus, expected_value: str) -> None:
+        assert member.value == expected_value
+
+    def test_enum_is_string_subclass(self) -> None:
+        assert isinstance(PlannerStatus.DONE, str)
+
+    def test_all_four_members_present(self) -> None:
+        assert len(PlannerStatus) == 4
+
+    def test_lookup_by_value(self) -> None:
+        status = PlannerStatus("planning")
+        assert status is PlannerStatus.PLANNING
+
+
+# ---------------------------------------------------------------------------
+# PlanResult
+# ---------------------------------------------------------------------------
+
+
+class TestNewIssueSpec:
+    """Tests for the NewIssueSpec model."""
+
+    def test_minimal_instantiation(self) -> None:
+        spec = NewIssueSpec(title="Fix bug")
+        assert spec.title == "Fix bug"
+        assert spec.body == ""
+        assert spec.labels == []
+
+    def test_all_fields_set(self) -> None:
+        spec = NewIssueSpec(
+            title="Tech debt",
+            body="Needs cleanup",
+            labels=["tech-debt", "low-priority"],
+        )
+        assert spec.title == "Tech debt"
+        assert spec.body == "Needs cleanup"
+        assert spec.labels == ["tech-debt", "low-priority"]
+
+    def test_labels_independent_between_instances(self) -> None:
+        a = NewIssueSpec(title="a")
+        b = NewIssueSpec(title="b")
+        a.labels.append("bug")
+        assert b.labels == []
+
+
+class TestPlanResult:
+    """Tests for the PlanResult model."""
+
+    def test_minimal_instantiation(self) -> None:
+        result = PlanResult(issue_number=10)
+        assert result.issue_number == 10
+
+    def test_success_defaults_to_false(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.success is False
+
+    def test_plan_defaults_to_empty_string(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.plan == ""
+
+    def test_summary_defaults_to_empty_string(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.summary == ""
+
+    def test_error_defaults_to_none(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.error is None
+
+    def test_transcript_defaults_to_empty_string(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.transcript == ""
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.duration_seconds == pytest.approx(0.0)
+
+    def test_new_issues_defaults_to_empty_list(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.new_issues == []
+
+    def test_new_issues_can_be_populated(self) -> None:
+        spec = NewIssueSpec(title="Bug", body="Details")
+        result = PlanResult(issue_number=1, new_issues=[spec])
+        assert len(result.new_issues) == 1
+        assert result.new_issues[0].title == "Bug"
+
+    def test_all_fields_set(self) -> None:
+        result = PlanResult(
+            issue_number=7,
+            success=True,
+            plan="Step 1: Do the thing",
+            summary="Implementation plan",
+            error=None,
+            transcript="Full transcript here.",
+            duration_seconds=30.5,
+        )
+        assert result.issue_number == 7
+        assert result.success is True
+        assert result.plan == "Step 1: Do the thing"
+        assert result.summary == "Implementation plan"
+        assert result.error is None
+        assert result.transcript == "Full transcript here."
+        assert result.duration_seconds == pytest.approx(30.5)
+
+    def test_serialization_with_model_dump(self) -> None:
+        result = PlanResult(
+            issue_number=3,
+            success=True,
+            plan="The plan",
+            summary="Summary",
+        )
+        data = result.model_dump()
+        assert data["issue_number"] == 3
+        assert data["success"] is True
+        assert data["plan"] == "The plan"
+        assert data["summary"] == "Summary"
+        assert data["error"] is None
+
+
+# ---------------------------------------------------------------------------
 # WorkerStatus
 # ---------------------------------------------------------------------------
 
@@ -187,6 +326,16 @@ class TestWorkerResult:
     def test_duration_seconds_defaults_to_zero(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.duration_seconds == pytest.approx(0.0)
+
+    def test_pr_info_defaults_to_none(self) -> None:
+        result = WorkerResult(issue_number=1, branch="b")
+        assert result.pr_info is None
+
+    def test_pr_info_can_be_set(self) -> None:
+        pr = PRInfo(number=101, issue_number=1, branch="b")
+        result = WorkerResult(issue_number=1, branch="b", pr_info=pr)
+        assert result.pr_info is not None
+        assert result.pr_info.number == 101
 
     def test_all_fields_set(self) -> None:
         # Arrange / Act
@@ -365,6 +514,14 @@ class TestReviewResult:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.fixes_made is False
 
+    def test_merged_defaults_to_false(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.merged is False
+
+    def test_merged_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, merged=True)
+        assert review.merged is True
+
     def test_transcript_defaults_to_empty_string(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.transcript == ""
@@ -429,6 +586,10 @@ class TestBatchResult:
     def test_issues_defaults_to_empty_list(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.issues == []
+
+    def test_plan_results_defaults_to_empty_list(self) -> None:
+        batch = BatchResult(batch_number=1)
+        assert batch.plan_results == []
 
     def test_worker_results_defaults_to_empty_list(self) -> None:
         batch = BatchResult(batch_number=1)
@@ -555,11 +716,10 @@ class TestPhase:
     @pytest.mark.parametrize(
         "member, expected_value",
         [
-            (Phase.FETCH, "fetch"),
+            (Phase.IDLE, "idle"),
+            (Phase.PLAN, "plan"),
             (Phase.IMPLEMENT, "implement"),
-            (Phase.PUSH_PRS, "push_prs"),
             (Phase.REVIEW, "review"),
-            (Phase.MERGE, "merge"),
             (Phase.CLEANUP, "cleanup"),
             (Phase.DONE, "done"),
         ],
@@ -569,16 +729,33 @@ class TestPhase:
         assert member.value == expected_value
 
     def test_enum_is_string_subclass(self) -> None:
-        assert isinstance(Phase.FETCH, str)
+        assert isinstance(Phase.IMPLEMENT, str)
 
-    def test_all_seven_members_present(self) -> None:
-        assert len(Phase) == 7
+    def test_all_six_members_present(self) -> None:
+        assert len(Phase) == 6
+
+    def test_plan_is_second_phase(self) -> None:
+        """PLAN should be the second declared phase (after IDLE)."""
+        members = list(Phase)
+        assert members[1] is Phase.PLAN
 
     def test_lookup_by_value(self) -> None:
         phase = Phase("implement")
         assert phase is Phase.IMPLEMENT
 
+    def test_idle_is_first_phase(self) -> None:
+        """IDLE should be the first declared phase."""
+        members = list(Phase)
+        assert members[0] is Phase.IDLE
+
     def test_done_is_terminal_phase(self) -> None:
         """DONE should be the last declared phase."""
         members = list(Phase)
         assert members[-1] is Phase.DONE
+
+    def test_idle_value_is_idle_string(self) -> None:
+        assert Phase.IDLE.value == "idle"
+
+    def test_idle_lookup_by_value(self) -> None:
+        phase = Phase("idle")
+        assert phase is Phase.IDLE

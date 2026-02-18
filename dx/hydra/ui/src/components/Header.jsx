@@ -1,19 +1,13 @@
 import React from 'react'
 
-const phaseColors = {
-  idle: '#8b949e',
-  fetch: '#58a6ff',
-  implement: '#d29922',
-  push_prs: '#d18616',
-  review: '#d18616',
-  merge: '#3fb950',
-  cleanup: '#8b949e',
-  done: '#3fb950',
-}
-
-export function Header({ batchNum, workers, prsCount, mergedCount, phase, connected }) {
-  const workerList = Object.values(workers)
-  const active = workerList.filter(w => w.status === 'running' || w.status === 'testing').length
+export function Header({
+  batchNum, prsCount, mergedCount,
+  connected, orchestratorStatus,
+  onStart, onStop, lifetimeStats,
+}) {
+  const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
+  const isStopping = orchestratorStatus === 'stopping'
+  const isRunning = orchestratorStatus === 'running'
 
   return (
     <header style={styles.header}>
@@ -29,16 +23,38 @@ export function Header({ batchNum, workers, prsCount, mergedCount, phase, connec
       </div>
       <div style={styles.stats}>
         <Stat label="Batch" value={batchNum} />
-        <Stat label="Workers" value={`${active}/${workerList.length}`} />
         <Stat label="PRs" value={prsCount} />
         <Stat label="Merged" value={mergedCount} />
+        {lifetimeStats && (<>
+          <Stat label="Fixed" value={lifetimeStats.issues_completed} />
+          <Stat label="Filed" value={lifetimeStats.issues_created} />
+        </>)}
       </div>
-      <span style={{
-        ...styles.badge,
-        background: phaseColors[phase] || '#8b949e',
-      }}>
-        {phase}
-      </span>
+      <div style={styles.controls}>
+        {canStart && (
+          <button
+            style={{
+              ...styles.startBtn,
+              opacity: connected ? 1 : 0.4,
+              cursor: connected ? 'pointer' : 'not-allowed',
+            }}
+            onClick={onStart}
+            disabled={!connected}
+          >
+            Start
+          </button>
+        )}
+        {isRunning && (
+          <button style={styles.stopBtn} onClick={onStop}>
+            Stop
+          </button>
+        )}
+        {isStopping && (
+          <span style={styles.stoppingBadge}>
+            Stopping…
+          </span>
+        )}
+      </div>
     </header>
   )
 }
@@ -68,12 +84,33 @@ const styles = {
   stats: { display: 'flex', gap: 20, fontSize: 12 },
   stat: { color: '#8b949e' },
   statVal: { color: '#c9d1d9' },
-  badge: {
-    padding: '4px 12px',
-    borderRadius: 12,
-    fontSize: 11,
+  controls: { display: 'flex', alignItems: 'center', gap: 10 },
+  startBtn: {
+    padding: '4px 14px',
+    borderRadius: 6,
+    border: 'none',
+    background: '#238636',
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: 600,
-    textTransform: 'uppercase',
+    cursor: 'pointer',
+  },
+  stopBtn: {
+    padding: '4px 14px',
+    borderRadius: 6,
+    border: 'none',
+    background: '#da3633',
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  stoppingBadge: {
+    padding: '4px 12px',
+    borderRadius: 6,
+    background: '#d29922',
     color: '#0d1117',
+    fontSize: 12,
+    fontWeight: 600,
   },
 }

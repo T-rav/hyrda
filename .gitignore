@@ -229,7 +229,7 @@ dx/qdrant/volumes/
 # Audio files
 *.mp3
 # CodeQL databases
-*-codeql-db/
+codeql-db*/
 
 # Hydra (parallel issue processor)
 .hydra-state.json

@@ -6,13 +6,16 @@ VENV := $(PROJECT_ROOT)/venv
 UV := VIRTUAL_ENV=$(VENV) uv run --active
 
 # CLI argument passthrough
-LABEL ?= ready
-WORKERS ?= 5
-MODEL ?= sonnet
+LABEL ?= hydra-ready
+WORKERS ?= 2
+MODEL ?= opus
 REVIEW_MODEL ?= opus
 BATCH_SIZE ?= 15
-BUDGET ?= 5.0
-REVIEW_BUDGET ?= 3.0
+BUDGET ?= 0
+REVIEW_BUDGET ?= 0
+PLANNER_LABEL ?= claude-find
+PLANNER_MODEL ?= opus
+PLANNER_BUDGET ?= 0
 PORT ?= 5555
 
 # Colors
@@ -22,12 +25,13 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dry-run clean test lint lint-check quality install status ui ui-dev ui-clean
+.PHONY: help run dev dry-run clean test lint lint-check quality install status ui ui-dev ui-clean
 
 help:
 	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
 	@echo ""
 	@echo "$(GREEN)Commands:$(RESET)"
+	@echo "  make dev            Start backend + Vite frontend dev server"
 	@echo "  make run            Run Hydra (processes issues with agents)"
 	@echo "  make dry-run        Dry run (log actions without executing)"
 	@echo "  make clean          Remove all worktrees and state"
@@ -42,14 +46,17 @@ help:
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
-	@echo "  LABEL          GitHub issue label (default: ready)"
-	@echo "  WORKERS        Max concurrent agents (default: 5)"
-	@echo "  MODEL          Implementation model (default: sonnet)"
-	@echo "  REVIEW_MODEL   Review model (default: opus)"
-	@echo "  BATCH_SIZE     Issues per batch (default: 15)"
-	@echo "  BUDGET         USD per impl agent (default: 5.0)"
-	@echo "  REVIEW_BUDGET  USD per review agent (default: 3.0)"
-	@echo "  PORT           Dashboard port (default: 5555)"
+	@echo "  LABEL            GitHub issue label (default: hydra-ready)"
+	@echo "  WORKERS          Max concurrent agents (default: 2)"
+	@echo "  MODEL            Implementation model (default: sonnet)"
+	@echo "  REVIEW_MODEL     Review model (default: opus)"
+	@echo "  BATCH_SIZE       Issues per batch (default: 15)"
+	@echo "  BUDGET           USD per impl agent (default: 0 = unlimited)"
+	@echo "  REVIEW_BUDGET    USD per review agent (default: 0 = unlimited)"
+	@echo "  PLANNER_LABEL    Planner issue label (default: claude-find)"
+	@echo "  PLANNER_MODEL    Planner model (default: opus)"
+	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
+	@echo "  PORT             Dashboard port (default: 5555)"
 
 run:
 	@echo "$(BLUE)Starting Hydra — label=$(LABEL) workers=$(WORKERS) model=$(MODEL)$(RESET)"
@@ -61,8 +68,30 @@ run:
 		--batch-size $(BATCH_SIZE) \
 		--max-budget-usd $(BUDGET) \
 		--review-budget-usd $(REVIEW_BUDGET) \
+		--planner-label $(PLANNER_LABEL) \
+		--planner-model $(PLANNER_MODEL) \
+		--planner-budget-usd $(PLANNER_BUDGET) \
 		--dashboard-port $(PORT)
 	@echo "$(GREEN)Hydra complete$(RESET)"
+
+dev:
+	@echo "$(BLUE)Starting Hydra dev mode — backend :$(PORT) + frontend :5556$(RESET)"
+	@echo "$(GREEN)Open http://localhost:5556 to use the dashboard$(RESET)"
+	@trap 'kill 0' EXIT; \
+	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev & \
+	cd $(HYDRA_DIR) && $(UV) python cli.py \
+		--label $(LABEL) \
+		--max-workers $(WORKERS) \
+		--model $(MODEL) \
+		--review-model $(REVIEW_MODEL) \
+		--batch-size $(BATCH_SIZE) \
+		--max-budget-usd $(BUDGET) \
+		--review-budget-usd $(REVIEW_BUDGET) \
+		--planner-label $(PLANNER_LABEL) \
+		--planner-model $(PLANNER_MODEL) \
+		--planner-budget-usd $(PLANNER_BUDGET) \
+		--dashboard-port $(PORT) & \
+	wait
 
 dry-run:
 	@echo "$(BLUE)Hydra dry run — label=$(LABEL)$(RESET)"
@@ -80,8 +109,8 @@ clean:
 
 status:
 	@echo "$(BLUE)Hydra State:$(RESET)"
-	@if [ -f $(PROJECT_ROOT)/.hydra-state.json ]; then \
-		cat $(PROJECT_ROOT)/.hydra-state.json | python -m json.tool; \
+	@if [ -f $(PROJECT_ROOT)/.hydra/state.json ]; then \
+		cat $(PROJECT_ROOT)/.hydra/state.json | python -m json.tool; \
 	else \
 		echo "$(YELLOW)No state file found (Hydra has not run yet)$(RESET)"; \
 	fi

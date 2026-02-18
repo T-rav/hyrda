@@ -1,12 +1,10 @@
 """Live web dashboard for Hydra — FastAPI + WebSocket."""
 
-from __future__ import annotations
-
 import asyncio
 import contextlib
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from config import HydraConfig
 from events import EventBus, HydraEvent
@@ -34,14 +32,15 @@ class HydraDashboard:
         config: HydraConfig,
         event_bus: EventBus,
         state: StateTracker,
-        orchestrator: HydraOrchestrator | None = None,
+        orchestrator: Optional["HydraOrchestrator"] = None,
     ) -> None:
         self._config = config
         self._bus = event_bus
         self._state = state
         self._orchestrator = orchestrator
-        self._server_task: asyncio.Task[None] | None = None
-        self._app: object | None = None
+        self._server_task: Optional[asyncio.Task[None]] = None
+        self._run_task: Optional[asyncio.Task[None]] = None
+        self._app: Optional[object] = None
 
     def create_app(self) -> object:
         """Build and return the FastAPI application."""
@@ -87,6 +86,10 @@ class HydraDashboard:
         async def get_state() -> JSONResponse:
             return JSONResponse(self._state.to_dict())
 
+        @app.get("/api/stats")
+        async def get_stats() -> JSONResponse:
+            return JSONResponse(self._state.get_lifetime_stats())
+
         @app.get("/api/events")
         async def get_events() -> JSONResponse:
             history = self._bus.get_history()
@@ -106,13 +109,60 @@ class HydraDashboard:
                 return JSONResponse({"status": "ok"})
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
 
+        @app.post("/api/control/start")
+        async def start_orchestrator() -> JSONResponse:
+            if self._orchestrator and self._orchestrator.running:
+                return JSONResponse({"error": "already running"}, status_code=409)
+
+            from orchestrator import HydraOrchestrator
+
+            orch = HydraOrchestrator(
+                self._config,
+                event_bus=self._bus,
+                state=self._state,
+            )
+            self._orchestrator = orch
+            self._run_task = asyncio.create_task(orch.run())
+            return JSONResponse({"status": "started"})
+
+        @app.post("/api/control/stop")
+        async def stop_orchestrator() -> JSONResponse:
+            if not self._orchestrator or not self._orchestrator.running:
+                return JSONResponse({"error": "not running"}, status_code=400)
+            self._orchestrator.request_stop()
+            await self._orchestrator._publish_status()
+            return JSONResponse({"status": "stopping"})
+
+        @app.get("/api/control/status")
+        async def get_control_status() -> JSONResponse:
+            status = "idle"
+            if self._orchestrator:
+                status = self._orchestrator.run_status
+            return JSONResponse(
+                {
+                    "status": status,
+                    "config": {
+                        "repo": self._config.repo,
+                        "label": self._config.label,
+                        "max_workers": self._config.max_workers,
+                        "batch_size": self._config.batch_size,
+                        "model": self._config.model,
+                    },
+                }
+            )
+
         @app.websocket("/ws")
         async def websocket_endpoint(ws: WebSocket) -> None:
             await ws.accept()
+
+            # Snapshot history BEFORE subscribing to avoid duplicates.
+            # Events published between snapshot and subscribe are picked
+            # up by the live queue, never sent twice.
+            history = self._bus.get_history()
             queue = self._bus.subscribe()
 
             # Send history on connect
-            for event in self._bus.get_history():
+            for event in history:
                 try:
                     await ws.send_text(event.model_dump_json())
                 except Exception:
@@ -144,7 +194,7 @@ class HydraDashboard:
         app = self.create_app()
         config = uvicorn.Config(
             app,
-            host="0.0.0.0",
+            host="127.0.0.1",
             port=self._config.dashboard_port,
             log_level="warning",
         )

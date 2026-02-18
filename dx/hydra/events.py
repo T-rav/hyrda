@@ -20,8 +20,11 @@ class EventType(str, Enum):
     TRANSCRIPT_LINE = "transcript_line"
     PR_CREATED = "pr_created"
     REVIEW_UPDATE = "review_update"
+    PLANNER_UPDATE = "planner_update"
     MERGE_UPDATE = "merge_update"
+    ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
+    ORCHESTRATOR_STATUS = "orchestrator_status"
     ERROR = "error"
 
 

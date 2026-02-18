@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { useHydraSocket } from './hooks/useHydraSocket'
 import { useHumanInput } from './hooks/useHumanInput'
 import { Header } from './components/Header'
@@ -6,10 +6,11 @@ import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
 import { PRTable } from './components/PRTable'
 import { ReviewTable } from './components/ReviewTable'
-import { EventLog } from './components/EventLog'
 import { HumanInputBanner } from './components/HumanInputBanner'
+import { PipelineStatus } from './components/PipelineStatus'
 
 const TABS = ['transcript', 'prs', 'reviews', 'timeline']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
   const state = useHydraSocket()
@@ -17,21 +18,50 @@ export default function App() {
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
 
+  // Auto-select the first active worker when none is selected
+  useEffect(() => {
+    if (selectedWorker !== null && state.workers[selectedWorker]) return
+    const active = Object.entries(state.workers).find(
+      ([, w]) => ACTIVE_STATUSES.includes(w.status)
+    )
+    if (active) {
+      const key = active[0]
+      setSelectedWorker(isNaN(Number(key)) ? key : Number(key))
+    }
+  }, [state.workers, selectedWorker])
+
+  const handleStart = useCallback(async () => {
+    try {
+      await fetch('/api/control/start', { method: 'POST' })
+    } catch { /* ignore */ }
+  }, [])
+
+  const handleStop = useCallback(async () => {
+    try {
+      await fetch('/api/control/stop', { method: 'POST' })
+    } catch { /* ignore */ }
+  }, [])
+
   return (
     <div style={styles.layout}>
       <Header
         batchNum={state.batchNum}
-        workers={state.workers}
         prsCount={state.prs.length}
         mergedCount={state.mergedCount}
-        phase={state.phase}
         connected={state.connected}
+        orchestratorStatus={state.orchestratorStatus}
+        onStart={handleStart}
+        onStop={handleStop}
+        lifetimeStats={state.lifetimeStats}
       />
+
+      <PipelineStatus phase={state.phase} workers={state.workers} />
 
       <WorkerList
         workers={state.workers}
         selectedWorker={selectedWorker}
         onSelect={setSelectedWorker}
+        humanInputRequests={requests}
       />
 
       <div style={styles.main}>
@@ -74,7 +104,6 @@ export default function App() {
         </div>
       </div>
 
-      <EventLog events={state.events} />
     </div>
   )
 }
@@ -82,8 +111,8 @@ export default function App() {
 const styles = {
   layout: {
     display: 'grid',
-    gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '280px 1fr 320px',
+    gridTemplateRows: 'auto auto 1fr',
+    gridTemplateColumns: '280px 1fr',
     height: '100vh',
   },
   main: {

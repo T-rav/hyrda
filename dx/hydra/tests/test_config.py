@@ -122,7 +122,7 @@ class TestHydraConfigDefaults:
         )
 
         # Assert
-        assert cfg.label == "ready"
+        assert cfg.label == "hydra-ready"
 
     def test_batch_size_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -146,7 +146,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_workers == 5
+        assert cfg.max_workers == 2
 
     def test_max_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -154,7 +154,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_budget_usd == pytest.approx(5.0)
+        assert cfg.max_budget_usd == pytest.approx(0)
 
     def test_model_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -178,7 +178,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.review_budget_usd == pytest.approx(3.0)
+        assert cfg.review_budget_usd == pytest.approx(0)
 
     def test_main_branch_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -400,7 +400,7 @@ class TestHydraConfigPathResolution:
         assert cfg.worktree_base == git_root.parent / "insightmesh-hydra"
 
     def test_default_state_file_derived_from_repo_root(self, tmp_path: Path) -> None:
-        """When state_file is left as Path('.'), it should resolve to repo_root / '.hydra-state.json'."""
+        """When state_file is left as Path('.'), it should resolve to repo_root / '.hydra/state.json'."""
         # Arrange
         git_root = tmp_path / "insightmesh"
         git_root.mkdir()
@@ -410,7 +410,7 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig(repo_root=git_root)
 
         # Assert
-        assert cfg.state_file == git_root / ".hydra-state.json"
+        assert cfg.state_file == git_root / ".hydra" / "state.json"
 
     def test_auto_detected_repo_root_is_absolute(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -447,7 +447,7 @@ class TestHydraConfigPathResolution:
     def test_auto_detected_state_file_named_hydra_state_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Auto-derived state_file should be named '.hydra-state.json'."""
+        """Auto-derived state_file should be inside .hydra/ and named 'state.json'."""
         # Arrange
         git_root = tmp_path / "repo"
         git_root.mkdir()
@@ -458,7 +458,8 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig()
 
         # Assert
-        assert cfg.state_file.name == ".hydra-state.json"
+        assert cfg.state_file.name == "state.json"
+        assert cfg.state_file.parent.name == ".hydra"
 
 
 # ---------------------------------------------------------------------------
@@ -556,14 +557,14 @@ class TestHydraConfigValidationConstraints:
         )
         assert cfg.max_budget_usd == pytest.approx(0.01)
 
-    def test_max_budget_usd_zero_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError):
-            HydraConfig(
-                max_budget_usd=0.0,
-                repo_root=tmp_path,
-                worktree_base=tmp_path / "wt",
-                state_file=tmp_path / "s.json",
-            )
+    def test_max_budget_usd_zero_is_unlimited(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_budget_usd=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_budget_usd == pytest.approx(0)
 
     def test_max_budget_usd_negative_raises(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError):
@@ -585,14 +586,14 @@ class TestHydraConfigValidationConstraints:
         )
         assert cfg.review_budget_usd == pytest.approx(0.50)
 
-    def test_review_budget_usd_zero_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError):
-            HydraConfig(
-                review_budget_usd=0.0,
-                repo_root=tmp_path,
-                worktree_base=tmp_path / "wt",
-                state_file=tmp_path / "s.json",
-            )
+    def test_review_budget_usd_zero_is_unlimited(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            review_budget_usd=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.review_budget_usd == pytest.approx(0)
 
     # dashboard_port: ge=1024, le=65535
 

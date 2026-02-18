@@ -29,6 +29,30 @@ def _make_proc(
 
 
 # ---------------------------------------------------------------------------
+# WorktreeManager.exists
+# ---------------------------------------------------------------------------
+
+
+class TestExists:
+    """Tests for WorktreeManager.exists."""
+
+    def test_returns_true_when_worktree_dir_exists(
+        self, config, tmp_path: Path
+    ) -> None:
+        """exists should return True when the issue directory is present."""
+        manager = WorktreeManager(config)
+        wt_path = config.worktree_base / "issue-7"
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        assert manager.exists(7) is True
+
+    def test_returns_false_when_worktree_dir_absent(self, config) -> None:
+        """exists should return False when no directory exists for the issue."""
+        manager = WorktreeManager(config)
+        assert manager.exists(999) is False
+
+
+# ---------------------------------------------------------------------------
 # WorktreeManager.create
 # ---------------------------------------------------------------------------
 
@@ -52,6 +76,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
@@ -63,6 +88,65 @@ class TestCreate:
         assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
         # Second call: git worktree add
         assert calls[1].args[:3] == ("git", "worktree", "add")
+
+    @pytest.mark.asyncio
+    async def test_create_fetches_remote_branch_when_exists(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should fetch the remote branch instead of force-creating from main."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc(returncode=0)
+
+        with (
+            patch(
+                "asyncio.create_subprocess_exec", return_value=success_proc
+            ) as mock_exec,
+            patch.object(
+                manager, "_remote_branch_exists", return_value=True
+            ) as mock_remote,
+            patch.object(manager, "_setup_env"),
+            patch.object(manager, "_install_hooks", new_callable=AsyncMock),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+        mock_remote.assert_awaited_once_with("agent/issue-7")
+        calls = mock_exec.call_args_list
+        # First call should be git fetch origin <branch>:<branch>
+        assert calls[0].args[:3] == ("git", "fetch", "origin")
+        assert "agent/issue-7:agent/issue-7" in calls[0].args
+        # Should NOT have git branch -f
+        for call in calls:
+            assert call.args[:3] != ("git", "branch", "-f"), (
+                "Should not force-create branch when remote exists"
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_fresh_branch_when_no_remote(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should force-create branch from main when no remote branch exists."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc(returncode=0)
+
+        with (
+            patch(
+                "asyncio.create_subprocess_exec", return_value=success_proc
+            ) as mock_exec,
+            patch.object(
+                manager, "_remote_branch_exists", return_value=False
+            ),
+            patch.object(manager, "_setup_env"),
+            patch.object(manager, "_install_hooks", new_callable=AsyncMock),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+        calls = mock_exec.call_args_list
+        # First call should be git branch -f
+        assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
 
     @pytest.mark.asyncio
     async def test_create_calls_setup_env_and_install_hooks(
@@ -79,6 +163,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env", setup_env),
             patch.object(manager, "_install_hooks", install_hooks),
         ):
@@ -98,6 +183,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
@@ -352,6 +438,49 @@ class TestRebase:
 
         with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
             result = await manager.rebase(tmp_path, "agent/issue-7")
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._remote_branch_exists
+# ---------------------------------------------------------------------------
+
+
+class TestRemoteBranchExists:
+    """Tests for WorktreeManager._remote_branch_exists."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_ls_remote_has_output(
+        self, config, tmp_path: Path
+    ) -> None:
+        manager = WorktreeManager(config)
+        proc = _make_proc(returncode=0, stdout=b"abc123\trefs/heads/agent/issue-7")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager._remote_branch_exists("agent/issue-7")
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_ls_remote_empty(
+        self, config, tmp_path: Path
+    ) -> None:
+        manager = WorktreeManager(config)
+        proc = _make_proc(returncode=0, stdout=b"")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager._remote_branch_exists("agent/issue-99")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_error(self, config, tmp_path: Path) -> None:
+        manager = WorktreeManager(config)
+        proc = _make_proc(returncode=1, stderr=b"fatal: network error")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager._remote_branch_exists("agent/issue-7")
 
         assert result is False
 

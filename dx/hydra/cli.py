@@ -21,8 +21,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser.add_argument(
         "--label",
-        default="ready",
-        help="GitHub issue label to filter by (default: ready)",
+        default="hydra-ready",
+        help="GitHub issue label to filter by (default: hydra-ready)",
     )
     parser.add_argument(
         "--batch-size",
@@ -33,14 +33,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=5,
-        help="Max concurrent implementation agents (default: 5)",
+        default=2,
+        help="Max concurrent implementation agents (default: 2)",
     )
     parser.add_argument(
         "--max-budget-usd",
         type=float,
-        default=5.0,
-        help="USD budget cap per implementation agent (default: 5.0)",
+        default=0,
+        help="USD budget cap per implementation agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--model",
@@ -55,8 +55,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--review-budget-usd",
         type=float,
-        default=3.0,
-        help="USD budget cap per review agent (default: 3.0)",
+        default=0,
+        help="USD budget cap per review agent (0 = unlimited, default: 0)",
+    )
+    parser.add_argument(
+        "--planner-label",
+        default="claude-find",
+        help="Label for issues needing plans (default: claude-find)",
+    )
+    parser.add_argument(
+        "--planner-model",
+        default="opus",
+        help="Model for planning agents (default: opus)",
+    )
+    parser.add_argument(
+        "--planner-budget-usd",
+        type=float,
+        default=0,
+        help="USD budget cap per planning agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--repo",
@@ -108,6 +124,9 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         model=args.model,
         review_model=args.review_model,
         review_budget_usd=args.review_budget_usd,
+        planner_label=args.planner_label,
+        planner_model=args.planner_model,
+        planner_budget_usd=args.planner_budget_usd,
         repo=args.repo,
         main_branch=args.main_branch,
         dashboard_port=args.dashboard_port,
@@ -135,23 +154,37 @@ async def _run_clean(config: HydraConfig) -> None:
 
 async def _run_main(config: HydraConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
-    orchestrator = HydraOrchestrator(config)
-
     if config.dashboard_enabled:
         from dashboard import HydraDashboard
+        from events import EventBus, EventType, HydraEvent
+        from models import Phase
+        from state import StateTracker
+
+        bus = EventBus()
+        state = StateTracker(config.state_file)
 
         dashboard = HydraDashboard(
             config=config,
-            event_bus=orchestrator.event_bus,
-            state=orchestrator.state,
-            orchestrator=orchestrator,
+            event_bus=bus,
+            state=state,
         )
         await dashboard.start()
+
+        # Publish idle phase so the UI shows the Start button
+        await bus.publish(
+            HydraEvent(
+                type=EventType.PHASE_CHANGE,
+                data={"phase": Phase.IDLE.value},
+            )
+        )
+
+        # Block until Ctrl+C — the dashboard handles start/stop via API
         try:
-            await orchestrator.run()
+            await asyncio.Event().wait()
         finally:
             await dashboard.stop()
     else:
+        orchestrator = HydraOrchestrator(config)
         await orchestrator.run()
 
 

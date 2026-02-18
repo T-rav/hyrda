@@ -13,9 +13,11 @@ import pytest
 # Ensure hydra package is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from tests.helpers import ConfigFactory  # noqa: E402
+
 if TYPE_CHECKING:
     from config import HydraConfig
-    from models import GitHubIssue, PRInfo, WorkerResult
+    from models import GitHubIssue, PlanResult, PRInfo, WorkerResult
 
 
 # --- Session-scoped environment setup ---
@@ -32,50 +34,7 @@ def setup_test_environment():
         yield
 
 
-# --- Config Factory ---
-
-
-class ConfigFactory:
-    """Factory for HydraConfig instances."""
-
-    @staticmethod
-    def create(
-        *,
-        label: str = "test-label",
-        batch_size: int = 3,
-        max_workers: int = 2,
-        max_budget_usd: float = 1.0,
-        model: str = "sonnet",
-        review_model: str = "opus",
-        review_budget_usd: float = 1.0,
-        repo: str = "test-org/test-repo",
-        dry_run: bool = False,
-        dashboard_enabled: bool = False,
-        dashboard_port: int = 15555,
-        repo_root: Path | None = None,
-        worktree_base: Path | None = None,
-        state_file: Path | None = None,
-    ):
-        """Create a HydraConfig with test-friendly defaults."""
-        from config import HydraConfig
-
-        root = repo_root or Path("/tmp/hydra-test-repo")
-        return HydraConfig(
-            label=label,
-            batch_size=batch_size,
-            max_workers=max_workers,
-            max_budget_usd=max_budget_usd,
-            model=model,
-            review_model=review_model,
-            review_budget_usd=review_budget_usd,
-            repo=repo,
-            dry_run=dry_run,
-            dashboard_enabled=dashboard_enabled,
-            dashboard_port=dashboard_port,
-            repo_root=root,
-            worktree_base=worktree_base or root.parent / "test-worktrees",
-            state_file=state_file or root / ".hydra-state.json",
-        )
+# --- Config Fixtures ---
 
 
 @pytest.fixture
@@ -164,6 +123,41 @@ class WorkerResultFactory:
 @pytest.fixture
 def worker_result() -> WorkerResult:
     return WorkerResultFactory.create()
+
+
+# --- Plan Result Factory ---
+
+
+class PlanResultFactory:
+    """Factory for PlanResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        issue_number: int = 42,
+        success: bool = True,
+        plan: str = "## Plan\n\n1. Do the thing\n2. Test the thing",
+        summary: str = "Plan to implement the feature",
+        error: str | None = None,
+        transcript: str = "PLAN_START\n## Plan\n\n1. Do the thing\nPLAN_END\nSUMMARY: Plan to implement the feature",
+        duration_seconds: float = 10.0,
+    ):
+        from models import PlanResult
+
+        return PlanResult(
+            issue_number=issue_number,
+            success=success,
+            plan=plan,
+            summary=summary,
+            error=error,
+            transcript=transcript,
+            duration_seconds=duration_seconds,
+        )
+
+
+@pytest.fixture
+def plan_result() -> PlanResult:
+    return PlanResultFactory.create()
 
 
 # --- PR Info Factory ---

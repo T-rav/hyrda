@@ -36,8 +36,28 @@ class WorktreeManager:
         self._repo_root = config.repo_root
         self._base = config.worktree_base
 
+    def exists(self, issue_number: int) -> bool:
+        """Check whether a worktree directory already exists for *issue_number*."""
+        wt_path = self._base / f"issue-{issue_number}"
+        return wt_path.is_dir()
+
+    async def _remote_branch_exists(self, branch: str) -> bool:
+        """Check whether *branch* exists on the remote."""
+        try:
+            output = await self._run(
+                "git", "ls-remote", "--heads", "origin", branch,
+                cwd=self._repo_root,
+            )
+            return bool(output.strip())
+        except RuntimeError:
+            return False
+
     async def create(self, issue_number: int, branch: str) -> Path:
         """Create a worktree for *issue_number* on *branch*.
+
+        If the branch already exists on the remote (previous run), fetches
+        and checks it out so work can resume.  Otherwise creates a fresh
+        branch from main.
 
         Returns the absolute path to the new worktree.
         """
@@ -56,15 +76,27 @@ class WorktreeManager:
         # Ensure base directory exists
         self._base.mkdir(parents=True, exist_ok=True)
 
-        # Create the branch from main
-        await self._run(
-            "git",
-            "branch",
-            "-f",
-            branch,
-            f"origin/{self._config.main_branch}",
-            cwd=self._repo_root,
-        )
+        # Check if the branch already exists on the remote (resumable work)
+        if await self._remote_branch_exists(branch):
+            logger.info(
+                "Remote branch %s exists — resuming from remote",
+                branch,
+                extra={"issue": issue_number},
+            )
+            await self._run(
+                "git", "fetch", "origin", f"{branch}:{branch}",
+                cwd=self._repo_root,
+            )
+        else:
+            # Create a fresh branch from main
+            await self._run(
+                "git",
+                "branch",
+                "-f",
+                branch,
+                f"origin/{self._config.main_branch}",
+                cwd=self._repo_root,
+            )
 
         # Create the worktree
         await self._run(

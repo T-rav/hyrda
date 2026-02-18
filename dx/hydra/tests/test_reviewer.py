@@ -7,7 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from tests.helpers import ConfigFactory, make_streaming_proc
 
 import pytest
 
@@ -22,15 +24,6 @@ from reviewer import ReviewRunner
 
 def _make_runner(config, event_bus):
     return ReviewRunner(config=config, event_bus=event_bus)
-
-
-def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = ""):
-    """Build a mock for asyncio.create_subprocess_exec."""
-    mock_proc = AsyncMock()
-    mock_proc.returncode = returncode
-    mock_proc.communicate = AsyncMock(return_value=(stdout.encode(), stderr.encode()))
-    mock_proc.wait = AsyncMock(return_value=returncode)
-    return AsyncMock(return_value=mock_proc)
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +46,20 @@ def test_build_command_uses_review_model_and_budget(config, tmp_path):
     assert cmd[budget_idx + 1] == str(config.review_budget_usd)
 
 
+def test_build_command_omits_budget_when_zero(tmp_path):
+    from tests.conftest import ConfigFactory
+
+    cfg = ConfigFactory.create(
+        review_budget_usd=0,
+        repo_root=tmp_path / "repo",
+        worktree_base=tmp_path / "wt",
+        state_file=tmp_path / "s.json",
+    )
+    runner = _make_runner(cfg, None)
+    cmd = runner._build_command(tmp_path)
+    assert "--max-budget-usd" not in cmd
+
+
 def test_build_command_does_not_include_cwd(config, tmp_path):
     runner = _make_runner(config, None)
     cmd = runner._build_command(tmp_path)
@@ -66,7 +73,7 @@ def test_build_command_includes_output_format(config, tmp_path):
 
     assert "--output-format" in cmd
     fmt_idx = cmd.index("--output-format")
-    assert cmd[fmt_idx + 1] == "text"
+    assert cmd[fmt_idx + 1] == "stream-json"
 
 
 # ---------------------------------------------------------------------------
@@ -280,7 +287,7 @@ async def test_review_dry_run_returns_auto_approved(
     dry_config, event_bus, pr_info, issue, tmp_path
 ):
     runner = _make_runner(dry_config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+    mock_create = make_streaming_proc(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         result = await runner.review(pr_info, issue, tmp_path, "some diff")
@@ -296,43 +303,22 @@ async def test_review_dry_run_returns_auto_approved(
 # ---------------------------------------------------------------------------
 
 
-def test_save_transcript_writes_to_correct_path(config, event_bus, tmp_path):
-    # Point repo_root to tmp_path so we can check the file
-    from config import HydraConfig
-
-    cfg = HydraConfig(
-        label=config.label,
-        repo=config.repo,
-        repo_root=tmp_path,
-        worktree_base=tmp_path / "worktrees",
-        state_file=tmp_path / "state.json",
-        review_model=config.review_model,
-        review_budget_usd=config.review_budget_usd,
-    )
+def test_save_transcript_writes_to_correct_path(event_bus, tmp_path):
+    cfg = ConfigFactory.create(repo_root=tmp_path)
     runner = ReviewRunner(config=cfg, event_bus=event_bus)
     transcript = "This is the review transcript."
 
     runner._save_transcript(42, transcript)
 
-    expected_path = tmp_path / ".hydra-logs" / "review-pr-42.txt"
+    expected_path = tmp_path / ".hydra" / "logs" / "review-pr-42.txt"
     assert expected_path.exists()
     assert expected_path.read_text() == transcript
 
 
-def test_save_transcript_creates_log_directory(config, event_bus, tmp_path):
-    from config import HydraConfig
-
-    cfg = HydraConfig(
-        label=config.label,
-        repo=config.repo,
-        repo_root=tmp_path,
-        worktree_base=tmp_path / "worktrees",
-        state_file=tmp_path / "state.json",
-        review_model=config.review_model,
-        review_budget_usd=config.review_budget_usd,
-    )
+def test_save_transcript_creates_log_directory(event_bus, tmp_path):
+    cfg = ConfigFactory.create(repo_root=tmp_path)
     runner = ReviewRunner(config=cfg, event_bus=event_bus)
-    log_dir = tmp_path / ".hydra-logs"
+    log_dir = tmp_path / ".hydra" / "logs"
     assert not log_dir.exists()
 
     runner._save_transcript(7, "transcript content")
@@ -344,6 +330,44 @@ def test_save_transcript_creates_log_directory(config, event_bus, tmp_path):
 # ---------------------------------------------------------------------------
 # REVIEW_UPDATE events
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_review_events_include_reviewer_role(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    """REVIEW_UPDATE events should carry role='reviewer'."""
+    runner = _make_runner(config, event_bus)
+    transcript = "All good.\nVERDICT: APPROVE\nSUMMARY: Looks great"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_new_commits", AsyncMock(return_value=False)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        await runner.review(pr_info, issue, tmp_path, "diff", worker_id=1)
+
+    events = event_bus.get_history()
+    review_events = [e for e in events if e.type == EventType.REVIEW_UPDATE]
+    assert len(review_events) >= 2
+    for event in review_events:
+        assert event.data.get("role") == "reviewer"
+
+
+@pytest.mark.asyncio
+async def test_dry_run_review_events_include_reviewer_role(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    """In dry-run mode, REVIEW_UPDATE events should still carry role='reviewer'."""
+    runner = _make_runner(dry_config, event_bus)
+
+    await runner.review(pr_info, issue, tmp_path, "diff")
+
+    events = event_bus.get_history()
+    review_events = [e for e in events if e.type == EventType.REVIEW_UPDATE]
+    assert len(review_events) >= 1
+    for event in review_events:
+        assert event.data.get("role") == "reviewer"
 
 
 @pytest.mark.asyncio
@@ -443,7 +467,7 @@ async def test_review_dry_run_still_publishes_review_update_event(
 async def test_has_new_commits_returns_true_when_staged(config, event_bus, tmp_path):
     runner = _make_runner(config, event_bus)
     # returncode != 0 means there are staged changes
-    mock_create = _make_subprocess_mock(returncode=1)
+    mock_create = make_streaming_proc(returncode=1)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         result = await runner._has_new_commits(tmp_path)
@@ -455,7 +479,7 @@ async def test_has_new_commits_returns_true_when_staged(config, event_bus, tmp_p
 async def test_has_new_commits_returns_false_when_clean(config, event_bus, tmp_path):
     runner = _make_runner(config, event_bus)
     # returncode 0 means no staged changes
-    mock_create = _make_subprocess_mock(returncode=0)
+    mock_create = make_streaming_proc(returncode=0)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         result = await runner._has_new_commits(tmp_path)
@@ -477,6 +501,35 @@ async def test_has_new_commits_returns_false_on_file_not_found(
 
 
 # ---------------------------------------------------------------------------
+# terminate
+# ---------------------------------------------------------------------------
+
+
+def test_terminate_kills_active_processes(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    mock_proc = MagicMock()
+    runner._active_procs.add(mock_proc)
+
+    runner.terminate()
+
+    mock_proc.kill.assert_called_once()
+
+
+def test_terminate_handles_process_lookup_error(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    mock_proc = MagicMock()
+    mock_proc.kill.side_effect = ProcessLookupError
+    runner._active_procs.add(mock_proc)
+
+    runner.terminate()  # Should not raise
+
+
+def test_terminate_with_no_active_processes(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    runner.terminate()  # Should not raise
+
+
+# ---------------------------------------------------------------------------
 # _execute
 # ---------------------------------------------------------------------------
 
@@ -485,10 +538,7 @@ async def test_has_new_commits_returns_false_on_file_not_found(
 async def test_execute_returns_transcript(config, event_bus, pr_info, tmp_path):
     runner = _make_runner(config, event_bus)
     expected_output = "VERDICT: APPROVE\nSUMMARY: looks good"
-    mock_proc = AsyncMock()
-    mock_proc.returncode = 0
-    mock_proc.communicate = AsyncMock(return_value=(expected_output.encode(), b""))
-    mock_create = AsyncMock(return_value=mock_proc)
+    mock_create = make_streaming_proc(returncode=0, stdout=expected_output)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         transcript = await runner._execute(
@@ -507,10 +557,7 @@ async def test_execute_publishes_transcript_line_events(
 ):
     runner = _make_runner(config, event_bus)
     output = "Line one\nLine two\nLine three"
-    mock_proc = AsyncMock()
-    mock_proc.returncode = 0
-    mock_proc.communicate = AsyncMock(return_value=(output.encode(), b""))
-    mock_create = AsyncMock(return_value=mock_proc)
+    mock_create = make_streaming_proc(returncode=0, stdout=output)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         await runner._execute(

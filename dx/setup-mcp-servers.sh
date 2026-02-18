@@ -81,6 +81,15 @@ main() {
         log_success "Pyright installed"
     fi
 
+    if ! check_command "codeql"; then
+        log_warning "CodeQL not found. Installing via Homebrew..."
+        if brew install codeql; then
+            log_success "CodeQL installed"
+        else
+            log_warning "Failed to install CodeQL. Install manually: brew install codeql"
+        fi
+    fi
+
     # Check for uv (recommended for Python package management)
     if ! check_command "uv"; then
         log_warning "uv not found. Installing uv for faster Python package management..."

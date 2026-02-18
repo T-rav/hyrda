@@ -20,6 +20,39 @@ class GitHubIssue(BaseModel):
     url: str = ""
 
 
+# --- Planner ---
+
+
+class PlannerStatus(str, Enum):
+    """Lifecycle status of a planning agent."""
+
+    QUEUED = "queued"
+    PLANNING = "planning"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class NewIssueSpec(BaseModel):
+    """Specification for a new issue discovered during planning."""
+
+    title: str
+    body: str = ""
+    labels: list[str] = Field(default_factory=list)
+
+
+class PlanResult(BaseModel):
+    """Outcome of a planner agent run."""
+
+    issue_number: int
+    success: bool = False
+    plan: str = ""
+    summary: str = ""
+    error: str | None = None
+    transcript: str = ""
+    duration_seconds: float = 0.0
+    new_issues: list[NewIssueSpec] = Field(default_factory=list)
+
+
 # --- Worker ---
 
 
@@ -45,6 +78,7 @@ class WorkerResult(BaseModel):
     transcript: str = ""
     commits: int = 0
     duration_seconds: float = 0.0
+    pr_info: PRInfo | None = None
 
 
 # --- Pull Requests ---
@@ -80,6 +114,7 @@ class ReviewResult(BaseModel):
     summary: str = ""
     fixes_made: bool = False
     transcript: str = ""
+    merged: bool = False
 
 
 # --- Batch ---
@@ -90,6 +125,7 @@ class BatchResult(BaseModel):
 
     batch_number: int
     issues: list[GitHubIssue] = Field(default_factory=list)
+    plan_results: list[PlanResult] = Field(default_factory=list)
     worker_results: list[WorkerResult] = Field(default_factory=list)
     pr_infos: list[PRInfo] = Field(default_factory=list)
     review_results: list[ReviewResult] = Field(default_factory=list)
@@ -102,10 +138,9 @@ class BatchResult(BaseModel):
 class Phase(str, Enum):
     """Phases of the orchestrator loop."""
 
-    FETCH = "fetch"
+    IDLE = "idle"
+    PLAN = "plan"
     IMPLEMENT = "implement"
-    PUSH_PRS = "push_prs"
     REVIEW = "review"
-    MERGE = "merge"
     CLEANUP = "cleanup"
     DONE = "done"

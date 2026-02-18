@@ -11,6 +11,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, WorkerResult, WorkerStatus
+from stream_parser import StreamParser
 
 logger = logging.getLogger("hydra.agent")
 
@@ -25,6 +26,7 @@ class AgentRunner:
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
         self._config = config
         self._bus = event_bus
+        self._active_procs: set[asyncio.subprocess.Process] = set()
 
     async def run(
         self,
@@ -92,8 +94,8 @@ class AgentRunner:
         return result
 
     def _save_transcript(self, result: WorkerResult) -> None:
-        """Write the transcript to .hydra-logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra-logs"
+        """Write the transcript to .hydra/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydra" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         path = log_dir / f"issue-{result.issue_number}.txt"
         path.write_text(result.transcript)
@@ -107,30 +109,61 @@ class AgentRunner:
         The working directory is set via ``cwd`` in the subprocess call,
         not via a CLI flag.
         """
-        return [
+        cmd = [
             "claude",
             "-p",
             "--output-format",
-            "text",
+            "stream-json",
             "--model",
             self._config.model,
-            "--max-budget-usd",
-            str(self._config.max_budget_usd),
             "--verbose",
+            "--permission-mode",
+            "bypass",
         ]
+        if self._config.max_budget_usd > 0:
+            cmd.extend(["--max-budget-usd", str(self._config.max_budget_usd)])
+        return cmd
+
+    @staticmethod
+    def _extract_plan_comment(comments: list[str]) -> tuple[str, list[str]]:
+        """Separate the planner's implementation plan from other comments.
+
+        Returns ``(plan_text, remaining_comments)``.  *plan_text* is the
+        raw body of the first comment that contains ``## Implementation Plan``,
+        or an empty string if none is found.
+        """
+        plan = ""
+        remaining: list[str] = []
+        for c in comments:
+            if not plan and "## Implementation Plan" in c:
+                plan = c
+            else:
+                remaining.append(c)
+        return plan, remaining
 
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the implementation prompt for the agent."""
+        plan_comment, other_comments = self._extract_plan_comment(issue.comments)
+
+        plan_section = ""
+        if plan_comment:
+            plan_section = (
+                f"\n\n## Implementation Plan\n\n"
+                f"Follow this plan closely. It was created by a planner agent "
+                f"that already analyzed the codebase.\n\n"
+                f"{plan_comment}"
+            )
+
         comments_section = ""
-        if issue.comments:
-            formatted = "\n".join(f"- {c}" for c in issue.comments)
+        if other_comments:
+            formatted = "\n".join(f"- {c}" for c in other_comments)
             comments_section = f"\n\n## Discussion\n{formatted}"
 
         return f"""You are implementing GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
 
-{issue.body}{comments_section}
+{issue.body}{plan_section}{comments_section}
 
 ## Instructions
 
@@ -152,6 +185,14 @@ class AgentRunner:
 - If you encounter issues, commit what works with a descriptive message.
 """
 
+    def terminate(self) -> None:
+        """Kill all active agent subprocesses."""
+        for proc in list(self._active_procs):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+
     async def _execute(
         self,
         cmd: list[str],
@@ -171,31 +212,60 @@ class AgentRunner:
             cwd=str(worktree_path),
             env=env,
         )
+        self._active_procs.add(proc)
 
-        # Send the prompt on stdin and close it
-        stdout_bytes, stderr_bytes = await proc.communicate(prompt.encode())
-        transcript = stdout_bytes.decode(errors="replace")
+        try:
+            # Send the prompt on stdin and close it
+            assert proc.stdin is not None
+            assert proc.stdout is not None
+            assert proc.stderr is not None
 
-        # Emit transcript lines
-        for line in transcript.splitlines():
-            if line.strip():
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.TRANSCRIPT_LINE,
-                        data={"issue": issue_number, "line": line},
+            proc.stdin.write(prompt.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+
+            # Drain stderr in background to prevent deadlock
+            stderr_task = asyncio.create_task(proc.stderr.read())
+
+            parser = StreamParser()
+            raw_lines: list[str] = []
+            result_text = ""
+            async for raw in proc.stdout:
+                line = raw.decode(errors="replace").rstrip("\n")
+                raw_lines.append(line)
+                if not line.strip():
+                    continue
+
+                display, result = parser.parse(line)
+                if result is not None:
+                    result_text = result
+
+                if display.strip():
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.TRANSCRIPT_LINE,
+                            data={"issue": issue_number, "line": display},
+                        )
                     )
+
+            stderr_bytes = await stderr_task
+            await proc.wait()
+
+            if proc.returncode != 0:
+                stderr_text = stderr_bytes.decode(errors="replace").strip()
+                logger.warning(
+                    "Agent process exited with code %d for issue #%d: %s",
+                    proc.returncode,
+                    issue_number,
+                    stderr_text[:500],
                 )
 
-        if proc.returncode != 0:
-            stderr_text = stderr_bytes.decode(errors="replace").strip()
-            logger.warning(
-                "Agent process exited with code %d for issue #%d: %s",
-                proc.returncode,
-                issue_number,
-                stderr_text[:500],
-            )
-
-        return transcript
+            return result_text or "\n".join(raw_lines)
+        except asyncio.CancelledError:
+            proc.kill()
+            raise
+        finally:
+            self._active_procs.discard(proc)
 
     async def _verify_result(
         self, worktree_path: Path, branch: str
@@ -209,11 +279,26 @@ class AgentRunner:
         if commit_count == 0:
             return False, "No commits found on branch"
 
-        # Run tests
+        # Run tests — try test-fast first, fall back to lint-only
         try:
+            for target in ("test-fast", "lint"):
+                proc = await asyncio.create_subprocess_exec(
+                    "make",
+                    "--question",
+                    target,
+                    cwd=str(worktree_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await proc.communicate()
+                if proc.returncode != 2:  # 2 = target doesn't exist
+                    break
+            else:
+                return True, "OK (no test target available)"
+
             proc = await asyncio.create_subprocess_exec(
                 "make",
-                "test-fast",
+                target,
                 cwd=str(worktree_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -223,7 +308,7 @@ class AgentRunner:
                 output = stdout.decode(errors="replace") + stderr.decode(
                     errors="replace"
                 )
-                return False, f"Tests failed:\n{output[-2000:]}"
+                return False, f"`make {target}` failed:\n{output[-2000:]}"
         except FileNotFoundError:
             return False, "make not found — cannot run tests"
 
@@ -257,6 +342,7 @@ class AgentRunner:
                     "issue": issue_number,
                     "worker": worker_id,
                     "status": status.value,
+                    "role": "implementer",
                 },
             )
         )

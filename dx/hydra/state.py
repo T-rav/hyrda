@@ -14,7 +14,7 @@ logger = logging.getLogger("hydra.state")
 class StateTracker:
     """JSON-file backed state for crash recovery.
 
-    Writes ``<repo_root>/.hydra-state.json`` after every mutation.
+    Writes ``<repo_root>/.hydra/state.json`` after every mutation.
     """
 
     def __init__(self, state_file: Path) -> None:
@@ -32,6 +32,9 @@ class StateTracker:
                 if not isinstance(loaded, dict):
                     raise ValueError("State file must contain a JSON object")
                 self._data = loaded
+                # Migrate: inject lifetime_stats if absent (old state files)
+                if "lifetime_stats" not in self._data:
+                    self._data["lifetime_stats"] = self._defaults()["lifetime_stats"]
                 logger.info("State loaded from %s", self._path)
             except (json.JSONDecodeError, OSError, ValueError) as exc:
                 logger.warning("Corrupt state file, resetting: %s", exc)
@@ -41,6 +44,7 @@ class StateTracker:
     def save(self) -> None:
         """Flush current state to disk."""
         self._data["last_updated"] = datetime.now(UTC).isoformat()
+        self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(self._data, indent=2))
 
     # --- issue tracking ---
@@ -104,13 +108,36 @@ class StateTracker:
     # --- reset ---
 
     def reset(self) -> None:
-        """Clear all state and persist."""
+        """Clear all state and persist.  Lifetime stats are preserved."""
+        saved_lifetime = dict(self._data.get("lifetime_stats", {}))
         self._data = self._defaults()
+        self._data["lifetime_stats"] = saved_lifetime or self._defaults()["lifetime_stats"]
         self.save()
 
     def to_dict(self) -> dict[str, Any]:
         """Return a copy of the raw state dict."""
         return dict(self._data)
+
+    # --- lifetime stats ---
+
+    def record_issue_completed(self) -> None:
+        """Increment the all-time issues-completed counter."""
+        self._data["lifetime_stats"]["issues_completed"] += 1
+        self.save()
+
+    def record_pr_merged(self) -> None:
+        """Increment the all-time PRs-merged counter."""
+        self._data["lifetime_stats"]["prs_merged"] += 1
+        self.save()
+
+    def record_issue_created(self) -> None:
+        """Increment the all-time issues-created counter."""
+        self._data["lifetime_stats"]["issues_created"] += 1
+        self.save()
+
+    def get_lifetime_stats(self) -> dict[str, int]:
+        """Return a copy of the lifetime stats counters."""
+        return dict(self._data["lifetime_stats"])
 
     # --- internals ---
 
@@ -122,5 +149,10 @@ class StateTracker:
             "active_worktrees": {},
             "active_branches": {},
             "reviewed_prs": {},
+            "lifetime_stats": {
+                "issues_completed": 0,
+                "prs_merged": 0,
+                "issues_created": 0,
+            },
             "last_updated": None,
         }

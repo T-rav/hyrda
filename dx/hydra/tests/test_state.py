@@ -461,6 +461,7 @@ class TestToDict:
             "active_worktrees",
             "active_branches",
             "reviewed_prs",
+            "lifetime_stats",
             "last_updated",
         }
         assert expected_keys.issubset(d.keys())
@@ -472,6 +473,11 @@ class TestToDict:
         d["current_batch"] = 999
         assert tracker.get_current_batch() == 0
 
+    def test_to_dict_contains_lifetime_stats_key(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        d = tracker.to_dict()
+        assert "lifetime_stats" in d
+
     def test_to_dict_reflects_current_state(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.mark_issue(7, "success")
@@ -479,3 +485,96 @@ class TestToDict:
         d = tracker.to_dict()
         assert d["processed_issues"]["7"] == "success"
         assert d["current_batch"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Lifetime stats
+# ---------------------------------------------------------------------------
+
+
+class TestLifetimeStats:
+    def test_defaults_include_lifetime_stats(self, tmp_path: Path) -> None:
+        """A fresh tracker should include zeroed lifetime_stats."""
+        tracker = make_tracker(tmp_path)
+        stats = tracker.get_lifetime_stats()
+        assert stats == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+
+    def test_record_issue_completed_increments(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_issue_completed()
+        assert tracker.get_lifetime_stats()["issues_completed"] == 1
+
+    def test_record_pr_merged_increments(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_pr_merged()
+        assert tracker.get_lifetime_stats()["prs_merged"] == 1
+
+    def test_record_issue_created_increments(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_issue_created()
+        assert tracker.get_lifetime_stats()["issues_created"] == 1
+
+    def test_multiple_increments_accumulate(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(3):
+            tracker.record_pr_merged()
+        assert tracker.get_lifetime_stats()["prs_merged"] == 3
+
+    def test_get_lifetime_stats_returns_copy(self, tmp_path: Path) -> None:
+        """Mutating the returned dict must not affect internal state."""
+        tracker = make_tracker(tmp_path)
+        tracker.record_issue_completed()
+        stats = tracker.get_lifetime_stats()
+        stats["issues_completed"] = 999
+        assert tracker.get_lifetime_stats()["issues_completed"] == 1
+
+    def test_lifetime_stats_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.record_pr_merged()
+        tracker.record_issue_created()
+        tracker.record_issue_created()
+
+        tracker2 = StateTracker(state_file)
+        stats = tracker2.get_lifetime_stats()
+        assert stats["prs_merged"] == 1
+        assert stats["issues_created"] == 2
+
+    def test_reset_preserves_lifetime_stats(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_pr_merged()
+        tracker.record_issue_completed()
+        tracker.record_issue_created()
+        tracker.mark_issue(1, "success")
+        tracker.increment_batch()
+
+        tracker.reset()
+
+        # Batch and issues should be cleared
+        assert tracker.get_current_batch() == 0
+        assert tracker.get_issue_status(1) is None
+        # Lifetime stats should survive
+        stats = tracker.get_lifetime_stats()
+        assert stats["prs_merged"] == 1
+        assert stats["issues_completed"] == 1
+        assert stats["issues_created"] == 1
+
+    def test_migration_adds_lifetime_stats_to_old_file(self, tmp_path: Path) -> None:
+        """Loading a state file without lifetime_stats should inject zero defaults."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        stats = tracker.get_lifetime_stats()
+        assert stats == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+        # Existing data is preserved
+        assert tracker.get_current_batch() == 5
+        assert tracker.get_issue_status(1) == "success"

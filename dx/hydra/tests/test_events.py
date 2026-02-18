@@ -20,8 +20,11 @@ class TestEventTypeEnum:
             "TRANSCRIPT_LINE",
             "PR_CREATED",
             "REVIEW_UPDATE",
+            "PLANNER_UPDATE",
             "MERGE_UPDATE",
+            "ISSUE_CREATED",
             "BATCH_COMPLETE",
+            "ORCHESTRATOR_STATUS",
             "ERROR",
         }
         actual = {member.name for member in EventType}
@@ -34,8 +37,11 @@ class TestEventTypeEnum:
         assert EventType.TRANSCRIPT_LINE == "transcript_line"
         assert EventType.PR_CREATED == "pr_created"
         assert EventType.REVIEW_UPDATE == "review_update"
+        assert EventType.PLANNER_UPDATE == "planner_update"
         assert EventType.MERGE_UPDATE == "merge_update"
+        assert EventType.ISSUE_CREATED == "issue_created"
         assert EventType.BATCH_COMPLETE == "batch_complete"
+        assert EventType.ORCHESTRATOR_STATUS == "orchestrator_status"
         assert EventType.ERROR == "error"
 
     def test_is_str_enum(self) -> None:
