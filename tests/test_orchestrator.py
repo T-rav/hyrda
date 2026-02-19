@@ -1457,8 +1457,8 @@ class TestReviewPRs:
 # ---------------------------------------------------------------------------
 
 
-class TestFetchReviewablePrsSkipLogic:
-    """Tests for _fetch_reviewable_prs filtering by in-memory active set."""
+class TestFetchReviewablePrs:
+    """Tests for _fetch_reviewable_prs: skip logic, parsing, and error handling."""
 
     @pytest.mark.asyncio
     async def test_skips_active_issues(self, config: HydraConfig) -> None:
@@ -1512,6 +1512,156 @@ class TestFetchReviewablePrsSkipLogic:
 
         assert len(issues) == 1
         assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_parses_pr_json_into_pr_info(self, config: HydraConfig) -> None:
+        """Successfully parses PR JSON and maps to PRInfo objects."""
+        orch = HydraOrchestrator(config)
+
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 200,
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": False,
+                }
+            ]
+        )
+
+        async def fake_gh_run(*args: str) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        prs, issues = await orch._fetch_reviewable_prs()
+
+        assert len(prs) == 1
+        assert prs[0].number == 200
+        assert prs[0].issue_number == 42
+        assert prs[0].branch == "agent/issue-42"
+        assert prs[0].url == "https://github.com/o/r/pull/200"
+        assert prs[0].draft is False
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_gh_cli_failure_skips_pr_for_that_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """gh CLI failure (RuntimeError) skips that issue's PR but preserves issues."""
+        orch = HydraOrchestrator(config)
+
+        async def fake_gh_run(*args: str) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            raise RuntimeError("Command failed (rc=1): some error")
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_json_decode_error_skips_pr_for_that_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """Invalid JSON from gh CLI skips that issue's PR but preserves issues."""
+        orch = HydraOrchestrator(config)
+
+        async def fake_gh_run(*args: str) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return "not-valid-json"
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_draft_prs_excluded_from_results(self, config: HydraConfig) -> None:
+        """Draft PRs are filtered out of the returned PR list."""
+        orch = HydraOrchestrator(config)
+
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 200,
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": True,
+                }
+            ]
+        )
+
+        async def fake_gh_run(*args: str) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_no_matching_pr_returns_empty_pr_list(
+        self, config: HydraConfig
+    ) -> None:
+        """Empty JSON array from PR lookup means no PRInfo is created."""
+        orch = HydraOrchestrator(config)
+
+        async def fake_gh_run(*args: str) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return "[]"
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_file_not_found_error_when_gh_missing(
+        self, config: HydraConfig
+    ) -> None:
+        """FileNotFoundError during issue fetch returns ([], []) early."""
+        orch = HydraOrchestrator(config)
+
+        mock_create = AsyncMock(side_effect=FileNotFoundError("No such file: 'gh'"))
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_tuple(self, dry_config: HydraConfig) -> None:
+        """Dry-run mode returns ([], []) without making subprocess calls."""
+        orch = HydraOrchestrator(dry_config)
+
+        mock_create = AsyncMock()
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert issues == []
+        mock_create.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
