@@ -43,25 +43,26 @@ class PRManager:
             return
 
         for field, color, description in self._HYDRA_LABELS:
-            label_name = getattr(self._config, field)
-            try:
-                await self._run(
-                    "gh",
-                    "label",
-                    "create",
-                    label_name,
-                    "--repo",
-                    self._repo,
-                    "--color",
-                    color,
-                    "--description",
-                    description,
-                    "--force",
-                    cwd=self._config.repo_root,
-                )
-                logger.debug("Ensured label %r exists", label_name)
-            except RuntimeError as exc:
-                logger.warning("Could not ensure label %r: %s", label_name, exc)
+            label_names = getattr(self._config, field)
+            for label_name in label_names:
+                try:
+                    await self._run(
+                        "gh",
+                        "label",
+                        "create",
+                        label_name,
+                        "--repo",
+                        self._repo,
+                        "--color",
+                        color,
+                        "--description",
+                        description,
+                        "--force",
+                        cwd=self._config.repo_root,
+                    )
+                    logger.debug("Ensured label %r exists", label_name)
+                except RuntimeError as exc:
+                    logger.warning("Could not ensure label %r: %s", label_name, exc)
 
     async def push_branch(self, worktree_path: Path, branch: str) -> bool:
         """Push *branch* to origin from *worktree_path*.
