@@ -241,8 +241,7 @@ class WorktreeManager:
 
     # --- subprocess helper ---
 
-    @staticmethod
-    async def _run(*cmd: str, cwd: Path) -> str:
+    async def _run(self, *cmd: str, cwd: Path) -> str:
         """Run a subprocess and return stdout.
 
         Raises :class:`RuntimeError` on non-zero exit.
@@ -250,6 +249,8 @@ class WorktreeManager:
         env = {**os.environ}
         # Prevent CLAUDECODE nesting detection
         env.pop("CLAUDECODE", None)
+        if self._config.gh_token:
+            env["GH_TOKEN"] = self._config.gh_token
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,

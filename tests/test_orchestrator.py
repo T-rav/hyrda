@@ -2399,3 +2399,55 @@ class TestWaitAndFixCI:
         assert (42, "hydra-review") in remove_calls
         add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
         assert (42, ["hydra-hitl"]) in add_calls
+
+
+# ---------------------------------------------------------------------------
+# _gh_run — gh_token injection
+# ---------------------------------------------------------------------------
+
+
+class TestGhRunGhToken:
+    """Tests for GH_TOKEN injection in HydraOrchestrator._gh_run."""
+
+    @pytest.mark.asyncio
+    async def test_gh_run_injects_token_into_env(self, tmp_path: Path) -> None:
+        """When gh_token is set, _gh_run should inject GH_TOKEN into subprocess env."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            gh_token="ghp_orch_secret",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        orch = HydraOrchestrator(cfg)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        mock_create = AsyncMock(return_value=mock_proc)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await orch._gh_run("gh", "issue", "list")
+
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["env"]["GH_TOKEN"] == "ghp_orch_secret"
+
+    @pytest.mark.asyncio
+    async def test_gh_run_does_not_inject_token_when_empty(
+        self, config, tmp_path: Path
+    ) -> None:
+        """When gh_token is empty, _gh_run should not forcibly set GH_TOKEN."""
+        orch = HydraOrchestrator(config)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        mock_create = AsyncMock(return_value=mock_proc)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await orch._gh_run("gh", "issue", "list")
+
+        call_kwargs = mock_create.call_args.kwargs
+        # GH_TOKEN should be whatever was inherited, not overridden
+        assert call_kwargs["env"].get("GH_TOKEN") != ""
