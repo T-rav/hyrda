@@ -46,11 +46,11 @@ export default function App() {
       <Header
         prsCount={state.prs.length}
         mergedCount={state.mergedCount}
+        issuesFound={Object.keys(state.workers).length}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        lifetimeStats={state.lifetimeStats}
         phase={state.phase}
         workers={state.workers}
       />

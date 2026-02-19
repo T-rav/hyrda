@@ -20,6 +20,7 @@ class PRManager:
 
     # All Hydra lifecycle labels: (config_field, color, description)
     _HYDRA_LABELS: tuple[tuple[str, str, str], ...] = (
+        ("find_label", "e4e669", "New issue for Hydra to discover and triage"),
         ("planner_label", "c5def5", "Issue needs planning before implementation"),
         ("ready_label", "0e8a16", "Issue ready for implementation"),
         ("review_label", "fbca04", "Issue/PR under review"),

@@ -149,6 +149,14 @@ class TestHydraConfigDefaults:
         )
         assert cfg.max_workers == 2
 
+    def test_find_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.find_label == ["hydra-find"]
+
     def test_max_planners_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,

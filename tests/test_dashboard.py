@@ -905,6 +905,7 @@ class TestControlStatusEndpoint:
         body = response.json()
         assert body["config"]["repo"] == config.repo
         assert body["config"]["ready_label"] == config.ready_label
+        assert body["config"]["find_label"] == config.find_label
         assert body["config"]["planner_label"] == config.planner_label
         assert body["config"]["review_label"] == config.review_label
         assert body["config"]["hitl_label"] == config.hitl_label

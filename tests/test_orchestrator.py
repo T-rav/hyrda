@@ -1844,6 +1844,100 @@ class TestStopMechanism:
 # ---------------------------------------------------------------------------
 
 
+class TestTriageFindIssues:
+    """Tests for _triage_find_issues (TriageRunner → label routing)."""
+
+    @pytest.mark.asyncio
+    async def test_triage_promotes_ready_issue_to_planning(
+        self, config: HydraConfig
+    ) -> None:
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(1, title="Implement feature X", body="A" * 100)
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(issue_number=1, ready=True)
+        )
+        orch._triage = mock_triage
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        mock_triage.evaluate.assert_awaited_once_with(issue)
+        mock_prs.remove_label.assert_called_once_with(1, config.find_label[0])
+        mock_prs.add_labels.assert_called_once_with(1, [config.planner_label[0]])
+        mock_prs.post_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_triage_escalates_unready_issue_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(2, title="Fix the bug please", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(
+                issue_number=2,
+                ready=False,
+                reasons=["Body is too short or empty (minimum 50 characters)"],
+            )
+        )
+        orch._triage = mock_triage
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_called_once_with(2, config.find_label[0])
+        mock_prs.add_labels.assert_called_once_with(2, [config.hitl_label[0]])
+        mock_prs.post_comment.assert_called_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "Needs More Information" in comment
+        assert "Body is too short" in comment
+
+    @pytest.mark.asyncio
+    async def test_triage_skips_when_no_find_label_configured(self) -> None:
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(find_label=[])
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_triage_skips_when_no_issues_found(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[]):
+            await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_not_called()
+
+
 class TestPlanPhase:
     """Tests for the PLAN phase in the orchestrator loop."""
 

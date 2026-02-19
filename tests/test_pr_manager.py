@@ -1299,6 +1299,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
     from config import HydraConfig
 
     cfg = HydraConfig(
+        find_label=["custom-find"],
         ready_label=["custom-ready"],
         planner_label=["custom-plan"],
         review_label=["custom-review"],
@@ -1324,6 +1325,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         created_labels.add(args[create_idx + 1])
 
     assert created_labels == {
+        "custom-find",
         "custom-plan",
         "custom-ready",
         "custom-review",

@@ -1,6 +1,7 @@
 import React from 'react'
 
 const STAGES = [
+  { key: 'find',      label: 'FIND',      color: '#39d353', role: 'triage' },
   { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
   { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
   { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
@@ -12,16 +13,17 @@ function countByRole(workers) {
   const list = Object.values(workers)
   const active = list.filter(w => ACTIVE_STATUSES.includes(w.status))
   return {
+    triage: active.filter(w => w.role === 'triage').length,
     planner: active.filter(w => w.role === 'planner').length,
-    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner').length,
+    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
     reviewer: active.filter(w => w.role === 'reviewer').length,
   }
 }
 
 export function Header({
-  prsCount, mergedCount,
+  prsCount, mergedCount, issuesFound,
   connected, orchestratorStatus,
-  onStart, onStop, lifetimeStats,
+  onStart, onStop,
   phase, workers,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
@@ -45,11 +47,9 @@ export function Header({
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
           <div style={styles.stats}>
+            <Stat label="Issues" value={issuesFound} />
             <Stat label="PRs" value={prsCount} />
             <Stat label="Merged" value={mergedCount} />
-            {lifetimeStats && (
-              <Stat label="Issues Found" value={lifetimeStats.issues_created} />
-            )}
           </div>
         </div>
         <div style={styles.pills}>
@@ -133,9 +133,8 @@ const styles = {
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   center: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
   },
   sessionBox: {
     display: 'flex',

@@ -60,6 +60,7 @@ class ConfigFactory:
         review_label: list[str] | None = None,
         hitl_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
+        find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
@@ -92,6 +93,7 @@ class ConfigFactory:
             review_label=review_label if review_label is not None else ["hydra-review"],
             hitl_label=hitl_label if hitl_label is not None else ["hydra-hitl"],
             fixed_label=fixed_label if fixed_label is not None else ["hydra-fixed"],
+            find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],

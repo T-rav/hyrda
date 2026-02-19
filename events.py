@@ -20,6 +20,7 @@ class EventType(StrEnum):
     TRANSCRIPT_LINE = "transcript_line"
     PR_CREATED = "pr_created"
     REVIEW_UPDATE = "review_update"
+    TRIAGE_UPDATE = "triage_update"
     PLANNER_UPDATE = "planner_update"
     MERGE_UPDATE = "merge_update"
     CI_CHECK = "ci_check"
