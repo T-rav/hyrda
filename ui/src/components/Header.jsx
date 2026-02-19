@@ -131,9 +131,8 @@ const styles = {
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   center: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
   },
   sessionBox: {
     display: 'flex',
