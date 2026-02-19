@@ -5,7 +5,7 @@ Tests the actual retry mechanism with exponential backoff in the full job contex
 
 import time
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -15,7 +15,7 @@ from jobs.youtube_ingest import YouTubeIngestJob
 
 @pytest.mark.integration
 class TestRetryLogicIntegration:
-    """Integration tests for retry logic with timing verification."""
+    """Integration tests for retry logic with exponential backoff."""
 
     @pytest.fixture
     def mock_settings(self):
@@ -23,24 +23,27 @@ class TestRetryLogicIntegration:
         return TasksSettings()
 
     @pytest.mark.asyncio
-    async def test_retry_with_actual_timing(self, mock_settings):
-        """Test retry logic with actual time delays (not mocked)."""
+    async def test_retry_uses_exponential_backoff_delays(self, mock_settings):
+        """Retry loop calls time.sleep with 2s, 4s, 8s, 16s delays (exponential backoff)."""
         job = YouTubeIngestJob(
             mock_settings,
             channel_url="https://www.youtube.com/@test",
             include_videos=True,
         )
 
-        start_time = time.time()
-        attempt_times = []
+        attempt_count = 0
 
-        # Mock services but use real retry/sleep logic
+        def track_and_return_none(*args, **kwargs):
+            nonlocal attempt_count
+            attempt_count += 1
+
         with (
             patch("os.getenv", return_value="test-key"),
             patch("services.youtube.YouTubeClient") as mock_youtube_client_class,
             patch("services.youtube.YouTubeTrackingService") as mock_tracking_class,
             patch("services.openai_embeddings.OpenAIEmbeddings"),
             patch("services.qdrant_client.QdrantClient") as mock_qdrant_class,
+            patch("jobs.youtube_ingest.time.sleep") as mock_sleep,
         ):
             mock_youtube_client = Mock()
             mock_youtube_client_class.return_value = mock_youtube_client
@@ -52,8 +55,8 @@ class TestRetryLogicIntegration:
             mock_youtube_client.list_channel_videos.return_value = [
                 {"video_id": "video123", "title": "Test Video"}
             ]
+            mock_youtube_client.get_video_info.side_effect = track_and_return_none
 
-            # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
             mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
@@ -64,54 +67,27 @@ class TestRetryLogicIntegration:
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
             mock_tracking.record_video_ingestion = Mock()
 
-            # Track when each attempt happens
-            def track_attempt(*args, **kwargs):
-                attempt_times.append(time.time())
-
-            mock_youtube_client.get_video_info.side_effect = track_attempt
-
-            # Setup vector store
             mock_qdrant = AsyncMock()
             mock_qdrant_class.return_value = mock_qdrant
 
-            # Execute job (will fail after 5 attempts)
             await job._execute_job()
 
-            # Verify timing between attempts follows exponential backoff
-            assert len(attempt_times) == 5, (
-                f"Expected 5 attempts, got {len(attempt_times)}"
-            )
-
-            # Calculate delays between attempts
-            delays = [
-                attempt_times[i] - attempt_times[i - 1]
-                for i in range(1, len(attempt_times))
-            ]
-
-            # Delays should be approximately 2s, 4s, 8s, 16s (with some tolerance)
-            expected_delays = [2, 4, 8, 16]
-            for i, (actual, expected) in enumerate(
-                zip(delays, expected_delays, strict=False)
-            ):
-                # Allow 0.5s tolerance for execution time
-                assert expected - 0.5 <= actual <= expected + 0.5, (
-                    f"Delay {i + 1}: expected ~{expected}s, got {actual:.2f}s"
-                )
-
-            # Total time should be approximately 30 seconds (2+4+8+16)
-            total_time = time.time() - start_time
-            assert 29 <= total_time <= 32, f"Expected ~30s total, got {total_time:.1f}s"
+        # 5 attempts total (1 initial + 4 retries), so 4 sleep calls
+        assert attempt_count == 5, f"Expected 5 attempts, got {attempt_count}"
+        assert mock_sleep.call_count == 4, (
+            f"Expected 4 sleep calls (retries 2-5), got {mock_sleep.call_count}"
+        )
+        # Verify exponential backoff: 2^1=2, 2^2=4, 2^3=8, 2^4=16
+        assert mock_sleep.call_args_list == [call(2), call(4), call(8), call(16)]
 
     @pytest.mark.asyncio
     async def test_retry_stops_on_success(self, mock_settings):
-        """Test that retry loop exits immediately on success."""
+        """Retry loop exits immediately on first success — no extra sleep calls."""
         job = YouTubeIngestJob(
             mock_settings,
             channel_url="https://www.youtube.com/@test",
             include_videos=True,
         )
-
-        start_time = time.time()
 
         with (
             patch("os.getenv", return_value="test-key"),
@@ -121,6 +97,7 @@ class TestRetryLogicIntegration:
                 "services.openai_embeddings.OpenAIEmbeddings"
             ) as mock_embeddings_class,
             patch("services.qdrant_client.QdrantClient") as mock_qdrant_class,
+            patch("jobs.youtube_ingest.time.sleep") as mock_sleep,
         ):
             mock_youtube_client = Mock()
             mock_youtube_client_class.return_value = mock_youtube_client
@@ -133,7 +110,7 @@ class TestRetryLogicIntegration:
                 {"video_id": "video123", "title": "Test Video"}
             ]
 
-            # Fail twice, then succeed
+            # Fail twice, then succeed on attempt 3
             mock_youtube_client.get_video_info.side_effect = [
                 None,  # Fail attempt 1
                 None,  # Fail attempt 2
@@ -147,10 +124,8 @@ class TestRetryLogicIntegration:
                 },
             ]
 
-            # Mock get_video_transcript
             mock_youtube_client.get_video_transcript.return_value = ("Success!", "en")
 
-            # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
             mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
@@ -161,29 +136,24 @@ class TestRetryLogicIntegration:
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
             mock_tracking.record_video_ingestion = Mock()
 
-            # Setup embeddings
             mock_embeddings = Mock()
             mock_embeddings_class.return_value = mock_embeddings
             mock_embeddings.chunk_text.return_value = ["Chunk 1"]
             mock_embeddings.embed_texts = AsyncMock(return_value=[[0.1, 0.2]])
 
-            # Setup vector store
             mock_qdrant = AsyncMock()
             mock_qdrant_class.return_value = mock_qdrant
 
-            # Execute job
             result = await job._execute_job()
 
-            # Should complete in ~6 seconds (2s delay + 4s delay)
-            # Not 30 seconds (all 5 attempts)
-            total_time = time.time() - start_time
-            assert total_time < 10, (
-                f"Expected early exit (<10s), took {total_time:.1f}s"
-            )
+        # Only 2 sleep calls: before attempt 2 (2s) and before attempt 3 (4s)
+        assert mock_sleep.call_count == 2, (
+            f"Expected 2 sleep calls (before retries 2 and 3), got {mock_sleep.call_count}"
+        )
+        assert mock_sleep.call_args_list == [call(2), call(4)]
 
-            # Should show success
-            assert result["records_success"] == 1
-            assert result["records_failed"] == 0
+        assert result["records_success"] == 1
+        assert result["records_failed"] == 0
 
 
 @pytest.mark.integration

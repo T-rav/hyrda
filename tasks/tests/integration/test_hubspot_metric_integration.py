@@ -18,6 +18,8 @@ from jobs.hubspot_sync import HubSpotSyncJob
 from jobs.metric_sync import MetricSyncJob
 from services.hubspot_deal_tracking_service import HubSpotDealTrackingService
 
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def settings():
