@@ -162,8 +162,9 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _plan_loop(self) -> None:
-        """Continuously poll for planner-labeled issues and plan them."""
+        """Continuously poll for find-labeled and planner-labeled issues."""
         while not self._stop_event.is_set():
+            await self._triage_find_issues()
             await self._plan_issues()
             await self._sleep_or_stop(self._config.poll_interval)
 
@@ -308,6 +309,35 @@ class HydraOrchestrator:
             )
         logger.info("Fetched %d issues for planning", len(issues))
         return issues[: self._config.batch_size]
+
+    async def _triage_find_issues(self) -> None:
+        """Swap ``find_label`` issues to ``planner_label`` so the planner picks them up."""
+        if not self._config.find_label:
+            return
+
+        issues = await self._fetch_issues_by_labels(
+            self._config.find_label, self._config.batch_size
+        )
+        if not issues:
+            return
+
+        logger.info("Triaging %d found issues into planning", len(issues))
+        for issue in issues:
+            if self._config.dry_run:
+                logger.info(
+                    "[dry-run] Would swap find→plan labels on issue #%d",
+                    issue.number,
+                )
+                continue
+            for lbl in self._config.find_label:
+                await self._prs.remove_label(issue.number, lbl)
+            await self._prs.add_labels(issue.number, [self._config.planner_label[0]])
+            logger.info(
+                "Issue #%d triaged: %s → %s",
+                issue.number,
+                ",".join(self._config.find_label),
+                self._config.planner_label[0],
+            )
 
     async def _plan_issues(self) -> list[PlanResult]:
         """Run planning agents on issues labeled with the planner label."""

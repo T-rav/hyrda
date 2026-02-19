@@ -71,7 +71,11 @@ class HydraConfig(BaseModel):
         description="Labels applied after PR is merged (OR logic)",
     )
 
-    # Planner configuration
+    # Discovery / planner configuration
+    find_label: list[str] = Field(
+        default=["hydra-find"],
+        description="Labels for new issues to discover and triage into planning (OR logic)",
+    )
     planner_label: list[str] = Field(
         default=["hydra-plan"],
         description="Labels for issues needing plans (OR logic)",
@@ -125,6 +129,7 @@ class HydraConfig(BaseModel):
             HYDRA_GITHUB_REPO       → repo
             HYDRA_GITHUB_ASSIGNEE   → (used by slash commands only)
             HYDRA_GH_TOKEN          → gh_token
+            HYDRA_LABEL_FIND        → find_label   (discovery stage)
             HYDRA_LABEL_PLAN        → planner_label
             HYDRA_LABEL_READY       → ready_label  (implement stage)
             HYDRA_LABEL_REVIEW      → review_label
@@ -153,6 +158,7 @@ class HydraConfig(BaseModel):
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
+            "HYDRA_LABEL_FIND": ("find_label", ["hydra-find"]),
             "HYDRA_LABEL_PLAN": ("planner_label", ["hydra-plan"]),
             "HYDRA_LABEL_READY": ("ready_label", ["hydra-ready"]),
             "HYDRA_LABEL_REVIEW": ("review_label", ["hydra-review"]),

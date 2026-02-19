@@ -98,7 +98,7 @@ class HydraDashboard:
 
         @app.get("/api/prs")
         async def get_prs() -> JSONResponse:
-            """Fetch open PRs labeled for review from GitHub."""
+            """Fetch all open Hydra PRs from GitHub."""
             import json as _json
 
             try:
@@ -107,7 +107,10 @@ class HydraDashboard:
                 seen: set[int] = set()
                 prs: list[dict[str, object]] = []
 
-                for label in self._config.review_label:
+                all_labels = list(
+                    {*self._config.ready_label, *self._config.review_label}
+                )
+                for label in all_labels:
                     proc = await asyncio.create_subprocess_exec(
                         "gh",
                         "pr",
@@ -289,6 +292,7 @@ class HydraDashboard:
                     "config": {
                         "repo": self._config.repo,
                         "ready_label": self._config.ready_label,
+                        "find_label": self._config.find_label,
                         "planner_label": self._config.planner_label,
                         "review_label": self._config.review_label,
                         "hitl_label": self._config.hitl_label,

@@ -19,9 +19,9 @@ function countByRole(workers) {
 }
 
 export function Header({
-  prsCount, mergedCount,
+  prsCount, mergedCount, issuesFound,
   connected, orchestratorStatus,
-  onStart, onStop, lifetimeStats,
+  onStart, onStop,
   phase, workers,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
@@ -45,11 +45,9 @@ export function Header({
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
           <div style={styles.stats}>
+            <Stat label="Issues" value={issuesFound} />
             <Stat label="PRs" value={prsCount} />
             <Stat label="Merged" value={mergedCount} />
-            {lifetimeStats && (
-              <Stat label="Issues Found" value={lifetimeStats.issues_created} />
-            )}
           </div>
         </div>
         <div style={styles.pills}>

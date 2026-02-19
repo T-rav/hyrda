@@ -1844,6 +1844,54 @@ class TestStopMechanism:
 # ---------------------------------------------------------------------------
 
 
+class TestTriageFindIssues:
+    """Tests for _triage_find_issues (find_label → planner_label swap)."""
+
+    @pytest.mark.asyncio
+    async def test_triage_swaps_find_label_to_planner_label(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        issue = make_issue(1)
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_called_once_with(1, config.find_label[0])
+        mock_prs.add_labels.assert_called_once_with(1, [config.planner_label[0]])
+
+    @pytest.mark.asyncio
+    async def test_triage_skips_when_no_find_label_configured(self) -> None:
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(find_label=[])
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_triage_skips_when_no_issues_found(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[]):
+            await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_not_called()
+
+
 class TestPlanPhase:
     """Tests for the PLAN phase in the orchestrator loop."""
 

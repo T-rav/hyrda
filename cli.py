@@ -104,6 +104,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels applied after PR is merged, comma-separated (default: hydra-fixed)",
     )
     parser.add_argument(
+        "--find-label",
+        default="hydra-find",
+        help="Labels for new issues to discover, comma-separated (default: hydra-find)",
+    )
+    parser.add_argument(
         "--planner-label",
         default="hydra-plan",
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
@@ -187,6 +192,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         review_label=_parse_label_arg(args.review_label),
         hitl_label=_parse_label_arg(args.hitl_label),
         fixed_label=_parse_label_arg(args.fixed_label),
+        find_label=_parse_label_arg(args.find_label),
         planner_label=_parse_label_arg(args.planner_label),
         planner_model=args.planner_model,
         planner_budget_usd=args.planner_budget_usd,
