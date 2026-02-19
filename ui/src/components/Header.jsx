@@ -28,8 +28,6 @@ export function Header({
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
   const counts = countByRole(workers || {})
-  const workerList = Object.values(workers || {})
-  const showPills = phase !== 'idle' || workerList.length > 0
 
   return (
     <header style={styles.header}>
@@ -50,35 +48,33 @@ export function Header({
           <Stat label="Filed" value={lifetimeStats.issues_created} />
         )}
       </div>
-      {showPills && (
-        <div style={styles.pills}>
-          {STAGES.map((stage, i) => {
-            const agentCount = counts[stage.role] || 0
-            const isActive = agentCount > 0
-            return (
-              <React.Fragment key={stage.key}>
-                {i > 0 && (
-                  <div style={{
-                    ...styles.connector,
-                    background: isActive ? stage.color : '#30363d',
-                  }} />
-                )}
+      <div style={styles.pills}>
+        {STAGES.map((stage, i) => {
+          const agentCount = counts[stage.role] || 0
+          const isActive = agentCount > 0
+          return (
+            <React.Fragment key={stage.key}>
+              {i > 0 && (
                 <div style={{
-                  ...styles.pill,
-                  background: isActive ? stage.color : '#21262d',
-                  color: isActive ? '#0d1117' : '#484f58',
-                  borderColor: isActive ? stage.color : '#30363d',
-                }}>
-                  {stage.label}
-                  {agentCount > 0 && (
-                    <span style={styles.count}>{agentCount}</span>
-                  )}
-                </div>
-              </React.Fragment>
-            )
-          })}
-        </div>
-      )}
+                  ...styles.connector,
+                  background: isActive ? stage.color : '#30363d',
+                }} />
+              )}
+              <div style={{
+                ...styles.pill,
+                background: isActive ? stage.color : '#21262d',
+                color: isActive ? '#0d1117' : '#484f58',
+                borderColor: isActive ? stage.color : '#30363d',
+              }}>
+                {stage.label}
+                {agentCount > 0 && (
+                  <span style={styles.count}>{agentCount}</span>
+                )}
+              </div>
+            </React.Fragment>
+          )
+        })}
+      </div>
       <div style={styles.controls}>
         {canStart && (
           <button
