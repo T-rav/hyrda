@@ -134,6 +134,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Log actions without executing (no agents, no git, no PRs)",
     )
     parser.add_argument(
+        "--gh-token",
+        default="",
+        help="GitHub token for gh CLI auth (overrides HYDRA_GH_TOKEN and shell GH_TOKEN)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -176,6 +181,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         dashboard_port=args.dashboard_port,
         dashboard_enabled=not args.no_dashboard,
         dry_run=args.dry_run,
+        gh_token=args.gh_token,
     )
 
 

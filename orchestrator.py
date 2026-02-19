@@ -462,11 +462,12 @@ class HydraOrchestrator:
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
 
-    @staticmethod
-    async def _gh_run(*cmd: str) -> str:
+    async def _gh_run(self, *cmd: str) -> str:
         """Run a gh CLI command and return stdout."""
         env = {**os.environ}
         env.pop("CLAUDECODE", None)
+        if self._config.gh_token:
+            env["GH_TOKEN"] = self._config.gh_token
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,

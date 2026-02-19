@@ -103,6 +103,12 @@ class HydraConfig(BaseModel):
         default=False, description="Log actions without executing them"
     )
 
+    # GitHub authentication
+    gh_token: str = Field(
+        default="",
+        description="GitHub token for gh CLI auth (overrides shell GH_TOKEN)",
+    )
+
     model_config = {"arbitrary_types_allowed": True}
 
     @model_validator(mode="after")
@@ -112,6 +118,7 @@ class HydraConfig(BaseModel):
         Environment variables (checked when no explicit CLI value is given):
             HYDRA_GITHUB_REPO       → repo
             HYDRA_GITHUB_ASSIGNEE   → (used by slash commands only)
+            HYDRA_GH_TOKEN          → gh_token
             HYDRA_LABEL_PLAN        → planner_label
             HYDRA_LABEL_READY       → ready_label  (implement stage)
             HYDRA_LABEL_REVIEW      → review_label
@@ -131,6 +138,12 @@ class HydraConfig(BaseModel):
             self.repo = os.environ.get("HYDRA_GITHUB_REPO", "") or _detect_repo_slug(
                 self.repo_root
             )
+
+        # GitHub token: explicit value → HYDRA_GH_TOKEN env var → inherited GH_TOKEN
+        if not self.gh_token:
+            env_token = os.environ.get("HYDRA_GH_TOKEN", "")
+            if env_token:
+                object.__setattr__(self, "gh_token", env_token)
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
