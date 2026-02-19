@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import logging
 import sys
+from typing import Any
 
 from config import HydraConfig
 from log import setup_logging
@@ -21,123 +22,123 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
     parser.add_argument(
         "--ready-label",
-        default="hydra-ready",
+        default=None,
         help="GitHub issue labels to filter by, comma-separated (default: hydra-ready)",
     )
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=15,
+        default=None,
         help="Number of issues per batch (default: 15)",
     )
     parser.add_argument(
         "--max-workers",
         type=int,
-        default=2,
+        default=None,
         help="Max concurrent implementation agents (default: 2)",
     )
     parser.add_argument(
         "--max-planners",
         type=int,
-        default=1,
+        default=None,
         help="Max concurrent planning agents (default: 1)",
     )
     parser.add_argument(
         "--max-reviewers",
         type=int,
-        default=1,
+        default=None,
         help="Max concurrent review agents (default: 1)",
     )
     parser.add_argument(
         "--max-budget-usd",
         type=float,
-        default=0,
+        default=None,
         help="USD budget cap per implementation agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--model",
-        default="sonnet",
+        default=None,
         help="Model for implementation agents (default: sonnet)",
     )
     parser.add_argument(
         "--review-model",
-        default="opus",
+        default=None,
         help="Model for review agents (default: opus)",
     )
     parser.add_argument(
         "--review-budget-usd",
         type=float,
-        default=0,
+        default=None,
         help="USD budget cap per review agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--ci-check-timeout",
         type=int,
-        default=600,
+        default=None,
         help="Seconds to wait for CI checks (default: 600)",
     )
     parser.add_argument(
         "--ci-poll-interval",
         type=int,
-        default=30,
+        default=None,
         help="Seconds between CI status polls (default: 30)",
     )
     parser.add_argument(
         "--max-ci-fix-attempts",
         type=int,
-        default=2,
+        default=None,
         help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
     )
     parser.add_argument(
         "--review-label",
-        default="hydra-review",
+        default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
     )
     parser.add_argument(
         "--hitl-label",
-        default="hydra-hitl",
+        default=None,
         help="Labels for human-in-the-loop escalation, comma-separated (default: hydra-hitl)",
     )
     parser.add_argument(
         "--fixed-label",
-        default="hydra-fixed",
+        default=None,
         help="Labels applied after PR is merged, comma-separated (default: hydra-fixed)",
     )
     parser.add_argument(
         "--find-label",
-        default="hydra-find",
+        default=None,
         help="Labels for new issues to discover, comma-separated (default: hydra-find)",
     )
     parser.add_argument(
         "--planner-label",
-        default="hydra-plan",
+        default=None,
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
         "--planner-model",
-        default="opus",
+        default=None,
         help="Model for planning agents (default: opus)",
     )
     parser.add_argument(
         "--planner-budget-usd",
         type=float,
-        default=0,
+        default=None,
         help="USD budget cap per planning agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
         "--repo",
-        default="",
+        default=None,
         help="GitHub repo owner/name (auto-detected from git remote if omitted)",
     )
     parser.add_argument(
         "--main-branch",
-        default="main",
+        default=None,
         help="Base branch name (default: main)",
     )
     parser.add_argument(
         "--dashboard-port",
         type=int,
-        default=5555,
+        default=None,
         help="Dashboard web UI port (default: 5555)",
     )
     parser.add_argument(
@@ -152,7 +153,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gh-token",
-        default="",
+        default=None,
         help="GitHub token for gh CLI auth (overrides HYDRA_GH_TOKEN and shell GH_TOKEN)",
     )
     parser.add_argument(
@@ -175,34 +176,57 @@ def _parse_label_arg(value: str) -> list[str]:
 
 
 def build_config(args: argparse.Namespace) -> HydraConfig:
-    """Convert parsed CLI args into a :class:`HydraConfig`."""
-    return HydraConfig(
-        ready_label=_parse_label_arg(args.ready_label),
-        batch_size=args.batch_size,
-        max_workers=args.max_workers,
-        max_planners=args.max_planners,
-        max_reviewers=args.max_reviewers,
-        max_budget_usd=args.max_budget_usd,
-        model=args.model,
-        review_model=args.review_model,
-        review_budget_usd=args.review_budget_usd,
-        ci_check_timeout=args.ci_check_timeout,
-        ci_poll_interval=args.ci_poll_interval,
-        max_ci_fix_attempts=args.max_ci_fix_attempts,
-        review_label=_parse_label_arg(args.review_label),
-        hitl_label=_parse_label_arg(args.hitl_label),
-        fixed_label=_parse_label_arg(args.fixed_label),
-        find_label=_parse_label_arg(args.find_label),
-        planner_label=_parse_label_arg(args.planner_label),
-        planner_model=args.planner_model,
-        planner_budget_usd=args.planner_budget_usd,
-        repo=args.repo,
-        main_branch=args.main_branch,
-        dashboard_port=args.dashboard_port,
-        dashboard_enabled=not args.no_dashboard,
-        dry_run=args.dry_run,
-        gh_token=args.gh_token,
-    )
+    """Convert parsed CLI args into a :class:`HydraConfig`.
+
+    Only explicitly-provided CLI values are passed through;
+    HydraConfig supplies all defaults.
+    """
+    kwargs: dict[str, Any] = {}
+
+    # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
+    for field in (
+        "batch_size",
+        "max_workers",
+        "max_planners",
+        "max_reviewers",
+        "max_budget_usd",
+        "model",
+        "review_model",
+        "review_budget_usd",
+        "ci_check_timeout",
+        "ci_poll_interval",
+        "max_ci_fix_attempts",
+        "planner_model",
+        "planner_budget_usd",
+        "repo",
+        "main_branch",
+        "dashboard_port",
+        "gh_token",
+    ):
+        val = getattr(args, field)
+        if val is not None:
+            kwargs[field] = val
+
+    # 2) Label fields: CLI string → list[str]
+    for field in (
+        "ready_label",
+        "review_label",
+        "hitl_label",
+        "fixed_label",
+        "find_label",
+        "planner_label",
+    ):
+        val = getattr(args, field)
+        if val is not None:
+            kwargs[field] = _parse_label_arg(val)
+
+    # 3) Boolean flags (only pass when explicitly set)
+    if args.no_dashboard:
+        kwargs["dashboard_enabled"] = False
+    if args.dry_run:
+        kwargs["dry_run"] = True
+
+    return HydraConfig(**kwargs)
 
 
 async def _run_clean(config: HydraConfig) -> None:
