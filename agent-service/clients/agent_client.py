@@ -28,6 +28,22 @@ from shared.utils.http_client import get_internal_service_url
 logger = logging.getLogger(__name__)
 
 
+def is_json_serializable(value: object) -> bool:
+    """Check if a value is JSON serializable.
+
+    Only allows simple types: str, int, float, bool, None, list, dict.
+    """
+    if value is None:
+        return True
+    if isinstance(value, str | int | float | bool):
+        return True
+    if isinstance(value, list):
+        return all(is_json_serializable(item) for item in value)
+    if isinstance(value, dict):
+        return all(is_json_serializable(v) for v in value.values())
+    return False
+
+
 class AgentClient:
     """HTTP-only agent client. No direct agent imports.
 
@@ -449,25 +465,6 @@ class AgentClient:
                                         f"⏭️  Skipping intermediate result from '{node_name}'"
                                     )
                                     continue
-
-                                # Filter out non-serializable fields
-                                # Only include simple types: str, int, float, bool, None, list, dict
-                                def is_json_serializable(value):
-                                    """Check if a value is JSON serializable."""
-                                    if value is None:
-                                        return True
-                                    if isinstance(value, str | int | float | bool):
-                                        return True
-                                    if isinstance(value, list):
-                                        return all(
-                                            is_json_serializable(item) for item in value
-                                        )
-                                    if isinstance(value, dict):
-                                        return all(
-                                            is_json_serializable(v)
-                                            for v in value.values()
-                                        )
-                                    return False
 
                                 serializable_result = {
                                     k: v

@@ -55,9 +55,13 @@ class StateTracker:
         self.save()
 
     def is_processed(self, issue_number: int) -> bool:
-        """Return *True* if the issue has been processed (success or failed)."""
+        """Return *True* if the issue was successfully processed.
+
+        Failed issues are NOT considered processed so they can be
+        retried on the next run.
+        """
         status = self._data["processed_issues"].get(str(issue_number))
-        return status in ("success", "failed")
+        return status == "success"
 
     def get_issue_status(self, issue_number: int) -> str | None:
         """Return the status string for *issue_number*, or *None*."""

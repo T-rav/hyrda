@@ -22,6 +22,7 @@ class TestEventTypeEnum:
             "REVIEW_UPDATE",
             "PLANNER_UPDATE",
             "MERGE_UPDATE",
+            "CI_CHECK",
             "ISSUE_CREATED",
             "BATCH_COMPLETE",
             "ORCHESTRATOR_STATUS",

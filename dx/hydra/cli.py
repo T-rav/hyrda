@@ -59,6 +59,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="USD budget cap per review agent (0 = unlimited, default: 0)",
     )
     parser.add_argument(
+        "--ci-check-timeout",
+        type=int,
+        default=600,
+        help="Seconds to wait for CI checks (default: 600)",
+    )
+    parser.add_argument(
+        "--ci-poll-interval",
+        type=int,
+        default=30,
+        help="Seconds between CI status polls (default: 30)",
+    )
+    parser.add_argument(
+        "--max-ci-fix-attempts",
+        type=int,
+        default=2,
+        help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
+    )
+    parser.add_argument(
         "--planner-label",
         default="claude-find",
         help="Label for issues needing plans (default: claude-find)",
@@ -124,6 +142,9 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         model=args.model,
         review_model=args.review_model,
         review_budget_usd=args.review_budget_usd,
+        ci_check_timeout=args.ci_check_timeout,
+        ci_poll_interval=args.ci_poll_interval,
+        max_ci_fix_attempts=args.max_ci_fix_attempts,
         planner_label=args.planner_label,
         planner_model=args.planner_model,
         planner_budget_usd=args.planner_budget_usd,

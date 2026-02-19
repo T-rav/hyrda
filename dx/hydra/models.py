@@ -115,6 +115,8 @@ class ReviewResult(BaseModel):
     fixes_made: bool = False
     transcript: str = ""
     merged: bool = False
+    ci_passed: bool | None = None  # None = not checked, True/False = outcome
+    ci_fix_attempts: int = 0
 
 
 # --- Batch ---

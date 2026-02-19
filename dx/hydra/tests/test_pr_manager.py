@@ -99,6 +99,201 @@ async def test_post_comment_handles_error(config, event_bus, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# post_pr_comment
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_pr_comment_calls_gh_pr_comment(config, event_bus, tmp_path):
+    """post_pr_comment should call gh pr comment with correct args."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.post_pr_comment(101, "Review summary here")
+
+    mock_create.assert_awaited_once()
+    call_args = mock_create.call_args
+    cmd = call_args.args if call_args.args else call_args[0]
+    assert "gh" in cmd
+    assert "pr" in cmd
+    assert "comment" in cmd
+    assert "101" in cmd
+    assert "--body" in cmd
+    assert "Review summary here" in cmd
+
+
+@pytest.mark.asyncio
+async def test_post_pr_comment_dry_run(dry_config, event_bus):
+    """In dry-run mode, post_pr_comment should not call subprocess."""
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.post_pr_comment(101, "Review summary here")
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_pr_comment_handles_error(config, event_bus, tmp_path):
+    """post_pr_comment should log warning on failure without raising."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="permission denied")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await mgr.post_pr_comment(101, "comment body")
+
+
+# ---------------------------------------------------------------------------
+# submit_review
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_path):
+    """submit_review with 'approve' should pass --approve flag."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "approve", "Looks good")
+
+    assert result is True
+    cmd = mock_create.call_args.args if mock_create.call_args.args else mock_create.call_args[0]
+    assert "gh" in cmd
+    assert "pr" in cmd
+    assert "review" in cmd
+    assert "101" in cmd
+    assert "--approve" in cmd
+    assert "--body" in cmd
+    assert "Looks good" in cmd
+
+
+@pytest.mark.asyncio
+async def test_submit_review_request_changes_calls_correct_flag(
+    config, event_bus, tmp_path
+):
+    """submit_review with 'request-changes' should pass --request-changes."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "request-changes", "Needs work")
+
+    assert result is True
+    cmd = mock_create.call_args.args if mock_create.call_args.args else mock_create.call_args[0]
+    assert "--request-changes" in cmd
+
+
+@pytest.mark.asyncio
+async def test_submit_review_comment_calls_correct_flag(config, event_bus, tmp_path):
+    """submit_review with 'comment' should pass --comment."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "comment", "FYI note")
+
+    assert result is True
+    cmd = mock_create.call_args.args if mock_create.call_args.args else mock_create.call_args[0]
+    assert "--comment" in cmd
+
+
+@pytest.mark.asyncio
+async def test_submit_review_dry_run(dry_config, event_bus):
+    """In dry-run mode, submit_review should not call subprocess."""
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "approve", "LGTM")
+
+    mock_create.assert_not_called()
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_submit_review_failure_returns_false(config, event_bus, tmp_path):
+    """submit_review should return False on subprocess failure."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="review failed")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "approve", "LGTM")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_submit_review_unknown_verdict_returns_false(config, event_bus):
+    """submit_review with invalid verdict should return False without calling subprocess."""
+    mgr = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(101, "invalid-verdict", "body")
+
+    assert result is False
+    mock_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # create_issue
 # ---------------------------------------------------------------------------
 
@@ -507,7 +702,7 @@ async def test_merge_pr_calls_gh_pr_merge_with_correct_flags(config, event_bus):
     assert "merge" in args
     assert "101" in args
     assert "--squash" in args
-    assert "--auto" in args
+    assert "--auto" not in args
     assert "--delete-branch" in args
 
 
@@ -747,3 +942,247 @@ async def test_run_raises_runtime_error_on_nonzero_exit(tmp_path):
         pytest.raises(RuntimeError, match="failed"),
     ):
         await PRManager._run("false", cwd=tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# get_pr_checks
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
+    """get_pr_checks should return parsed check results."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    checks_json = '[{"name":"ci","state":"COMPLETED","conclusion":"SUCCESS"}]'
+    mock_create = _make_subprocess_mock(returncode=0, stdout=checks_json)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        checks = await mgr.get_pr_checks(101)
+
+    assert len(checks) == 1
+    assert checks[0]["name"] == "ci"
+    assert checks[0]["conclusion"] == "SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_get_pr_checks_returns_empty_on_failure(config, event_bus, tmp_path):
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="not found")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        checks = await mgr.get_pr_checks(999)
+
+    assert checks == []
+
+
+@pytest.mark.asyncio
+async def test_get_pr_checks_dry_run_returns_empty(dry_config, event_bus):
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        checks = await mgr.get_pr_checks(101)
+
+    mock_create.assert_not_called()
+    assert checks == []
+
+
+# ---------------------------------------------------------------------------
+# wait_for_ci
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_passes_when_all_succeed(config, event_bus, tmp_path):
+    """wait_for_ci should return (True, ...) when all checks pass."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+
+    checks = [
+        {"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+    ]
+    mgr.get_pr_checks = AsyncMock(return_value=checks)
+
+    passed, summary = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is True
+    assert "2 checks passed" in summary
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_fails_on_failure(config, event_bus, tmp_path):
+    """wait_for_ci should return (False, ...) when checks fail."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+
+    checks = [
+        {"name": "ci", "state": "COMPLETED", "conclusion": "FAILURE"},
+        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+    ]
+    mgr.get_pr_checks = AsyncMock(return_value=checks)
+
+    passed, summary = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is False
+    assert "ci" in summary
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_passes_when_no_checks(config, event_bus, tmp_path):
+    """wait_for_ci should return (True, ...) when no CI checks exist."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+
+    mgr.get_pr_checks = AsyncMock(return_value=[])
+
+    passed, summary = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is True
+    assert "No CI checks found" in summary
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_respects_stop_event(config, event_bus, tmp_path):
+    """wait_for_ci should return (False, 'Stopped') when stop_event is set."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+    stop.set()  # Already stopped
+
+    passed, summary = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is False
+    assert summary == "Stopped"
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_dry_run_returns_success(dry_config, event_bus):
+    """In dry-run mode, wait_for_ci should return (True, ...)."""
+    import asyncio
+
+    mgr = _make_manager(dry_config, event_bus)
+    stop = asyncio.Event()
+
+    passed, summary = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is True
+    assert "Dry-run" in summary
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_already_complete_returns_immediately(
+    config, event_bus, tmp_path
+):
+    """When checks are already complete, should return without sleeping."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+
+    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    mgr.get_pr_checks = AsyncMock(return_value=checks)
+
+    passed, _ = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    assert passed is True
+    mgr.get_pr_checks.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path):
+    """wait_for_ci should publish CI_CHECK events."""
+    import asyncio
+
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        label=config.label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    stop = asyncio.Event()
+
+    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    mgr.get_pr_checks = AsyncMock(return_value=checks)
+
+    await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
+
+    events = event_bus.get_history()
+    ci_events = [e for e in events if e.type == EventType.CI_CHECK]
+    assert len(ci_events) >= 1
+    assert ci_events[0].data["pr"] == 101
+    assert ci_events[0].data["status"] == "passed"

@@ -545,6 +545,22 @@ class TestReviewResult:
         assert review.fixes_made is True
         assert review.transcript == "Reviewed 5 files."
 
+    def test_ci_passed_defaults_to_none(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.ci_passed is None
+
+    def test_ci_fix_attempts_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.ci_fix_attempts == 0
+
+    def test_ci_passed_can_be_set_true(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, ci_passed=True)
+        assert review.ci_passed is True
+
+    def test_ci_passed_can_be_set_false(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, ci_passed=False)
+        assert review.ci_passed is False
+
     def test_request_changes_verdict(self) -> None:
         review = ReviewResult(
             pr_number=2, issue_number=2, verdict=ReviewVerdict.REQUEST_CHANGES

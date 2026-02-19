@@ -59,23 +59,7 @@ help:
 	@echo "  PORT             Dashboard port (default: 5555)"
 
 run:
-	@echo "$(BLUE)Starting Hydra — label=$(LABEL) workers=$(WORKERS) model=$(MODEL)$(RESET)"
-	@cd $(HYDRA_DIR) && $(UV) python cli.py \
-		--label $(LABEL) \
-		--max-workers $(WORKERS) \
-		--model $(MODEL) \
-		--review-model $(REVIEW_MODEL) \
-		--batch-size $(BATCH_SIZE) \
-		--max-budget-usd $(BUDGET) \
-		--review-budget-usd $(REVIEW_BUDGET) \
-		--planner-label $(PLANNER_LABEL) \
-		--planner-model $(PLANNER_MODEL) \
-		--planner-budget-usd $(PLANNER_BUDGET) \
-		--dashboard-port $(PORT)
-	@echo "$(GREEN)Hydra complete$(RESET)"
-
-dev:
-	@echo "$(BLUE)Starting Hydra dev mode — backend :$(PORT) + frontend :5556$(RESET)"
+	@echo "$(BLUE)Starting Hydra — backend :$(PORT) + frontend :5556$(RESET)"
 	@echo "$(GREEN)Open http://localhost:5556 to use the dashboard$(RESET)"
 	@trap 'kill 0' EXIT; \
 	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev & \
@@ -92,6 +76,8 @@ dev:
 		--planner-budget-usd $(PLANNER_BUDGET) \
 		--dashboard-port $(PORT) & \
 	wait
+
+dev: run
 
 dry-run:
 	@echo "$(BLUE)Hydra dry run — label=$(LABEL)$(RESET)"

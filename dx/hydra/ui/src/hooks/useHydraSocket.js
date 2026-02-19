@@ -156,6 +156,9 @@ function reducer(state, action) {
     case 'LIFETIME_STATS':
       return { ...state, lifetimeStats: action.data }
 
+    case 'EXISTING_PRS':
+      return { ...state, prs: [...action.data, ...state.prs] }
+
     case 'batch_complete':
       return {
         ...addEvent(state, action),
@@ -206,6 +209,11 @@ export function useHydraSocket() {
         .catch(() => {})
       // Fetch lifetime stats on connect
       fetchLifetimeStats()
+      // Fetch existing PRs from GitHub
+      fetch('/api/prs')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'EXISTING_PRS', data }))
+        .catch(() => {})
     }
 
     ws.onmessage = (e) => {

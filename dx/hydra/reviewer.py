@@ -104,6 +104,105 @@ class ReviewRunner:
 
         return result
 
+    async def fix_ci(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        worktree_path: Path,
+        failure_summary: str,
+        attempt: int = 1,
+        worker_id: int = 0,
+    ) -> ReviewResult:
+        """Run an agent to fix CI failures.
+
+        Mirrors the :meth:`review` structure: build command, execute,
+        parse verdict, check commits.  Returns a :class:`ReviewResult`
+        with verdict APPROVE (fixed) or REQUEST_CHANGES (could not fix).
+        """
+        result = ReviewResult(
+            pr_number=pr.number,
+            issue_number=issue.number,
+        )
+
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.CI_CHECK,
+                data={
+                    "pr": pr.number,
+                    "issue": issue.number,
+                    "worker": worker_id,
+                    "status": "fixing",
+                    "attempt": attempt,
+                },
+            )
+        )
+
+        if self._config.dry_run:
+            logger.info("[dry-run] Would fix CI for PR #%d", pr.number)
+            result.verdict = ReviewVerdict.APPROVE
+            result.summary = "Dry-run: CI fix skipped"
+            return result
+
+        try:
+            cmd = self._build_command(worktree_path)
+            prompt = self._build_ci_fix_prompt(pr, issue, failure_summary, attempt)
+            transcript = await self._execute(cmd, prompt, worktree_path, pr.number)
+            result.transcript = transcript
+            result.verdict = self._parse_verdict(transcript)
+            result.summary = self._extract_summary(transcript)
+            result.fixes_made = await self._has_new_commits(worktree_path)
+            self._save_transcript(pr.number, transcript)
+        except Exception as exc:
+            result.verdict = ReviewVerdict.REQUEST_CHANGES
+            result.summary = f"CI fix failed: {exc}"
+            logger.error("CI fix failed for PR #%d: %s", pr.number, exc)
+
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.CI_CHECK,
+                data={
+                    "pr": pr.number,
+                    "issue": issue.number,
+                    "worker": worker_id,
+                    "status": "fix_done",
+                    "attempt": attempt,
+                    "verdict": result.verdict.value,
+                },
+            )
+        )
+
+        return result
+
+    def _build_ci_fix_prompt(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        failure_summary: str,
+        attempt: int,
+    ) -> str:
+        """Build a focused prompt for fixing CI failures."""
+        return f"""You are fixing CI failures on PR #{pr.number} (issue #{issue.number}: {issue.title}).
+
+## CI Failure Summary
+
+{failure_summary}
+
+## Fix Attempt {attempt}
+
+1. Read the failing CI output above.
+2. Fix the root causes — do NOT skip or disable tests.
+3. Run `make lint` and `make test-fast` to verify locally.
+4. Commit fixes with message: "ci-fix: <description> (PR #{pr.number})"
+
+## Required Output
+
+End your response with EXACTLY one of these verdict lines:
+- VERDICT: APPROVE   (if CI failures are fixed)
+- VERDICT: REQUEST_CHANGES  (if you could not fix them)
+
+Then a brief summary on the next line starting with "SUMMARY: ".
+"""
+
     def _build_command(self, worktree_path: Path) -> list[str]:
         """Construct the ``claude`` CLI invocation for review.
 
@@ -119,7 +218,7 @@ class ReviewRunner:
             self._config.review_model,
             "--verbose",
             "--permission-mode",
-            "bypass",
+            "bypassPermissions",
         ]
         if self._config.review_budget_usd > 0:
             cmd.extend(["--max-budget-usd", str(self._config.review_budget_usd)])

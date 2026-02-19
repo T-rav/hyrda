@@ -905,3 +905,151 @@ class TestControlStatusEndpoint:
         body = response.json()
         assert body["config"]["repo"] == config.repo
         assert body["config"]["label"] == config.label
+
+
+# ---------------------------------------------------------------------------
+# GET /api/hitl
+# ---------------------------------------------------------------------------
+
+
+def _make_gh_proc(stdout: str = "[]", returncode: int = 0) -> AsyncMock:
+    """Build a mock for asyncio.create_subprocess_exec returning *stdout*."""
+    proc = AsyncMock()
+    proc.returncode = returncode
+    proc.communicate = AsyncMock(
+        return_value=(stdout.encode(), b"")
+    )
+    return proc
+
+
+class TestHITLRoute:
+    """Tests for the GET /api/hitl route."""
+
+    def test_hitl_returns_200(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc()):
+            response = client.get("/api/hitl")
+
+        assert response.status_code == 200
+
+    def test_hitl_returns_empty_list_when_no_issues(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc("[]")):
+            response = client.get("/api/hitl")
+
+        assert response.json() == []
+
+    def test_hitl_returns_issues_with_pr_info(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        issues_json = _json.dumps([
+            {"number": 42, "title": "Fix widget", "url": "https://github.com/org/repo/issues/42"},
+        ])
+        pr_json = _json.dumps([
+            {"number": 99, "url": "https://github.com/org/repo/pull/99"},
+        ])
+
+        call_count = 0
+
+        async def mock_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_gh_proc(issues_json)
+            return _make_gh_proc(pr_json)
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_exec):
+            response = client.get("/api/hitl")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["issue"] == 42
+        assert body[0]["title"] == "Fix widget"
+        assert body[0]["pr"] == 99
+        assert body[0]["branch"] == "agent/issue-42"
+
+    def test_hitl_returns_empty_on_gh_failure(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc("", returncode=1),
+        ):
+            response = client.get("/api/hitl")
+
+        assert response.json() == []
+
+    def test_hitl_shows_zero_pr_when_no_pr_found(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        issues_json = _json.dumps([
+            {"number": 10, "title": "Broken thing", "url": ""},
+        ])
+
+        call_count = 0
+
+        async def mock_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _make_gh_proc(issues_json)
+            return _make_gh_proc("[]")  # No PR found
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", side_effect=mock_exec):
+            response = client.get("/api/hitl")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["pr"] == 0
+        assert body[0]["prUrl"] == ""

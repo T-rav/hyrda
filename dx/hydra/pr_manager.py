@@ -80,7 +80,7 @@ class PRManager:
 
         body = (
             f"## Summary\n\n"
-            f"Automated implementation for #{issue.number}.\n\n"
+            f"Closes #{issue.number}.\n\n"
             f"## Issue\n\n{issue.title}\n\n"
             f"## Test plan\n\n"
             f"- [ ] Unit tests pass (`make test-fast`)\n"
@@ -163,7 +163,7 @@ class PRManager:
             )
 
     async def merge_pr(self, pr_number: int) -> bool:
-        """Auto-merge PR via squash merge with branch deletion.
+        """Merge PR immediately via squash merge with branch deletion.
 
         Returns *True* on success.
         """
@@ -180,7 +180,6 @@ class PRManager:
                 "--repo",
                 self._repo,
                 "--squash",
-                "--auto",
                 "--delete-branch",
                 cwd=self._config.repo_root,
             )
@@ -188,7 +187,7 @@ class PRManager:
             await self._bus.publish(
                 HydraEvent(
                     type=EventType.MERGE_UPDATE,
-                    data={"pr": pr_number, "status": "merge_requested"},
+                    data={"pr": pr_number, "status": "merged"},
                 )
             )
             return True
@@ -219,6 +218,77 @@ class PRManager:
                 issue_number,
                 exc,
             )
+
+    async def post_pr_comment(self, pr_number: int, body: str) -> None:
+        """Post a comment on a GitHub pull request."""
+        if self._config.dry_run:
+            logger.info("[dry-run] Would post comment on PR #%d", pr_number)
+            return
+        try:
+            await self._run(
+                "gh",
+                "pr",
+                "comment",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--body",
+                body,
+                cwd=self._config.repo_root,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not post comment on PR #%d: %s",
+                pr_number,
+                exc,
+            )
+
+    async def submit_review(
+        self, pr_number: int, verdict: str, body: str
+    ) -> bool:
+        """Submit a formal GitHub PR review.
+
+        *verdict* should be ``"approve"``, ``"request-changes"``, or
+        ``"comment"``.  Returns *True* on success.
+        """
+        flag_map = {
+            "approve": "--approve",
+            "request-changes": "--request-changes",
+            "comment": "--comment",
+        }
+        flag = flag_map.get(verdict)
+        if flag is None:
+            logger.error("Unknown review verdict %r for PR #%d", verdict, pr_number)
+            return False
+
+        if self._config.dry_run:
+            logger.info(
+                "[dry-run] Would submit %s review on PR #%d", verdict, pr_number
+            )
+            return True
+
+        try:
+            await self._run(
+                "gh",
+                "pr",
+                "review",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                flag,
+                "--body",
+                body,
+                cwd=self._config.repo_root,
+            )
+            return True
+        except RuntimeError as exc:
+            logger.error(
+                "Could not submit %s review on PR #%d: %s",
+                verdict,
+                pr_number,
+                exc,
+            )
+            return False
 
     async def add_labels(self, issue_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub issue."""
@@ -391,6 +461,113 @@ class PRManager:
         except RuntimeError as exc:
             logger.error("Pull main failed: %s", exc)
             return False
+
+    # --- CI check methods ---
+
+    async def get_pr_checks(self, pr_number: int) -> list[dict[str, str]]:
+        """Fetch CI check results for *pr_number*.
+
+        Returns a list of dicts with ``name``, ``state``, and ``conclusion``
+        keys.  Returns an empty list on failure or in dry-run mode.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would fetch CI checks for PR #%d", pr_number)
+            return []
+
+        try:
+            raw = await self._run(
+                "gh",
+                "pr",
+                "checks",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--json",
+                "name,state,conclusion",
+                cwd=self._config.repo_root,
+            )
+            return json.loads(raw)  # type: ignore[no-any-return]
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "Could not fetch CI checks for PR #%d: %s", pr_number, exc
+            )
+            return []
+
+    _PASSING_CONCLUSIONS = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+
+    async def wait_for_ci(  # noqa: PLR0911
+        self,
+        pr_number: int,
+        timeout: int,
+        poll_interval: int,
+        stop_event: asyncio.Event,
+    ) -> tuple[bool, str]:
+        """Poll CI checks until all complete or *timeout* seconds elapse.
+
+        Returns ``(passed, summary_message)``.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would wait for CI on PR #%d", pr_number)
+            return True, "Dry-run: CI skipped"
+
+        elapsed = 0
+        while elapsed < timeout:
+            if stop_event.is_set():
+                return False, "Stopped"
+
+            checks = await self.get_pr_checks(pr_number)
+
+            if not checks:
+                return True, "No CI checks found"
+
+            pending = [
+                c for c in checks if c.get("state", "").upper() != "COMPLETED"
+            ]
+            if pending:
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.CI_CHECK,
+                        data={
+                            "pr": pr_number,
+                            "status": "pending",
+                            "pending": len(pending),
+                            "total": len(checks),
+                        },
+                    )
+                )
+                try:
+                    await asyncio.wait_for(
+                        stop_event.wait(), timeout=poll_interval
+                    )
+                    # If we get here, stop_event was set
+                    return False, "Stopped"
+                except TimeoutError:
+                    elapsed += poll_interval
+                    continue
+
+            # All checks completed — check conclusions
+            failed = [
+                c["name"]
+                for c in checks
+                if c.get("conclusion", "").upper() not in self._PASSING_CONCLUSIONS
+            ]
+            passed = not failed
+            status = "passed" if passed else "failed"
+            data: dict[str, object] = {"pr": pr_number, "status": status}
+            if failed:
+                data["failed"] = failed
+            else:
+                data["total"] = len(checks)
+
+            await self._bus.publish(
+                HydraEvent(type=EventType.CI_CHECK, data=data)
+            )
+
+            if passed:
+                return True, f"All {len(checks)} checks passed"
+            return False, f"Failed checks: {', '.join(failed)}"
+
+        return False, f"Timeout after {timeout}s"
 
     # --- subprocess helper ---
 

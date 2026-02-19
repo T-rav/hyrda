@@ -632,3 +632,87 @@ class TestHydraConfigValidationConstraints:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
+
+    # ci_check_timeout: ge=30, le=3600
+
+    def test_ci_check_timeout_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.ci_check_timeout == 600
+
+    def test_ci_check_timeout_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            ci_check_timeout=30,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.ci_check_timeout == 30
+
+    def test_ci_check_timeout_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                ci_check_timeout=29,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # ci_poll_interval: ge=5, le=120
+
+    def test_ci_poll_interval_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.ci_poll_interval == 30
+
+    def test_ci_poll_interval_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            ci_poll_interval=5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.ci_poll_interval == 5
+
+    def test_ci_poll_interval_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                ci_poll_interval=4,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_ci_fix_attempts: ge=0, le=5
+
+    def test_max_ci_fix_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_ci_fix_attempts == 2
+
+    def test_max_ci_fix_attempts_zero_disables(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_ci_fix_attempts=0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_ci_fix_attempts == 0
+
+    def test_max_ci_fix_attempts_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_ci_fix_attempts=6,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )

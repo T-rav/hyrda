@@ -5,11 +5,11 @@ import { Header } from './components/Header'
 import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
 import { PRTable } from './components/PRTable'
-import { ReviewTable } from './components/ReviewTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { PipelineStatus } from './components/PipelineStatus'
+import { HITLTable } from './components/HITLTable'
 
-const TABS = ['transcript', 'prs', 'reviews', 'timeline']
+const TABS = ['transcript', 'prs', 'hitl', 'timeline']
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
@@ -77,7 +77,7 @@ export default function App() {
                 ...(activeTab === tab ? styles.tabActive : {}),
               }}
             >
-              {tab === 'prs' ? 'Pull Requests' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -87,7 +87,7 @@ export default function App() {
             <TranscriptView workers={state.workers} selectedWorker={selectedWorker} />
           )}
           {activeTab === 'prs' && <PRTable prs={state.prs} />}
-          {activeTab === 'reviews' && <ReviewTable reviews={state.reviews} />}
+          {activeTab === 'hitl' && <HITLTable />}
           {activeTab === 'timeline' && (
             <div style={styles.timeline}>
               {state.events.map((e, i) => (

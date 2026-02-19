@@ -578,3 +578,118 @@ async def test_execute_publishes_transcript_line_events(
     for ev in transcript_events:
         assert ev.data["pr"] == pr_info.number
         assert ev.data["source"] == "reviewer"
+
+
+# ---------------------------------------------------------------------------
+# _build_ci_fix_prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_ci_fix_prompt_includes_failure_summary(config, event_bus, pr_info, issue):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_ci_fix_prompt(pr_info, issue, "Failed checks: ci, lint", 1)
+
+    assert "Failed checks: ci, lint" in prompt
+
+
+def test_build_ci_fix_prompt_includes_pr_and_issue_context(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_ci_fix_prompt(pr_info, issue, "CI failed", 2)
+
+    assert f"#{pr_info.number}" in prompt
+    assert f"#{issue.number}" in prompt
+    assert issue.title in prompt
+    assert "Attempt 2" in prompt
+
+
+# ---------------------------------------------------------------------------
+# fix_ci — success path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_success_path(config, event_bus, pr_info, issue, tmp_path):
+    runner = _make_runner(config, event_bus)
+    transcript = "Fixed lint.\nVERDICT: APPROVE\nSUMMARY: Fixed CI failures"
+
+    mock_execute = AsyncMock(return_value=transcript)
+    mock_has_commits = AsyncMock(return_value=True)
+
+    with (
+        patch.object(runner, "_execute", mock_execute),
+        patch.object(runner, "_has_new_commits", mock_has_commits),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.fix_ci(
+            pr_info, issue, tmp_path, "Failed: ci", attempt=1, worker_id=0
+        )
+
+    assert result.verdict == ReviewVerdict.APPROVE
+    assert result.fixes_made is True
+    assert result.summary == "Fixed CI failures"
+
+
+# ---------------------------------------------------------------------------
+# fix_ci — failure path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_failure_path(config, event_bus, pr_info, issue, tmp_path):
+    runner = _make_runner(config, event_bus)
+
+    mock_execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
+
+    with patch.object(runner, "_execute", mock_execute):
+        result = await runner.fix_ci(
+            pr_info, issue, tmp_path, "Failed: ci", attempt=1
+        )
+
+    assert result.verdict == ReviewVerdict.REQUEST_CHANGES
+    assert "CI fix failed" in result.summary
+
+
+# ---------------------------------------------------------------------------
+# fix_ci — dry-run
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_dry_run_returns_auto_approved(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(dry_config, event_bus)
+
+    result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.verdict == ReviewVerdict.APPROVE
+    assert "Dry-run" in result.summary
+
+
+# ---------------------------------------------------------------------------
+# fix_ci — CI_CHECK events
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_publishes_ci_check_events(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+    transcript = "VERDICT: APPROVE\nSUMMARY: Fixed"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_new_commits", AsyncMock(return_value=True)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    events = event_bus.get_history()
+    ci_events = [e for e in events if e.type == EventType.CI_CHECK]
+    assert len(ci_events) >= 2
+    statuses = [e.data["status"] for e in ci_events]
+    assert "fixing" in statuses
+    assert "fix_done" in statuses

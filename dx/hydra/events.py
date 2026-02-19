@@ -22,6 +22,7 @@ class EventType(str, Enum):
     REVIEW_UPDATE = "review_update"
     PLANNER_UPDATE = "planner_update"
     MERGE_UPDATE = "merge_update"
+    CI_CHECK = "ci_check"
     ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
     ORCHESTRATOR_STATUS = "orchestrator_status"

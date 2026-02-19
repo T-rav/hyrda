@@ -142,10 +142,11 @@ class TestIssueTracking:
         tracker.mark_issue(1, "success")
         assert tracker.is_processed(1) is True
 
-    def test_is_processed_true_for_failed(self, tmp_path: Path) -> None:
+    def test_is_processed_false_for_failed(self, tmp_path: Path) -> None:
+        """Failed issues are NOT processed — they should be retried."""
         tracker = make_tracker(tmp_path)
         tracker.mark_issue(2, "failed")
-        assert tracker.is_processed(2) is True
+        assert tracker.is_processed(2) is False
 
     def test_is_processed_false_for_in_progress(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)

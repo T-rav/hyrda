@@ -316,9 +316,10 @@ class TestFetchReadyIssues:
         assert "world" in issues[0].comments
 
     @pytest.mark.asyncio
-    async def test_skips_already_processed_issues(self, config: HydraConfig) -> None:
+    async def test_skips_active_issues(self, config: HydraConfig) -> None:
+        """Issues already active in this run should be skipped."""
         orch = HydraOrchestrator(config)
-        orch._state.mark_issue(42, "success")
+        orch._active_issues.add(42)
 
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
@@ -328,6 +329,25 @@ class TestFetchReadyIssues:
             issues = await orch._fetch_ready_issues()
 
         assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_does_not_skip_failed_issues_on_restart(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed issues with hydra-ready label should be retried (no state filter)."""
+        orch = HydraOrchestrator(config)
+        orch._state.mark_issue(42, "failed")
+        # NOT in _active_issues → should be picked up
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_ready_issues()
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
@@ -1124,6 +1144,376 @@ class TestReviewPRs:
         assert stats["prs_merged"] == 0
         assert stats["issues_completed"] == 0
 
+    @pytest.mark.asyncio
+    async def test_review_merge_marks_issue_as_merged(
+        self, config: HydraConfig
+    ) -> None:
+        """Successful merge should mark issue status as 'merged'."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        assert orch._state.get_issue_status(42) == "merged"
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_keeps_reviewed_status(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed merge should leave issue as 'reviewed', not 'merged'."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=False)
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        assert orch._state.get_issue_status(42) == "reviewed"
+
+    @pytest.mark.asyncio
+    async def test_review_posts_pr_comment_with_summary(
+        self, config: HydraConfig
+    ) -> None:
+        """post_pr_comment should be called with the review summary."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+
+    @pytest.mark.asyncio
+    async def test_review_submits_formal_github_review(
+        self, config: HydraConfig
+    ) -> None:
+        """submit_review should be called with verdict and summary."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        mock_prs.submit_review.assert_awaited_once_with(101, "approve", "Looks good.")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "verdict",
+        [ReviewVerdict.APPROVE, ReviewVerdict.REQUEST_CHANGES, ReviewVerdict.COMMENT],
+    )
+    async def test_review_submits_review_for_all_verdicts(
+        self, config: HydraConfig, verdict: ReviewVerdict
+    ) -> None:
+        """submit_review should be called for all verdict types."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=verdict)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        mock_prs.submit_review.assert_awaited_once_with(
+            101, verdict.value, "Looks good."
+        )
+
+    @pytest.mark.asyncio
+    async def test_review_skips_pr_comment_when_summary_empty(
+        self, config: HydraConfig
+    ) -> None:
+        """post_pr_comment should NOT be called when summary is empty."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="",
+            fixes_made=False,
+        )
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        mock_prs.post_pr_comment.assert_not_awaited()
+        # submit_review should still be called
+        mock_prs.submit_review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_comment_and_review_before_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """post_pr_comment and submit_review should be called before merge."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        call_order: list[str] = []
+
+        async def fake_post_pr_comment(pr_number: int, body: str) -> None:
+            call_order.append("post_pr_comment")
+
+        async def fake_submit_review(
+            pr_number: int, verdict: str, body: str
+        ) -> bool:
+            call_order.append("submit_review")
+            return True
+
+        async def fake_merge(pr_number: int) -> bool:
+            call_order.append("merge")
+            return True
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = fake_post_pr_comment
+        mock_prs.submit_review = fake_submit_review
+        mock_prs.merge_pr = fake_merge
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        assert call_order.index("post_pr_comment") < call_order.index("merge")
+        assert call_order.index("submit_review") < call_order.index("merge")
+
+    @pytest.mark.asyncio
+    async def test_review_posts_comment_even_when_merge_fails(
+        self, config: HydraConfig
+    ) -> None:
+        """post_pr_comment and submit_review should be called regardless of merge outcome."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=False)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+        mock_prs.submit_review.assert_awaited_once_with(101, "approve", "Looks good.")
+
+
+# ---------------------------------------------------------------------------
+# _fetch_reviewable_prs — skip logic
+# ---------------------------------------------------------------------------
+
+
+class TestFetchReviewablePrsSkipLogic:
+    """Tests for _fetch_reviewable_prs filtering by in-memory active set."""
+
+    @pytest.mark.asyncio
+    async def test_skips_active_issues(self, config: HydraConfig) -> None:
+        """Issues already active in this run should be skipped."""
+        orch = HydraOrchestrator(config)
+        orch._active_issues.add(42)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(RAW_ISSUE_JSON.encode(), b"")
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            prs, issues = await orch._fetch_reviewable_prs()
+
+        assert prs == []
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_picks_up_previously_reviewed_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """Issues reviewed in a prior run should be picked up again."""
+        orch = HydraOrchestrator(config)
+        orch._state.mark_issue(42, "reviewed")
+        # NOT in _active_issues → should be picked up
+
+        pr_json = json.dumps(
+            [{"number": 200, "url": "https://github.com/o/r/pull/200", "isDraft": False}]
+        )
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(RAW_ISSUE_JSON.encode(), b"")
+        )
+
+        async def fake_gh_run(*args: str) -> str:
+            return pr_json
+
+        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            prs, issues = await orch._fetch_reviewable_prs()
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
 
 # ---------------------------------------------------------------------------
 # run() loop
@@ -1649,3 +2039,363 @@ class TestPlanPhase:
         mock_prs.create_issue.assert_awaited_once_with(
             "Tech debt", "Cleanup needed", ["tech-debt"]
         )
+
+
+# ---------------------------------------------------------------------------
+# CI wait/fix loop (_wait_and_fix_ci)
+# ---------------------------------------------------------------------------
+
+
+class TestWaitAndFixCI:
+    """Tests for the _wait_and_fix_ci method and CI gate in _review_prs."""
+
+    def _make_orch(self, config: HydraConfig) -> HydraOrchestrator:
+        orch = HydraOrchestrator(config)
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+        return orch
+
+    @pytest.mark.asyncio
+    async def test_ci_passes_on_first_check_merges(self, config: HydraConfig) -> None:
+        """When CI passes on first check, PR should be merged."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(True, "All 3 checks passed"))
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        assert results[0].ci_passed is True
+        mock_prs.merge_pr.assert_awaited_once_with(101)
+
+    @pytest.mark.asyncio
+    async def test_ci_fails_all_attempts_does_not_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """When CI fails after all fix attempts, PR should not be merged."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        assert results[0].ci_passed is False
+        mock_prs.merge_pr.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ci_wait_skipped_when_max_attempts_zero(
+        self, config: HydraConfig
+    ) -> None:
+        """When max_ci_fix_attempts=0, CI wait is skipped entirely."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=0,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(True, "passed"))
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        # wait_for_ci should NOT have been called
+        mock_prs.wait_for_ci.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ci_not_checked_for_non_approve_verdicts(
+        self, config: HydraConfig
+    ) -> None:
+        """CI wait only triggers for APPROVE — REQUEST_CHANGES skips it."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(
+                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(True, "passed"))
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        mock_prs.wait_for_ci.assert_not_awaited()
+        mock_prs.merge_pr.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_fix_loop_retries_after_agent_makes_changes(
+        self, config: HydraConfig
+    ) -> None:
+        """When fix agent makes changes, loop should retry CI."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        # CI fails first, then passes after fix
+        ci_results = [
+            (False, "Failed checks: ci"),
+            (True, "All 2 checks passed"),
+        ]
+        ci_call_count = 0
+
+        async def fake_wait_for_ci(_pr_num, _timeout, _interval, _stop):
+            nonlocal ci_call_count
+            result = ci_results[ci_call_count]
+            ci_call_count += 1
+            return result
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = fake_wait_for_ci
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        assert results[0].ci_passed is True
+        assert results[0].ci_fix_attempts == 1
+        assert ci_call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_fix_agent_no_changes_stops_retrying(
+        self, config: HydraConfig
+    ) -> None:
+        """When fix agent makes no changes, loop should stop early."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=3,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=False,  # No changes made
+        )
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        assert results[0].ci_passed is False
+        # Only 1 fix attempt (stopped early because no changes)
+        assert results[0].ci_fix_attempts == 1
+        # fix_ci called once, not 3 times
+        mock_reviewers.fix_ci.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_posts_comment_and_labels_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """CI failure should post a comment and swap label to hydra-hitl."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        # Should have posted a CI failure comment
+        comment_calls = [c.args for c in mock_prs.post_pr_comment.call_args_list]
+        ci_comments = [c for c in comment_calls if "CI failed" in c[1]]
+        assert len(ci_comments) == 1
+        assert "Failed checks: ci" in ci_comments[0][1]
+
+        # Should swap label to hydra-hitl
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-hitl"]) in add_calls

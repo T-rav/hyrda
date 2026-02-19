@@ -118,7 +118,7 @@ class AgentRunner:
             self._config.model,
             "--verbose",
             "--permission-mode",
-            "bypass",
+            "bypassPermissions",
         ]
         if self._config.max_budget_usd > 0:
             cmd.extend(["--max-budget-usd", str(self._config.max_budget_usd)])

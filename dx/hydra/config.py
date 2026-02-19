@@ -32,6 +32,20 @@ class HydraConfig(BaseModel):
         default=0, ge=0, description="USD cap per review agent (0 = unlimited)"
     )
 
+    # CI check configuration
+    ci_check_timeout: int = Field(
+        default=600, ge=30, le=3600, description="Seconds to wait for CI checks"
+    )
+    ci_poll_interval: int = Field(
+        default=30, ge=5, le=120, description="Seconds between CI status polls"
+    )
+    max_ci_fix_attempts: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Max CI fix-and-retry cycles (0 = skip CI wait)",
+    )
+
     # Planner configuration
     planner_label: str = Field(
         default="claude-find", description="Label for issues needing plans"

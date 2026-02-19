@@ -97,7 +97,7 @@ class PlannerRunner:
             self._config.planner_model,
             "--verbose",
             "--permission-mode",
-            "bypass",
+            "bypassPermissions",
             "--disallowedTools",
             "Write,Edit,NotebookEdit",
         ]

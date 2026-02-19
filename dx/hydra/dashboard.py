@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -94,6 +95,114 @@ class HydraDashboard:
         async def get_events() -> JSONResponse:
             history = self._bus.get_history()
             return JSONResponse([e.model_dump() for e in history])
+
+        @app.get("/api/prs")
+        async def get_prs() -> JSONResponse:
+            """Fetch open PRs labeled hydra-review from GitHub."""
+            import json as _json
+
+            try:
+                env = {**os.environ}
+                env.pop("CLAUDECODE", None)
+                proc = await asyncio.create_subprocess_exec(
+                    "gh", "pr", "list",
+                    "--repo", self._config.repo,
+                    "--label", "hydra-review",
+                    "--state", "open",
+                    "--json", "number,url,headRefName,isDraft,title",
+                    "--limit", "50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode != 0:
+                    return JSONResponse([])
+
+                raw = _json.loads(stdout.decode())
+                prs = []
+                for p in raw:
+                    # Extract issue number from branch name agent/issue-N
+                    branch = p.get("headRefName", "")
+                    issue_num = 0
+                    if branch.startswith("agent/issue-"):
+                        try:
+                            issue_num = int(branch.split("-")[-1])
+                        except ValueError:
+                            pass
+                    prs.append({
+                        "pr": p["number"],
+                        "issue": issue_num,
+                        "branch": branch,
+                        "url": p.get("url", ""),
+                        "draft": p.get("isDraft", False),
+                        "title": p.get("title", ""),
+                    })
+                return JSONResponse(prs)
+            except Exception:
+                return JSONResponse([])
+
+        @app.get("/api/hitl")
+        async def get_hitl() -> JSONResponse:
+            """Fetch issues/PRs labeled hydra-hitl (stuck on CI)."""
+            import json as _json
+
+            try:
+                env = {**os.environ}
+                env.pop("CLAUDECODE", None)
+
+                # Fetch issues with hydra-hitl label
+                proc = await asyncio.create_subprocess_exec(
+                    "gh", "issue", "list",
+                    "--repo", self._config.repo,
+                    "--label", "hydra-hitl",
+                    "--state", "open",
+                    "--json", "number,title,url",
+                    "--limit", "50",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+                stdout, _ = await proc.communicate()
+                if proc.returncode != 0:
+                    return JSONResponse([])
+
+                raw_issues = _json.loads(stdout.decode())
+                items = []
+                for issue in raw_issues:
+                    branch = f"agent/issue-{issue['number']}"
+                    # Look up the PR for this issue's branch
+                    pr_proc = await asyncio.create_subprocess_exec(
+                        "gh", "pr", "list",
+                        "--repo", self._config.repo,
+                        "--head", branch,
+                        "--state", "open",
+                        "--json", "number,url",
+                        "--limit", "1",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=env,
+                    )
+                    pr_stdout, _ = await pr_proc.communicate()
+                    pr_number = 0
+                    pr_url = ""
+                    if pr_proc.returncode == 0:
+                        pr_data = _json.loads(pr_stdout.decode())
+                        if pr_data:
+                            pr_number = pr_data[0]["number"]
+                            pr_url = pr_data[0].get("url", "")
+
+                    items.append({
+                        "issue": issue["number"],
+                        "title": issue.get("title", ""),
+                        "issueUrl": issue.get("url", ""),
+                        "pr": pr_number,
+                        "prUrl": pr_url,
+                        "branch": branch,
+                    })
+                return JSONResponse(items)
+            except Exception:
+                return JSONResponse([])
 
         @app.get("/api/human-input")
         async def get_human_input_requests() -> JSONResponse:

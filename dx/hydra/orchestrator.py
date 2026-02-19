@@ -59,6 +59,8 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
+        # In-memory tracking of issues active in this run (avoids double-processing)
+        self._active_issues: set[int] = set()
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
@@ -119,6 +121,7 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
+        self._active_issues.clear()
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -378,13 +381,15 @@ class HydraOrchestrator:
             return []
 
         all_issues = self._parse_raw_issues(raw_issues)
+        # Only skip issues already active in this run (GitHub labels are
+        # the source of truth — if it still has hydra-ready, it needs work)
         issues = [
             i for i in all_issues
-            if not self._state.is_processed(i.number)
+            if i.number not in self._active_issues
         ]
         for skipped in all_issues:
-            if self._state.is_processed(skipped.number):
-                logger.info("Skipping already-processed issue #%d", skipped.number)
+            if skipped.number in self._active_issues:
+                logger.info("Skipping in-progress issue #%d", skipped.number)
 
         logger.info("Fetched %d issues to implement", len(issues))
         return issues[:queue_size]
@@ -429,10 +434,10 @@ class HydraOrchestrator:
             return [], []
 
         issues = self._parse_raw_issues(raw_issues)
-        # Skip issues already reviewed in this run
+        # Only skip issues already active in this run
         issues = [
             i for i in issues
-            if self._state.get_issue_status(i.number) != "reviewed"
+            if i.number not in self._active_issues
         ]
         if not issues:
             return [], []
@@ -521,6 +526,7 @@ class HydraOrchestrator:
                     )
 
                 branch = f"agent/issue-{issue.number}"
+                self._active_issues.add(issue.number)
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
 
@@ -603,6 +609,7 @@ class HydraOrchestrator:
 
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
+                self._active_issues.add(pr.issue_number)
                 issue = issue_map.get(pr.issue_number)
                 if issue is None:
                     return ReviewResult(
@@ -628,25 +635,42 @@ class HydraOrchestrator:
                 if result.fixes_made:
                     await self._prs.push_branch(wt_path, pr.branch)
 
+                # Post review summary as PR comment
+                if result.summary and pr.number > 0:
+                    await self._prs.post_pr_comment(pr.number, result.summary)
+
+                # Submit formal GitHub PR review
+                if pr.number > 0:
+                    await self._prs.submit_review(
+                        pr.number, result.verdict.value, result.summary
+                    )
+
                 self._state.mark_pr(pr.number, result.verdict.value)
                 self._state.mark_issue(pr.issue_number, "reviewed")
 
-                # Merge immediately if approved
+                # Merge immediately if approved (with optional CI gate)
                 if (
                     result.verdict == ReviewVerdict.APPROVE
                     and pr.number > 0
                 ):
-                    success = await self._prs.merge_pr(pr.number)
-                    if success:
-                        result.merged = True
-                        self._state.record_pr_merged()
-                        self._state.record_issue_completed()
-                        await self._prs.remove_label(
-                            pr.issue_number, "hydra-review"
+                    should_merge = True
+                    if self._config.max_ci_fix_attempts > 0:
+                        should_merge = await self._wait_and_fix_ci(
+                            pr, issue, wt_path, result, idx
                         )
-                        await self._prs.add_labels(
-                            pr.issue_number, ["hydra-fixed"]
-                        )
+                    if should_merge:
+                        success = await self._prs.merge_pr(pr.number)
+                        if success:
+                            result.merged = True
+                            self._state.mark_issue(pr.issue_number, "merged")
+                            self._state.record_pr_merged()
+                            self._state.record_issue_completed()
+                            await self._prs.remove_label(
+                                pr.issue_number, "hydra-review"
+                            )
+                            await self._prs.add_labels(
+                                pr.issue_number, ["hydra-fixed"]
+                            )
 
                 # Cleanup worktree after review
                 try:
@@ -666,6 +690,71 @@ class HydraOrchestrator:
             results.append(await task)
 
         return results
+
+    async def _wait_and_fix_ci(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        result: ReviewResult,
+        worker_id: int,
+    ) -> bool:
+        """Wait for CI and attempt fixes if it fails.
+
+        Returns *True* if CI passed and the PR should be merged.
+        Mutates *result* to set ``ci_passed`` and ``ci_fix_attempts``.
+        """
+        max_attempts = self._config.max_ci_fix_attempts
+        summary = ""
+
+        for attempt in range(max_attempts + 1):
+            passed, summary = await self._prs.wait_for_ci(
+                pr.number,
+                self._config.ci_check_timeout,
+                self._config.ci_poll_interval,
+                self._stop_event,
+            )
+            if passed:
+                result.ci_passed = True
+                return True
+
+            # Last attempt — no more retries
+            if attempt >= max_attempts:
+                break
+
+            # Run the CI fix agent
+            fix_result = await self._reviewers.fix_ci(
+                pr,
+                issue,
+                wt_path,
+                summary,
+                attempt=attempt + 1,
+                worker_id=worker_id,
+            )
+            result.ci_fix_attempts += 1
+
+            if not fix_result.fixes_made:
+                logger.info(
+                    "CI fix agent made no changes for PR #%d — stopping retries",
+                    pr.number,
+                )
+                break
+
+            # Push fixes and loop back to wait_for_ci
+            await self._prs.push_branch(wt_path, pr.branch)
+
+        # CI failed after all attempts — escalate to human
+        result.ci_passed = False
+        await self._prs.post_pr_comment(
+            pr.number,
+            f"**CI failed** after {result.ci_fix_attempts} fix attempt(s).\n\n"
+            f"Last failure: {summary}\n\n"
+            f"PR not merged — escalating to human review.",
+        )
+        # Swap to hydra-hitl so the dashboard HITL tab picks it up
+        await self._prs.remove_label(issue.number, "hydra-review")
+        await self._prs.add_labels(issue.number, ["hydra-hitl"])
+        return False
 
     async def _set_phase(self, phase: Phase) -> None:
         """Update the current phase and broadcast."""
