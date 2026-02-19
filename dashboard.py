@@ -294,6 +294,8 @@ class HydraDashboard:
                         "hitl_label": self._config.hitl_label,
                         "fixed_label": self._config.fixed_label,
                         "max_workers": self._config.max_workers,
+                        "max_planners": self._config.max_planners,
+                        "max_reviewers": self._config.max_reviewers,
                         "batch_size": self._config.batch_size,
                         "model": self._config.model,
                     },

@@ -1,13 +1,35 @@
 import React from 'react'
 
+const STAGES = [
+  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
+  { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
+  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
+]
+
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+
+function countByRole(workers) {
+  const list = Object.values(workers)
+  const active = list.filter(w => ACTIVE_STATUSES.includes(w.status))
+  return {
+    planner: active.filter(w => w.role === 'planner').length,
+    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner').length,
+    reviewer: active.filter(w => w.role === 'reviewer').length,
+  }
+}
+
 export function Header({
-  batchNum, prsCount, mergedCount,
+  prsCount, mergedCount,
   connected, orchestratorStatus,
   onStart, onStop, lifetimeStats,
+  phase, workers,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
+  const counts = countByRole(workers || {})
+  const workerList = Object.values(workers || {})
+  const showPills = phase !== 'idle' || workerList.length > 0
 
   return (
     <header style={styles.header}>
@@ -22,14 +44,41 @@ export function Header({
         }} />
       </div>
       <div style={styles.stats}>
-        <Stat label="Batch" value={batchNum} />
         <Stat label="PRs" value={prsCount} />
         <Stat label="Merged" value={mergedCount} />
-        {lifetimeStats && (<>
-          <Stat label="Fixed" value={lifetimeStats.issues_completed} />
+        {lifetimeStats && (
           <Stat label="Filed" value={lifetimeStats.issues_created} />
-        </>)}
+        )}
       </div>
+      {showPills && (
+        <div style={styles.pills}>
+          {STAGES.map((stage, i) => {
+            const agentCount = counts[stage.role] || 0
+            const isActive = agentCount > 0
+            return (
+              <React.Fragment key={stage.key}>
+                {i > 0 && (
+                  <div style={{
+                    ...styles.connector,
+                    background: isActive ? stage.color : '#30363d',
+                  }} />
+                )}
+                <div style={{
+                  ...styles.pill,
+                  background: isActive ? stage.color : '#21262d',
+                  color: isActive ? '#0d1117' : '#484f58',
+                  borderColor: isActive ? stage.color : '#30363d',
+                }}>
+                  {stage.label}
+                  {agentCount > 0 && (
+                    <span style={styles.count}>{agentCount}</span>
+                  )}
+                </div>
+              </React.Fragment>
+            )
+          })}
+        </div>
+      )}
       <div style={styles.controls}>
         {canStart && (
           <button
@@ -84,6 +133,31 @@ const styles = {
   stats: { display: 'flex', gap: 20, fontSize: 12 },
   stat: { color: '#8b949e' },
   statVal: { color: '#c9d1d9' },
+  pills: { display: 'flex', alignItems: 'center', gap: 0 },
+  pill: {
+    padding: '4px 14px',
+    borderRadius: 12,
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    border: '1px solid',
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  connector: {
+    width: 24,
+    height: 2,
+    flexShrink: 0,
+  },
+  count: {
+    background: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: '1px 6px',
+    fontSize: 10,
+    fontWeight: 700,
+  },
   controls: { display: 'flex', alignItems: 'center', gap: 10 },
   startBtn: {
     padding: '4px 14px',

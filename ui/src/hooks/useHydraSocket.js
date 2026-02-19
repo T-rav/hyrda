@@ -145,13 +145,19 @@ function reducer(state, action) {
       return { ...addEvent(state, action), workers: updatedWorkers }
     }
 
-    case 'merge_update':
+    case 'merge_update': {
+      const isMerged = action.data.status === 'merged'
+      const updatedPrs = isMerged && action.data.pr
+        ? state.prs.map(p => p.pr === action.data.pr ? { ...p, merged: true } : p)
+        : state.prs
       return {
         ...addEvent(state, action),
-        mergedCount: action.data.status === 'merge_requested'
+        prs: updatedPrs,
+        mergedCount: isMerged
           ? state.mergedCount + 1
           : state.mergedCount,
       }
+    }
 
     case 'LIFETIME_STATS':
       return { ...state, lifetimeStats: action.data }
