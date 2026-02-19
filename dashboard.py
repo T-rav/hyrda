@@ -5,7 +5,7 @@ import contextlib
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from config import HydraConfig
 from events import EventBus, HydraEvent
@@ -41,9 +41,9 @@ class HydraDashboard:
         self._orchestrator = orchestrator
         self._server_task: asyncio.Task[None] | None = None
         self._run_task: asyncio.Task[None] | None = None
-        self._app: object | None = None
+        self._app: Any = None
 
-    def create_app(self) -> object:
+    def create_app(self) -> Any:
         """Build and return the FastAPI application."""
         try:
             from fastapi import FastAPI, WebSocket, WebSocketDisconnect

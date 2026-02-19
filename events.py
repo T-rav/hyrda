@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Categories of events published by the orchestrator."""
 
     BATCH_START = "batch_start"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -23,7 +23,7 @@ class GitHubIssue(BaseModel):
 # --- Planner ---
 
 
-class PlannerStatus(str, Enum):
+class PlannerStatus(StrEnum):
     """Lifecycle status of a planning agent."""
 
     QUEUED = "queued"
@@ -56,7 +56,7 @@ class PlanResult(BaseModel):
 # --- Worker ---
 
 
-class WorkerStatus(str, Enum):
+class WorkerStatus(StrEnum):
     """Lifecycle status of an implementation worker."""
 
     QUEUED = "queued"
@@ -97,7 +97,7 @@ class PRInfo(BaseModel):
 # --- Reviews ---
 
 
-class ReviewVerdict(str, Enum):
+class ReviewVerdict(StrEnum):
     """Verdict from a reviewer agent."""
 
     APPROVE = "approve"
@@ -137,7 +137,7 @@ class BatchResult(BaseModel):
 # --- Orchestrator Phases ---
 
 
-class Phase(str, Enum):
+class Phase(StrEnum):
     """Phases of the orchestrator loop."""
 
     IDLE = "idle"
