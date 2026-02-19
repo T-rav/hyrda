@@ -45,7 +45,7 @@ class ConfigFactory:
     @staticmethod
     def create(
         *,
-        ready_label: str = "test-label",
+        ready_label: list[str] | None = None,
         batch_size: int = 3,
         max_workers: int = 2,
         max_budget_usd: float = 1.0,
@@ -55,10 +55,10 @@ class ConfigFactory:
         ci_check_timeout: int = 600,
         ci_poll_interval: int = 30,
         max_ci_fix_attempts: int = 0,
-        review_label: str = "hydra-review",
-        hitl_label: str = "hydra-hitl",
-        fixed_label: str = "hydra-fixed",
-        planner_label: str = "hydra-plan",
+        review_label: list[str] | None = None,
+        hitl_label: list[str] | None = None,
+        fixed_label: list[str] | None = None,
+        planner_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
         repo: str = "test-org/test-repo",
@@ -74,7 +74,7 @@ class ConfigFactory:
 
         root = repo_root or Path("/tmp/hydra-test-repo")
         return HydraConfig(
-            ready_label=ready_label,
+            ready_label=ready_label if ready_label is not None else ["test-label"],
             batch_size=batch_size,
             max_workers=max_workers,
             max_budget_usd=max_budget_usd,
@@ -84,10 +84,12 @@ class ConfigFactory:
             ci_check_timeout=ci_check_timeout,
             ci_poll_interval=ci_poll_interval,
             max_ci_fix_attempts=max_ci_fix_attempts,
-            review_label=review_label,
-            hitl_label=hitl_label,
-            fixed_label=fixed_label,
-            planner_label=planner_label,
+            review_label=review_label if review_label is not None else ["hydra-review"],
+            hitl_label=hitl_label if hitl_label is not None else ["hydra-hitl"],
+            fixed_label=fixed_label if fixed_label is not None else ["hydra-fixed"],
+            planner_label=planner_label
+            if planner_label is not None
+            else ["hydra-plan"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
             repo=repo,

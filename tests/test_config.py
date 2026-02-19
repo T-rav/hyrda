@@ -122,7 +122,7 @@ class TestHydraConfigDefaults:
         )
 
         # Assert
-        assert cfg.ready_label == "hydra-ready"
+        assert cfg.ready_label == ["hydra-ready"]
 
     def test_batch_size_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -225,14 +225,14 @@ class TestHydraConfigCustomValues:
     def test_custom_label(self, tmp_path: Path) -> None:
         # Arrange / Act
         cfg = HydraConfig(
-            ready_label="sprint",
+            ready_label=["sprint"],
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
 
         # Assert
-        assert cfg.ready_label == "sprint"
+        assert cfg.ready_label == ["sprint"]
 
     def test_custom_batch_size(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
