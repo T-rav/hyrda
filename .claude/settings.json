@@ -1,0 +1,180 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-destructive-git.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for destructive git commands..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/validate-tests-before-commit.sh",
+            "timeout": 120,
+            "statusMessage": "Validating lint + tests before commit..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/scan-secrets-before-commit.sh",
+            "timeout": 30,
+            "statusMessage": "Scanning for secrets in staged files..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-plan-and-explore.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for exploration and planning..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-test-counterpart.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for test counterpart..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-migrations.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for direct DB schema changes..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-plan-and-explore.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for exploration and planning..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-migrations.sh",
+            "timeout": 10,
+            "statusMessage": "Checking for direct DB schema changes..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-cross-service-impact.sh",
+            "timeout": 15,
+            "statusMessage": "Checking cross-service impact for shared/ changes..."
+          }
+        ]
+      },
+      {
+        "matcher": "claude-context",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-reindex-needed.sh",
+            "timeout": 5,
+            "statusMessage": "Checking if claude-context index is stale..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-reindex-needed.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "TaskCreate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-planning.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "claude-context",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-indexed.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "cclsp",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-exploration.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/warn-new-file-creation.sh",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-code-changes.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/track-code-changes.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/cleanup-code-change-marker.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
