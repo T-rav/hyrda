@@ -29,6 +29,14 @@ def make_state(tmp_path: Path) -> StateTracker:
     return StateTracker(tmp_path / "state.json")
 
 
+def _make_gh_proc(stdout: str = "[]", returncode: int = 0) -> AsyncMock:
+    """Build a mock for asyncio.create_subprocess_exec returning *stdout*."""
+    proc = AsyncMock()
+    proc.returncode = returncode
+    proc.communicate = AsyncMock(return_value=(stdout.encode(), b""))
+    return proc
+
+
 def make_orchestrator_mock(
     requests: dict | None = None,
     running: bool = False,
@@ -390,6 +398,257 @@ class TestEventsRoute:
 
         assert len(body) == 1
         assert body[0]["type"] == EventType.BATCH_START.value
+
+
+# ---------------------------------------------------------------------------
+# GET /api/prs
+# ---------------------------------------------------------------------------
+
+
+class TestPRsRoute:
+    """Tests for the GET /api/prs route."""
+
+    def test_prs_returns_200(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc()):
+            response = client.get("/api/prs")
+
+        assert response.status_code == 200
+
+    def test_prs_returns_empty_list_when_no_open_prs(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc("[]")):
+            response = client.get("/api/prs")
+
+        assert response.json() == []
+
+    def test_prs_returns_empty_list_on_gh_failure(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc("", returncode=1),
+        ):
+            response = client.get("/api/prs")
+
+        assert response.json() == []
+
+    def test_prs_happy_path_returns_pr_list(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 10,
+                    "url": "https://github.com/org/repo/pull/10",
+                    "headRefName": "agent/issue-42",
+                    "isDraft": False,
+                    "title": "Fix widget",
+                },
+                {
+                    "number": 11,
+                    "url": "https://github.com/org/repo/pull/11",
+                    "headRefName": "agent/issue-55",
+                    "isDraft": True,
+                    "title": "Add feature",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 2
+
+        assert body[0]["pr"] == 10
+        assert body[0]["issue"] == 42
+        assert body[0]["branch"] == "agent/issue-42"
+        assert body[0]["url"] == "https://github.com/org/repo/pull/10"
+        assert body[0]["draft"] is False
+        assert body[0]["title"] == "Fix widget"
+
+        assert body[1]["pr"] == 11
+        assert body[1]["issue"] == 55
+        assert body[1]["branch"] == "agent/issue-55"
+        assert body[1]["draft"] is True
+        assert body[1]["title"] == "Add feature"
+
+    def test_prs_includes_all_expected_fields(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 7,
+                    "url": "https://github.com/org/repo/pull/7",
+                    "headRefName": "agent/issue-99",
+                    "isDraft": False,
+                    "title": "Some PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 1
+        expected_keys = {"pr", "issue", "branch", "url", "draft", "title"}
+        assert set(body[0].keys()) == expected_keys
+
+    def test_prs_deduplicates_across_labels(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        # Same PR returned for every label query
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 42,
+                    "url": "https://github.com/org/repo/pull/42",
+                    "headRefName": "agent/issue-10",
+                    "isDraft": False,
+                    "title": "Duplicate PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        # Even though 5 labels each return the same PR, it should appear once
+        assert len(body) == 1
+        assert body[0]["pr"] == 42
+
+    def test_prs_non_standard_branch_sets_issue_to_zero(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 5,
+                    "url": "https://github.com/org/repo/pull/5",
+                    "headRefName": "feature/my-branch",
+                    "isDraft": False,
+                    "title": "Manual PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["issue"] == 0
+        assert body[0]["branch"] == "feature/my-branch"
+
+    def test_prs_returns_empty_on_malformed_json(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc("not valid json"),
+        ):
+            response = client.get("/api/prs")
+
+        # The outer try/except catches the JSON error and returns []
+        assert response.json() == []
 
 
 # ---------------------------------------------------------------------------
@@ -920,14 +1179,6 @@ class TestControlStatusEndpoint:
 # ---------------------------------------------------------------------------
 # GET /api/hitl
 # ---------------------------------------------------------------------------
-
-
-def _make_gh_proc(stdout: str = "[]", returncode: int = 0) -> AsyncMock:
-    """Build a mock for asyncio.create_subprocess_exec returning *stdout*."""
-    proc = AsyncMock()
-    proc.returncode = returncode
-    proc.communicate = AsyncMock(return_value=(stdout.encode(), b""))
-    return proc
 
 
 class TestHITLRoute:
