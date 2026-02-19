@@ -1,6 +1,7 @@
 import React from 'react'
 
 const STAGES = [
+  { key: 'find',      label: 'FIND',      color: '#39d353', role: 'triage' },
   { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
   { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
   { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
@@ -12,8 +13,9 @@ function countByRole(workers) {
   const list = Object.values(workers)
   const active = list.filter(w => ACTIVE_STATUSES.includes(w.status))
   return {
+    triage: active.filter(w => w.role === 'triage').length,
     planner: active.filter(w => w.role === 'planner').length,
-    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner').length,
+    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
     reviewer: active.filter(w => w.role === 'reviewer').length,
   }
 }

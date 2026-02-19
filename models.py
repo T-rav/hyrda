@@ -20,6 +20,25 @@ class GitHubIssue(BaseModel):
     url: str = ""
 
 
+# --- Triage ---
+
+
+class TriageStatus(StrEnum):
+    """Lifecycle status of a triage evaluation."""
+
+    EVALUATING = "evaluating"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class TriageResult(BaseModel):
+    """Outcome of evaluating a single issue for readiness."""
+
+    issue_number: int
+    ready: bool = False
+    reasons: list[str] = Field(default_factory=list)
+
+
 # --- Planner ---
 
 

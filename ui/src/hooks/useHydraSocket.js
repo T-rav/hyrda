@@ -91,6 +91,30 @@ function reducer(state, action) {
         prs: [...state.prs, action.data],
       }
 
+    case 'triage_update': {
+      const triageKey = `triage-${action.data.issue}`
+      const triageStatus = action.data.status === 'done' ? 'done' : 'running'
+      const triageWorker = {
+        status: triageStatus,
+        worker: action.data.worker,
+        role: 'triage',
+        title: `Triage Issue #${action.data.issue}`,
+        branch: '',
+        transcript: [],
+        pr: null,
+      }
+      const existingTriage = state.workers[triageKey]
+      return {
+        ...addEvent(state, action),
+        workers: {
+          ...state.workers,
+          [triageKey]: existingTriage
+            ? { ...existingTriage, status: triageStatus }
+            : triageWorker,
+        },
+      }
+    }
+
     case 'planner_update': {
       const planKey = `plan-${action.data.issue}`
       const planStatus = action.data.status === 'done' ? 'done'
