@@ -104,13 +104,14 @@ class HydraOrchestrator:
         self._human_input_responses[issue_number] = answer
         self._human_input_requests.pop(issue_number, None)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
         self._stop_event.set()
         logger.info("Stop requested — terminating active processes")
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        await self._publish_status()
 
     # Alias for backward compatibility
     request_stop = stop
