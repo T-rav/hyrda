@@ -48,9 +48,26 @@ uv venv venv --python 3.11
 uv pip install -e ".[test,dev,dashboard]" --python venv/bin/python
 ```
 
-### 3. Create GitHub labels
+### 3. Configure environment
 
-Hydra uses 5 lifecycle labels. Create them in your repo:
+```bash
+cp .env.example .env
+```
+
+The `.env` file is auto-loaded by the Makefile. Defaults are the standard Hydra labels — edit only if you need custom label names:
+
+```bash
+# .env
+HYDRA_LABEL_PLAN=hydra-plan
+HYDRA_LABEL_READY=hydra-ready
+HYDRA_LABEL_REVIEW=hydra-review
+HYDRA_LABEL_HITL=hydra-hitl
+HYDRA_LABEL_FIXED=hydra-fixed
+```
+
+### 4. Create GitHub labels
+
+Hydra uses 5 lifecycle labels. Create them in your repo (reads label names from `.env`):
 
 ```bash
 # From the hydra directory (auto-detects your repo from git remote)
@@ -63,7 +80,7 @@ Or set `HYDRA_GITHUB_REPO` to target a different repo:
 HYDRA_GITHUB_REPO=owner/other-repo make ensure-labels
 ```
 
-### 4. Install the slash commands
+### 5. Install the slash commands
 
 Copy Hydra's Claude Code slash commands into your project so you can use `/gh-issue`, `/code-review`, and the audit commands from Claude Code in your own repo:
 
@@ -89,7 +106,7 @@ export HYDRA_GITHUB_REPO=owner/repo       # auto-detected if unset
 export HYDRA_GITHUB_ASSIGNEE=username     # repo owner if unset
 ```
 
-### 5. Install Claude Code hooks (optional)
+### 6. Install Claude Code hooks (optional)
 
 Hydra ships with Claude Code hooks that enforce quality gates during development. To use them in your project:
 
@@ -116,7 +133,7 @@ Then merge Hydra's hook configuration into your `.claude/settings.json`. The hoo
 | `track-planning.sh` | PostToolUse(TaskCreate) | Tracks planning activity |
 | `warn-new-file-creation.sh` | PostToolUse(Write) | Warns on new file creation |
 
-### 6. Install git hooks (optional)
+### 7. Install git hooks (optional)
 
 ```bash
 cd hydra
@@ -127,7 +144,7 @@ This configures:
 - **pre-commit**: Ruff lint check on staged Python files
 - **pre-push**: Full quality gate (lint + typecheck + security + tests)
 
-### 7. Run Hydra
+### 8. Run Hydra
 
 ```bash
 cd hydra

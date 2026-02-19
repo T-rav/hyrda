@@ -2,6 +2,10 @@
 
 HYDRA_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(HYDRA_DIR))
+
+# Load .env if present (export all variables)
+-include $(PROJECT_ROOT)/.env
+export
 VENV := $(PROJECT_ROOT)/venv
 UV := VIRTUAL_ENV=$(VENV) uv run --active
 
