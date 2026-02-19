@@ -1845,18 +1845,23 @@ class TestStopMechanism:
 
 
 class TestTriageFindIssues:
-    """Tests for _triage_find_issues (find_label → planner_label swap)."""
+    """Tests for _triage_find_issues (find_label → evaluate → route)."""
 
     @pytest.mark.asyncio
-    async def test_triage_swaps_find_label_to_planner_label(
+    async def test_triage_promotes_well_described_issue_to_planning(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        issue = make_issue(1)
+        issue = make_issue(
+            1,
+            title="Implement user authentication flow",
+            body="We need OAuth2 login with JWT tokens. " * 5,
+        )
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
         mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
         orch._prs = mock_prs
 
         with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
@@ -1864,6 +1869,50 @@ class TestTriageFindIssues:
 
         mock_prs.remove_label.assert_called_once_with(1, config.find_label[0])
         mock_prs.add_labels.assert_called_once_with(1, [config.planner_label[0]])
+        mock_prs.post_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_triage_escalates_issue_with_empty_body_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        issue = make_issue(2, title="Fix the bug please", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        mock_prs.remove_label.assert_called_once_with(2, config.find_label[0])
+        mock_prs.add_labels.assert_called_once_with(2, [config.hitl_label[0]])
+        mock_prs.post_comment.assert_called_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "Needs More Information" in comment
+        assert "Body is too short" in comment
+
+    @pytest.mark.asyncio
+    async def test_triage_escalates_issue_with_short_title_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        issue = make_issue(3, title="Bug", body="A" * 100)
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        mock_prs.add_labels.assert_called_once_with(3, [config.hitl_label[0]])
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "Title is too short" in comment
 
     @pytest.mark.asyncio
     async def test_triage_skips_when_no_find_label_configured(self) -> None:
@@ -1890,6 +1939,34 @@ class TestTriageFindIssues:
             await orch._triage_find_issues()
 
         mock_prs.remove_label.assert_not_called()
+
+    def test_evaluate_issue_readiness_passes_good_issue(self) -> None:
+        issue = make_issue(
+            1,
+            title="Implement feature X for module Y",
+            body="Detailed description of what needs to happen. " * 3,
+        )
+        ready, reasons = HydraOrchestrator._evaluate_issue_readiness(issue)
+        assert ready is True
+        assert reasons == []
+
+    def test_evaluate_issue_readiness_fails_empty_body(self) -> None:
+        issue = make_issue(1, title="A good title here", body="")
+        ready, reasons = HydraOrchestrator._evaluate_issue_readiness(issue)
+        assert ready is False
+        assert any("Body" in r for r in reasons)
+
+    def test_evaluate_issue_readiness_fails_short_title(self) -> None:
+        issue = make_issue(1, title="Fix", body="A" * 100)
+        ready, reasons = HydraOrchestrator._evaluate_issue_readiness(issue)
+        assert ready is False
+        assert any("Title" in r for r in reasons)
+
+    def test_evaluate_issue_readiness_fails_both(self) -> None:
+        issue = make_issue(1, title="Bug", body="short")
+        ready, reasons = HydraOrchestrator._evaluate_issue_readiness(issue)
+        assert ready is False
+        assert len(reasons) == 2
 
 
 class TestPlanPhase:
