@@ -933,29 +933,71 @@ async def test_pull_main_dry_run_skips_command(dry_config, event_bus):
 
 
 # ---------------------------------------------------------------------------
-# _run static method
+# _run instance method
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_run_returns_stdout_on_success(tmp_path):
+async def test_run_returns_stdout_on_success(config, event_bus, tmp_path):
+    mgr = _make_manager(config, event_bus)
     mock_create = _make_subprocess_mock(returncode=0, stdout="hello world\n")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        output = await PRManager._run("echo", "hello world", cwd=tmp_path)
+        output = await mgr._run("echo", "hello world", cwd=tmp_path)
 
     assert output == "hello world"
 
 
 @pytest.mark.asyncio
-async def test_run_raises_runtime_error_on_nonzero_exit(tmp_path):
+async def test_run_raises_runtime_error_on_nonzero_exit(config, event_bus, tmp_path):
+    mgr = _make_manager(config, event_bus)
     mock_create = _make_subprocess_mock(returncode=1, stderr="command not found")
 
     with (
         patch("asyncio.create_subprocess_exec", mock_create),
         pytest.raises(RuntimeError, match="failed"),
     ):
-        await PRManager._run("false", cwd=tmp_path)
+        await mgr._run("false", cwd=tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# _run — gh_token injection
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_injects_gh_token_into_env(event_bus, tmp_path):
+    """When gh_token is set, _run should inject GH_TOKEN into the subprocess env."""
+    from tests.helpers import ConfigFactory
+
+    cfg = ConfigFactory.create(
+        gh_token="ghp_secret123",
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr._run("gh", "pr", "list", cwd=tmp_path)
+
+    call_kwargs = mock_create.call_args.kwargs
+    assert call_kwargs["env"]["GH_TOKEN"] == "ghp_secret123"
+
+
+@pytest.mark.asyncio
+async def test_run_does_not_inject_gh_token_when_empty(config, event_bus, tmp_path):
+    """When gh_token is empty, _run should not override GH_TOKEN in the env."""
+    mgr = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr._run("gh", "pr", "list", cwd=tmp_path)
+
+    call_kwargs = mock_create.call_args.kwargs
+    # GH_TOKEN should be whatever was in os.environ, not forcibly set
+    assert call_kwargs["env"].get("GH_TOKEN") != ""  # from conftest session fixture
 
 
 # ---------------------------------------------------------------------------

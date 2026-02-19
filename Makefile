@@ -143,9 +143,28 @@ install:
 	@echo "$(GREEN)Dashboard dependencies installed$(RESET)"
 
 setup:
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "$(BLUE)Installing gh CLI...$(RESET)"; \
+		if command -v brew >/dev/null 2>&1; then \
+			brew install gh; \
+		elif command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y gh; \
+		elif command -v dnf >/dev/null 2>&1; then \
+			sudo dnf install -y gh; \
+		else \
+			echo "$(RED)Error: Could not install gh CLI automatically. Install it manually: https://cli.github.com$(RESET)"; \
+			exit 1; \
+		fi; \
+	fi
+	@echo "  gh CLI: $$(gh --version | head -1)"
+	@if ! gh auth status >/dev/null 2>&1; then \
+		echo "$(YELLOW)gh CLI is not authenticated. Starting login...$(RESET)"; \
+		gh auth login; \
+	fi
+	@echo "  gh user: $$(gh api user --jq .login)"
 	@echo "$(BLUE)Setting up git hooks...$(RESET)"
 	@git config core.hooksPath .githooks
-	@echo "$(GREEN)Git hooks installed (.githooks/)$(RESET)"
+	@echo "$(GREEN)Setup complete$(RESET)"
 	@echo "  pre-commit: lint check on staged Python files"
 	@echo "  pre-push:   full quality gate (lint + typecheck + security + tests)"
 

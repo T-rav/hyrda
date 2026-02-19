@@ -146,7 +146,7 @@ class HydraOrchestrator:
         logger.info(
             "Hydra starting — repo=%s label=%s workers=%d poll=%ds",
             self._config.repo,
-            self._config.ready_label,
+            ",".join(self._config.ready_label),
             self._config.max_workers,
             self._config.poll_interval,
         )
@@ -222,45 +222,93 @@ class HydraOrchestrator:
             )
         return issues
 
-    async def _fetch_plan_issues(self) -> list[GitHubIssue]:
-        """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
+    async def _fetch_issues_by_labels(
+        self,
+        labels: list[str],
+        limit: int,
+        exclude_labels: list[str] | None = None,
+    ) -> list[GitHubIssue]:
+        """Fetch open issues matching *any* of *labels*, deduplicated.
+
+        If *labels* is empty but *exclude_labels* is provided, fetch all
+        open issues and filter out those carrying any of the exclude labels.
+        """
         if self._config.dry_run:
             logger.info(
-                "[dry-run] Would fetch issues with planner label %r",
-                self._config.planner_label,
+                "[dry-run] Would fetch issues with labels=%r exclude=%r",
+                labels,
+                exclude_labels,
             )
             return []
 
-        try:
-            env = {**os.environ}
-            env.pop("CLAUDECODE", None)
-            proc = await asyncio.create_subprocess_exec(
+        seen: dict[int, dict] = {}
+
+        async def _query_label(label: str | None) -> None:
+            cmd = [
                 "gh",
                 "issue",
                 "list",
                 "--repo",
                 self._config.repo,
-                "--label",
-                self._config.planner_label,
                 "--limit",
-                str(self._config.batch_size),
+                str(limit),
                 "--json",
                 "number,title,body,labels,comments,url",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                logger.error("gh issue list (planner) failed: %s", stderr.decode())
-                return []
+            ]
+            if label is not None:
+                cmd += ["--label", label]
+            try:
+                raw = await self._gh_run(*cmd)
+                for item in json.loads(raw):
+                    seen.setdefault(item["number"], item)
+            except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
+                logger.error("gh issue list failed for label=%r: %s", label, exc)
 
-            raw_issues = json.loads(stdout.decode())
-        except (json.JSONDecodeError, FileNotFoundError) as exc:
-            logger.error("Failed to fetch plan issues: %s", exc)
+        if labels:
+            await asyncio.gather(*[_query_label(lbl) for lbl in labels])
+        elif exclude_labels:
+            await _query_label(None)
+            # Remove issues that carry any of the exclude labels
+            exclude_set = set(exclude_labels)
+            to_remove = []
+            for num, raw in seen.items():
+                raw_labels = {
+                    (rl["name"] if isinstance(rl, dict) else str(rl))
+                    for rl in raw.get("labels", [])
+                }
+                if raw_labels & exclude_set:
+                    to_remove.append(num)
+            for num in to_remove:
+                del seen[num]
+        else:
             return []
 
-        issues = self._parse_raw_issues(raw_issues)
+        issues = self._parse_raw_issues(list(seen.values()))
+        return issues[:limit]
+
+    async def _fetch_plan_issues(self) -> list[GitHubIssue]:
+        """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
+        if not self._config.planner_label:
+            # No planner labels configured — fetch all open issues that are
+            # not already in a downstream pipeline stage.
+            exclude = list(
+                {
+                    *self._config.ready_label,
+                    *self._config.review_label,
+                    *self._config.hitl_label,
+                    *self._config.fixed_label,
+                }
+            )
+            issues = await self._fetch_issues_by_labels(
+                [],
+                self._config.batch_size,
+                exclude_labels=exclude,
+            )
+        else:
+            issues = await self._fetch_issues_by_labels(
+                self._config.planner_label,
+                self._config.batch_size,
+            )
         logger.info("Fetched %d issues for planning", len(issues))
         return issues[: self._config.batch_size]
 
@@ -295,15 +343,20 @@ class HydraOrchestrator:
                     )
                     await self._prs.post_comment(issue.number, comment_body)
 
-                    # Swap labels: remove planner label, add implementation label
-                    await self._prs.remove_label(
-                        issue.number, self._config.planner_label
+                    # Swap labels: remove planner label(s), add implementation label
+                    for lbl in self._config.planner_label:
+                        await self._prs.remove_label(issue.number, lbl)
+                    await self._prs.add_labels(
+                        issue.number, [self._config.ready_label[0]]
                     )
-                    await self._prs.add_labels(issue.number, [self._config.ready_label])
 
                     # File new issues discovered during planning
                     for new_issue in result.new_issues:
-                        labels = new_issue.labels or [self._config.planner_label]
+                        labels = new_issue.labels or (
+                            [self._config.planner_label[0]]
+                            if self._config.planner_label
+                            else []
+                        )
                         await self._prs.create_issue(
                             new_issue.title, new_issue.body, labels
                         )
@@ -342,44 +395,10 @@ class HydraOrchestrator:
         """
         queue_size = 2 * self._config.max_workers
 
-        if self._config.dry_run:
-            logger.info(
-                "[dry-run] Would fetch up to %d issues with label %r",
-                queue_size,
-                self._config.ready_label,
-            )
-            return []
-
-        try:
-            env = {**os.environ}
-            env.pop("CLAUDECODE", None)
-            proc = await asyncio.create_subprocess_exec(
-                "gh",
-                "issue",
-                "list",
-                "--repo",
-                self._config.repo,
-                "--label",
-                self._config.ready_label,
-                "--limit",
-                str(queue_size),
-                "--json",
-                "number,title,body,labels,comments,url",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                logger.error("gh issue list failed: %s", stderr.decode())
-                return []
-
-            raw_issues = json.loads(stdout.decode())
-        except (json.JSONDecodeError, FileNotFoundError) as exc:
-            logger.error("Failed to fetch issues: %s", exc)
-            return []
-
-        all_issues = self._parse_raw_issues(raw_issues)
+        all_issues = await self._fetch_issues_by_labels(
+            self._config.ready_label,
+            queue_size,
+        )
         # Only skip issues already active in this run (GitHub labels are
         # the source of truth — if it still has hydra-ready, it needs work)
         issues = [i for i in all_issues if i.number not in self._active_issues]
@@ -397,41 +416,12 @@ class HydraOrchestrator:
 
         Returns ``(pr_infos, issues)`` so the reviewer has both.
         """
-        if self._config.dry_run:
-            return [], []
-
-        try:
-            env = {**os.environ}
-            env.pop("CLAUDECODE", None)
-            proc = await asyncio.create_subprocess_exec(
-                "gh",
-                "issue",
-                "list",
-                "--repo",
-                self._config.repo,
-                "--label",
-                self._config.review_label,
-                "--limit",
-                str(self._config.batch_size),
-                "--json",
-                "number,title,body,labels,comments,url",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
-            )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                logger.error("gh issue list (review) failed: %s", stderr.decode())
-                return [], []
-
-            raw_issues = json.loads(stdout.decode())
-        except (json.JSONDecodeError, FileNotFoundError) as exc:
-            logger.error("Failed to fetch review issues: %s", exc)
-            return [], []
-
-        issues = self._parse_raw_issues(raw_issues)
+        all_issues = await self._fetch_issues_by_labels(
+            self._config.review_label,
+            self._config.batch_size,
+        )
         # Only skip issues already active in this run
-        issues = [i for i in issues if i.number not in self._active_issues]
+        issues = [i for i in all_issues if i.number not in self._active_issues]
         if not issues:
             return [], []
 
@@ -474,11 +464,12 @@ class HydraOrchestrator:
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
 
-    @staticmethod
-    async def _gh_run(*cmd: str) -> str:
+    async def _gh_run(self, *cmd: str) -> str:
         """Run a gh CLI command and return stdout."""
         env = {**os.environ}
         env.pop("CLAUDECODE", None)
+        if self._config.gh_token:
+            env["GH_TOKEN"] = self._config.gh_token
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -565,15 +556,14 @@ class HydraOrchestrator:
 
                         if result.success:
                             # Success: move to review pipeline
-                            await self._prs.remove_label(
-                                issue.number, self._config.ready_label
-                            )
+                            for lbl in self._config.ready_label:
+                                await self._prs.remove_label(issue.number, lbl)
                             await self._prs.add_labels(
-                                issue.number, [self._config.review_label]
+                                issue.number, [self._config.review_label[0]]
                             )
                             if pr and pr.number > 0:
                                 await self._prs.add_pr_labels(
-                                    pr.number, [self._config.review_label]
+                                    pr.number, [self._config.review_label[0]]
                                 )
                         # Failure: keep implementation label so issue can be retried
 
@@ -662,11 +652,10 @@ class HydraOrchestrator:
                             self._state.mark_issue(pr.issue_number, "merged")
                             self._state.record_pr_merged()
                             self._state.record_issue_completed()
-                            await self._prs.remove_label(
-                                pr.issue_number, self._config.review_label
-                            )
+                            for lbl in self._config.review_label:
+                                await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.add_labels(
-                                pr.issue_number, [self._config.fixed_label]
+                                pr.issue_number, [self._config.fixed_label[0]]
                             )
 
                 # Cleanup worktree after review
@@ -749,8 +738,9 @@ class HydraOrchestrator:
             f"PR not merged — escalating to human review.",
         )
         # Swap to HITL label so the dashboard HITL tab picks it up
-        await self._prs.remove_label(issue.number, self._config.review_label)
-        await self._prs.add_labels(issue.number, [self._config.hitl_label])
+        for lbl in self._config.review_label:
+            await self._prs.remove_label(issue.number, lbl)
+        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
         return False
 
     async def _set_phase(self, phase: Phase) -> None:

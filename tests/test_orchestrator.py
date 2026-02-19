@@ -1495,17 +1495,20 @@ class TestFetchReviewablePrsSkipLogic:
             ]
         )
 
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+        call_count = 0
 
         async def fake_gh_run(*args: str) -> str:
+            nonlocal call_count
+            call_count += 1
+            # First call(s): issue fetch from _fetch_issues_by_labels
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            # Subsequent calls: PR lookup
             return pr_json
 
         orch._gh_run = fake_gh_run  # type: ignore[method-assign]
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            prs, issues = await orch._fetch_reviewable_prs()
+        prs, issues = await orch._fetch_reviewable_prs()
 
         assert len(issues) == 1
         assert issues[0].number == 42
@@ -1932,8 +1935,11 @@ class TestPlanPhase:
 
         await orch._plan_issues()
 
-        mock_prs.remove_label.assert_awaited_once_with(42, config.planner_label)
-        mock_prs.add_labels.assert_awaited_once_with(42, [config.ready_label])
+        # With multi-label, remove_label is called once per planner label
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+        mock_prs.add_labels.assert_awaited_once_with(42, [config.ready_label[0]])
 
     @pytest.mark.asyncio
     async def test_plan_issues_skips_label_swap_on_failure(
@@ -2404,3 +2410,55 @@ class TestWaitAndFixCI:
         assert (42, "hydra-review") in remove_calls
         add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
         assert (42, ["hydra-hitl"]) in add_calls
+
+
+# ---------------------------------------------------------------------------
+# _gh_run — gh_token injection
+# ---------------------------------------------------------------------------
+
+
+class TestGhRunGhToken:
+    """Tests for GH_TOKEN injection in HydraOrchestrator._gh_run."""
+
+    @pytest.mark.asyncio
+    async def test_gh_run_injects_token_into_env(self, tmp_path: Path) -> None:
+        """When gh_token is set, _gh_run should inject GH_TOKEN into subprocess env."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            gh_token="ghp_orch_secret",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        orch = HydraOrchestrator(cfg)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        mock_create = AsyncMock(return_value=mock_proc)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await orch._gh_run("gh", "issue", "list")
+
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["env"]["GH_TOKEN"] == "ghp_orch_secret"
+
+    @pytest.mark.asyncio
+    async def test_gh_run_does_not_inject_token_when_empty(
+        self, config, tmp_path: Path
+    ) -> None:
+        """When gh_token is empty, _gh_run should not forcibly set GH_TOKEN."""
+        orch = HydraOrchestrator(config)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
+        mock_create = AsyncMock(return_value=mock_proc)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await orch._gh_run("gh", "issue", "list")
+
+        call_kwargs = mock_create.call_args.kwargs
+        # GH_TOKEN should be whatever was inherited, not overridden
+        assert call_kwargs["env"].get("GH_TOKEN") != ""

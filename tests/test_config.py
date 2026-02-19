@@ -122,7 +122,7 @@ class TestHydraConfigDefaults:
         )
 
         # Assert
-        assert cfg.ready_label == "hydra-ready"
+        assert cfg.ready_label == ["hydra-ready"]
 
     def test_batch_size_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -225,14 +225,14 @@ class TestHydraConfigCustomValues:
     def test_custom_label(self, tmp_path: Path) -> None:
         # Arrange / Act
         cfg = HydraConfig(
-            ready_label="sprint",
+            ready_label=["sprint"],
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
 
         # Assert
-        assert cfg.ready_label == "sprint"
+        assert cfg.ready_label == ["sprint"]
 
     def test_custom_batch_size(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -717,3 +717,52 @@ class TestHydraConfigValidationConstraints:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – gh_token resolution
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigGhToken:
+    """Tests for the gh_token field and HYDRA_GH_TOKEN env var resolution."""
+
+    def test_gh_token_default_is_empty(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == ""
+
+    def test_gh_token_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            gh_token="ghp_explicit123",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_explicit123"
+
+    def test_gh_token_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GH_TOKEN", "ghp_from_env")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_from_env"
+
+    def test_gh_token_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GH_TOKEN", "ghp_from_env")
+        cfg = HydraConfig(
+            gh_token="ghp_explicit",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_explicit"

@@ -601,10 +601,11 @@ class PRManager:
 
     # --- subprocess helper ---
 
-    @staticmethod
-    async def _run(*cmd: str, cwd: Path) -> str:
+    async def _run(self, *cmd: str, cwd: Path) -> str:
         env = {**os.environ}
         env.pop("CLAUDECODE", None)
+        if self._config.gh_token:
+            env["GH_TOKEN"] = self._config.gh_token
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
