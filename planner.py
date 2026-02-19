@@ -106,18 +106,31 @@ class PlannerRunner:
             cmd.extend(["--max-budget-usd", str(self._config.planner_budget_usd)])
         return cmd
 
+    # Maximum characters for issue body and comments in the prompt
+    _MAX_BODY_CHARS = 10_000
+    _MAX_COMMENT_CHARS = 2_000
+
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the planning prompt for the agent."""
         comments_section = ""
         if issue.comments:
-            formatted = "\n".join(f"- {c}" for c in issue.comments)
+            truncated = [
+                c[: self._MAX_COMMENT_CHARS]
+                + ("…" if len(c) > self._MAX_COMMENT_CHARS else "")
+                for c in issue.comments
+            ]
+            formatted = "\n".join(f"- {c}" for c in truncated)
             comments_section = f"\n\n## Discussion\n{formatted}"
+
+        body = issue.body or ""
+        if len(body) > self._MAX_BODY_CHARS:
+            body = body[: self._MAX_BODY_CHARS] + "\n\n…(truncated)"
 
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
 
-{issue.body}{comments_section}
+{body}{comments_section}
 
 ## Instructions
 

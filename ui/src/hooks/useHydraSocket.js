@@ -10,6 +10,7 @@ const initialState = {
   reviews: [],    // ReviewData[]
   mergedCount: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
+  config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
 }
 
@@ -188,6 +189,9 @@ function reducer(state, action) {
     case 'LIFETIME_STATS':
       return { ...state, lifetimeStats: action.data }
 
+    case 'CONFIG':
+      return { ...state, config: action.data }
+
     case 'EXISTING_PRS':
       return { ...state, prs: [...action.data, ...state.prs] }
 
@@ -237,6 +241,9 @@ export function useHydraSocket() {
             data: { status: data.status },
             timestamp: new Date().toISOString(),
           })
+          if (data.config) {
+            dispatch({ type: 'CONFIG', data: data.config })
+          }
         })
         .catch(() => {})
       // Fetch lifetime stats on connect

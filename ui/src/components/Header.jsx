@@ -1,10 +1,10 @@
 import React from 'react'
 
 const STAGES = [
-  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage' },
-  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
-  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer' },
-  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
+  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage',      configKey: null },
+  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner',     configKey: 'max_planners' },
+  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer', configKey: 'max_workers' },
+  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer',    configKey: 'max_reviewers' },
 ]
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
@@ -23,7 +23,7 @@ export function Header({
   prsCount, mergedCount, issuesFound,
   connected, orchestratorStatus,
   onStart, onStop,
-  phase, workers,
+  phase, workers, config,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
@@ -55,6 +55,7 @@ export function Header({
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
             const agentCount = counts[stage.role] || 0
+            const maxCount = stage.configKey && config ? config[stage.configKey] : 1
             const lit = isRunning || agentCount > 0
             return (
               <React.Fragment key={stage.key}>
@@ -71,8 +72,8 @@ export function Header({
                   borderColor: lit ? stage.color : '#30363d',
                 }}>
                   {stage.label}
-                  {agentCount > 0 && (
-                    <span style={styles.count}>{agentCount}</span>
+                  {lit && (
+                    <span style={styles.count}>{agentCount}/{maxCount}</span>
                   )}
                 </div>
               </React.Fragment>

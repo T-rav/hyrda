@@ -53,6 +53,7 @@ export default function App() {
         onStop={handleStop}
         phase={state.phase}
         workers={state.workers}
+        config={state.config}
       />
 
       <WorkerList
