@@ -38,22 +38,20 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# .env file (never committed)
-SLACK_BOT_TOKEN=xoxb-...
-LLM_API_KEY=sk-...
+# Use environment variables (never hardcode)
 ```
 
 **Anti-pattern (BAD):**
 ```python
 # ❌ CRITICAL - Hardcoded secrets
-SLACK_BOT_TOKEN = "xoxb-EXAMPLE-TOKEN-PLACEHOLDER"
-OPENAI_API_KEY = "sk-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN"
-DATABASE_PASSWORD = "MySecretPassword123!"
+SLACK_BOT_TOKEN = "hardcoded-token-value"
+OPENAI_API_KEY = "hardcoded-api-key-value"
+DATABASE_PASSWORD = "hardcoded-password"
 
 # ❌ CRITICAL - Secrets in config files
 config = {
-    "api_key": "sk-live-prod-key-12345",
-    "token": "ghp_github_token_secret"
+    "api_key": "hardcoded-key",
+    "token": "hardcoded-token"
 }
 ```
 
@@ -235,8 +233,8 @@ services:
 
 # ❌ HIGH - Hardcoded secrets in compose file
 environment:
-  - SLACK_BOT_TOKEN=xoxb-hardcoded-secret-token
-  - API_KEY=sk-production-key-12345
+  - SLACK_BOT_TOKEN=hardcoded-secret-token
+  - API_KEY=hardcoded-production-key
 
 # ❌ MEDIUM - Privileged containers
 privileged: true
@@ -472,7 +470,7 @@ engine = create_engine(
 # App can DROP tables, CREATE schemas, etc.
 
 # ❌ MEDIUM - Hardcoded connection string
-DATABASE_URL = "postgresql://admin:password123@prod-db:5432/mydb"
+DATABASE_URL = "postgresql://admin:HARDCODED@prod-db:5432/mydb"
 
 # ❌ LOW - Connection info leak
 engine = create_engine(DATABASE_URL, echo=True)  # Logs all SQL with parameters
@@ -1651,7 +1649,7 @@ handler.setFormatter(PIIRedactingFormatter())
 
 **Finding:**
 ```python
-SLACK_BOT_TOKEN = "xoxb-EXAMPLE-TOKEN-PLACEHOLDER"
+SLACK_BOT_TOKEN = "hardcoded-token-value"
 ```
 
 **Risk:**
@@ -1664,9 +1662,6 @@ SLACK_BOT_TOKEN = "xoxb-EXAMPLE-TOKEN-PLACEHOLDER"
 # Move to environment variable
 import os
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-
-# Update .env (not committed)
-SLACK_BOT_TOKEN=xoxb-...
 
 # Rotate the exposed token immediately
 ```

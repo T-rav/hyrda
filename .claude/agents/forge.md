@@ -1384,7 +1384,7 @@ Run forge fix with confirmation
 1. **Hardcoded Secrets → Environment Variables**
    ```python
    # Before (CRITICAL security issue)
-   API_KEY = "sk-1234567890abcdef"
+   API_KEY = "hardcoded-api-key"
 
    # After (auto-fixed by Forge)
    import os
