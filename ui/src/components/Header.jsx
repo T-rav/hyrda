@@ -56,25 +56,25 @@ export function Header({
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
             const agentCount = counts[stage.role] || 0
-            const isActive = agentCount > 0
+            const lit = isRunning || agentCount > 0
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
                   <div style={{
                     ...styles.connector,
-                    background: isActive ? stage.color : '#30363d',
+                    background: lit ? stage.color : '#30363d',
                   }} />
                 )}
                 <div style={{
                   ...styles.pill,
-                  background: isActive ? stage.color : '#21262d',
-                  color: isActive ? '#0d1117' : '#484f58',
-                  borderColor: isActive ? stage.color : '#30363d',
+                  background: lit ? stage.color : '#21262d',
+                  color: lit ? '#0d1117' : '#484f58',
+                  borderColor: lit ? stage.color : '#30363d',
                 }}>
                   {stage.label}
-                  {agentCount > 0 && (
-                    <span style={styles.count}>{agentCount}</span>
-                  )}
+                  <span style={styles.count}>
+                    {agentCount}/{stage.role === 'implementer' ? '∞' : '1'}
+                  </span>
                 </div>
               </React.Fragment>
             )
