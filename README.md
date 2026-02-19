@@ -4,23 +4,24 @@ Multi-agent orchestration system that automates the full GitHub issue lifecycle 
 
 ## How It Works
 
-Hydra runs three concurrent async loops that continuously poll for labeled issues:
+Hydra runs four concurrent async loops that continuously poll for labeled issues:
 
 ```
-hydra-plan ──> hydra-ready ──> hydra-review ──> hydra-fixed
-   │               │                │
-   │  Plan agent   │  Impl agent    │  Review agent
-   │  explores     │  creates       │  checks quality
-   │  codebase,    │  worktree,     │  submits review,
-   │  posts plan   │  writes code,  │  waits for CI,
-   │  as comment   │  pushes PR     │  auto-merges
-   │               │                │
-   │               │                └──> hydra-hitl (CI failure)
+hydra-find ──> hydra-plan ──> hydra-ready ──> hydra-review ──> hydra-fixed
+   │               │               │                │
+   │  Triage       │  Plan agent   │  Impl agent    │  Review agent
+   │  agent        │  explores     │  creates       │  checks quality
+   │  evaluates    │  codebase,    │  worktree,     │  submits review,
+   │  readiness,   │  posts plan   │  writes code,  │  waits for CI,
+   │  promotes     │  as comment   │  pushes PR     │  auto-merges
+   │  to plan      │               │                │
+   │               │               │                └──> hydra-hitl (CI failure)
 ```
 
-1. **Plan loop** -- Fetches `hydra-plan` issues, runs a read-only Claude agent to explore the codebase and produce an implementation plan, posts it as a comment, swaps label to `hydra-ready`.
-2. **Implement loop** -- Fetches `hydra-ready` issues, creates git worktrees, runs implementation agents with TDD prompts, pushes branches, creates PRs, swaps to `hydra-review`.
-3. **Review loop** -- Fetches `hydra-review` issues, runs a review agent, submits a formal PR review, waits for CI, and auto-merges. CI failures escalate to `hydra-hitl` for human intervention.
+1. **Triage loop** -- Fetches `hydra-find` issues, evaluates readiness (title/body quality), promotes qualified issues to `hydra-plan`.
+2. **Plan loop** -- Fetches `hydra-plan` issues, runs a read-only Claude agent to explore the codebase and produce an implementation plan, posts it as a comment, swaps label to `hydra-ready`.
+3. **Implement loop** -- Fetches `hydra-ready` issues, creates git worktrees, runs implementation agents with TDD prompts, pushes branches, creates PRs, swaps to `hydra-review`.
+4. **Review loop** -- Fetches `hydra-review` issues, runs a review agent, submits a formal PR review, waits for CI, and auto-merges. CI failures escalate to `hydra-hitl` for human intervention.
 
 ## Prerequisites
 
@@ -58,6 +59,7 @@ The `.env` file is auto-loaded by the Makefile. Defaults are the standard Hydra 
 
 ```bash
 # .env
+HYDRA_LABEL_FIND=hydra-find
 HYDRA_LABEL_PLAN=hydra-plan
 HYDRA_LABEL_READY=hydra-ready
 HYDRA_LABEL_REVIEW=hydra-review
@@ -67,7 +69,7 @@ HYDRA_LABEL_FIXED=hydra-fixed
 
 ### 4. Create GitHub labels
 
-Hydra uses 5 lifecycle labels. Create them in your repo (reads label names from `.env`):
+Hydra uses 6 lifecycle labels. Create them in your repo (reads label names from `.env`):
 
 ```bash
 # From the hydra directory (auto-detects your repo from git remote)
@@ -82,7 +84,7 @@ HYDRA_GITHUB_REPO=owner/other-repo make ensure-labels
 
 ### 5. Install the slash commands
 
-Copy Hydra's Claude Code slash commands into your project so you can use `/gh-issue`, `/code-review`, and the audit commands from Claude Code in your own repo:
+Copy Hydra's Claude Code slash commands into your project so you can use `/gh-issue`, `/audit-tests`, and the other audit commands from Claude Code in your own repo:
 
 ```bash
 # From your project root
@@ -90,7 +92,7 @@ mkdir -p .claude/commands
 
 # Copy the commands you want
 cp hydra/.claude/commands/gh-issue.md .claude/commands/
-cp hydra/.claude/commands/code-review.md .claude/commands/
+cp hydra/.claude/commands/audit-tests.md .claude/commands/
 cp hydra/.claude/commands/audit-integration-tests.md .claude/commands/
 cp hydra/.claude/commands/audit-hooks.md .claude/commands/
 ```
@@ -127,10 +129,14 @@ Then merge Hydra's hook configuration into your `.claude/settings.json`. The hoo
 | `check-test-counterpart.sh` | PreToolUse(Write) | Warns when writing source without tests |
 | `enforce-migrations.sh` | PreToolUse(Write/Edit) | Checks for direct DB schema changes |
 | `check-cross-service-impact.sh` | PreToolUse(Edit) | Flags cross-service shared/ changes |
-| `track-exploration.sh` | PostToolUse(Read) | Tracks codebase exploration progress |
+| `check-reindex-needed.sh` | PreToolUse(claude-context) | Checks if claude-context index is stale |
+| `track-exploration.sh` | PostToolUse(Read/claude-context/cclsp) | Tracks codebase exploration progress |
 | `track-code-changes.sh` | PostToolUse(Write/Edit) | Tracks which files were modified |
 | `track-planning.sh` | PostToolUse(TaskCreate) | Tracks planning activity |
+| `track-indexed.sh` | PostToolUse(claude-context) | Tracks indexed files |
+| `track-reindex-needed.sh` | PostToolUse(Bash) | Tracks when reindexing may be needed |
 | `warn-new-file-creation.sh` | PostToolUse(Write) | Warns on new file creation |
+| `cleanup-code-change-marker.sh` | Stop | Cleans up code change tracking markers |
 
 ### 7. Install git hooks (optional)
 
@@ -175,7 +181,7 @@ gh issue create --label hydra-plan --title "Add retry logic to API client" --bod
 | Command | Description |
 |---------|-------------|
 | `/gh-issue <description>` | Research codebase and create a well-structured GitHub issue |
-| `/code-review` | Run 4 parallel review agents on changed files (tests, clean code, security, migrations) |
+| `/audit-tests` | Unit test coverage and quality audit |
 | `/audit-integration-tests` | Integration test coverage gap analysis |
 | `/audit-hooks` | Audit Claude Code hooks for correctness and efficiency |
 
@@ -183,6 +189,7 @@ gh issue create --label hydra-plan --title "Add retry logic to API client" --bod
 
 | Label | Meaning | What happens next |
 |-------|---------|-------------------|
+| `hydra-find` | New issue discovered | Triage agent evaluates readiness, promotes to `hydra-plan` |
 | `hydra-plan` | Issue needs a plan | Plan agent explores, posts plan comment, swaps to `hydra-ready` |
 | `hydra-ready` | Ready for implementation | Impl agent creates worktree, writes code + tests, opens PR, swaps to `hydra-review` |
 | `hydra-review` | PR under review | Review agent checks quality, waits for CI, auto-merges, swaps to `hydra-fixed` |
@@ -196,6 +203,7 @@ Labels can be overridden via CLI flags or environment variables:
 make run READY_LABEL=custom-ready PLANNER_LABEL=custom-plan
 
 # Environment variables
+export HYDRA_LABEL_FIND=custom-find
 export HYDRA_LABEL_PLAN=custom-plan
 export HYDRA_LABEL_READY=custom-ready
 export HYDRA_LABEL_REVIEW=custom-review
@@ -209,20 +217,32 @@ All configuration is via CLI flags or environment variables. Defaults are sensib
 
 | Flag | Env var | Default | Description |
 |------|---------|---------|-------------|
-| `--ready-label` | `HYDRA_LABEL_READY` | `hydra-ready` | Label for implementation queue |
+| `--find-label` | `HYDRA_LABEL_FIND` | `hydra-find` | Label for discovery/triage queue |
 | `--planner-label` | `HYDRA_LABEL_PLAN` | `hydra-plan` | Label for planning queue |
+| `--ready-label` | `HYDRA_LABEL_READY` | `hydra-ready` | Label for implementation queue |
 | `--review-label` | `HYDRA_LABEL_REVIEW` | `hydra-review` | Label for review queue |
 | `--hitl-label` | `HYDRA_LABEL_HITL` | `hydra-hitl` | Label for human escalation |
 | `--fixed-label` | `HYDRA_LABEL_FIXED` | `hydra-fixed` | Label for completed issues |
 | `--max-workers` | -- | `2` | Concurrent implementation agents |
+| `--max-planners` | -- | `1` | Concurrent planning agents |
+| `--max-reviewers` | -- | `1` | Concurrent review agents |
 | `--model` | -- | `sonnet` | Model for implementation agents |
 | `--planner-model` | -- | `opus` | Model for planning agents |
 | `--review-model` | -- | `opus` | Model for review agents |
 | `--max-budget-usd` | -- | `0` (unlimited) | USD cap per implementation agent |
+| `--planner-budget-usd` | -- | `0` (unlimited) | USD cap per planning agent |
+| `--review-budget-usd` | -- | `0` (unlimited) | USD cap per review agent |
+| `--ci-check-timeout` | -- | `600` | Seconds to wait for CI checks |
+| `--ci-poll-interval` | -- | `30` | Seconds between CI status polls |
+| `--max-ci-fix-attempts` | -- | `2` | Max CI fix-and-retry cycles (0 disables CI wait) |
+| `--main-branch` | -- | `main` | Base branch name |
 | `--repo` | `HYDRA_GITHUB_REPO` | auto-detected | GitHub `owner/repo` slug |
+| `--gh-token` | `HYDRA_GH_TOKEN` | -- | GitHub token override |
 | `--dashboard-port` | -- | `5555` | Dashboard API port |
 | `--no-dashboard` | -- | -- | Disable the web dashboard |
 | `--dry-run` | -- | -- | Log actions without executing |
+| `--verbose` | -- | -- | Enable debug logging |
+| `--clean` | -- | -- | Remove all worktrees and state, then exit |
 
 ## Development
 
@@ -245,8 +265,9 @@ make status         # Show current Hydra state
 
 ```
 cli.py                 CLI entry point
-orchestrator.py        Main coordinator (3 async polling loops)
+orchestrator.py        Main coordinator (4 async polling loops)
 config.py              HydraConfig (Pydantic model)
+triage.py              TriageRunner (issue readiness evaluation)
 agent.py               AgentRunner (implementation agent)
 planner.py             PlannerRunner (read-only planning agent)
 reviewer.py            ReviewRunner (review + CI fix agent)
@@ -257,10 +278,11 @@ events.py              EventBus (async pub/sub)
 state.py               StateTracker (JSON-backed crash recovery)
 models.py              Pydantic data models
 stream_parser.py       Claude CLI stream-json parser
+log.py                 Logging configuration (structured JSON)
 ui/                    React dashboard frontend
 .claude/commands/      Claude Code slash commands
 .claude/hooks/         Claude Code quality gate hooks
-.claude/agents/        Claude Code agent definitions
+.claude/agents/        Agent definitions (code-quality-enforcer, test-audit)
 .githooks/             Git pre-commit and pre-push hooks
 ```
 
