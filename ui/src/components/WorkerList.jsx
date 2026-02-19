@@ -19,15 +19,6 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
   const implementers = allEntries.filter(([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage')
   const reviewers = allEntries.filter(([, w]) => w.role === 'reviewer')
 
-  if (allEntries.length === 0) {
-    return (
-      <div style={styles.sidebar}>
-        <div style={styles.title}>Workers</div>
-        <div style={styles.empty}>Waiting for issues...</div>
-      </div>
-    )
-  }
-
   return (
     <div style={styles.sidebar}>
       <RoleSection
@@ -76,8 +67,6 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
 
   const active = entries.filter(([, w]) => ACTIVE_STATUSES.includes(w.status)).length
   const total = entries.length
-
-  if (total === 0) return null
 
   return (
     <>
@@ -131,22 +120,6 @@ const styles = {
     overflowY: 'auto',
     background: '#161b22',
   },
-  title: {
-    padding: '12px 16px 8px',
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    color: '#8b949e',
-    letterSpacing: 0.5,
-  },
-  empty: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-    color: '#8b949e',
-    fontSize: 13,
-  },
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
@@ -175,13 +148,14 @@ const styles = {
   card: {
     padding: '10px 16px',
     borderBottom: '1px solid #30363d',
+    borderLeft: '3px solid #484f58',
+    paddingLeft: 13,
     cursor: 'pointer',
-    transition: 'background 0.15s',
+    transition: 'background 0.15s, border-left-color 0.15s',
   },
   active: {
     background: 'rgba(88,166,255,0.08)',
     borderLeft: '3px solid #58a6ff',
-    paddingLeft: 13,
   },
   cardHeader: {
     display: 'flex',

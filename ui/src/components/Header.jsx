@@ -9,13 +9,19 @@ const STAGES = [
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
-function countByRole(workers) {
+function countByRole(workers, activeOnly) {
   const list = Object.values(workers)
+  const f = activeOnly
+    ? (role) => list.filter(w => w.role === role && ACTIVE_STATUSES.includes(w.status)).length
+    : (role) => list.filter(w => w.role === role).length
+  const implFilter = activeOnly
+    ? list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage' && ACTIVE_STATUSES.includes(w.status)).length
+    : list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length
   return {
-    triage: list.filter(w => w.role === 'triage').length,
-    planner: list.filter(w => w.role === 'planner').length,
-    implementer: list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
-    reviewer: list.filter(w => w.role === 'reviewer').length,
+    triage: f('triage'),
+    planner: f('planner'),
+    implementer: implFilter,
+    reviewer: f('reviewer'),
   }
 }
 
@@ -28,7 +34,8 @@ export function Header({
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
-  const counts = countByRole(workers || {})
+  const activeCounts = countByRole(workers || {}, true)
+  const totalCounts = countByRole(workers || {}, false)
 
   return (
     <header style={styles.header}>
@@ -54,27 +61,30 @@ export function Header({
         </div>
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
-            const agentCount = counts[stage.role] || 0
+            const activeCount = activeCounts[stage.role] || 0
+            const totalCount = totalCounts[stage.role] || 0
             const maxCount = stage.configKey && config ? config[stage.configKey] : 1
-            const lit = isRunning || agentCount > 0
+            const lit = isRunning
+            const dimmed = !isRunning
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
                   <div style={{
                     ...styles.connector,
-                    background: lit ? stage.color : '#30363d',
+                    background: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
                   }} />
                 )}
                 <div style={{
                   ...styles.pill,
-                  background: lit ? stage.color : '#21262d',
-                  color: lit ? '#0d1117' : '#484f58',
-                  borderColor: lit ? stage.color : '#30363d',
+                  background: lit ? stage.color : dimmed ? stage.color + '20' : '#21262d',
+                  color: lit ? '#0d1117' : dimmed ? stage.color + '99' : '#484f58',
+                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
                 }}>
                   {stage.label}
-                  {lit && (
-                    <span style={styles.count}>{maxCount}</span>
-                  )}
+                  <span style={{
+                    ...styles.count,
+                    opacity: lit ? 1 : 0.6,
+                  }}>{maxCount}</span>
                 </div>
               </React.Fragment>
             )
