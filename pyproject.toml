@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+exclude = ["ui*", "templates*", "tests*"]
+
+[project]
+name = "hyrda"
+version = "1.0.0"
+requires-python = ">=3.11,<3.12"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "httpx>=0.27.0",
+]
+dev = [
+    "ruff==0.15.0",
+    "pyright==1.1.390",
+    "bandit[toml]==1.8.0",
+]
+dashboard = [
+    "fastapi>=0.110.0",
+    "uvicorn>=0.30.0",
+    "websockets>=12.0",
+]
+
+# === Ruff ===
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["."]
+exclude = [
+    ".venv", "venv", "build", "dist", "node_modules",
+    "htmlcov", "__pycache__", ".pytest_cache", ".ruff_cache",
+]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "PL", "SIM"]
+ignore = ["E501", "B008", "C901", "PLR0913", "PLR0912", "PLR0915", "PLR2004", "PLC0415"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "B011", "F811", "E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["."]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# === Pyright ===
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["."]
+exclude = ["tests", "**/__pycache__", "**/node_modules", "templates", ".venv", "venv"]
+typeCheckingMode = "standard"
+reportMissingImports = false
+reportMissingTypeStubs = false
+
+# === Bandit ===
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]
+
+# === Pytest ===
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--verbose",
+    "--cov=.",
+    "--cov-fail-under=70",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+]
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "*/__init__.py", "venv/*", ".venv/*", "templates/*"]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true

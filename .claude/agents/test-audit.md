@@ -167,7 +167,7 @@ class SettingsMockFactory:
     @staticmethod
     def create_basic_settings() -> MagicMock:
         settings = MagicMock()
-        settings.slack.bot_token = "xoxb-test"
+        settings.slack.bot_token = "test-token"
         return settings
 
 # Fixture (pytest integration)

@@ -1,611 +1,159 @@
-# Makefile for InsightMesh
-# All Python commands use `uv run` — never raw python/pip
+# Makefile for Hydra — Parallel Claude Code Issue Processor
 
-# Determine project root directory (where this Makefile is located)
-MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-PROJECT_ROOT_DIR := $(MAKEFILE_DIR)
-BOT_DIR := $(PROJECT_ROOT_DIR)bot
-VENV := $(PROJECT_ROOT_DIR)venv
-ENV_FILE := $(PROJECT_ROOT_DIR).env
-IMAGE ?= insight-mesh-slack-bot
-
-# uv run using the shared root venv (not per-service project envs)
+HYDRA_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PROJECT_ROOT := $(abspath $(HYDRA_DIR))
+VENV := $(PROJECT_ROOT)/venv
 UV := VIRTUAL_ENV=$(VENV) uv run --active
 
-# Version management
-VERSION_FILE := $(PROJECT_ROOT_DIR).version
-VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo "0.0.0")
-GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+# CLI argument passthrough
+READY_LABEL ?= hydra-ready
+WORKERS ?= 2
+MODEL ?= opus
+REVIEW_MODEL ?= opus
+BATCH_SIZE ?= 15
+BUDGET ?= 0
+REVIEW_BUDGET ?= 0
+PLANNER_LABEL ?= hydra-plan
+PLANNER_MODEL ?= opus
+PLANNER_BUDGET ?= 0
+PORT ?= 5555
 
-# Docker registry configuration
-# Override these with environment variables or make arguments:
-#   make docker-push REGISTRY=ghcr.io/myorg
-REGISTRY ?= localhost
-IMAGE_PREFIX ?= insightmesh
-
-# Full image names with registry and version
-BOT_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-bot:$(VERSION)
-AGENT_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:$(VERSION)
-CONTROL_PLANE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:$(VERSION)
-TASKS_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-tasks:$(VERSION)
-RAG_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:$(VERSION)
-DASHBOARD_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:$(VERSION)
-LANGSMITH_PROXY_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:$(VERSION)
-
-# All images for batch operations
-ALL_IMAGES := $(BOT_IMAGE) $(AGENT_SERVICE_IMAGE) $(CONTROL_PLANE_IMAGE) $(TASKS_IMAGE) $(RAG_SERVICE_IMAGE) $(DASHBOARD_SERVICE_IMAGE) $(LANGSMITH_PROXY_IMAGE)
-
-# All service directories (for iteration)
-SERVICE_DIRS := bot agent-service control_plane tasks rag-service dashboard-service shared
-
-# Colors for output
+# Colors
 RED := \033[0;31m
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install setup-dev run test test-fast test-service test-coverage lint lint-check quality ci docker-build start stop restart status clean security security-docker security-full db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status version version-bump docker-tag docker-push docker-push-latest release
+.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean
 
 help:
-	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
+	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
 	@echo ""
-	@echo "$(RED)PRIMARY COMMAND:$(RESET)"
-	@echo "  $(GREEN)make ci$(RESET)              Comprehensive validation: lint + test + security + build"
+	@echo "$(GREEN)Commands:$(RESET)"
+	@echo "  make dev            Start backend + Vite frontend dev server"
+	@echo "  make run            Run Hydra (processes issues with agents)"
+	@echo "  make dry-run        Dry run (log actions without executing)"
+	@echo "  make clean          Remove all worktrees and state"
+	@echo "  make status         Show current Hydra state"
+	@echo "  make test           Run unit tests"
+	@echo "  make lint           Auto-fix linting"
+	@echo "  make lint-check     Check linting (no fix)"
+	@echo "  make typecheck      Run Pyright type checks"
+	@echo "  make security       Run Bandit security scan"
+	@echo "  make quality        Lint + typecheck + security + test"
+	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
+	@echo "  make install        Install dashboard dependencies"
+	@echo "  make ui             Build React dashboard (ui/dist/)"
+	@echo "  make ui-dev         Start React dashboard dev server"
+	@echo "  make ui-clean       Remove ui/dist and node_modules"
 	@echo ""
-	@echo "$(GREEN)Quick Commands:$(RESET)"
-	@echo "  make start             Start full Docker stack"
-	@echo "  make stop              Stop all containers"
-	@echo "  make restart           Restart everything"
-	@echo "  make status            Show container status"
-	@echo ""
-	@echo "$(GREEN)Development:$(RESET)"
-	@echo "  make install           Install all service dependencies (via uv)"
-	@echo "  make setup-dev         Install dev tools + pre-commit hooks (run once)"
-	@echo "  make run               Run bot standalone"
-	@echo ""
-	@echo "$(GREEN)Testing (progressive):$(RESET)"
-	@echo "  make lint              Lint + format all services (auto-fix) (~2s)"
-	@echo "  make lint-check        Check linting without fixing (~2s)"
-	@echo "  make test-fast         Unit tests only, all services (~20s)"
-	@echo "  make test-service SERVICE=bot  Test a single service"
-	@echo "  make test              Full test suite, all services (~2-3min)"
-	@echo "  make test-coverage     Tests with coverage report (>70% required)"
-	@echo "  make quality           Lint + test (~2-3min)"
-	@echo "  make ci                Full CI: quality + security + build (~5-10min)"
-	@echo ""
-	@echo "$(GREEN)Build & Security:$(RESET)"
-	@echo "  make docker-build      Build all Docker images"
-	@echo "  make security          Run Bandit code security scanner"
-	@echo "  make security-docker   Scan Docker images with Trivy"
-	@echo "  make security-full     Bandit + Trivy + pip-audit + Checkov + Semgrep"
-	@echo "  make clean             Remove caches and artifacts"
-	@echo ""
-	@echo "$(GREEN)Version & Release:$(RESET)"
-	@echo "  make version           Show current version"
-	@echo "  make version-bump      Bump version (patch|minor|major)"
-	@echo "  make docker-tag        Tag images with version"
-	@echo "  make docker-push       Push images to registry"
-	@echo "  make release           Full release: tag, build, push"
-	@echo ""
-	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  make db-start          Start MySQL databases"
-	@echo "  make db-stop           Stop MySQL databases"
-	@echo "  make db-migrate        Generate new migration files"
-	@echo "  make db-upgrade        Apply pending migrations"
-	@echo "  make db-downgrade      Rollback last migration"
-	@echo "  make db-reset          Reset databases (WARNING: destroys data)"
-	@echo "  make db-status         Show migration status"
+	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
+	@echo "  READY_LABEL      GitHub issue label (default: hydra-ready)"
+	@echo "  WORKERS          Max concurrent agents (default: 2)"
+	@echo "  MODEL            Implementation model (default: sonnet)"
+	@echo "  REVIEW_MODEL     Review model (default: opus)"
+	@echo "  BATCH_SIZE       Issues per batch (default: 15)"
+	@echo "  BUDGET           USD per impl agent (default: 0 = unlimited)"
+	@echo "  REVIEW_BUDGET    USD per review agent (default: 0 = unlimited)"
+	@echo "  PLANNER_LABEL    Planner issue label (default: claude-find)"
+	@echo "  PLANNER_MODEL    Planner model (default: opus)"
+	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
+	@echo "  PORT             Dashboard port (default: 5555)"
 
-# ===== SETUP & INSTALL =====
+run:
+	@echo "$(BLUE)Starting Hydra — backend :$(PORT) + frontend :5556$(RESET)"
+	@echo "$(GREEN)Open http://localhost:5556 to use the dashboard$(RESET)"
+	@trap 'kill 0' EXIT; \
+	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev & \
+	cd $(HYDRA_DIR) && $(UV) python cli.py \
+		--ready-label $(READY_LABEL) \
+		--max-workers $(WORKERS) \
+		--model $(MODEL) \
+		--review-model $(REVIEW_MODEL) \
+		--batch-size $(BATCH_SIZE) \
+		--max-budget-usd $(BUDGET) \
+		--review-budget-usd $(REVIEW_BUDGET) \
+		--planner-label $(PLANNER_LABEL) \
+		--planner-model $(PLANNER_MODEL) \
+		--planner-budget-usd $(PLANNER_BUDGET) \
+		--dashboard-port $(PORT) & \
+	wait
 
-install:
-	@echo "$(BLUE)Installing all service dependencies (via uv)...$(RESET)"
-	@echo "$(BLUE)[1/7] Bot...$(RESET)"
-	@cd $(BOT_DIR) && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]"
-	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
-	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
-	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
-	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
-	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
-	@echo "$(BLUE)[7/7] Dev tools (ruff, pyright, bandit)...$(RESET)"
-	@VIRTUAL_ENV=$(VENV) uv pip install ruff pyright bandit
-	@echo "$(GREEN)All service dependencies installed successfully$(RESET)"
+dev: run
 
-setup-dev: install
-	@echo "$(BLUE)Setting up development environment...$(RESET)"
-	@VIRTUAL_ENV=$(VENV) uv pip install pre-commit
-	@pre-commit install
-	@echo "$(GREEN)Dev environment ready! Pre-commit hooks installed.$(RESET)"
-
-check-env:
-	@if [ ! -f $(ENV_FILE) ]; then \
-		echo "Error: .env not found at $(ENV_FILE)"; \
-		echo "Create it with SLACK_BOT_TOKEN, SLACK_APP_TOKEN, LLM_API_URL, LLM_API_KEY"; \
-		exit 1; \
-	fi
-
-# Start Redis service (required for conversation caching) - internal target
-start-redis:
-	@echo "$(BLUE)Starting Redis service...$(RESET)"
-	@if command -v brew >/dev/null 2>&1; then \
-		brew services start redis || echo "$(YELLOW)Redis may already be running$(RESET)"; \
-	elif command -v systemctl >/dev/null 2>&1; then \
-		sudo systemctl start redis || echo "$(YELLOW)Redis may already be running$(RESET)"; \
-	elif command -v service >/dev/null 2>&1; then \
-		sudo service redis-server start || echo "$(YELLOW)Redis may already be running$(RESET)"; \
-	else \
-		echo "$(YELLOW)Please start Redis manually: redis-server$(RESET)"; \
-	fi
-	@echo "$(GREEN)Redis service started$(RESET)"
-
-run: check-env start-redis
-	@echo "$(GREEN)Starting AI Slack Bot...$(RESET)"
-	cd $(BOT_DIR) && $(UV) python app.py
-
-# ===== TESTING =====
-
-test:
-	@echo "$(BLUE)Testing all 7 services (unit tests only)...$(RESET)"
-	@echo ""
-	@echo "$(BLUE)[1/7] Bot...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -q
-	@echo ""
-	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest -q
-	@echo ""
-	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest -q
-	@echo ""
-	@echo "$(BLUE)[7/7] Shared...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q
-	@echo ""
-	@echo "$(GREEN)All 7 services tested successfully$(RESET)"
-
-test-fast:
-	@echo "$(BLUE)Quick validation - unit tests only (all services)...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -q --no-header
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -q --no-header
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest -q --no-header
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -q --no-header
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -q --no-header
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest -q --no-header
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q --no-header
-	@echo "$(GREEN)All tests passed$(RESET)"
-
-test-service:
-	@if [ -z "$(SERVICE)" ]; then \
-		echo "$(RED)Error: Specify SERVICE=<name>$(RESET)"; \
-		echo "  Example: make test-service SERVICE=bot"; \
-		echo "  Available: bot, agent-service, control_plane, tasks, rag-service, dashboard-service, shared"; \
-		exit 1; \
-	fi
-	@echo "$(BLUE)Testing $(SERVICE)...$(RESET)"
-	@if [ "$(SERVICE)" = "shared" ]; then \
-		cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -v; \
-	elif [ "$(SERVICE)" = "bot" ]; then \
-		cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -v; \
-	elif [ "$(SERVICE)" = "tasks" ]; then \
-		cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -v; \
-	elif [ "$(SERVICE)" = "rag-service" ]; then \
-		cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -v; \
-	elif [ "$(SERVICE)" = "agent-service" ]; then \
-		cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -v; \
-	else \
-		cd $(PROJECT_ROOT_DIR)$(SERVICE) && PYTHONPATH=. $(UV) pytest -v; \
-	fi
-
-test-coverage:
-	@echo "$(BLUE)Running tests with coverage report...$(RESET)"
-	@echo ""
-	@echo "$(BLUE)[1/7] Bot...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest --cov=. --cov-report=term-missing --cov-fail-under=70 -q
-	@echo ""
-	@echo "$(BLUE)[7/7] Shared...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q
-	@echo ""
-	@echo "$(GREEN)All services meet coverage threshold (>70%)$(RESET)"
-
-# ===== LINTING =====
-
-lint:
-	@echo "$(BLUE)Running unified linting on all services (auto-fix)...$(RESET)"
-	@for dir in $(SERVICE_DIRS); do \
-		echo "$(BLUE)  $$dir...$(RESET)"; \
-		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) ruff check . --fix && $(UV) ruff format .; \
-	done
-	@echo "$(GREEN)All services linted and formatted!$(RESET)"
-
-lint-check:
-	@echo "$(BLUE)Running unified linting checks on all services...$(RESET)"
-	@for dir in $(SERVICE_DIRS); do \
-		echo "$(BLUE)  $$dir...$(RESET)"; \
-		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) ruff check . && $(UV) ruff format . --check; \
-	done
-	@echo "$(GREEN)All services passed linting checks!$(RESET)"
-
-# ===== QUALITY & CI =====
-
-quality: lint-check test
-	@echo "$(GREEN)Quality pipeline passed (lint + tests)$(RESET)"
-
-ci: lint-check test security docker-build
-	@echo "$(GREEN)Comprehensive CI validation passed!$(RESET)"
-	@echo "$(GREEN)All services: linted, tested, secured, and built$(RESET)"
-
-# ===== SECURITY =====
-
-security:
-	@echo "$(BLUE)Running Bandit security scanner on all services...$(RESET)"
-	@for dir in bot agent-service control_plane tasks rag-service dashboard-service; do \
-		echo "$(BLUE)  $$dir...$(RESET)"; \
-		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) bandit -r . -f txt \
-			--exclude ./.venv,./venv,./node_modules,./build,./dist,./.pytest_cache,./.ruff_cache,./tests \
-			2>/dev/null || true; \
-	done
-	@echo "$(GREEN)Security scans completed$(RESET)"
-
-security-docker:
-	@echo "$(BLUE)Scanning Docker images with Trivy...$(RESET)"
-	@if docker image inspect insightmesh-bot:latest >/dev/null 2>&1; then \
-		for img in bot agent-service control-plane tasks rag-service dashboard-service; do \
-			echo "$(BLUE)  insightmesh-$$img...$(RESET)"; \
-			docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-				aquasec/trivy:latest image --severity HIGH,CRITICAL --format table \
-				insightmesh-$$img:latest 2>/dev/null || true; \
-		done; \
-	else \
-		echo "$(YELLOW)Docker images not built yet. Run 'make docker-build' first.$(RESET)"; \
-	fi
-	@echo "$(GREEN)Docker security scans completed$(RESET)"
-
-security-full: security security-docker
-	@echo ""
-	@echo "$(BLUE)Extended security scans...$(RESET)"
-	@echo "$(BLUE)Dependency vulnerability audit (pip-audit)...$(RESET)"
-	@if $(UV) pip-audit --help >/dev/null 2>&1; then \
-		$(UV) pip-audit --desc 2>/dev/null || echo "$(YELLOW)pip-audit found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)pip-audit not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install pip-audit$(RESET)"; \
-	fi
-	@echo ""
-	@echo "$(BLUE)Infrastructure security scan (Checkov)...$(RESET)"
-	@if $(UV) checkov --help >/dev/null 2>&1; then \
-		$(UV) checkov --file docker-compose.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)Checkov found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)Checkov not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install checkov$(RESET)"; \
-	fi
-	@echo ""
-	@echo "$(BLUE)Semgrep security analysis...$(RESET)"
-	@if $(UV) semgrep --help >/dev/null 2>&1; then \
-		cd $(BOT_DIR) && $(UV) semgrep --config=auto --quiet --error . 2>/dev/null || echo "$(YELLOW)Semgrep found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)Semgrep not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install semgrep$(RESET)"; \
-	fi
-	@echo "$(GREEN)Extended security scans completed$(RESET)"
-
-# ===== VERSION MANAGEMENT =====
-
-version:
-	@echo "$(BLUE)InsightMesh Version Information$(RESET)"
-	@echo "  Version:     $(GREEN)$(VERSION)$(RESET)"
-	@echo "  Git SHA:     $(YELLOW)$(GIT_SHA)$(RESET)"
-	@echo "  Build Date:  $(YELLOW)$(BUILD_DATE)$(RESET)"
-	@echo "  Registry:    $(YELLOW)$(REGISTRY)$(RESET)"
-	@echo ""
-	@echo "$(BLUE)Docker Images:$(RESET)"
-	@echo "  Bot:              $(BOT_IMAGE)"
-	@echo "  Agent Service:    $(AGENT_SERVICE_IMAGE)"
-	@echo "  Control Plane:    $(CONTROL_PLANE_IMAGE)"
-	@echo "  Tasks:            $(TASKS_IMAGE)"
-	@echo "  RAG Service:      $(RAG_SERVICE_IMAGE)"
-	@echo "  Dashboard:        $(DASHBOARD_SERVICE_IMAGE)"
-	@echo "  LangSmith Proxy:  $(LANGSMITH_PROXY_IMAGE)"
-
-version-bump:
-	@echo "$(BLUE)Current version: $(VERSION)$(RESET)"
-	@read -p "Bump type (patch|minor|major): " bump_type; \
-	current_version=$(VERSION); \
-	major=$$(echo $$current_version | cut -d. -f1); \
-	minor=$$(echo $$current_version | cut -d. -f2); \
-	patch=$$(echo $$current_version | cut -d. -f3); \
-	case "$$bump_type" in \
-		major) major=$$((major + 1)); minor=0; patch=0;; \
-		minor) minor=$$((minor + 1)); patch=0;; \
-		patch) patch=$$((patch + 1));; \
-		*) echo "$(RED)Invalid bump type. Use: patch, minor, or major$(RESET)"; exit 1;; \
-	esac; \
-	new_version="$${major}.$${minor}.$${patch}"; \
-	echo "$$new_version" > $(VERSION_FILE); \
-	echo "$(GREEN)Version bumped: $$current_version -> $$new_version$(RESET)"; \
-	echo "$(YELLOW)Don't forget to commit the .version file!$(RESET)"
-
-# ===== DOCKER BUILD & PUBLISH =====
-
-# Build with version args injected
-docker-build-versioned: health-ui tasks-ui control-plane-ui dashboard-health-ui
-	@echo "$(BLUE)Building versioned Docker images (v$(VERSION))...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && \
-	DOCKER_BUILDKIT=1 docker compose build \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_DATE=$(BUILD_DATE)
-	@echo "$(GREEN)All images built with version $(VERSION)$(RESET)"
-
-# Tag local images with registry prefix and version
-docker-tag:
-	@echo "$(BLUE)Tagging images for registry...$(RESET)"
-	@echo "$(YELLOW)Tagging bot...$(RESET)"
-	docker tag insightmesh-bot:latest $(BOT_IMAGE)
-	docker tag insightmesh-bot:latest $(REGISTRY)/$(IMAGE_PREFIX)-bot:latest
-	@echo "$(YELLOW)Tagging agent-service...$(RESET)"
-	docker tag insightmesh-agent-service:latest $(AGENT_SERVICE_IMAGE)
-	docker tag insightmesh-agent-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:latest
-	@echo "$(YELLOW)Tagging control-plane...$(RESET)"
-	docker tag insightmesh-control-plane:latest $(CONTROL_PLANE_IMAGE)
-	docker tag insightmesh-control-plane:latest $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:latest
-	@echo "$(YELLOW)Tagging tasks...$(RESET)"
-	docker tag insightmesh-tasks:latest $(TASKS_IMAGE)
-	docker tag insightmesh-tasks:latest $(REGISTRY)/$(IMAGE_PREFIX)-tasks:latest
-	@echo "$(YELLOW)Tagging rag-service...$(RESET)"
-	docker tag insightmesh-rag-service:latest $(RAG_SERVICE_IMAGE)
-	docker tag insightmesh-rag-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:latest
-	@echo "$(YELLOW)Tagging dashboard-service...$(RESET)"
-	docker tag insightmesh-dashboard-service:latest $(DASHBOARD_SERVICE_IMAGE)
-	docker tag insightmesh-dashboard-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:latest
-	@echo "$(YELLOW)Tagging langsmith-proxy...$(RESET)"
-	docker tag insightmesh-langsmith-proxy:latest $(LANGSMITH_PROXY_IMAGE)
-	docker tag insightmesh-langsmith-proxy:latest $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
-	@echo "$(GREEN)All images tagged for registry$(RESET)"
-
-# Push all images to registry
-docker-push:
-	@echo "$(BLUE)Pushing images to registry: $(REGISTRY)$(RESET)"
-	@if [ "$(REGISTRY)" = "localhost" ]; then \
-		echo "$(RED)Error: REGISTRY not set. Use: make docker-push REGISTRY=ghcr.io/yourorg$(RESET)"; \
-		exit 1; \
-	fi
-	@echo "$(YELLOW)Pushing version $(VERSION) tags...$(RESET)"
-	docker push $(BOT_IMAGE)
-	docker push $(AGENT_SERVICE_IMAGE)
-	docker push $(CONTROL_PLANE_IMAGE)
-	docker push $(TASKS_IMAGE)
-	docker push $(RAG_SERVICE_IMAGE)
-	docker push $(DASHBOARD_SERVICE_IMAGE)
-	docker push $(LANGSMITH_PROXY_IMAGE)
-	@echo "$(YELLOW)Pushing latest tags...$(RESET)"
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-bot:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-tasks:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:latest
-	docker push $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
-	@echo "$(GREEN)All images pushed to $(REGISTRY)$(RESET)"
-
-# Full release workflow: bump (optional), build, tag, push
-release:
-	@echo "$(BLUE)Starting release workflow$(RESET)"
-	@echo "$(BLUE)Current version: $(VERSION)$(RESET)"
-	@read -p "Bump version? (patch|minor|major|no): " bump; \
-	if [ "$$bump" != "no" ]; then \
-		$(MAKE) version-bump; \
-		VERSION=$$(cat $(VERSION_FILE)); \
-	fi
-	@echo "$(BLUE)Building images...$(RESET)"
-	$(MAKE) docker-build-versioned
-	@echo "$(BLUE)Tagging images...$(RESET)"
-	$(MAKE) docker-tag
-	@echo "$(BLUE)Pushing to registry...$(RESET)"
-	$(MAKE) docker-push
-	@echo "$(GREEN)Release $(VERSION) complete!$(RESET)"
-	@echo "$(YELLOW)To deploy, update docker-compose.prod.yml with version $(VERSION)$(RESET)"
-
-# Build React UIs (required for Docker images)
-health-ui:
-	@echo "$(BLUE)Building React health dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/bot/health_ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)Health UI built successfully!$(RESET)"
-
-tasks-ui:
-	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && \
-		if [ -f $(PROJECT_ROOT_DIR)/.env ]; then . $(PROJECT_ROOT_DIR)/.env; fi && \
-		VITE_BASE_PATH=$${TASKS_BASE_PATH:-/} npm run build && \
-		echo "Built with base path: $${TASKS_BASE_PATH:-/}"
-	@echo "$(GREEN)Tasks UI built successfully!$(RESET)"
-
-control-plane-ui:
-	@echo "$(BLUE)Building React control plane dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/control_plane/ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)Control Plane UI built successfully!$(RESET)"
-
-dashboard-health-ui:
-	@echo "$(BLUE)Building React dashboard health UI...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)Dashboard Health UI built successfully!$(RESET)"
-
-docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
-	@echo "$(BLUE)Building all Docker images...$(RESET)"
-	@echo "$(YELLOW)Version: $(VERSION) | SHA: $(GIT_SHA) | Date: $(BUILD_DATE)$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose build \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_SHA=$(GIT_SHA) \
-		--build-arg BUILD_DATE=$(BUILD_DATE)
-	@echo "$(GREEN)All images built successfully!$(RESET)"
-
-# ===== DOCKER STACK =====
-
-# Start full Docker stack
-start: docker-build
-	@echo "$(BLUE)Starting full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose up -d
-	@echo "$(GREEN)InsightMesh services started!$(RESET)"
-	@echo "$(BLUE)  - Bot Health: http://localhost:8080$(RESET)"
-	@echo "$(BLUE)  - Task Scheduler: http://localhost:5001$(RESET)"
-	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
-
-# Stop all containers
-stop:
-	@echo "$(BLUE)Stopping InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose down
-	@echo "$(GREEN)All services stopped!$(RESET)"
-
-# Restart everything
-restart: stop start
-	@echo "$(GREEN)Services restarted successfully!$(RESET)"
-
-# Status command - show Docker container status
-status:
-	@echo "$(BLUE)================================$(RESET)"
-	@echo "$(BLUE)DOCKER CONTAINER STATUS$(RESET)"
-	@echo "$(BLUE)================================$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)Main Stack Containers:$(RESET)"
-	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "network=insightmesh" 2>/dev/null || echo "$(RED)Main stack not running$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)Monitoring Stack Containers:$(RESET)"
-	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)Monitoring stack not running$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)All InsightMesh Containers:$(RESET)"
-	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)No InsightMesh containers found$(RESET)"
-	@echo ""
-	@echo "$(BLUE)Service URLs (if running):$(RESET)"
-	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
-	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
-	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
-	@echo "$(BLUE)  - Grafana (Logs + Metrics): http://localhost:3000 (admin/admin)$(RESET)"
-	@echo "$(BLUE)  - Prometheus: http://localhost:9090$(RESET)"
-	@echo "$(BLUE)  - Loki: http://localhost:3100$(RESET)"
-	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
-
-# ===== CLEANUP =====
+dry-run:
+	@echo "$(BLUE)Hydra dry run — label=$(READY_LABEL)$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) python cli.py \
+		--ready-label $(READY_LABEL) \
+		--max-workers $(WORKERS) \
+		--batch-size $(BATCH_SIZE) \
+		--dry-run --verbose
+	@echo "$(GREEN)Dry run complete$(RESET)"
 
 clean:
-	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"
-	find $(PROJECT_ROOT_DIR) -type f -name "*.pyc" -delete
-	find $(PROJECT_ROOT_DIR) -type d -name "__pycache__" -delete
-	rm -rf $(PROJECT_ROOT_DIR).coverage $(PROJECT_ROOT_DIR)htmlcov/ $(BOT_DIR)/htmlcov_slack-bot/
-	rm -rf $(PROJECT_ROOT_DIR).pytest_cache $(BOT_DIR)/.pytest_cache
-	rm -rf $(PROJECT_ROOT_DIR).ruff_cache $(BOT_DIR)/.ruff_cache
-	rm -rf $(PROJECT_ROOT_DIR).pyright_cache $(BOT_DIR)/.pyright_cache
-	@echo "$(GREEN)Cleanup completed$(RESET)"
+	@echo "$(YELLOW)Cleaning up Hydra worktrees and state...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) python cli.py --clean
+	@echo "$(GREEN)Cleanup complete$(RESET)"
 
-# ===== DATABASE MANAGEMENT =====
-
-# Start MySQL databases in Docker (uses main docker-compose.yml)
-db-start:
-	@echo "$(BLUE)Starting MySQL databases...$(RESET)"
-	docker compose up -d mysql phpmyadmin
-	@echo "$(BLUE)Waiting for MySQL to be ready...$(RESET)"
-	@timeout=60; \
-	while [ $$timeout -gt 0 ]; do \
-		if docker exec insightmesh-mysql mysqladmin ping -h localhost --silent; then \
-			echo "$(GREEN)MySQL is ready!$(RESET)"; \
-			break; \
-		fi; \
-		echo "$(YELLOW)Waiting... ($$timeout seconds remaining)$(RESET)"; \
-		sleep 2; \
-		timeout=$$((timeout-2)); \
-	done; \
-	if [ $$timeout -le 0 ]; then \
-		echo "$(RED)MySQL failed to start within 60 seconds$(RESET)"; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)MySQL databases are running!$(RESET)"
-	@echo "$(YELLOW)phpMyAdmin available at: http://localhost:8081$(RESET)"
-
-# Stop MySQL databases
-db-stop:
-	@echo "$(YELLOW)Stopping MySQL databases...$(RESET)"
-	docker compose stop mysql phpmyadmin
-	@echo "$(GREEN)MySQL databases stopped$(RESET)"
-
-# Generate new migration files
-db-migrate:
-	@echo "$(BLUE)Generating migration files...$(RESET)"
-	@read -p "Enter migration message: " message; \
-	echo "$(BLUE)Generating bot service migration...$(RESET)"; \
-	cd $(BOT_DIR) && $(UV) alembic revision --autogenerate -m "$$message"; \
-	echo "$(BLUE)Generating tasks service migration...$(RESET)"; \
-	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic revision --autogenerate -m "$$message"
-	@echo "$(GREEN)Migration files generated!$(RESET)"
-
-# Apply pending migrations
-db-upgrade: db-start
-	@echo "$(BLUE)Applying migrations...$(RESET)"
-	@echo "$(BLUE)Upgrading bot database...$(RESET)"
-	cd $(BOT_DIR) && $(UV) alembic upgrade head
-	@echo "$(BLUE)Upgrading tasks database...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic upgrade head
-	@echo "$(GREEN)All migrations applied successfully!$(RESET)"
-
-# Rollback last migration
-db-downgrade:
-	@echo "$(YELLOW)Rolling back last migration...$(RESET)"
-	@echo "$(YELLOW)Rolling back bot database...$(RESET)"
-	cd $(BOT_DIR) && $(UV) alembic downgrade -1
-	@echo "$(YELLOW)Rolling back tasks database...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic downgrade -1
-	@echo "$(GREEN)Rollback completed$(RESET)"
-
-# Reset databases (WARNING: destroys data)
-db-reset: db-stop
-	@echo "$(RED)WARNING: This will destroy all data!$(RESET)"
-	@read -p "Are you sure? Type 'yes' to continue: " confirm; \
-	if [ "$$confirm" = "yes" ]; then \
-		echo "$(YELLOW)Resetting databases...$(RESET)"; \
-		docker volume rm ai-slack-bot_mysql_data 2>/dev/null || true; \
-		$(MAKE) db-start; \
-		$(MAKE) db-upgrade; \
-		echo "$(GREEN)Databases reset and migrations applied$(RESET)"; \
+status:
+	@echo "$(BLUE)Hydra State:$(RESET)"
+	@if [ -f $(PROJECT_ROOT)/.hydra/state.json ]; then \
+		cat $(PROJECT_ROOT)/.hydra/state.json | python -m json.tool; \
 	else \
-		echo "$(BLUE)Reset cancelled$(RESET)"; \
+		echo "$(YELLOW)No state file found (Hydra has not run yet)$(RESET)"; \
 	fi
 
-# Show migration status
-db-status:
-	@echo "$(BLUE)Database migration status:$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)Bot Database (bot):$(RESET)"
-	@cd $(BOT_DIR) && $(UV) alembic current -v || echo "$(RED)No migrations applied$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)Tasks Database (task):$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic current -v || echo "$(RED)No migrations applied$(RESET)"
-	@echo ""
-	@echo "$(BLUE)Pending migrations:$(RESET)"
-	@cd $(BOT_DIR) && $(UV) alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+test:
+	@echo "$(BLUE)Running Hydra unit tests...$(RESET)"
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v
+	@echo "$(GREEN)All tests passed$(RESET)"
 
-# ===== LIBRECHAT UI =====
-# LibreChat is now included in main docker-compose.yml
-# Use 'make start' to run full stack including LibreChat
+lint:
+	@echo "$(BLUE)Linting Hydra (auto-fix)...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) ruff check . --fix && $(UV) ruff format .
+	@echo "$(GREEN)Linting complete$(RESET)"
+
+lint-check:
+	@echo "$(BLUE)Checking Hydra linting...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) ruff check . && $(UV) ruff format . --check
+	@echo "$(GREEN)Lint check passed$(RESET)"
+
+typecheck:
+	@echo "$(BLUE)Running Pyright type checks...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) pyright
+	@echo "$(GREEN)Type check passed$(RESET)"
+
+security:
+	@echo "$(BLUE)Running Bandit security scan...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) bandit -c pyproject.toml -r . --severity-level medium
+	@echo "$(GREEN)Security scan passed$(RESET)"
+
+quality: lint-check typecheck security test
+	@echo "$(GREEN)Hydra quality pipeline passed$(RESET)"
+
+install:
+	@echo "$(BLUE)Installing Hydra dashboard dependencies...$(RESET)"
+	@VIRTUAL_ENV=$(VENV) uv pip install fastapi uvicorn websockets
+	@echo "$(GREEN)Dashboard dependencies installed$(RESET)"
+
+setup:
+	@echo "$(BLUE)Setting up git hooks...$(RESET)"
+	@git config core.hooksPath .githooks
+	@echo "$(GREEN)Git hooks installed (.githooks/)$(RESET)"
+	@echo "  pre-commit: lint check on staged Python files"
+	@echo "  pre-push:   full quality gate (lint + typecheck + security + tests)"
+
+ui:
+	@echo "$(BLUE)Building Hydra React dashboard...$(RESET)"
+	@cd $(HYDRA_DIR)ui && npm install && npm run build
+	@echo "$(GREEN)Dashboard built → ui/dist/$(RESET)"
+
+ui-dev:
+	@echo "$(BLUE)Starting Hydra dashboard dev server...$(RESET)"
+	@cd $(HYDRA_DIR)ui && npm install && npm run dev
+
+ui-clean:
+	@echo "$(YELLOW)Cleaning dashboard build artifacts...$(RESET)"
+	@rm -rf $(HYDRA_DIR)ui/dist $(HYDRA_DIR)ui/node_modules
+	@echo "$(GREEN)Dashboard cleaned$(RESET)"

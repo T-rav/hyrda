@@ -1,5 +1,0 @@
-tasks/Dockerfile: dockerfile.security.missing-user.missing-user
-# Pre-existing patterns that are intentional - internal Docker communication
-agent-service/services/agent_sync.py
-control_plane/ui/src/App.jsx
-tasks/ui/src/App.jsx

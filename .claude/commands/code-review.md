@@ -4,11 +4,16 @@ Run all 4 code review checks (test quality, clean code/SRP, security, migrations
 
 ## Instructions
 
-1. Run `git diff --cached --name-only` and `git diff --name-only` to find all changed files.
-2. If no source files were changed, report "No source files changed — nothing to review." and stop.
-3. Launch ALL 4 review agents **in parallel** using `Task` with `run_in_background: true` and `subagent_type: "general-purpose"`.
-4. Wait for all agents to complete.
-5. Summarize the findings from each agent.
+1. **Resolve configuration** before doing anything else:
+   - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+   - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
+   - Run `echo "$HYDRA_LABEL_AUDIT"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
+   - Pass all resolved values into every agent prompt below so they use the correct repo, assignee, and label.
+2. Run `git diff --cached --name-only` and `git diff --name-only` to find all changed files.
+3. If no source files were changed, report "No source files changed — nothing to review." and stop.
+4. Launch ALL 4 review agents **in parallel** using `Task` with `run_in_background: true` and `subagent_type: "general-purpose"`.
+5. Wait for all agents to complete.
+6. Summarize the findings from each agent.
 
 ## Agent 1: Test Quality Review
 
@@ -48,10 +53,10 @@ Steps:
 
 If tests are missing edge cases or exception handling:
 1. Before creating an issue, check for duplicates by running:
-   gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search "<key terms from title>"
+   gh issue list --repo $REPO --label $LABEL --state open --search "<key terms from title>"
    If a matching open issue already exists for the same file and finding, skip it.
 2. Create a GitHub issue for each distinct NEW finding by running:
-   gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title "<concise title>" --body "<details with file paths, line numbers, and what's missing>"
+   gh issue create --repo $REPO --assignee $ASSIGNEE --label $LABEL --title "<concise title>" --body "<details with file paths, line numbers, and what's missing>"
 3. Return {"ok": false, "reason": "Tests for [file] are missing: [specific list]. GitHub issue(s) created."}
 
 If tests are adequate, return {"ok": true}
@@ -218,10 +223,10 @@ For each changed React/TS TEST file (.spec.tsx, .test.tsx, .spec.ts, .test.ts), 
 
 If issues are found:
 1. Before creating an issue, check for duplicates by running:
-   gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search "<key terms from title>"
+   gh issue list --repo $REPO --label $LABEL --state open --search "<key terms from title>"
    If a matching open issue already exists for the same file and finding, skip it.
 2. Create a GitHub issue for each distinct NEW finding by running:
-   gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title "<concise title>" --body "<details with file paths, line numbers, and what needs to change>"
+   gh issue create --repo $REPO --assignee $ASSIGNEE --label $LABEL --title "<concise title>" --body "<details with file paths, line numbers, and what needs to change>"
 3. Return {"ok": false, "reason": "<concise list of issues with file paths and line numbers>. GitHub issue(s) created."}
 
 If code is clean, return {"ok": true}
@@ -276,8 +281,8 @@ Steps:
 - Overly permissive permissions
 
 If vulnerabilities found:
-1. Check for duplicate issues: gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search "<key terms>"
-2. Create issues: gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title "Security: <title>" --body "<details>"
+1. Check for duplicate issues: gh issue list --repo $REPO --label $LABEL --state open --search "<key terms>"
+2. Create issues: gh issue create --repo $REPO --assignee $ASSIGNEE --label $LABEL --title "Security: <title>" --body "<details>"
 3. Return {"ok": false, "reason": "Security issues found: [list]. GitHub issue(s) created."}
 
 If no vulnerabilities, return {"ok": true}
@@ -320,8 +325,8 @@ Steps:
 - Clear migration description?
 
 If issues found:
-1. Check duplicates: gh issue list --repo 8thlight/insightmesh --label claude-find --state open --search "migration <key terms>"
-2. Create issues: gh issue create --repo 8thlight/insightmesh --assignee T-rav --label claude-find --title "Migration: <title>" --body "<details>"
+1. Check duplicates: gh issue list --repo $REPO --label $LABEL --state open --search "migration <key terms>"
+2. Create issues: gh issue create --repo $REPO --assignee $ASSIGNEE --label $LABEL --title "Migration: <title>" --body "<details>"
 3. Return {"ok": false, "reason": "Migration issues: [list]. GitHub issue(s) created."}
 
 If migrations are safe, return {"ok": true}

@@ -15,6 +15,13 @@ If `$ARGUMENTS` is empty, ask the user to describe the issue.
 
 ## Instructions
 
+### Phase 0: Resolve Configuration
+
+Before doing anything else:
+- Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+- Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
+- Run `echo "$HYDRA_LABEL_EXPLORE"` — if set, use it as the label for created issues. If empty, default to `hydra-explore`.
+
 ### Phase 1: Understand the Request
 
 Parse `$ARGUMENTS` to understand what the user wants filed as an issue. Identify:
@@ -37,7 +44,7 @@ This research makes the issue actionable rather than vague.
 
 Before creating, search for existing issues:
 ```bash
-gh issue list --repo 8thlight/insightmesh --label claude-explore --state open --search "<key terms>"
+gh issue list --repo $REPO --label $LABEL --state open --search "<key terms>"
 ```
 
 If a matching open issue already exists, tell the user and show the link instead of creating a duplicate.
@@ -45,8 +52,8 @@ If a matching open issue already exists, tell the user and show the link instead
 ### Phase 4: Create the Issue
 
 Create the issue using `gh issue create` with:
-- **Label**: `claude-explore`
-- **Assignee**: `T-rav`
+- **Label**: `$LABEL`
+- **Assignee**: `$ASSIGNEE`
 - **Title**: Concise, descriptive (under 70 chars)
 - **Body**: Well-structured with the sections below
 
@@ -85,9 +92,9 @@ Reference existing patterns in the codebase that should be followed.
 #### gh issue create command
 
 ```bash
-gh issue create --repo 8thlight/insightmesh \
-  --assignee T-rav \
-  --label claude-explore \
+gh issue create --repo $REPO \
+  --assignee $ASSIGNEE \
+  --label $LABEL \
   --title "<title>" \
   --body "$(cat <<'EOF'
 <body content>
