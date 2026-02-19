@@ -18,7 +18,8 @@ class WorktreeManager:
 
     Each worktree gets:
     - A fresh branch from ``main``
-    - Symlinked ``venv/``, ``.env``, and ``node_modules/`` dirs
+    - An independent venv via ``uv sync``
+    - Symlinked ``.env`` and ``node_modules/`` dirs
     - Copied ``.claude/settings.local.json``
     - Pre-commit hooks installed
     """
@@ -117,6 +118,7 @@ class WorktreeManager:
 
         # Set up the environment inside the worktree
         self._setup_env(wt_path)
+        await self._create_venv(wt_path)
         await self._install_hooks(wt_path)
 
         logger.info(
@@ -204,13 +206,7 @@ class WorktreeManager:
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
-        """Symlink venv, .env, and node_modules into the worktree."""
-        # Symlink venv/
-        venv_src = self._repo_root / "venv"
-        venv_dst = wt_path / "venv"
-        if venv_src.exists() and not venv_dst.exists():
-            venv_dst.symlink_to(venv_src)
-
+        """Symlink .env and node_modules into the worktree."""
         # Symlink .env
         env_src = self._repo_root / ".env"
         env_dst = wt_path / ".env"
@@ -231,6 +227,13 @@ class WorktreeManager:
             if nm_src.exists() and not nm_dst.exists():
                 nm_dst.parent.mkdir(parents=True, exist_ok=True)
                 nm_dst.symlink_to(nm_src)
+
+    async def _create_venv(self, wt_path: Path) -> None:
+        """Create an independent venv in the worktree via ``uv sync``."""
+        try:
+            await self._run("uv", "sync", cwd=wt_path)
+        except RuntimeError as exc:
+            logger.warning("uv sync failed in %s: %s", wt_path, exc)
 
     async def _install_hooks(self, wt_path: Path) -> None:
         """Run ``pre-commit install`` in the worktree."""

@@ -78,9 +78,10 @@ class TestCreate:
             ) as mock_exec,
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
-            # _setup_env and _install_hooks must not fail; patch them out
+            # _setup_env, _create_venv, and _install_hooks must not fail; patch them out
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
@@ -107,6 +108,7 @@ class TestCreate:
                 manager, "_remote_branch_exists", return_value=True
             ) as mock_remote,
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             await manager.create(issue_number=7, branch="agent/issue-7")
@@ -138,6 +140,7 @@ class TestCreate:
             ) as mock_exec,
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             await manager.create(issue_number=7, branch="agent/issue-7")
@@ -147,27 +150,30 @@ class TestCreate:
         assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
 
     @pytest.mark.asyncio
-    async def test_create_calls_setup_env_and_install_hooks(
+    async def test_create_calls_setup_env_create_venv_and_install_hooks(
         self, config, tmp_path: Path
     ) -> None:
-        """create should invoke _setup_env and _install_hooks after adding the worktree."""
+        """create should invoke _setup_env, _create_venv, and _install_hooks."""
         manager = WorktreeManager(config)
         config.worktree_base.mkdir(parents=True, exist_ok=True)
 
         success_proc = _make_proc()
 
         setup_env = MagicMock()
+        create_venv = AsyncMock()
         install_hooks = AsyncMock()
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env", setup_env),
+            patch.object(manager, "_create_venv", create_venv),
             patch.object(manager, "_install_hooks", install_hooks),
         ):
             result = await manager.create(issue_number=7, branch="agent/issue-7")
 
         setup_env.assert_called_once()
+        create_venv.assert_awaited_once()
         install_hooks.assert_awaited_once()
         assert result == config.worktree_base / "issue-7"
 
@@ -183,6 +189,7 @@ class TestCreate:
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             result = await manager.create(issue_number=99, branch="agent/issue-99")
@@ -491,8 +498,8 @@ class TestRemoteBranchExists:
 class TestSetupEnv:
     """Tests for WorktreeManager._setup_env."""
 
-    def test_setup_env_symlinks_venv(self, config, tmp_path: Path) -> None:
-        """_setup_env should create a symlink for venv/ if source exists."""
+    def test_setup_env_does_not_symlink_venv(self, config, tmp_path: Path) -> None:
+        """_setup_env should NOT create a symlink for venv/ (independent venvs via uv sync)."""
         manager = WorktreeManager(config)
 
         repo_root = config.repo_root
@@ -507,8 +514,7 @@ class TestSetupEnv:
         manager._setup_env(wt_path)
 
         venv_dst = wt_path / "venv"
-        assert venv_dst.is_symlink()
-        assert venv_dst.resolve() == venv_src.resolve()
+        assert not venv_dst.exists()
 
     def test_setup_env_symlinks_dotenv(self, config, tmp_path: Path) -> None:
         """_setup_env should create a symlink for .env if source exists."""
@@ -595,15 +601,48 @@ class TestSetupEnv:
         wt_path.mkdir()
         repo_root.mkdir(parents=True, exist_ok=True)
 
-        venv_src = repo_root / "venv"
-        venv_src.mkdir()
+        env_src = repo_root / ".env"
+        env_src.write_text("EXISTING=true")
 
-        venv_dst = wt_path / "venv"
-        venv_dst.symlink_to(venv_src)
+        env_dst = wt_path / ".env"
+        env_dst.symlink_to(env_src)
 
         # Should not raise
         manager._setup_env(wt_path)
-        assert venv_dst.is_symlink()
+        assert env_dst.is_symlink()
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._create_venv
+# ---------------------------------------------------------------------------
+
+
+class TestCreateVenv:
+    """Tests for WorktreeManager._create_venv."""
+
+    @pytest.mark.asyncio
+    async def test_create_venv_runs_uv_sync(self, config, tmp_path: Path) -> None:
+        """_create_venv should run 'uv sync' in the worktree."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc()
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._create_venv(tmp_path)
+
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.args[:2] == ("uv", "sync")
+
+    @pytest.mark.asyncio
+    async def test_create_venv_swallows_errors(self, config, tmp_path: Path) -> None:
+        """_create_venv should not propagate errors if uv sync fails."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"uv not found")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager._create_venv(tmp_path)
 
 
 # ---------------------------------------------------------------------------

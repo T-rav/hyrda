@@ -438,6 +438,7 @@ async def test_push_branch_calls_git_push(config, event_bus, tmp_path):
     args = mock_create.call_args[0]
     assert args[0] == "git"
     assert args[1] == "push"
+    assert "--no-verify" in args
     assert "-u" in args
     assert "origin" in args
     assert "agent/issue-42" in args

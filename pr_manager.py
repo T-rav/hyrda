@@ -78,6 +78,7 @@ class PRManager:
             await self._run(
                 "git",
                 "push",
+                "--no-verify",
                 "-u",
                 "origin",
                 branch,
