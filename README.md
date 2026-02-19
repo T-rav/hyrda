@@ -91,7 +91,6 @@ mkdir -p .claude/commands
 # Copy the commands you want
 cp hydra/.claude/commands/gh-issue.md .claude/commands/
 cp hydra/.claude/commands/code-review.md .claude/commands/
-cp hydra/.claude/commands/audit-code.md .claude/commands/
 cp hydra/.claude/commands/audit-integration-tests.md .claude/commands/
 cp hydra/.claude/commands/audit-hooks.md .claude/commands/
 ```
@@ -177,7 +176,6 @@ gh issue create --label hydra-plan --title "Add retry logic to API client" --bod
 |---------|-------------|
 | `/gh-issue <description>` | Research codebase and create a well-structured GitHub issue |
 | `/code-review` | Run 4 parallel review agents on changed files (tests, clean code, security, migrations) |
-| `/audit-code` | Full repo code quality + test audit with parallel agents |
 | `/audit-integration-tests` | Integration test coverage gap analysis |
 | `/audit-hooks` | Audit Claude Code hooks for correctness and efficiency |
 
