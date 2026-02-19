@@ -73,7 +73,7 @@ export function Header({
                 }}>
                   {stage.label}
                   {lit && (
-                    <span style={styles.count}>{agentCount}/{maxCount}</span>
+                    <span style={styles.count}>{maxCount}</span>
                   )}
                 </div>
               </React.Fragment>
