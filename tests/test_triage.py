@@ -139,6 +139,46 @@ class TestTriageEvents:
         triage_events = [e for e in received if e.type == EventType.TRIAGE_UPDATE]
         assert all(e.data["issue"] == 99 for e in triage_events)
 
+    @pytest.mark.asyncio
+    async def test_evaluate_emits_transcript_lines(
+        self, runner: TriageRunner, bus: EventBus
+    ) -> None:
+        issue = make_issue(
+            number=42,
+            title="Implement feature X for module Y",
+            body="Detailed description of what needs to happen. " * 3,
+        )
+        received: list = []
+        queue = bus.subscribe()
+
+        await runner.evaluate(issue)
+
+        while not queue.empty():
+            received.append(await queue.get())
+
+        transcript_events = [e for e in received if e.type == EventType.TRANSCRIPT_LINE]
+        assert len(transcript_events) >= 2
+        assert transcript_events[0].data["source"] == "triage"
+        assert transcript_events[0].data["issue"] == 42
+        assert "Evaluating" in transcript_events[0].data["line"]
+
+    @pytest.mark.asyncio
+    async def test_not_ready_transcript_shows_reasons(
+        self, runner: TriageRunner, bus: EventBus
+    ) -> None:
+        issue = make_issue(number=7, title="Bug", body="short")
+        received: list = []
+        queue = bus.subscribe()
+
+        await runner.evaluate(issue)
+
+        while not queue.empty():
+            received.append(await queue.get())
+
+        transcript_events = [e for e in received if e.type == EventType.TRANSCRIPT_LINE]
+        lines = [e.data["line"] for e in transcript_events]
+        assert any("needs more information" in line for line in lines)
+
 
 # ---------------------------------------------------------------------------
 # Dry-run mode

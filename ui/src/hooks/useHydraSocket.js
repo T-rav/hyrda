@@ -69,7 +69,9 @@ function reducer(state, action) {
 
     case 'transcript_line': {
       let key = action.data.issue || action.data.pr
-      if (action.data.source === 'planner') {
+      if (action.data.source === 'triage') {
+        key = `triage-${action.data.issue}`
+      } else if (action.data.source === 'planner') {
         key = `plan-${action.data.issue}`
       } else if (action.data.source === 'reviewer') {
         key = `review-${action.data.pr}`

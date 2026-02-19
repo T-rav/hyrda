@@ -14,8 +14,9 @@ const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'plann
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)
+  const triagers = allEntries.filter(([, w]) => w.role === 'triage')
   const planners = allEntries.filter(([, w]) => w.role === 'planner')
-  const implementers = allEntries.filter(([, w]) => w.role !== 'reviewer' && w.role !== 'planner')
+  const implementers = allEntries.filter(([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage')
   const reviewers = allEntries.filter(([, w]) => w.role === 'reviewer')
 
   if (allEntries.length === 0) {
@@ -29,6 +30,13 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
 
   return (
     <div style={styles.sidebar}>
+      <RoleSection
+        label="Triage"
+        entries={triagers}
+        selectedWorker={selectedWorker}
+        onSelect={onSelect}
+        humanInputRequests={humanInputRequests}
+      />
       <RoleSection
         label="Planners"
         entries={planners}

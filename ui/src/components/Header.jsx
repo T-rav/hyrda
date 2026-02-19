@@ -1,7 +1,7 @@
 import React from 'react'
 
 const STAGES = [
-  { key: 'find',      label: 'FIND',      color: '#39d353', role: 'triage' },
+  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage' },
   { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
   { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
   { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
