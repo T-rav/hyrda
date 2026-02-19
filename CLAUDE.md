@@ -57,6 +57,7 @@ make lint-check     # Check linting (no fix)
 make typecheck      # Run Pyright type checks
 make security       # Run Bandit security scan
 make quality        # Lint + typecheck + security + test
+make setup          # Install git hooks (pre-commit, pre-push)
 make ui             # Build React dashboard
 make ui-dev         # Start React dashboard dev server
 ```

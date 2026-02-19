@@ -25,7 +25,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install status ui ui-dev ui-clean
+.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean
 
 help:
 	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
@@ -42,6 +42,7 @@ help:
 	@echo "  make typecheck      Run Pyright type checks"
 	@echo "  make security       Run Bandit security scan"
 	@echo "  make quality        Lint + typecheck + security + test"
+	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
@@ -135,6 +136,13 @@ install:
 	@echo "$(BLUE)Installing Hydra dashboard dependencies...$(RESET)"
 	@VIRTUAL_ENV=$(VENV) uv pip install fastapi uvicorn websockets
 	@echo "$(GREEN)Dashboard dependencies installed$(RESET)"
+
+setup:
+	@echo "$(BLUE)Setting up git hooks...$(RESET)"
+	@git config core.hooksPath .githooks
+	@echo "$(GREEN)Git hooks installed (.githooks/)$(RESET)"
+	@echo "  pre-commit: lint check on staged Python files"
+	@echo "  pre-push:   full quality gate (lint + typecheck + security + tests)"
 
 ui:
 	@echo "$(BLUE)Building Hydra React dashboard...$(RESET)"

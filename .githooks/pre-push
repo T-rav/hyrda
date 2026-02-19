@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Pre-push hook: full quality gate (lint, typecheck, security, tests).
+# Prevents pushing code that will fail CI.
+
+set -euo pipefail
+
+HYDRA_DIR="$(git rev-parse --show-toplevel)"
+
+echo "pre-push: running full quality pipeline..."
+cd "$HYDRA_DIR" && make quality || {
+    echo ""
+    echo "Quality gate failed. Fix issues before pushing."
+    exit 1
+}
+
+echo "pre-push: all checks passed"

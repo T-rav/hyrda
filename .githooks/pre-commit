@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Pre-commit hook: fast lint check on staged Python files.
+# Catches formatting and style issues before they reach CI.
+
+set -euo pipefail
+
+# Only check if Python files are staged
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py' || true)
+if [ -z "$STAGED_PY" ]; then
+    exit 0
+fi
+
+HYDRA_DIR="$(git rev-parse --show-toplevel)"
+UV="VIRTUAL_ENV=${HYDRA_DIR}/venv uv run --active"
+
+echo "pre-commit: running ruff check..."
+cd "$HYDRA_DIR" && eval "$UV ruff check ." || {
+    echo ""
+    echo "Lint failed. Run 'make lint' to auto-fix, then re-stage."
+    exit 1
+}
+
+echo "pre-commit: running ruff format check..."
+cd "$HYDRA_DIR" && eval "$UV ruff format . --check" || {
+    echo ""
+    echo "Format check failed. Run 'make lint' to auto-fix, then re-stage."
+    exit 1
+}
+
+echo "pre-commit: lint OK"
