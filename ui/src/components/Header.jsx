@@ -41,39 +41,44 @@ export function Header({
           background: connected ? '#3fb950' : '#f85149',
         }} />
       </div>
-      <div style={styles.stats}>
-        <Stat label="PRs" value={prsCount} />
-        <Stat label="Merged" value={mergedCount} />
-        {lifetimeStats && (
-          <Stat label="Filed" value={lifetimeStats.issues_created} />
-        )}
-      </div>
-      <div style={styles.pills}>
-        {STAGES.map((stage, i) => {
-          const agentCount = counts[stage.role] || 0
-          const isActive = agentCount > 0
-          return (
-            <React.Fragment key={stage.key}>
-              {i > 0 && (
-                <div style={{
-                  ...styles.connector,
-                  background: isActive ? stage.color : '#30363d',
-                }} />
-              )}
-              <div style={{
-                ...styles.pill,
-                background: isActive ? stage.color : '#21262d',
-                color: isActive ? '#0d1117' : '#484f58',
-                borderColor: isActive ? stage.color : '#30363d',
-              }}>
-                {stage.label}
-                {agentCount > 0 && (
-                  <span style={styles.count}>{agentCount}</span>
+      <div style={styles.center}>
+        <div style={styles.sessionBox}>
+          <span style={styles.sessionLabel}>Session</span>
+          <div style={styles.stats}>
+            <Stat label="PRs" value={prsCount} />
+            <Stat label="Merged" value={mergedCount} />
+            {lifetimeStats && (
+              <Stat label="Issues Found" value={lifetimeStats.issues_created} />
+            )}
+          </div>
+        </div>
+        <div style={styles.pills}>
+          {STAGES.map((stage, i) => {
+            const agentCount = counts[stage.role] || 0
+            const isActive = agentCount > 0
+            return (
+              <React.Fragment key={stage.key}>
+                {i > 0 && (
+                  <div style={{
+                    ...styles.connector,
+                    background: isActive ? stage.color : '#30363d',
+                  }} />
                 )}
-              </div>
-            </React.Fragment>
-          )
-        })}
+                <div style={{
+                  ...styles.pill,
+                  background: isActive ? stage.color : '#21262d',
+                  color: isActive ? '#0d1117' : '#484f58',
+                  borderColor: isActive ? stage.color : '#30363d',
+                }}>
+                  {stage.label}
+                  {agentCount > 0 && (
+                    <span style={styles.count}>{agentCount}</span>
+                  )}
+                </div>
+              </React.Fragment>
+            )
+          })}
+        </div>
       </div>
       <div style={styles.controls}>
         {canStart && (
@@ -126,7 +131,29 @@ const styles = {
   logo: { fontSize: 18, fontWeight: 700, color: '#58a6ff' },
   subtitle: { color: '#8b949e', fontWeight: 400, fontSize: 12, marginLeft: 8 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
-  stats: { display: 'flex', gap: 20, fontSize: 12 },
+  center: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sessionBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    border: '1px solid #30363d',
+    borderRadius: 8,
+    padding: '6px 14px',
+    background: '#0d1117',
+  },
+  sessionLabel: {
+    color: '#8b949e',
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  stats: { display: 'flex', gap: 16, fontSize: 12 },
   stat: { color: '#8b949e' },
   statVal: { color: '#c9d1d9' },
   pills: { display: 'flex', alignItems: 'center', gap: 0 },
