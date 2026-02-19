@@ -1,0 +1,178 @@
+# Plan for Issue #31
+
+## Goal
+
+Extract the repeated mock setup in `TestImplementBatch` and `TestImplementIncludesPush` into a single helper function, reducing ~15-20 lines of boilerplate per test to 1-3 lines.
+
+## Files to Modify
+
+- **`tests/test_orchestrator.py`** — Add helper function and refactor both test classes.
+
+## No New Files
+
+The helper belongs in `test_orchestrator.py` alongside the existing `make_issue`, `make_worker_result`, and `make_pr_info` helpers. It is specific to orchestrator tests and follows the same local-helper pattern.
+
+## Implementation Steps
+
+### Step 1: Add the `_setup_implement_mocks` helper function
+
+Add this function in the `# Helpers` section (after `make_review_result`, around line 93), before the test classes:
+
+```python
+def _setup_implement_mocks(
+    orch: HydraOrchestrator,
+    config: HydraConfig,
+    issues: list[GitHubIssue],
+    *,
+    agent_run: Any | None = None,
+    success: bool = True,
+    push_return: bool = True,
+    create_pr_return: PRInfo | None = None,
+) -> tuple[AsyncMock, AsyncMock]:
+    """Wire standard _implement_batch mocks into *orch*.
+
+    Parameters
+    ----------
+    agent_run : optional custom coroutine for ``orch._agents.run``; when *None*
+        a default is generated that returns ``make_worker_result(success=success)``.
+    success : used by the default agent_run only.
+    push_return : return value for ``mock_prs.push_branch``.
+    create_pr_return : return value for ``mock_prs.create_pr``; defaults to ``make_pr_info()``.
+
+    Returns ``(mock_wt, mock_prs)`` so tests can assert on them.
+    """
+    if agent_run is None:
+        async def _default_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number,
+                success=success,
+                worktree_path=str(wt_path),
+            )
+        agent_run = _default_agent_run
+
+    orch._agents.run = agent_run  # type: ignore[method-assign]
+    orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+    mock_wt = AsyncMock()
+    mock_wt.create = AsyncMock(
+        side_effect=lambda num, branch: config.worktree_base / f"issue-{num}"
+    )
+    orch._worktrees = mock_wt
+
+    mock_prs = AsyncMock()
+    mock_prs.push_branch = AsyncMock(return_value=push_return)
+    mock_prs.create_pr = AsyncMock(
+        return_value=create_pr_return if create_pr_return is not None else make_pr_info()
+    )
+    mock_prs.add_labels = AsyncMock()
+    mock_prs.remove_label = AsyncMock()
+    mock_prs.post_comment = AsyncMock()
+    mock_prs.add_pr_labels = AsyncMock()
+    orch._prs = mock_prs
+
+    return mock_wt, mock_prs
+```
+
+### Step 2: Refactor `TestImplementBatch` tests
+
+**`test_returns_worker_results_for_each_issue`** (line 442):
+- Keep the custom `fake_agent_run` (matches results by issue.number).
+- Replace ~15 lines of mock setup with:
+  ```python
+  _setup_implement_mocks(orch, config, issues, agent_run=fake_agent_run)
+  ```
+
+**`test_semaphore_limits_concurrency`** (line 485):
+- Keep the custom `fake_agent_run` (concurrency tracking).
+- Replace ~12 lines of mock setup with:
+  ```python
+  _setup_implement_mocks(orch, config, issues, agent_run=fake_agent_run)
+  ```
+
+**`test_marks_issue_in_progress_then_done`** (line 526):
+- Remove inline `fake_agent_run` — use default.
+- Replace ~18 lines with:
+  ```python
+  _setup_implement_mocks(orch, config, [issue])
+  ```
+
+**`test_marks_issue_failed_when_agent_fails`** (line 557):
+- Remove inline `fake_agent_run` — use default with `success=False`.
+- Replace ~18 lines with:
+  ```python
+  _setup_implement_mocks(orch, config, [issue], success=False)
+  ```
+
+**`test_returns_empty_when_no_issues`** (line 590):
+- **Leave unchanged** — only patches `_fetch_ready_issues` with empty list; no other mocks needed.
+
+**`test_resumes_existing_worktree`** (line 601):
+- Remove inline `fake_agent_run` — use default.
+- Replace ~15 lines with:
+  ```python
+  mock_wt, mock_prs = _setup_implement_mocks(
+      orch, config, [issue], create_pr_return=make_pr_info(101, 77)
+  )
+  ```
+- Keep the pre-created worktree directory setup and the assertion on `mock_wt.create.assert_not_awaited()`.
+
+### Step 3: Refactor `TestImplementIncludesPush` tests
+
+**`test_worker_result_contains_pr_info`** (line 647):
+- Replace ~15 lines with:
+  ```python
+  _setup_implement_mocks(orch, config, [issue], create_pr_return=make_pr_info(101, 42))
+  ```
+
+**`test_worker_creates_draft_pr_on_failure`** (line 680):
+- Replace ~15 lines with:
+  ```python
+  mock_wt, mock_prs = _setup_implement_mocks(
+      orch, config, [issue], success=False, create_pr_return=make_pr_info(101, 42, draft=True)
+  )
+  ```
+
+**`test_worker_no_pr_when_push_fails`** (line 719):
+- Replace ~12 lines with:
+  ```python
+  mock_wt, mock_prs = _setup_implement_mocks(orch, config, [issue], push_return=False)
+  ```
+
+**`test_branch_pushed_and_commented_before_agent_runs`** (line 749):
+- Keep the custom `fake_push`, `fake_comment`, and `fake_agent_run` functions (call order tracking).
+- Use helper for the base setup, then override specific mock attributes:
+  ```python
+  mock_wt, mock_prs = _setup_implement_mocks(
+      orch, config, [issue], agent_run=fake_agent_run, create_pr_return=make_pr_info(101, 42)
+  )
+  mock_prs.push_branch = fake_push
+  mock_prs.post_comment = fake_comment
+  ```
+
+### Step 4: Clean up imports
+
+- Add `Any` to the `typing` import if not already present (for the `agent_run` parameter type hint). Alternatively, use `Callable` from `collections.abc` or just use no annotation beyond what's needed. Since the file already uses `TYPE_CHECKING`, the simplest approach is to use a protocol or `Any`.
+
+## Testing Strategy
+
+- Run `make test` — all existing tests must pass with zero changes to assertions.
+- This is a pure refactoring; no new test logic is needed.
+- The existing 10 tests across both classes are the verification suite.
+- Verify no test behavior changes by confirming identical pass/fail outcomes.
+
+## Key Considerations
+
+1. **Backward compatibility of assertions**: Tests that assert on `mock_wt` or `mock_prs` (e.g., `mock_wt.create.assert_not_awaited()`, `mock_prs.create_pr.call_args`) rely on these being the exact mocks returned by the helper. This is preserved since the helper returns `(mock_wt, mock_prs)`.
+
+2. **The helper sets `post_comment` and `add_pr_labels`**: The orchestrator's `_implement_batch` calls both `post_comment` and `add_pr_labels`, but most existing tests don't explicitly mock them (relying on AsyncMock's auto-attribute behavior). The helper explicitly sets these for clarity and to match what the orchestrator calls.
+
+3. **Tests that don't use the return value**: Some tests (like `test_marks_issue_in_progress_then_done`) don't need `mock_wt` or `mock_prs` — they just call `_setup_implement_mocks(orch, config, [issue])` without capturing the return. This is fine.
+
+4. **`test_returns_empty_when_no_issues` is left alone**: It only mocks `_fetch_ready_issues` and doesn't need worktree/PR mocks, so the helper doesn't help here.
+
+5. **Net reduction**: ~130 lines of boilerplate removed across 9 test methods (9 × ~15 lines), replaced by 9 one-liner calls plus the ~30-line helper function. Net savings: ~100 lines.
+
+---
+**Summary:** Extract repeated implement-batch mock setup into a `_setup_implement_mocks` helper, reducing ~130 lines of boilerplate to 9 one-liner calls plus a 30-line helper.

@@ -173,6 +173,7 @@ class HydraOrchestrator:
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
+            await self._triage_find_issues()
             await self._plan_issues()
             await self._sleep_or_stop(self._config.poll_interval)
 

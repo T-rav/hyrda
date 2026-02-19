@@ -1,0 +1,186 @@
+I'll start by exploring the relevant files to understand the current `_run` implementations and their callers.
+  → Read: /Users/travisf/Documents/projects/hyrda/hydra/worktree.py
+    ← File does not exist.
+  → Read: /Users/travisf/Documents/projects/hyrda/hydra/pr_manager.py
+    ← <tool_use_error>Sibling tool call errored</tool_use_error>
+  → Read: /Users/travisf/Documents/projects/hyrda/hydra/orchestrator.py
+    ← <tool_use_error>Sibling tool call errored</tool_use_error>
+  → Read: /Users/travisf/Documents/projects/hyrda/hydra/dashboard.py
+    ← <tool_use_error>Sibling tool call errored</tool_use_error>
+The files are likely under the `src/` directory. Let me find the correct paths.
+  → Glob: **/{worktree,pr_manager,orchestrator,dashboard}.py
+    ← /Users/travisf/Documents/projects/hyrda/worktree.py /Users/travisf/Documents/pro…
+They're at the root level. Let me read all the relevant sections.
+  → Read: /Users/travisf/Documents/projects/hyrda/worktree.py
+    ←    240→            logger.warning("pre-commit install failed: %s", exc)    241→ …
+  → Read: /Users/travisf/Documents/projects/hyrda/pr_manager.py
+    ←    560→    561→        elapsed = 0    562→        while elapsed < timeout:    56…
+  → Read: /Users/travisf/Documents/projects/hyrda/orchestrator.py
+    ←    470→        # Only skip issues already active in this run (GitHub labels are …
+  → Read: /Users/travisf/Documents/projects/hyrda/dashboard.py
+    ←    100→        async def get_prs() -> JSONResponse:    101→            """Fetch …
+The line numbers from the issue seem off for some files. Let me search for the actual `_run` and `_gh_run` methods.
+  → Grep: /async def _run\b|async def _gh_run\b/ in .
+    ← worktree.py:244:    async def _run(self, *cmd: str, cwd: Path) -> str: orchestra…
+  → Read: /Users/travisf/Documents/projects/hyrda/dashboard.py
+    ←    180→                for label in self._config.hitl_label:    181→            …
+  → Read: /Users/travisf/Documents/projects/hyrda/pr_manager.py
+    ←    645→            Path(tmp_path).unlink(missing_ok=True)    646→    647→    # -…
+  → Read: /Users/travisf/Documents/projects/hyrda/orchestrator.py
+    ←    530→    531→        non_draft = [p for p in pr_infos if not p.draft and p.num…
+Now let me find all callers of these methods and see the existing project structure.
+  → Grep: /self\._run\(|self\._gh_run\(/ in .
+    ← worktree.py:47:            output = await self._run( worktree.py:90:            …
+  → Glob: *.py
+    ← /Users/travisf/Documents/projects/hyrda/.venv/lib/python3.11/site-packages/pydan…
+  → Glob: tests/**/*.py
+    ← /Users/travisf/Documents/projects/hyrda/tests/conftest.py /Users/travisf/Documen…
+Now let me check the existing project structure for source files and look at how the current `_run` callers use `cwd`, and check what existing test patterns look like.
+  → Bash: ls /Users/travisf/Documents/projects/hyrda/*.py
+    ← /Users/travisf/Documents/projects/hyrda/__init__.py /Users/travisf/Documents/pro…
+  → Grep: /self\._gh_run\(/ in /Users/travisf/Documents/projects/hyrda/orchestrator.py
+    ← 267:                raw = await self._gh_run(*cmd) 501:                raw = awa…
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/test_worktree.py
+    ←      1→"""Tests for dx/hydra/worktree.py — WorktreeManager."""      2→      3→fr…
+Let me check how the orchestrator and dashboard use the `_gh_run` and inline subprocess calls to understand the differences.
+  → Read: /Users/travisf/Documents/projects/hyrda/orchestrator.py
+    ←    260→                str(limit),    261→                "--json",    262→     …
+  → Read: /Users/travisf/Documents/projects/hyrda/orchestrator.py
+    ←    495→    496→        # For each issue, look up the open PR on its branch    49…
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/conftest.py
+    ←      1→"""Shared fixtures and factories for Hydra tests."""      2→      3→from …
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/helpers.py
+    ←      1→"""Shared test helpers for Hydra tests."""      2→      3→from __future__…
+Now let me see the full dashboard.py to understand all inline subprocess calls, and check if there are any other subprocess patterns I should be aware of.
+  → Grep: /create_subprocess_exec/ in /Users/travisf/Documents/projects/hyrda
+    ← orchestrator.py:541:        proc = await asyncio.create_subprocess_exec( agent.p…
+  → Read: /Users/travisf/Documents/projects/hyrda/dashboard.py
+    ←      1→"""Live web dashboard for Hydra — FastAPI + WebSocket."""      2→      3→…
+Let me check if agent.py, reviewer.py, and planner.py have their own subprocess patterns that might also be candidates for consolidation.
+  → Read: /Users/travisf/Documents/projects/hyrda/agent.py
+    ←    210→        cmd: list[str],    211→        prompt: str,    212→        worktr…
+  → Read: /Users/travisf/Documents/projects/hyrda/reviewer.py
+    ←    310→        worktree_path: Path,    311→        pr_number: int,    312→    ) …
+  → Read: /Users/travisf/Documents/projects/hyrda/agent.py
+    ←    290→        # Check for commits on the branch    291→        commit_count = a…
+Now let me check what `agent.py` line 380 does and look for any existing utility module.
+  → Read: /Users/travisf/Documents/projects/hyrda/agent.py
+    ←    370→            if success:    371→                return True, "OK", attempt…
+  → Glob: **/util*.py
+    ← /Users/travisf/Documents/projects/hyrda/.venv/lib/python3.11/site-packages/pydan…
+No existing utility module. Let me also check the `reviewer.py` line 384 and the `planner.py` subprocess usage to confirm they're all streaming (different pattern).
+  → Read: /Users/travisf/Documents/projects/hyrda/reviewer.py
+    ←    377→        path = log_dir / f"review-pr-{pr_number}.txt"    378→        path…
+  → Read: /Users/travisf/Documents/projects/hyrda/planner.py
+    ←    353→        cwd: Path,    354→        issue_number: int,    355→    ) -> str:…
+  → Read: /Users/travisf/Documents/projects/hyrda/config.py
+    ←      1→"""Hydra configuration via Pydantic."""      2→      3→from __future__ im…
+Good — `agent.py`, `reviewer.py`, and `planner.py` use `create_subprocess_exec` for interactive Claude CLI streaming (stdin piping), which is fundamentally different from the run-and-capture pattern. The `agent.py:_count_commits` and `reviewer.py:_has_new_commits` also use subprocess directly but with different semantics (no RuntimeError raise, custom return types). Those are out of scope.
+
+Let me check the `config.py` for `gh_token` and `main_branch` fields.
+  → Grep: /gh_token|main_branch/ in /Users/travisf/Documents/projects/hyrda/config.py
+    ← 95:    main_branch: str = Field(default="main", description="Base branch name") …
+Now I have all the information needed. Let me produce the plan.
+
+PLAN_START
+
+## Goal
+
+Extract the duplicated async subprocess helper (`_run` / `_gh_run`) from `worktree.py`, `pr_manager.py`, and `orchestrator.py` into a shared utility function. Replace the inline subprocess calls in `dashboard.py` with the shared function as well.
+
+## New File
+
+### `subprocess_util.py`
+
+Create a new module at the project root containing a single async helper function:
+
+```python
+async def run_subprocess(
+    *cmd: str,
+    cwd: Path | None = None,
+    gh_token: str = "",
+) -> str:
+```
+
+**Behavior** (identical to existing `_run` methods):
+1. Copy `os.environ`, remove `CLAUDECODE` key
+2. If `gh_token` is non-empty, set `GH_TOKEN` in env
+3. Call `asyncio.create_subprocess_exec` with `stdout=PIPE`, `stderr=PIPE`, optional `cwd`
+4. Await `proc.communicate()`
+5. On non-zero returncode, raise `RuntimeError` with the same message format: `f"Command {cmd!r} failed (rc={proc.returncode}): {stderr.decode().strip()}"`
+6. Return `stdout.decode().strip()`
+
+## Files to Modify
+
+### 1. `worktree.py`
+- **Delete** the `_run` method (lines 244-268)
+- **Import** `run_subprocess` from `subprocess_util`
+- **Replace** all `await self._run(...)` calls (≈12 call sites) with `await run_subprocess(..., gh_token=self._config.gh_token)`
+- The `cwd=` keyword is already used at every call site, so the signature change is compatible
+
+### 2. `pr_manager.py`
+- **Delete** the `_run` method (lines 649-668)
+- **Import** `run_subprocess` from `subprocess_util`
+- **Replace** all `await self._run(...)` calls (≈13 call sites) with `await run_subprocess(..., gh_token=self._config.gh_token)`
+- Same `cwd=` pattern as worktree
+
+### 3. `orchestrator.py`
+- **Delete** the `_gh_run` method (lines 535-553)
+- **Import** `run_subprocess` from `subprocess_util`
+- **Replace** `await self._gh_run(...)` calls (2 call sites at lines 267 and 501) with `await run_subprocess(..., gh_token=self._config.gh_token)`
+- These calls don't pass `cwd`, which is fine since `cwd` defaults to `None`
+
+### 4. `dashboard.py`
+- **Import** `run_subprocess` from `subprocess_util`
+- **Replace** the 3 inline `create_subprocess_exec` blocks (lines ~120, ~181, ~211) with calls to `run_subprocess`
+- Dashboard currently swallows errors (continues on non-zero exit). Wrap calls in `try/except RuntimeError` to preserve that behavior, parsing the stdout from the function's return value
+- Note: dashboard does NOT set `GH_TOKEN` currently, but it should — this is a minor improvement. If the dashboard has access to `self._config.gh_token`, pass it; otherwise just omit it (empty string default)
+
+## Implementation Steps
+
+1. **Create `subprocess_util.py`** with the `run_subprocess` function
+2. **Create `tests/test_subprocess_util.py`** with unit tests (see testing strategy below)
+3. **Update `worktree.py`** — remove `_run`, import and use `run_subprocess`
+4. **Update `pr_manager.py`** — remove `_run`, import and use `run_subprocess`
+5. **Update `orchestrator.py`** — remove `_gh_run`, import and use `run_subprocess`
+6. **Update `dashboard.py`** — replace inline subprocess calls with `run_subprocess` wrapped in try/except
+7. **Run `make quality`** to verify lint, types, security, and all tests pass
+
+## Testing Strategy
+
+### New tests: `tests/test_subprocess_util.py`
+
+Test the shared `run_subprocess` function directly:
+
+1. **`test_returns_stdout_on_success`** — Mock `create_subprocess_exec`, verify stdout returned stripped
+2. **`test_raises_runtime_error_on_nonzero_exit`** — Mock a failed process, verify `RuntimeError` is raised with correct message including the command and stderr
+3. **`test_strips_claudecode_from_env`** — Verify the env dict passed to `create_subprocess_exec` does not contain `CLAUDECODE`
+4. **`test_sets_gh_token_when_provided`** — Verify `GH_TOKEN` is set in env when `gh_token` param is non-empty
+5. **`test_no_gh_token_when_empty`** — Verify `GH_TOKEN` is not injected when `gh_token=""` (or uses whatever was already in the env)
+6. **`test_passes_cwd_when_provided`** — Verify `cwd` is passed to `create_subprocess_exec`
+7. **`test_no_cwd_when_none`** — Verify `cwd` is not passed (or passed as None) when omitted
+
+### Existing tests
+
+The existing tests in `test_worktree.py`, `test_pr_manager.py`, `test_orchestrator.py`, and `test_dashboard.py` all mock `asyncio.create_subprocess_exec` at the module level. Since we're replacing the private `_run` methods with a call to the shared function (which still calls `asyncio.create_subprocess_exec` internally), these tests should continue to work **if** the mock target is updated:
+
+- Tests currently patching `asyncio.create_subprocess_exec` will still work since `subprocess_util.run_subprocess` calls the same function
+- The patch target in each test file may need to change from `"asyncio.create_subprocess_exec"` to `"subprocess_util.run_subprocess"` for tests that were testing through the `_run` wrapper — but since most tests mock at the `asyncio` level, they should continue to work as-is. Verify by running `make test` after each file change.
+
+## Key Considerations
+
+1. **Backward compatibility**: The public API of all classes remains unchanged. Only private methods are being removed and replaced with a module-level function.
+
+2. **Error message format**: Keep the exact same `RuntimeError` message format so any existing error handling/logging that parses these messages continues to work.
+
+3. **Dashboard error handling**: The dashboard currently silently ignores subprocess failures. When switching to `run_subprocess`, wrap each call in `try/except RuntimeError` to preserve this behavior.
+
+4. **No `cwd` for orchestrator**: The orchestrator's `_gh_run` doesn't pass `cwd`. The shared function should accept `cwd: Path | None = None` and only pass it to `create_subprocess_exec` when not None. (Actually, passing `cwd=None` to `create_subprocess_exec` is valid and means "use current directory", so this is fine either way.)
+
+5. **GH_TOKEN in dashboard**: Dashboard inline calls currently don't set `GH_TOKEN`. The dashboard has `self._config` available, so we should pass `gh_token=self._config.gh_token` for consistency. This is a minor correctness improvement.
+
+6. **Import path for mock targets**: Since the new function lives in `subprocess_util`, tests that need to mock the subprocess layer can either mock `asyncio.create_subprocess_exec` globally (as they do now) or mock `subprocess_util.run_subprocess` at a higher level. The existing approach should continue working.
+
+PLAN_END
+
+SUMMARY: Extract duplicated `_run`/`_gh_run` async subprocess helpers from worktree.py, pr_manager.py, orchestrator.py, and dashboard.py into a shared `run_subprocess` function in a new `subprocess_util.py` module.
