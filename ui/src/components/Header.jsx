@@ -47,7 +47,8 @@ export function Header({
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
           <div style={styles.stats}>
-            <Stat label="Issues" value={issuesFound} />
+            <Stat label="Triage" value={Object.values(workers || {}).filter(w => w.role === 'triage').length} />
+            <Stat label="New Issues" value={issuesFound} />
             <Stat label="PRs" value={prsCount} />
             <Stat label="Merged" value={mergedCount} />
           </div>
