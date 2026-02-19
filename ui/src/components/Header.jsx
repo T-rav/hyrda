@@ -11,12 +11,11 @@ const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'plann
 
 function countByRole(workers) {
   const list = Object.values(workers)
-  const active = list.filter(w => ACTIVE_STATUSES.includes(w.status))
   return {
-    triage: active.filter(w => w.role === 'triage').length,
-    planner: active.filter(w => w.role === 'planner').length,
-    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
-    reviewer: active.filter(w => w.role === 'reviewer').length,
+    triage: list.filter(w => w.role === 'triage').length,
+    planner: list.filter(w => w.role === 'planner').length,
+    implementer: list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
+    reviewer: list.filter(w => w.role === 'reviewer').length,
   }
 }
 
