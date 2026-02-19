@@ -1,6 +1,6 @@
 # Full Repo Code Quality Audit
 
-Run a comprehensive code quality and test quality audit across all services in the repo. Launch one Tier 1 coordinator agent per service, all in parallel and in background. Each agent reviews all `.py` source and test files in its service, then creates GitHub issues for findings (with duplicate checking).
+Run a comprehensive code quality and test quality audit across the entire repo. Dynamically discovers the project structure, splits work across parallel agents, and creates GitHub issues for findings.
 
 ## Instructions
 
@@ -8,25 +8,43 @@ Run a comprehensive code quality and test quality audit across all services in t
    - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
    - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
    - Run `echo "$HYDRA_LABEL_AUDIT"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
-   - Pass all resolved values into every agent prompt below so they use the correct repo, assignee, and label.
-2. Launch ALL of the following Tier 1 agents **in parallel** using `Task` with `run_in_background: true` and `subagent_type: "general-purpose"`.
-3. Wait for all agents to complete.
-4. After all finish, run `gh issue list --repo $REPO --label $LABEL --state open --limit 200` to show the user a final summary of all issues created.
+   - Store resolved values as `$REPO`, `$ASSIGNEE`, `$LABEL`.
 
-## Tier 1 Agents to Launch
+2. **Discover project structure:**
+   - Use Glob to find all `*.py` source files, excluding `.venv/`, `venv/`, `__pycache__/`, `node_modules/`, `dist/`, `build/`, `*.pyc`.
+   - Separate into SOURCE files and TEST files (any file under a `tests/` or `test/` directory, or matching `test_*.py`).
+   - Count the files. If >20 source files, split them into 2-3 roughly equal groups for parallel agents.
 
-### Agent 1: bot/ audit
+3. **Launch agents in parallel** using `Task` with `run_in_background: true` and `subagent_type: "general-purpose"`:
+   - **Agent 1: Source code audit** — Reviews all (or first half of) source files against the Source File Checklist.
+   - **Agent 2: Source code audit (overflow)** — If >20 source files, reviews the second half. Otherwise skip this agent.
+   - **Agent 3: Test quality audit** — Reviews all test files against the Test File Checklist.
+   - **Agent 4: Non-Python audit** — Reviews Dockerfiles, CSS, HTML, JSX/TSX, YAML against their respective checklists.
+
+4. Wait for all agents to complete.
+5. After all finish, run `gh issue list --repo $REPO --label $LABEL --state open --limit 200` to show the user a final summary of all issues created.
+
+## Agent Prompt Template — Source Code Audit
+
 ```
-You are a code quality auditor for the bot/ service in /Users/travisf/Documents/projects/hyrda.
+You are a code quality auditor for the project at {repo_root}.
+
+## Configuration
+- GitHub repo: {REPO}
+- Assignee: {ASSIGNEE}
+- Label: {LABEL}
+
+## Your Scope
+Audit these source files:
+{file_list}
 
 ## Steps
-1. Use Glob to list ALL .py files in bot/ — EXCLUDE .venv/, __pycache__/, node_modules/, *.pyc
-2. Separate into SOURCE files and TEST files (tests/ directory)
-3. Read each file and review against the checklists below
-4. For each finding, check for duplicate GH issues first:
-   gh issue list --repo $REPO --label $LABEL --state open --search "<key terms>"
-5. Create GH issues for NEW findings only:
-   gh issue create --repo $REPO --assignee $ASSIGNEE --label $LABEL --title "<title>" --body "<details with file paths, line numbers, and what needs to change>"
+1. Read each file listed above
+2. Review against the checklist below
+3. For each finding, check for duplicate GH issues first:
+   gh issue list --repo {REPO} --label {LABEL} --state open --search "<key terms>"
+4. Create GH issues for NEW findings only:
+   gh issue create --repo {REPO} --assignee {ASSIGNEE} --label {LABEL} --title "<title>" --body "<details with file paths, line numbers, and what needs to change>"
 
 ## Source File Checklist
 - Type hints on all function signatures (params + return)
@@ -42,85 +60,120 @@ You are a code quality auditor for the bot/ service in /Users/travisf/Documents/
 - Files >200 lines — consider splitting
 - Read 2-3 neighboring files for pattern consistency
 
-## Test File Checklist
-- Tests for happy path, edge cases (empty/None/boundary), and error handling
-- Proper assertions (not just assert True)
-- Tests isolated with mocks/fixtures
-- Arrange-Act-Assert pattern
-- Flag complex inline object construction (4+ fields) — suggest builder
-- Flag repeated setup across tests — suggest factory
-
-## Exclusions
-- Don't review librechat-custom/ files
-- Don't review generated/dist files
+## Be Pragmatic
+- Focus on real issues, not style nitpicks
+- Small utility functions don't need to be flagged
+- Don't flag things that are already well-structured
+- Focus on maintainability and correctness issues
 
 Return a summary of all findings grouped by category, with GH issue URLs created.
 ```
 
-### Agent 2: shared/ audit
-Same prompt as Agent 1, but targeting `shared/` directory.
+## Agent Prompt Template — Test Quality Audit
 
-### Agent 3: agent-service/ audit
-Same prompt as Agent 1, but targeting `agent-service/` directory.
-
-### Agent 4: tasks/ audit
-Same prompt as Agent 1, but targeting `tasks/` directory.
-
-### Agent 5: control_plane/ audit
-Same prompt as Agent 1, but targeting `control_plane/` directory.
-
-### Agent 6: rag-service/ audit
-Same prompt as Agent 1, but targeting `rag-service/` directory.
-
-### Agent 7: Dockerfiles, CSS, HTML audit
 ```
-You are a code quality auditor for Dockerfiles, CSS, and HTML templates in /Users/travisf/Documents/projects/hyrda.
+You are a test quality auditor for the project at {repo_root}.
+
+## Configuration
+- GitHub repo: {REPO}
+- Assignee: {ASSIGNEE}
+- Label: {LABEL}
+
+## Your Scope
+Audit these test files:
+{test_file_list}
+
+Also reference these shared test utilities:
+{helper_files}
 
 ## Steps
-1. Use Glob to find all Dockerfile* files, *.css files, and *.html files across the repo
-2. EXCLUDE librechat-custom/, dist/, node_modules/
-3. Read each file and review against the checklists below
-4. Check for duplicate GH issues before creating new ones
-5. Create GH issues for NEW findings only
+1. Read each test file
+2. For each corresponding source file, check if tests cover:
+   - Happy path (normal operation)
+   - Edge cases (empty inputs, None values, boundary conditions)
+   - Error handling (invalid inputs, failures)
+   - All public functions/methods
+3. Review test quality against the checklist below
+4. For each finding, check for duplicate GH issues first:
+   gh issue list --repo {REPO} --label {LABEL} --state open --search "<key terms>"
+5. Create GH issues for NEW findings only:
+   gh issue create --repo {REPO} --assignee {ASSIGNEE} --label {LABEL} --title "<title>" --body "<details with file paths, line numbers, and what's missing>"
+
+## Test Quality Checklist
+- Tests for happy path, edge cases (empty/None/boundary), and error handling
+- Proper assertions (not just assert True)
+- Tests isolated with mocks/fixtures
+- Arrange-Act-Assert (3As) pattern with clear separation
+- Flag tests with more than one logical assertion group
+- Flag complex inline object construction (4+ fields) — suggest builder
+- Flag repeated setup across tests — suggest factory
+- Do tests cover all public functions in the source file?
+- Are error messages tested (checking exception types and messages)?
+
+## Be Pragmatic
+- Not every function needs exhaustive edge case tests
+- Focus on functions handling user input or external data
+- Focus on functions with conditional logic or error handling paths
+- Small utility functions don't need builders
+- Simple dataclass construction doesn't need a factory
+
+Return a summary of all findings grouped by category, with GH issue URLs created.
+```
+
+## Agent Prompt Template — Non-Python Audit
+
+```
+You are a code quality auditor for non-Python files in the project at {repo_root}.
+
+## Configuration
+- GitHub repo: {REPO}
+- Assignee: {ASSIGNEE}
+- Label: {LABEL}
+
+## Steps
+1. Use Glob to find all Dockerfile*, *.css, *.html, *.jsx, *.tsx, *.ts (exclude node_modules/, dist/, .venv/, venv/, build/)
+2. Read each file and review against the checklists below
+3. For each finding, check for duplicate GH issues first:
+   gh issue list --repo {REPO} --label {LABEL} --state open --search "<key terms>"
+4. Create GH issues for NEW findings only:
+   gh issue create --repo {REPO} --assignee {ASSIGNEE} --label {LABEL} --title "<title>" --body "<details>"
 
 ## Dockerfile Checklist
 - Pin base image versions (no latest tags)
-- Use multi-stage builds where a build step exists
-- Minimize layers — combine related RUN commands with &&
-- COPY before RUN for better layer caching (deps before source)
-- Run as non-root user (USER appuser)
+- Multi-stage builds where applicable
+- Run as non-root user
 - Set HEALTHCHECK instruction
-- No secrets or credentials in build args or environment
-- Use SHELL ["/bin/bash", "-o", "pipefail", "-c"] for safe piping
-- Consistency with project patterns (public.ecr.aws mirrors, OCI labels, useradd -m -u 1000 appuser, PYTHONUNBUFFERED=1)
+- No secrets in build args or environment
 
 ## CSS Checklist
-- No inline !important unless overriding third-party styles
-- Consistent naming (lowercase-hyphenated BEM-style)
-- No hardcoded colors — project uses purple-to-violet gradient: #667eea to #764ba2
-- No duplicate selectors or properties
+- No inline !important unless overriding third-party
+- Consistent naming
+- No hardcoded colors that should be variables
 - Use relative units (rem, em) over fixed px for font sizes
-- Media queries for responsive design
-- Consistency with existing CSS in the same UI
 
 ## HTML Template Checklist
-- Valid HTML structure (DOCTYPE, html, head, body)
+- Valid HTML structure
 - Proper meta charset and viewport tags
-- No inline JavaScript (use separate files or script blocks at end of body)
-- Accessible: form labels, alt text, proper heading hierarchy
-- Escape user-provided data (Jinja2 auto-escaping)
-- Consistency with existing templates in the same service
+- Accessible: form labels, alt text, heading hierarchy
+- No inline JavaScript where avoidable
 
-## Exclusions
-- Skip librechat-custom/ files
-- Skip generated/dist files
-- Dockerfile review only for project Dockerfiles, not base images
+## React/JSX/TSX Checklist
+- Functional components only
+- Proper hooks usage (useMemo/useCallback where needed)
+- Props destructuring
+- Components focused — flag >100 lines of JSX
+- Event handlers named handleX
+- No inline object/array literals in JSX props (causes re-renders)
+
+## Be Pragmatic
+- Focus on real issues, not perfection
+- Dashboard UIs don't need the same rigor as production user-facing apps
 
 Return a summary of all findings grouped by category, with GH issue URLs created.
 ```
 
 ## Important Notes
 - Each agent should read files directly (no spawning sub-agents)
-- Each agent should check `gh issue list --repo $REPO --label $LABEL --state open --search "<terms>"` before creating any issue to avoid duplicates
-- All issues should use label `$LABEL` and assignee `$ASSIGNEE`
-- Be pragmatic: focus on real issues, not style nitpicks. Small utility functions don't need builders. Simple dataclass construction doesn't need a factory.
+- Each agent should check `gh issue list` before creating any issue to avoid duplicates
+- All issues should use the resolved `$REPO`, `$ASSIGNEE`, and `$LABEL`
+- Be pragmatic: focus on real issues, not style nitpicks
