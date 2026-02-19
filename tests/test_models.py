@@ -262,6 +262,7 @@ class TestWorkerStatus:
             (WorkerStatus.RUNNING, "running"),
             (WorkerStatus.TESTING, "testing"),
             (WorkerStatus.COMMITTING, "committing"),
+            (WorkerStatus.QUALITY_FIX, "quality_fix"),
             (WorkerStatus.DONE, "done"),
             (WorkerStatus.FAILED, "failed"),
         ],
@@ -274,9 +275,9 @@ class TestWorkerStatus:
         # Assert
         assert isinstance(WorkerStatus.DONE, str)
 
-    def test_all_six_members_present(self) -> None:
+    def test_all_seven_members_present(self) -> None:
         # Assert
-        assert len(WorkerStatus) == 6
+        assert len(WorkerStatus) == 7
 
     def test_lookup_by_value(self) -> None:
         # Act

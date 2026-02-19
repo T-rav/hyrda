@@ -114,6 +114,9 @@ test:
 	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v
 	@echo "$(GREEN)All tests passed$(RESET)"
 
+test-fast:
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x -q --tb=short
+
 lint:
 	@echo "$(BLUE)Linting Hydra (auto-fix)...$(RESET)"
 	@cd $(HYDRA_DIR) && $(UV) ruff check . --fix && $(UV) ruff format .

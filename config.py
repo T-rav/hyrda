@@ -56,6 +56,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max CI fix-and-retry cycles (0 = skip CI wait)",
     )
+    max_quality_fix_attempts: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Max quality fix-and-retry cycles before marking agent as failed",
+    )
 
     # Label lifecycle
     review_label: list[str] = Field(

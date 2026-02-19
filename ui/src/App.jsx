@@ -46,7 +46,7 @@ export default function App() {
       <Header
         prsCount={state.prs.length}
         mergedCount={state.mergedCount}
-        issuesFound={Object.values(state.workers).filter(w => w.role !== 'triage').length}
+        issuesFound={state.lifetimeStats?.issues_created ?? 0}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
