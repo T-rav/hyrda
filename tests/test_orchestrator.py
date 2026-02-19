@@ -197,11 +197,11 @@ class TestProperties:
         orch = HydraOrchestrator(config)
         assert orch.human_input_requests is orch._human_input_requests
 
-    def test_default_max_reviewers_is_one(self, config: HydraConfig) -> None:
-        assert HydraOrchestrator.DEFAULT_MAX_REVIEWERS == 1
+    def test_no_class_constant_default_max_reviewers(self) -> None:
+        assert not hasattr(HydraOrchestrator, "DEFAULT_MAX_REVIEWERS")
 
-    def test_default_max_planners_is_one(self, config: HydraConfig) -> None:
-        assert HydraOrchestrator.DEFAULT_MAX_PLANNERS == 1
+    def test_no_class_constant_default_max_planners(self) -> None:
+        assert not hasattr(HydraOrchestrator, "DEFAULT_MAX_PLANNERS")
 
 
 # ---------------------------------------------------------------------------
@@ -870,10 +870,10 @@ class TestReviewPRs:
         assert orch._state.get_pr_status(101) == "approve"
 
     @pytest.mark.asyncio
-    async def test_reviewer_only_limited_by_default_max_reviewers(
+    async def test_reviewer_concurrency_limited_by_config_max_reviewers(
         self, config: HydraConfig
     ) -> None:
-        """At most DEFAULT_MAX_REVIEWERS concurrent reviews."""
+        """At most config.max_reviewers concurrent reviews."""
         concurrency_counter = {"current": 0, "peak": 0}
 
         async def fake_review(pr, issue, wt_path, diff, worker_id=0):
@@ -909,7 +909,7 @@ class TestReviewPRs:
 
         await orch._review_prs(prs, issues)
 
-        assert concurrency_counter["peak"] <= HydraOrchestrator.DEFAULT_MAX_REVIEWERS
+        assert concurrency_counter["peak"] <= config.max_reviewers
 
     @pytest.mark.asyncio
     async def test_returns_comment_verdict_when_issue_missing(

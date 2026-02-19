@@ -24,6 +24,12 @@ class HydraConfig(BaseModel):
 
     # Worker configuration
     max_workers: int = Field(default=2, ge=1, le=10, description="Concurrent agents")
+    max_planners: int = Field(
+        default=1, ge=1, le=10, description="Concurrent planning agents"
+    )
+    max_reviewers: int = Field(
+        default=1, ge=1, le=10, description="Concurrent review agents"
+    )
     max_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
     )

@@ -37,6 +37,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max concurrent implementation agents (default: 2)",
     )
     parser.add_argument(
+        "--max-planners",
+        type=int,
+        default=1,
+        help="Max concurrent planning agents (default: 1)",
+    )
+    parser.add_argument(
+        "--max-reviewers",
+        type=int,
+        default=1,
+        help="Max concurrent review agents (default: 1)",
+    )
+    parser.add_argument(
         "--max-budget-usd",
         type=float,
         default=0,
@@ -163,6 +175,8 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         ready_label=_parse_label_arg(args.ready_label),
         batch_size=args.batch_size,
         max_workers=args.max_workers,
+        max_planners=args.max_planners,
+        max_reviewers=args.max_reviewers,
         max_budget_usd=args.max_budget_usd,
         model=args.model,
         review_model=args.review_model,

@@ -38,9 +38,6 @@ class HydraOrchestrator:
     concurrently without waiting on each other.
     """
 
-    DEFAULT_MAX_REVIEWERS = 1
-    DEFAULT_MAX_PLANNERS = 1
-
     def __init__(
         self,
         config: HydraConfig,
@@ -318,7 +315,7 @@ class HydraOrchestrator:
         if not issues:
             return []
 
-        semaphore = asyncio.Semaphore(self.DEFAULT_MAX_PLANNERS)
+        semaphore = asyncio.Semaphore(self._config.max_planners)
         results: list[PlanResult] = []
 
         async def _plan_one(idx: int, issue: GitHubIssue) -> PlanResult:
@@ -594,7 +591,7 @@ class HydraOrchestrator:
             return []
 
         issue_map = {i.number: i for i in issues}
-        semaphore = asyncio.Semaphore(self.DEFAULT_MAX_REVIEWERS)
+        semaphore = asyncio.Semaphore(self._config.max_reviewers)
         results: list[ReviewResult] = []
 
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:

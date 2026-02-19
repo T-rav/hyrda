@@ -149,6 +149,22 @@ class TestHydraConfigDefaults:
         )
         assert cfg.max_workers == 2
 
+    def test_max_planners_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 1
+
+    def test_max_reviewers_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 1
+
     def test_max_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -542,6 +558,82 @@ class TestHydraConfigValidationConstraints:
         with pytest.raises(ValueError):
             HydraConfig(
                 max_workers=11,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_planners: ge=1, le=10
+
+    def test_max_planners_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_planners=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 1
+
+    def test_max_planners_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_planners=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 10
+
+    def test_max_planners_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_planners=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_planners_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_planners=11,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_reviewers: ge=1, le=10
+
+    def test_max_reviewers_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_reviewers=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 1
+
+    def test_max_reviewers_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_reviewers=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 10
+
+    def test_max_reviewers_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_reviewers=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_reviewers_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_reviewers=11,
                 repo_root=tmp_path,
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
