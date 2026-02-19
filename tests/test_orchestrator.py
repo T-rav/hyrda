@@ -1975,14 +1975,17 @@ class TestPlanPhase:
     """Tests for the PLAN phase in the orchestrator loop."""
 
     @pytest.mark.asyncio
-    async def test_plan_runs_concurrently_with_implement(
-        self, config: HydraConfig
-    ) -> None:
-        """Plan and implement should run concurrently in each batch."""
+    async def test_all_loops_run_concurrently(self, config: HydraConfig) -> None:
+        """Triage, plan, implement, review should all run concurrently."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         execution_order: list[str] = []
+
+        async def fake_triage() -> None:
+            execution_order.append("triage_start")
+            await asyncio.sleep(0)
+            execution_order.append("triage_end")
 
         async def fake_plan() -> list[PlanResult]:
             execution_order.append("plan_start")
@@ -1997,12 +2000,14 @@ class TestPlanPhase:
             execution_order.append("implement_end")
             return [], []
 
+        orch._triage_find_issues = fake_triage  # type: ignore[method-assign]
         orch._plan_issues = fake_plan  # type: ignore[method-assign]
         orch._implement_batch = fake_implement  # type: ignore[method-assign]
 
         await orch.run()
 
-        # Both should have started before either finished (concurrent)
+        # All should have started (concurrent loops)
+        assert "triage_start" in execution_order
         assert "plan_start" in execution_order
         assert "implement_start" in execution_order
 
