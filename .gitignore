@@ -208,3 +208,6 @@ __marimo__/
 
 # Node
 node_modules/
+
+# Hydra runtime state
+.hydra/
