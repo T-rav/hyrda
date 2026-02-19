@@ -7,7 +7,7 @@ Run all 4 code review checks (test quality, clean code/SRP, security, migrations
 1. **Resolve configuration** before doing anything else:
    - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
    - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
-   - Run `echo "$HYDRA_LABEL_AUDIT"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
+   - Run `echo "$HYDRA_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
    - Pass all resolved values into every agent prompt below so they use the correct repo, assignee, and label.
 2. Run `git diff --cached --name-only` and `git diff --name-only` to find all changed files.
 3. If no source files were changed, report "No source files changed — nothing to review." and stop.

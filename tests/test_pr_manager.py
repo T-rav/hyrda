@@ -1210,3 +1210,133 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     assert len(ci_events) >= 1
     assert ci_events[0].data["pr"] == 101
     assert ci_events[0].data["status"] == "passed"
+
+
+# ---------------------------------------------------------------------------
+# ensure_labels_exist
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_creates_all_hydra_labels(
+    config, event_bus, tmp_path
+):
+    """ensure_labels_exist should call gh label create --force for each label."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    # Should be called once per label (5 lifecycle labels)
+    assert mock_create.call_count == len(PRManager._HYDRA_LABELS)
+
+    # Verify each call uses gh label create --force
+    for call in mock_create.call_args_list:
+        args = call[0]
+        assert args[0] == "gh"
+        assert "label" in args
+        assert "create" in args
+        assert "--force" in args
+        assert "--color" in args
+        assert "--description" in args
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tmp_path):
+    """ensure_labels_exist should use label names from config (not hardcoded defaults)."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label="custom-ready",
+        planner_label="custom-plan",
+        review_label="custom-review",
+        hitl_label="custom-hitl",
+        fixed_label="custom-fixed",
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    # Collect all label names passed to gh label create
+    created_labels = set()
+    for call in mock_create.call_args_list:
+        args = call[0]
+        # Label name is the arg after "create"
+        create_idx = list(args).index("create")
+        created_labels.add(args[create_idx + 1])
+
+    assert created_labels == {
+        "custom-plan",
+        "custom-ready",
+        "custom-review",
+        "custom-hitl",
+        "custom-fixed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_dry_run_skips(dry_config, event_bus):
+    """In dry-run mode, ensure_labels_exist should not call subprocess."""
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_handles_individual_failures(
+    config, event_bus, tmp_path
+):
+    """If one label creation fails, others should still be attempted."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+
+    # First call fails, rest succeed
+    call_count = 0
+
+    async def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_proc = AsyncMock()
+        if call_count == 1:
+            mock_proc.returncode = 1
+            mock_proc.communicate = AsyncMock(return_value=(b"", b"permission denied"))
+        else:
+            mock_proc.returncode = 0
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        mock_proc.wait = AsyncMock(return_value=mock_proc.returncode)
+        return mock_proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+        # Should not raise
+        await mgr.ensure_labels_exist()
+
+    # All labels should be attempted even though first one failed
+    assert call_count == len(PRManager._HYDRA_LABELS)
