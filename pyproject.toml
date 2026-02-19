@@ -59,7 +59,7 @@ line-ending = "auto"
 [tool.pyright]
 pythonVersion = "3.11"
 include = ["."]
-exclude = ["tests", "**/__pycache__", "**/node_modules", "templates"]
+exclude = ["tests", "**/__pycache__", "**/node_modules", "templates", ".venv", "venv"]
 typeCheckingMode = "standard"
 reportMissingImports = false
 reportMissingTypeStubs = false

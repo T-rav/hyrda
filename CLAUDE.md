@@ -54,7 +54,9 @@ make status         # Show current Hydra state
 make test           # Run unit tests
 make lint           # Auto-fix linting
 make lint-check     # Check linting (no fix)
-make quality        # Lint + test
+make typecheck      # Run Pyright type checks
+make security       # Run Bandit security scan
+make quality        # Lint + typecheck + security + test
 make ui             # Build React dashboard
 make ui-dev         # Start React dashboard dev server
 ```

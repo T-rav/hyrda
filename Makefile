@@ -6,14 +6,14 @@ VENV := $(PROJECT_ROOT)/venv
 UV := VIRTUAL_ENV=$(VENV) uv run --active
 
 # CLI argument passthrough
-LABEL ?= hydra-ready
+READY_LABEL ?= hydra-ready
 WORKERS ?= 2
 MODEL ?= opus
 REVIEW_MODEL ?= opus
 BATCH_SIZE ?= 15
 BUDGET ?= 0
 REVIEW_BUDGET ?= 0
-PLANNER_LABEL ?= claude-find
+PLANNER_LABEL ?= hydra-plan
 PLANNER_MODEL ?= opus
 PLANNER_BUDGET ?= 0
 PORT ?= 5555
@@ -25,7 +25,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check quality install status ui ui-dev ui-clean
+.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install status ui ui-dev ui-clean
 
 help:
 	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
@@ -39,14 +39,16 @@ help:
 	@echo "  make test           Run unit tests"
 	@echo "  make lint           Auto-fix linting"
 	@echo "  make lint-check     Check linting (no fix)"
-	@echo "  make quality        Lint + test"
+	@echo "  make typecheck      Run Pyright type checks"
+	@echo "  make security       Run Bandit security scan"
+	@echo "  make quality        Lint + typecheck + security + test"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
-	@echo "  LABEL            GitHub issue label (default: hydra-ready)"
+	@echo "  READY_LABEL      GitHub issue label (default: hydra-ready)"
 	@echo "  WORKERS          Max concurrent agents (default: 2)"
 	@echo "  MODEL            Implementation model (default: sonnet)"
 	@echo "  REVIEW_MODEL     Review model (default: opus)"
@@ -64,7 +66,7 @@ run:
 	@trap 'kill 0' EXIT; \
 	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev & \
 	cd $(HYDRA_DIR) && $(UV) python cli.py \
-		--label $(LABEL) \
+		--ready-label $(READY_LABEL) \
 		--max-workers $(WORKERS) \
 		--model $(MODEL) \
 		--review-model $(REVIEW_MODEL) \
@@ -80,9 +82,9 @@ run:
 dev: run
 
 dry-run:
-	@echo "$(BLUE)Hydra dry run — label=$(LABEL)$(RESET)"
+	@echo "$(BLUE)Hydra dry run — label=$(READY_LABEL)$(RESET)"
 	@cd $(HYDRA_DIR) && $(UV) python cli.py \
-		--label $(LABEL) \
+		--ready-label $(READY_LABEL) \
 		--max-workers $(WORKERS) \
 		--batch-size $(BATCH_SIZE) \
 		--dry-run --verbose
@@ -116,7 +118,17 @@ lint-check:
 	@cd $(HYDRA_DIR) && $(UV) ruff check . && $(UV) ruff format . --check
 	@echo "$(GREEN)Lint check passed$(RESET)"
 
-quality: lint-check test
+typecheck:
+	@echo "$(BLUE)Running Pyright type checks...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) pyright
+	@echo "$(GREEN)Type check passed$(RESET)"
+
+security:
+	@echo "$(BLUE)Running Bandit security scan...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) bandit -c pyproject.toml -r . --severity-level medium
+	@echo "$(GREEN)Security scan passed$(RESET)"
+
+quality: lint-check typecheck security test
 	@echo "$(GREEN)Hydra quality pipeline passed$(RESET)"
 
 install:
