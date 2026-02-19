@@ -1926,6 +1926,39 @@ class TestTriageFindIssues:
         mock_prs.remove_label.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_triage_stops_when_stop_event_set(self, config: HydraConfig) -> None:
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issues = [
+            make_issue(1, title="Issue one long enough", body="A" * 100),
+            make_issue(2, title="Issue two long enough", body="B" * 100),
+        ]
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        call_count = 0
+
+        async def evaluate_then_stop(issue: object) -> TriageResult:
+            nonlocal call_count
+            call_count += 1
+            orch._stop_event.set()  # Stop after first evaluation
+            return TriageResult(issue_number=1, ready=True)
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
+        orch._triage = mock_triage
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=issues):
+            await orch._triage_find_issues()
+
+        # Only the first issue should be evaluated; second skipped due to stop
+        assert call_count == 1
+
+    @pytest.mark.asyncio
     async def test_triage_skips_when_no_issues_found(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
 

@@ -331,6 +331,10 @@ class HydraOrchestrator:
 
         logger.info("Triaging %d found issues", len(issues))
         for issue in issues:
+            if self._stop_event.is_set():
+                logger.info("Stop requested — aborting triage loop")
+                return
+
             result = await self._triage.evaluate(issue)
 
             if self._config.dry_run:
