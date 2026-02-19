@@ -148,6 +148,38 @@ def test_build_prompt_omits_comments_section_when_empty(config, event_bus, issue
     assert "Discussion" not in prompt
 
 
+def test_build_prompt_truncates_long_body(config, event_bus):
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=1, title="Big issue", body="X" * 20_000, labels=[], comments=[], url=""
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "…(truncated)" in prompt
+    assert len(prompt) < 20_000 + 5000  # prompt overhead
+
+
+def test_build_prompt_truncates_long_comments(config, event_bus):
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=1,
+        title="Big comments",
+        body="Normal body with enough content",
+        labels=[],
+        comments=["C" * 5000, "Short"],
+        url="",
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    # First comment should be truncated, second should be intact
+    assert "…" in prompt
+    assert "Short" in prompt
+
+
 # ---------------------------------------------------------------------------
 # _extract_plan
 # ---------------------------------------------------------------------------

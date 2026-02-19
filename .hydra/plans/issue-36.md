@@ -1,0 +1,75 @@
+# Plan for Issue #36
+
+## Issue Summary
+
+Add missing test coverage for `_summarize_input` helper (Edit, Write, Glob, NotebookEdit/unknown tool fallback), `StreamParser._parse_user` edge cases (multiple tool_results, non-tool_result content, empty content), and `parse_stream_event` edge cases (empty content list, non-string result, truncation behavior).
+
+## Files to Modify
+
+- **`tests/test_stream_parser.py`** — Add new test functions/methods to cover the gaps identified below. No changes to source code are needed.
+
+## Implementation Steps
+
+### Step 1: Add `_summarize_input` tests for Edit, Write, Glob tools
+
+Add three new tests in the stateless `parse_stream_event` section, following the existing pattern (e.g., `test_assistant_tool_use_grep`):
+
+1. **`test_assistant_tool_use_edit`** — Event with `name: "Edit"`, `input: {"file_path": "/src/models.py", "old_text": "...", "new_text": "..."}`. Assert display contains `"Edit"` and `"/src/models.py"`. Verify only `file_path` is shown (not the old/new text).
+
+2. **`test_assistant_tool_use_write`** — Event with `name: "Write"`, `input: {"file_path": "/src/new_file.py", "content": "..."}`. Assert display contains `"Write"` and `"/src/new_file.py"`.
+
+3. **`test_assistant_tool_use_glob`** — Event with `name: "Glob"`, `input: {"pattern": "**/*.py"}`. Assert display contains `"Glob"` and `"**/*.py"`. (Note: there's already a stateful test using Glob in `test_cumulative_message_with_new_tool` but no _stateless_ test that validates the Glob summarize format.)
+
+### Step 2: Add `_summarize_input` test for unknown/fallback tool
+
+4. **`test_assistant_tool_use_notebookedit_fallback`** — Event with `name: "NotebookEdit"`, `input: {"notebook_path": "/nb.ipynb", "cell_index": 3}`. Assert display contains `"NotebookEdit"`. Since NotebookEdit has no special handler, this tests the generic `str(tool_input)[:120]` fallback path.
+
+5. **`test_assistant_tool_use_unknown_tool_fallback`** — Event with `name: "SomeUnknownTool"`, `input: {"foo": "bar"}`. Assert display contains `"SomeUnknownTool"` and some representation of the input dict.
+
+### Step 3: Add `_summarize_input` truncation test
+
+6. **`test_summarize_input_truncation`** — Import `_summarize_input` directly and test:
+   - Bash command longer than 120 chars → result is truncated to 120.
+   - Generic fallback with input > 120 chars → result is 123 chars (120 + `"..."`).
+   - Task description longer than 120 chars → truncated to 120.
+
+   This directly tests the `[:120]` guards. Import `_summarize_input` from `stream_parser` (add to the import line at top of test file).
+
+### Step 4: Add `_parse_user` edge case tests in the `TestStreamParserDelta` class
+
+7. **`test_user_message_multiple_tool_results`** — User event with two `tool_result` blocks. Assert that only the **first** result's preview appears (because `_parse_user` returns on the first match). This documents the current behavior.
+
+8. **`test_user_message_non_tool_result_content`** — User event with content blocks that have `type: "text"` (not `tool_result`). Assert display is `""`.
+
+9. **`test_user_message_empty_content`** — User event with `content: []`. Assert display is `""`.
+
+10. **`test_user_tool_result_long_content_truncated`** — User event with tool_result content > 80 chars. Assert the preview is truncated and ends with `"…"`.
+
+### Step 5: Add `parse_stream_event` edge case tests
+
+11. **`test_assistant_empty_content_list`** — Assistant event with `content: []`. Assert display is `""`, result is `None`.
+
+12. **`test_result_event_non_string_result`** — Result event with `result: {"key": "value"}` (a dict, not a string). Assert `result` is the dict (the code does `event.get("result", "")` so it returns whatever type is there).
+
+13. **`test_assistant_content_non_dict_blocks_skipped`** — Assistant event with content containing non-dict items like `[42, "string", None, {"type": "text", "text": "real"}]`. Assert only the valid text block is displayed.
+
+### Step 6: Add Task tool edge case
+
+14. **`test_assistant_task_tool_without_subagent_type`** — Task tool with only `description` and no `subagent_type`. Assert display shows description only (no leading `": "`). This covers the `if agent else desc[:120]` branch.
+
+## Testing Strategy
+
+- All tests are pure unit tests with no external dependencies — just construct JSON events and assert output.
+- Import `_summarize_input` directly for the truncation tests (it's a module-level function, already importable).
+- Follow existing test naming and structure conventions.
+- Tests should pass with `make test` — no changes to source code.
+
+## Key Considerations
+
+- **`_parse_user` only returns the first `tool_result`**: The current code has an early return in the loop. Test 7 documents this behavior. This is intentional (brief summary), not a bug.
+- **NotebookEdit has no special handler**: It falls through to the generic fallback. The test documents this. If special handling is desired later, the test will need updating.
+- **Truncation boundary values**: Test at exactly 120 chars and 121 chars to catch off-by-one errors.
+- **No source changes needed**: This issue is purely about test coverage gaps.
+
+---
+**Summary:** Add 14 unit tests covering _summarize_input (Edit/Write/Glob/fallback/truncation), _parse_user edge cases (multiple results, non-tool content, empty content), and parse_stream_event edge cases (empty content, non-string result, non-dict blocks, Task without subagent).

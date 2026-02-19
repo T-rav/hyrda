@@ -168,8 +168,11 @@ class TestIndexRoute:
         state = make_state(tmp_path)
         dashboard = HydraDashboard(config, event_bus, state)
 
-        # Patch _TEMPLATE_DIR to a non-existent path
-        with patch("dashboard._TEMPLATE_DIR", tmp_path / "no-templates"):
+        # Patch both _UI_DIST_DIR and _TEMPLATE_DIR to non-existent paths
+        with (
+            patch("dashboard._UI_DIST_DIR", tmp_path / "no-dist"),
+            patch("dashboard._TEMPLATE_DIR", tmp_path / "no-templates"),
+        ):
             app = dashboard.create_app()
             client = TestClient(app)
             response = client.get("/")

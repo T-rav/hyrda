@@ -46,13 +46,14 @@ export default function App() {
       <Header
         prsCount={state.prs.length}
         mergedCount={state.mergedCount}
-        issuesFound={Object.keys(state.workers).length}
+        issuesFound={Object.values(state.workers).filter(w => w.role !== 'triage').length}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
         phase={state.phase}
         workers={state.workers}
+        config={state.config}
       />
 
       <WorkerList

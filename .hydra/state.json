@@ -1,0 +1,28 @@
+{
+  "current_batch": 0,
+  "processed_issues": {
+    "38": "in_progress",
+    "37": "success",
+    "36": "success",
+    "35": "success"
+  },
+  "active_worktrees": {
+    "38": "/Users/travisf/Documents/projects/hyrda-worktrees/issue-38",
+    "37": "/Users/travisf/Documents/projects/hyrda-worktrees/issue-37",
+    "36": "/Users/travisf/Documents/projects/hyrda-worktrees/issue-36",
+    "35": "/Users/travisf/Documents/projects/hyrda-worktrees/issue-35"
+  },
+  "active_branches": {
+    "38": "agent/issue-38",
+    "37": "agent/issue-37",
+    "36": "agent/issue-36",
+    "35": "agent/issue-35"
+  },
+  "reviewed_prs": {},
+  "lifetime_stats": {
+    "issues_completed": 0,
+    "prs_merged": 0,
+    "issues_created": 1
+  },
+  "last_updated": "2026-02-19T23:06:19.406964+00:00"
+}

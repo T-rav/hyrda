@@ -1,0 +1,28 @@
+I'll explore the codebase to understand the current test structure and create a detailed plan for extracting the repeated mock setup pattern.
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ←    800→class TestReviewPRs:    801→    """Tests for the _review_prs coroutine.""…
+  → Grep: /class TestReviewPRs/ in /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ← 800:class TestReviewPRs:
+  → Grep: /async def test_/ in /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ← 251:    async def test_returns_parsed_issues_from_gh_output( 269:    async def t…
+Let me also look at the rest of the class and the top of the file for existing helpers and fixtures.
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ←      1→"""Tests for dx/hydra/orchestrator.py - HydraOrchestrator class."""      …
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ←   1452→        mock_prs.submit_review.assert_awaited_once_with(101, "approve", "…
+Let me check the conftest for existing fixtures and also look at similar patterns elsewhere in the test file.
+  → Glob: tests/conftest.py
+    ← /Users/travisf/Documents/projects/hyrda/tests/conftest.py
+  → Grep: /def _setup|def setup_|@pytest\.fixture/ in /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ← No matches found
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/conftest.py
+    ←      1→"""Shared fixtures and factories for Hydra tests."""      2→      3→from …
+  → Glob: tests/helpers.py
+    ← /Users/travisf/Documents/projects/hyrda/tests/helpers.py
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/helpers.py
+    ←      1→"""Shared test helpers for Hydra tests."""      2→      3→from __future__…
+Now let me check what specific mock methods each test in the class needs — I need to catalog the variations.
+  → Grep: /mock_prs\.(post_pr_comment|submit_review|pull_main) = AsyncMock/ in /Users/travisf/Documents/projects/hyrda/tests/test_
+    ← 1053:        mock_prs.pull_main = AsyncMock() 1228:        mock_prs.post_pr_comm…
+  → Grep: /orch\._state\.set_worktree/ in /Users/travisf/Documents/projects/hyrda/tests/test_orchestrator.py
+    ← 834:        orch._state.set_worktree(42, str(wt))

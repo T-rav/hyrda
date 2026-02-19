@@ -1,0 +1,96 @@
+I'll start by reading the relevant files to understand the current implementation.
+  → Read: /Users/travisf/Documents/projects/hyrda/log.py
+    ←      1→"""Structured JSON logging for Hydra."""      2→      3→from __future__ i…
+  → Read: /Users/travisf/Documents/projects/hyrda/cli.py
+    ←      1→"""CLI entry point for Hydra."""      2→      3→from __future__ import an…
+  → Read: /Users/travisf/Documents/projects/hyrda/cli.py
+    ←    250→    251→        # Block until Ctrl+C — the dashboard handles start/stop v…
+  → Grep: /setup_logging/ in /Users/travisf/Documents/projects/hyrda
+    ← log.py:32:def setup_logging( cli.py:11:from log import setup_logging cli.py:266:…
+  → Grep: /log_dir/ in /Users/travisf/Documents/projects/hyrda
+    ← agent.py:99:        log_dir = self._config.repo_root / ".hydra" / "logs" agent.p…
+Now let me check the existing tests for `log.py`.
+  → Glob: tests/test_log*.py
+    ← No files found
+  → Grep: /from log import|import log/ in /Users/travisf/Documents/projects/hyrda/tests
+    ← No matches found
+  → Grep: /setup_logging|log_dir/ in /Users/travisf/Documents/projects/hyrda/tests
+    ← tests/test_reviewer.py:317:def test_save_transcript_creates_log_directory(event_…
+Good — the `log_dir` references in `tests/` are all about agent transcript log directories, unrelated to `setup_logging`'s `log_dir` parameter. There are no existing tests for `log.py` at all.
+
+Let me also confirm there are no other callers of `setup_logging` beyond `cli.py`.
+  → Grep: /setup_logging/ in /Users/travisf/Documents/projects/hyrda
+    ← cli.py:11:from log import setup_logging cli.py:266:    setup_logging(level=level…
+  → Read: /Users/travisf/Documents/projects/hyrda/tests/test_cli.py
+    ← File does not exist.
+Confirmed: `setup_logging` is only called once (in `cli.py:266`), and `log_dir` is never passed. No tests exist for `log.py` or `cli.py`. Now I have everything needed for the plan.
+
+PLAN_START
+
+## Issue Summary
+
+Remove the unused `log_dir` parameter from `setup_logging()` per YAGNI. The parameter is never passed by any caller, the docstring incorrectly describes it as "rotating" when it uses a plain `FileHandler`, and no CLI flag exposes it. Removing it simplifies the code.
+
+## Files to Modify
+
+### 1. `log.py` — Remove `log_dir` parameter and file handler block
+- **Remove** the `log_dir: Path | None = None` parameter from `setup_logging()` (line 34)
+- **Remove** the `from pathlib import Path` import (line 9) — it becomes unused
+- **Remove** the docstring entry for `log_dir` (lines 42-43)
+- **Remove** the file handler block (lines 72-78: the comment, the `if log_dir` block)
+
+### 2. `tests/test_log.py` — New file: unit tests for `log.py`
+No tests exist for `log.py` currently. Add tests covering:
+- `JSONFormatter.format()` produces valid JSON with expected keys (`ts`, `level`, `msg`, `logger`)
+- `JSONFormatter.format()` includes exception info when present
+- `JSONFormatter.format()` includes extra fields (`issue`, `worker`, `pr`, `phase`, `batch`) when set
+- `setup_logging()` returns a logger named `"hydra"`
+- `setup_logging()` with `json_output=True` attaches a `JSONFormatter`
+- `setup_logging()` with `json_output=False` attaches a plain `Formatter`
+- `setup_logging()` sets the correct log level
+- `setup_logging()` clears pre-existing handlers (call it twice, verify only one handler)
+- Verify the function signature no longer accepts `log_dir`
+
+## Implementation Steps
+
+1. **Edit `log.py`**:
+   - Remove `from pathlib import Path` import on line 9
+   - Remove `log_dir: Path | None = None,` parameter on line 34
+   - Remove docstring lines 42-43 (`log_dir:` and `Optional directory for a rotating log file.`)
+   - Remove lines 72-78 (the `# Optional file handler` comment and entire `if log_dir` block)
+
+2. **Create `tests/test_log.py`** with the following tests:
+   - `test_json_formatter_basic_fields` — Create a `LogRecord`, format it with `JSONFormatter`, parse the JSON, assert `ts`, `level`, `msg`, `logger` keys exist with correct values
+   - `test_json_formatter_with_exception` — Create a record with `exc_info`, verify `exception` key appears in output
+   - `test_json_formatter_extra_fields` — Set extra attributes (`issue`, `worker`, `pr`, `phase`, `batch`) on a record, verify they appear in formatted JSON
+   - `test_json_formatter_extra_fields_absent_when_not_set` — Verify extra fields don't appear when not set on the record
+   - `test_setup_logging_returns_hydra_logger` — Call `setup_logging()`, assert returned logger name is `"hydra"`
+   - `test_setup_logging_json_output` — Call with `json_output=True`, verify the handler's formatter is `JSONFormatter`
+   - `test_setup_logging_plain_output` — Call with `json_output=False`, verify the handler's formatter is not `JSONFormatter`
+   - `test_setup_logging_sets_level` — Call with `level=logging.DEBUG`, verify logger level
+   - `test_setup_logging_clears_existing_handlers` — Call `setup_logging()` twice, verify only one handler exists (not two)
+   - `test_setup_logging_no_log_dir_param` — Use `inspect.signature` to verify `log_dir` is not a parameter (regression guard)
+
+3. **Run validation**:
+   - `make lint` to ensure formatting is correct
+   - `make test` to ensure all tests pass
+   - `make typecheck` to ensure type checking passes
+
+## Testing Strategy
+
+- All tests are pure unit tests with no external dependencies or mocking needed
+- `JSONFormatter` tests create `LogRecord` objects directly
+- `setup_logging` tests call the function and inspect the returned logger's handlers and formatters
+- Clean up the `"hydra"` logger handlers after each test to avoid test pollution (use a fixture or cleanup in each test)
+- The regression test using `inspect.signature` ensures `log_dir` doesn't accidentally get re-added
+
+## Key Considerations
+
+- **No callers pass `log_dir`**: The only call site (`cli.py:266`) does not use it, so removal is safe
+- **`Path` import removal**: After removing `log_dir`, the `Path` import is unused and should be removed to keep the code clean and pass linting
+- **The `log_dir` variables in `agent.py`, `reviewer.py`, and `planner.py`** are unrelated — they handle per-agent transcript file saving, not the `setup_logging` file handler. No changes needed there.
+- **Backward compatibility**: Since `log_dir` was never used by any caller and there's no public API contract, this is a safe removal
+
+PLAN_END
+
+SUMMARY: Remove unused `log_dir` parameter from `setup_logging()` and add comprehensive unit tests for `log.py`.

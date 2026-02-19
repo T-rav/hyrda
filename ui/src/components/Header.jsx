@@ -1,22 +1,27 @@
 import React from 'react'
 
 const STAGES = [
-  { key: 'find',      label: 'FIND',      color: '#39d353', role: 'triage' },
-  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
-  { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
-  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
+  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage',      configKey: null },
+  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner',     configKey: 'max_planners' },
+  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer', configKey: 'max_workers' },
+  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer',    configKey: 'max_reviewers' },
 ]
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
-function countByRole(workers) {
+function countByRole(workers, activeOnly) {
   const list = Object.values(workers)
-  const active = list.filter(w => ACTIVE_STATUSES.includes(w.status))
+  const f = activeOnly
+    ? (role) => list.filter(w => w.role === role && ACTIVE_STATUSES.includes(w.status)).length
+    : (role) => list.filter(w => w.role === role).length
+  const implFilter = activeOnly
+    ? list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage' && ACTIVE_STATUSES.includes(w.status)).length
+    : list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length
   return {
-    triage: active.filter(w => w.role === 'triage').length,
-    planner: active.filter(w => w.role === 'planner').length,
-    implementer: active.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length,
-    reviewer: active.filter(w => w.role === 'reviewer').length,
+    triage: f('triage'),
+    planner: f('planner'),
+    implementer: implFilter,
+    reviewer: f('reviewer'),
   }
 }
 
@@ -24,12 +29,13 @@ export function Header({
   prsCount, mergedCount, issuesFound,
   connected, orchestratorStatus,
   onStart, onStop,
-  phase, workers,
+  phase, workers, config,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
-  const counts = countByRole(workers || {})
+  const activeCounts = countByRole(workers || {}, true)
+  const totalCounts = countByRole(workers || {}, false)
 
   return (
     <header style={styles.header}>
@@ -47,33 +53,38 @@ export function Header({
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
           <div style={styles.stats}>
-            <Stat label="Issues" value={issuesFound} />
+            <Stat label="Triage" value={Object.values(workers || {}).filter(w => w.role === 'triage').length} />
+            <Stat label="New Issues" value={issuesFound} />
             <Stat label="PRs" value={prsCount} />
             <Stat label="Merged" value={mergedCount} />
           </div>
         </div>
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
-            const agentCount = counts[stage.role] || 0
-            const isActive = agentCount > 0
+            const activeCount = activeCounts[stage.role] || 0
+            const totalCount = totalCounts[stage.role] || 0
+            const maxCount = stage.configKey && config ? config[stage.configKey] : 1
+            const lit = isRunning
+            const dimmed = !isRunning
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
                   <div style={{
                     ...styles.connector,
-                    background: isActive ? stage.color : '#30363d',
+                    background: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
                   }} />
                 )}
                 <div style={{
                   ...styles.pill,
-                  background: isActive ? stage.color : '#21262d',
-                  color: isActive ? '#0d1117' : '#484f58',
-                  borderColor: isActive ? stage.color : '#30363d',
+                  background: lit ? stage.color : dimmed ? stage.color + '20' : '#21262d',
+                  color: lit ? '#0d1117' : dimmed ? stage.color + '99' : '#484f58',
+                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
                 }}>
                   {stage.label}
-                  {agentCount > 0 && (
-                    <span style={styles.count}>{agentCount}</span>
-                  )}
+                  <span style={{
+                    ...styles.count,
+                    opacity: lit ? 1 : 0.6,
+                  }}>{maxCount}</span>
                 </div>
               </React.Fragment>
             )

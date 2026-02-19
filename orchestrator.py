@@ -154,6 +154,7 @@ class HydraOrchestrator:
 
         try:
             await asyncio.gather(
+                self._triage_loop(),
                 self._plan_loop(),
                 self._implement_loop(),
                 self._review_loop(),
@@ -163,8 +164,14 @@ class HydraOrchestrator:
             await self._publish_status()
             logger.info("Hydra stopped")
 
+    async def _triage_loop(self) -> None:
+        """Continuously poll for find-labeled issues and triage them."""
+        while not self._stop_event.is_set():
+            await self._triage_find_issues()
+            await self._sleep_or_stop(self._config.poll_interval)
+
     async def _plan_loop(self) -> None:
-        """Continuously poll for find-labeled and planner-labeled issues."""
+        """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
             await self._triage_find_issues()
             await self._plan_issues()
@@ -331,6 +338,10 @@ class HydraOrchestrator:
 
         logger.info("Triaging %d found issues", len(issues))
         for issue in issues:
+            if self._stop_event.is_set():
+                logger.info("Stop requested — aborting triage loop")
+                return
+
             result = await self._triage.evaluate(issue)
 
             if self._config.dry_run:

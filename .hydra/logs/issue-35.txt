@@ -1,0 +1,8 @@
+All green. The implementation is already complete:
+
+- **699 tests passed**, including the new `tests/test_log.py` tests
+- **`log.py` has 100% coverage**
+- Lint, typecheck, security scan, and all tests pass
+- Commit `8b7aad5` already captures the fix: "Fixes #35: Remove unused log_dir parameter from setup_logging"
+
+The issue has been fully resolved — the `log_dir` parameter was removed from `setup_logging()`, the unused `Path` import was cleaned up, and comprehensive unit tests were added as a regression guard.
