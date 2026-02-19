@@ -192,7 +192,7 @@ class ReviewRunner:
 
 1. Read the failing CI output above.
 2. Fix the root causes — do NOT skip or disable tests.
-3. Run `make lint` and `make test-fast` to verify locally.
+3. Run `make lint` and `make test` to verify locally.
 4. Commit fixes with message: "ci-fix: <description> (PR #{pr.number})"
 
 ## Required Output
@@ -245,7 +245,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 2. Verify comprehensive test coverage (tests are MANDATORY per CLAUDE.md).
 3. Check code quality: type annotations, proper error handling, no security issues.
 4. Check CLAUDE.md compliance: linting, formatting, no secrets committed.
-5. Run `make lint` and `make test-fast` to verify everything passes.
+5. Run `make lint` and `make test` to verify everything passes.
 6. Run the project's audit commands on the changed code:
    - Review code quality patterns (SRP, type hints, naming, complexity)
    - Review test quality (3As structure, factories, edge cases)

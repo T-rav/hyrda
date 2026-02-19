@@ -82,6 +82,7 @@ class WorkerStatus(StrEnum):
     RUNNING = "running"
     TESTING = "testing"
     COMMITTING = "committing"
+    QUALITY_FIX = "quality_fix"
     DONE = "done"
     FAILED = "failed"
 
@@ -97,6 +98,7 @@ class WorkerResult(BaseModel):
     transcript: str = ""
     commits: int = 0
     duration_seconds: float = 0.0
+    quality_fix_attempts: int = 0
     pr_info: PRInfo | None = None
 
 

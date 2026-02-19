@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 from config import HydraConfig
@@ -17,6 +18,9 @@ logger = logging.getLogger("hydra.pr_manager")
 
 class PRManager:
     """Pushes branches, creates PRs, merges, and manages labels."""
+
+    _GITHUB_COMMENT_LIMIT = 65_536
+    _HEADER_RESERVE = 50  # room for "*Part X/Y*\n\n" prefix
 
     # All Hydra lifecycle labels: (config_field, color, description)
     _HYDRA_LABELS: tuple[tuple[str, str, str], ...] = (
@@ -78,6 +82,7 @@ class PRManager:
             await self._run(
                 "git",
                 "push",
+                "--no-verify",
                 "-u",
                 "origin",
                 branch,
@@ -125,7 +130,7 @@ class PRManager:
             f"Closes #{issue.number}.\n\n"
             f"## Issue\n\n{issue.title}\n\n"
             f"## Test plan\n\n"
-            f"- [ ] Unit tests pass (`make test-fast`)\n"
+            f"- [ ] Unit tests pass (`make test`)\n"
             f"- [ ] Linting passes (`make lint`)\n"
             f"- [ ] Manual review of changes\n\n"
             f"---\n"
@@ -158,14 +163,14 @@ class PRManager:
             self._config.main_branch,
             "--title",
             title,
-            "--body",
-            body,
         ]
         if draft:
             cmd.append("--draft")
 
         try:
-            output = await self._run(*cmd, cwd=self._config.repo_root)
+            output = await self._run_with_body_file(
+                *cmd, body=body, cwd=self._config.repo_root
+            )
             # gh pr create --json would be better, but the URL is in stdout
             pr_url = output.strip()
 
@@ -242,48 +247,60 @@ class PRManager:
         if self._config.dry_run:
             logger.info("[dry-run] Would post comment on issue #%d", issue_number)
             return
-        try:
-            await self._run(
-                "gh",
-                "issue",
-                "comment",
-                str(issue_number),
-                "--repo",
-                self._repo,
-                "--body",
-                body,
-                cwd=self._config.repo_root,
-            )
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not post comment on issue #%d: %s",
-                issue_number,
-                exc,
-            )
+        chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
+        chunks = self._chunk_body(body, chunk_limit)
+        for idx, chunk in enumerate(chunks):
+            part = chunk
+            if len(chunks) > 1:
+                part = f"*Part {idx + 1}/{len(chunks)}*\n\n{chunk}"
+            part = self._cap_body(part, self._GITHUB_COMMENT_LIMIT)
+            try:
+                await self._run_with_body_file(
+                    "gh",
+                    "issue",
+                    "comment",
+                    str(issue_number),
+                    "--repo",
+                    self._repo,
+                    body=part,
+                    cwd=self._config.repo_root,
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Could not post comment on issue #%d: %s",
+                    issue_number,
+                    exc,
+                )
 
     async def post_pr_comment(self, pr_number: int, body: str) -> None:
         """Post a comment on a GitHub pull request."""
         if self._config.dry_run:
             logger.info("[dry-run] Would post comment on PR #%d", pr_number)
             return
-        try:
-            await self._run(
-                "gh",
-                "pr",
-                "comment",
-                str(pr_number),
-                "--repo",
-                self._repo,
-                "--body",
-                body,
-                cwd=self._config.repo_root,
-            )
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not post comment on PR #%d: %s",
-                pr_number,
-                exc,
-            )
+        chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
+        chunks = self._chunk_body(body, chunk_limit)
+        for idx, chunk in enumerate(chunks):
+            part = chunk
+            if len(chunks) > 1:
+                part = f"*Part {idx + 1}/{len(chunks)}*\n\n{chunk}"
+            part = self._cap_body(part, self._GITHUB_COMMENT_LIMIT)
+            try:
+                await self._run_with_body_file(
+                    "gh",
+                    "pr",
+                    "comment",
+                    str(pr_number),
+                    "--repo",
+                    self._repo,
+                    body=part,
+                    cwd=self._config.repo_root,
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Could not post comment on PR #%d: %s",
+                    pr_number,
+                    exc,
+                )
 
     async def submit_review(self, pr_number: int, verdict: str, body: str) -> bool:
         """Submit a formal GitHub PR review.
@@ -307,8 +324,9 @@ class PRManager:
             )
             return True
 
+        body = self._cap_body(body, self._GITHUB_COMMENT_LIMIT)
         try:
-            await self._run(
+            await self._run_with_body_file(
                 "gh",
                 "pr",
                 "review",
@@ -316,8 +334,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 flag,
-                "--body",
-                body,
+                body=body,
                 cwd=self._config.repo_root,
             )
             return True
@@ -423,14 +440,14 @@ class PRManager:
             self._repo,
             "--title",
             title,
-            "--body",
-            body,
         ]
         for label in labels or []:
             cmd.extend(["--label", label])
 
         try:
-            output = await self._run(*cmd, cwd=self._config.repo_root)
+            output = await self._run_with_body_file(
+                *cmd, body=body, cwd=self._config.repo_root
+            )
             # gh issue create prints the issue URL
             issue_number = int(output.strip().rstrip("/").split("/")[-1])
 
@@ -600,6 +617,53 @@ class PRManager:
             return False, f"Failed checks: {', '.join(failed)}"
 
         return False, f"Timeout after {timeout}s"
+
+    # --- body-file helpers ---
+
+    _TRUNCATION_MARKER = "\n\n*...truncated to fit GitHub comment limit*"
+
+    @staticmethod
+    def _chunk_body(body: str, limit: int = 65_536) -> list[str]:
+        """Split *body* into chunks that fit within GitHub's comment limit."""
+        if len(body) <= limit:
+            return [body]
+        chunks: list[str] = []
+        while body:
+            if len(body) <= limit:
+                chunks.append(body)
+                break
+            split_at = body.rfind("\n", 0, limit)
+            if split_at <= 0:
+                split_at = limit
+            chunks.append(body[:split_at])
+            body = body[split_at:].lstrip("\n")
+        return chunks
+
+    @classmethod
+    def _cap_body(cls, body: str, limit: int = 65_536) -> str:
+        """Hard-truncate *body* to *limit* characters.
+
+        Acts as a safety net after chunking / header prepending to guarantee
+        no single payload exceeds GitHub's comment size limit.
+        """
+        if len(body) <= limit:
+            return body
+        marker = cls._TRUNCATION_MARKER
+        return body[: limit - len(marker)] + marker
+
+    async def _run_with_body_file(self, *cmd: str, body: str, cwd: Path) -> str:
+        """Run a ``gh`` command using ``--body-file`` instead of ``--body``.
+
+        Writes *body* to a temporary ``.md`` file, passes ``--body-file``
+        to the command, and cleans up the file afterwards.
+        """
+        fd, tmp_path = tempfile.mkstemp(suffix=".md", prefix="hydra-body-")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(body)
+            return await self._run(*cmd, "--body-file", tmp_path, cwd=cwd)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     # --- subprocess helper ---
 

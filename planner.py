@@ -106,25 +106,49 @@ class PlannerRunner:
             cmd.extend(["--max-budget-usd", str(self._config.planner_budget_usd)])
         return cmd
 
-    # Maximum characters for issue body and comments in the prompt
-    _MAX_BODY_CHARS = 10_000
-    _MAX_COMMENT_CHARS = 2_000
+    # Maximum characters for issue body and comments in the prompt.
+    # Keep conservative to avoid hitting Claude CLI's internal text-splitter
+    # limits (RecursiveCharacterTextSplitter fails on very long unsplittable lines).
+    _MAX_BODY_CHARS = 4_000
+    _MAX_COMMENT_CHARS = 1_000
+    _MAX_LINE_CHARS = 500
+
+    @staticmethod
+    def _truncate_text(text: str, char_limit: int, line_limit: int) -> str:
+        """Truncate *text* at a line boundary, also breaking long lines.
+
+        Lines exceeding *line_limit* are hard-truncated to avoid producing
+        unsplittable chunks that crash Claude CLI's text splitter.
+        """
+        lines: list[str] = []
+        total = 0
+        for raw_line in text.splitlines():
+            capped = (
+                raw_line[:line_limit] + "…" if len(raw_line) > line_limit else raw_line
+            )
+            if total + len(capped) + 1 > char_limit:
+                break
+            lines.append(capped)
+            total += len(capped) + 1  # +1 for newline
+        result = "\n".join(lines)
+        if len(result) < len(text):
+            result += "\n\n…(truncated)"
+        return result
 
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the planning prompt for the agent."""
         comments_section = ""
         if issue.comments:
             truncated = [
-                c[: self._MAX_COMMENT_CHARS]
-                + ("…" if len(c) > self._MAX_COMMENT_CHARS else "")
+                self._truncate_text(c, self._MAX_COMMENT_CHARS, self._MAX_LINE_CHARS)
                 for c in issue.comments
             ]
             formatted = "\n".join(f"- {c}" for c in truncated)
             comments_section = f"\n\n## Discussion\n{formatted}"
 
-        body = issue.body or ""
-        if len(body) > self._MAX_BODY_CHARS:
-            body = body[: self._MAX_BODY_CHARS] + "\n\n…(truncated)"
+        body = self._truncate_text(
+            issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
+        )
 
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
