@@ -216,13 +216,17 @@ class TestVerifySignature:
         signature = generate_signature(token, body, timestamp)
 
         # Reject with 1 minute max age
-        is_valid, error = verify_signature(token, body, timestamp, signature, max_age_seconds=60)
+        is_valid, error = verify_signature(
+            token, body, timestamp, signature, max_age_seconds=60
+        )
         assert is_valid is False
         assert error is not None
         assert "Request expired" in error
 
         # Accept with 3 minute max age
-        is_valid, error = verify_signature(token, body, timestamp, signature, max_age_seconds=180)
+        is_valid, error = verify_signature(
+            token, body, timestamp, signature, max_age_seconds=180
+        )
         assert is_valid is True
         assert error is None
 
@@ -487,10 +491,14 @@ class TestExtractAndVerifySignature:
 
         # Should raise with 1 minute max age
         with pytest.raises(RequestSigningError):
-            extract_and_verify_signature(token, body, timestamp, signature, max_age_seconds=60)
+            extract_and_verify_signature(
+                token, body, timestamp, signature, max_age_seconds=60
+            )
 
         # Should succeed with 3 minute max age
-        extract_and_verify_signature(token, body, timestamp, signature, max_age_seconds=180)
+        extract_and_verify_signature(
+            token, body, timestamp, signature, max_age_seconds=180
+        )
 
     def test_extract_and_verify_empty_string_headers(self):
         """Test that empty string headers are treated as missing."""
@@ -780,10 +788,16 @@ class TestIntegrationScenarios:
 
         # Both should verify independently
         extract_and_verify_signature(
-            token, body, headers1["X-Request-Timestamp"], headers1["X-Request-Signature"]
+            token,
+            body,
+            headers1["X-Request-Timestamp"],
+            headers1["X-Request-Signature"],
         )
         extract_and_verify_signature(
-            token, body, headers2["X-Request-Timestamp"], headers2["X-Request-Signature"]
+            token,
+            body,
+            headers2["X-Request-Timestamp"],
+            headers2["X-Request-Signature"],
         )
 
     def test_retry_with_new_signature(self):

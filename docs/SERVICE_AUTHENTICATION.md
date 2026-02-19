@@ -8,9 +8,9 @@ InsightMesh uses **static service tokens** for service-to-service authentication
 
 | Service | URL | Authentication |
 |---------|-----|----------------|
-| **LibreChat UI** | `https://localhost:3443` | Google OAuth |
-| **Control Plane** | `https://localhost:6001` | Service token + JWT |
-| **Agent Service** | `https://localhost:8000` | Service token |
+| **LibreChat UI** | `http://localhost:3080` | Google OAuth |
+| **Control Plane** | `http://localhost:6001` | Service token + JWT |
+| **Agent Service** | `http://localhost:8000` | Service token |
 | **RAG Service** | `http://localhost:8002` | Service token |
 | **Tasks Service** | `http://localhost:5001` | Service token (API) |
 
@@ -72,7 +72,7 @@ X-LibreChat-Token: <user-jwt>  # Only for LibreChat
 
 ### 2. LibreChat (Sender)
 
-**File**: `docker-compose.librechat.yml`
+**File**: `docker-compose.yml` (librechat service)
 
 **Sends token to**: RAG service
 
@@ -232,19 +232,17 @@ SERVICE_TOKENS = {
 
 **Fix**:
 - Ensure `LIBRECHAT_SERVICE_TOKEN` is set in `.env`
-- Ensure `docker-compose.librechat.yml` uses `${LIBRECHAT_SERVICE_TOKEN}`
-- Restart LibreChat: `docker compose -f docker-compose.librechat.yml restart`
+- Ensure `docker-compose.yml` librechat service uses `${LIBRECHAT_SERVICE_TOKEN}`
+- Restart LibreChat: `docker compose restart librechat`
 
 ### Cannot Access LibreChat UI
 
-**Cause**: Port or SSL configuration issue
+**Cause**: Port or configuration issue
 
 **Fix**:
-- Check containers are running: `docker compose -f docker-compose.librechat.yml ps`
-- Verify ports: HTTP on 3080, HTTPS on 3443
-- Check nginx logs: `docker logs librechat-nginx`
-- For SSL warnings, use `mkcert -install` to trust local CA
-- Ensure SSL certificates exist in `.ssl/librechat-cert.pem` and `.ssl/librechat-key.pem`
+- Check containers are running: `docker compose ps librechat`
+- Verify port 3080 is accessible
+- Check container logs: `docker logs insightmesh-librechat`
 
 ## Files Reference
 
@@ -252,7 +250,7 @@ SERVICE_TOKENS = {
 |------|---------|
 | `shared/utils/jwt_auth.py` | Token validation logic |
 | `rag-service/dependencies/auth.py` | RAG service authentication |
-| `docker-compose.librechat.yml` | LibreChat token configuration |
+| `docker-compose.yml` | Service configuration (includes LibreChat) |
 | `docs/LIBRECHAT_INTEGRATION.md` | LibreChat integration details |
 | `.env` | Token storage (never commit!) |
 | `.env.example` | Token documentation template |

@@ -1,17 +1,16 @@
-# Improved Makefile for Insight Mesh Slack Bot
-# This Makefile automatically detects the project root and works from any subdirectory
+# Makefile for InsightMesh
+# All Python commands use `uv run` — never raw python/pip
 
 # Determine project root directory (where this Makefile is located)
 MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT_DIR := $(MAKEFILE_DIR)
 BOT_DIR := $(PROJECT_ROOT_DIR)bot
-
-# Virtual environment settings
 VENV := $(PROJECT_ROOT_DIR)venv
-PYTHON ?= $(VENV)/bin/python
-PIP ?= $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
+
+# uv run using the shared root venv (not per-service project envs)
+UV := VIRTUAL_ENV=$(VENV) uv run --active
 
 # Version management
 VERSION_FILE := $(PROJECT_ROOT_DIR).version
@@ -37,19 +36,8 @@ LANGSMITH_PROXY_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:$(VERSION)
 # All images for batch operations
 ALL_IMAGES := $(BOT_IMAGE) $(AGENT_SERVICE_IMAGE) $(CONTROL_PLANE_IMAGE) $(TASKS_IMAGE) $(RAG_SERVICE_IMAGE) $(DASHBOARD_SERVICE_IMAGE) $(LANGSMITH_PROXY_IMAGE)
 
-# Find Python command with ruff installed (for linting) - prioritize env var, then venv
-PYTHON_LINT ?= $(shell \
-    if [ -n "$$PYTHON" ] && $$PYTHON -m ruff --version >/dev/null 2>&1; then \
-        echo "$$PYTHON"; \
-    elif [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
-        echo "$(VENV)/bin/python"; \
-    else \
-        for cmd in python3.11 python3 python; do \
-            if command -v $$cmd >/dev/null 2>&1 && $$cmd -m ruff --version >/dev/null 2>&1; then \
-                echo $$cmd; break; \
-            fi; \
-        done; \
-    fi)
+# All service directories (for iteration)
+SERVICE_DIRS := bot agent-service control_plane tasks rag-service dashboard-service shared
 
 # Colors for output
 RED := \033[0;31m
@@ -58,68 +46,83 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status setup-ssl version version-bump docker-tag docker-push docker-push-latest release
+.PHONY: help install setup-dev run test test-fast test-service test-coverage lint lint-check quality ci docker-build start stop restart status clean security security-docker security-full db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status version version-bump docker-tag docker-push docker-push-latest release
 
 help:
 	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
 	@echo ""
-	@echo "$(RED)🚀 PRIMARY COMMAND:$(RESET)"
-	@echo "  $(GREEN)make ci$(RESET)          🔥 Comprehensive validation: lint + test + security + build (USE THIS)"
+	@echo "$(RED)PRIMARY COMMAND:$(RESET)"
+	@echo "  $(GREEN)make ci$(RESET)              Comprehensive validation: lint + test + security + build"
 	@echo ""
 	@echo "$(GREEN)Quick Commands:$(RESET)"
-	@echo "  make start       Start full Docker stack"
-	@echo "  make stop        Stop all containers"
-	@echo "  make restart     Restart everything"
-	@echo "  make status      Show container status"
+	@echo "  make start             Start full Docker stack"
+	@echo "  make stop              Stop all containers"
+	@echo "  make restart           Restart everything"
+	@echo "  make status            Show container status"
 	@echo ""
 	@echo "$(GREEN)Development:$(RESET)"
-	@echo "  make install     Install Python dependencies"
-	@echo "  make run         Run bot standalone"
-	@echo "  make test        Test all 6 services (unit tests only)"
-	@echo "  make lint        Lint and format all services (auto-fix)"
-	@echo "  make lint-check  Check linting without fixing"
+	@echo "  make install           Install all service dependencies (via uv)"
+	@echo "  make setup-dev         Install dev tools + pre-commit hooks (run once)"
+	@echo "  make run               Run bot standalone"
+	@echo ""
+	@echo "$(GREEN)Testing (progressive):$(RESET)"
+	@echo "  make lint              Lint + format all services (auto-fix) (~2s)"
+	@echo "  make lint-check        Check linting without fixing (~2s)"
+	@echo "  make test-fast         Unit tests only, all services (~20s)"
+	@echo "  make test-service SERVICE=bot  Test a single service"
+	@echo "  make test              Full test suite, all services (~2-3min)"
+	@echo "  make test-coverage     Tests with coverage report (>70% required)"
+	@echo "  make quality           Lint + test (~2-3min)"
+	@echo "  make ci                Full CI: quality + security + build (~5-10min)"
 	@echo ""
 	@echo "$(GREEN)Build & Security:$(RESET)"
-	@echo "  make docker-build Build all Docker images"
-	@echo "  make security     Run security scans (Bandit + Trivy)"
-	@echo "  make clean        Remove caches and artifacts"
+	@echo "  make docker-build      Build all Docker images"
+	@echo "  make security          Run Bandit code security scanner"
+	@echo "  make security-docker   Scan Docker images with Trivy"
+	@echo "  make security-full     Bandit + Trivy + pip-audit + Checkov + Semgrep"
+	@echo "  make clean             Remove caches and artifacts"
 	@echo ""
 	@echo "$(GREEN)Version & Release:$(RESET)"
-	@echo "  make version          Show current version"
-	@echo "  make version-bump     Bump version (patch|minor|major)"
-	@echo "  make docker-tag       Tag images with version"
-	@echo "  make docker-push      Push images to registry"
-	@echo "  make release          Full release: tag, build, push"
+	@echo "  make version           Show current version"
+	@echo "  make version-bump      Bump version (patch|minor|major)"
+	@echo "  make docker-tag        Tag images with version"
+	@echo "  make docker-push       Push images to registry"
+	@echo "  make release           Full release: tag, build, push"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
-	@echo "  db-stop         🛑 Stop MySQL databases"
-	@echo "  db-migrate      📋 Generate new migration files"
-	@echo "  db-upgrade      ⬆️  Apply pending migrations"
-	@echo "  db-downgrade    ⬇️  Rollback last migration"
-	@echo "  db-reset        🔄 Reset databases (WARNING: destroys data)"
-	@echo "  db-status       📊 Show migration status"
+	@echo "  make db-start          Start MySQL databases"
+	@echo "  make db-stop           Stop MySQL databases"
+	@echo "  make db-migrate        Generate new migration files"
+	@echo "  make db-upgrade        Apply pending migrations"
+	@echo "  make db-downgrade      Rollback last migration"
+	@echo "  make db-reset          Reset databases (WARNING: destroys data)"
+	@echo "  make db-status         Show migration status"
 
-$(VENV):
-	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
-	python3.11 -m venv $(VENV)
-	@echo "$(GREEN)Virtual environment created at $(VENV)$(RESET)"
+# ===== SETUP & INSTALL =====
 
-install: $(VENV)
-	@echo "$(BLUE)Installing all service dependencies...$(RESET)"
-	@echo "$(BLUE)[1/6] Bot...$(RESET)"
-	cd $(BOT_DIR) && $(PIP) install -e .[dev,test]
-	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)agent-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
-	@echo "$(BLUE)[3/6] Control-plane...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)control_plane && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
-	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
-	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)rag-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
-	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)dashboard-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
-	@echo "$(GREEN)✅ All service dependencies installed successfully$(RESET)"
+install:
+	@echo "$(BLUE)Installing all service dependencies (via uv)...$(RESET)"
+	@echo "$(BLUE)[1/7] Bot...$(RESET)"
+	@cd $(BOT_DIR) && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]"
+	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)agent-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
+	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
+	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
+	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)rag-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
+	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && VIRTUAL_ENV=$(VENV) uv pip install -e ".[dev,test]" 2>/dev/null || VIRTUAL_ENV=$(VENV) uv pip install -e .
+	@echo "$(BLUE)[7/7] Dev tools (ruff, pyright, bandit)...$(RESET)"
+	@VIRTUAL_ENV=$(VENV) uv pip install ruff pyright bandit
+	@echo "$(GREEN)All service dependencies installed successfully$(RESET)"
+
+setup-dev: install
+	@echo "$(BLUE)Setting up development environment...$(RESET)"
+	@VIRTUAL_ENV=$(VENV) uv pip install pre-commit
+	@pre-commit install
+	@echo "$(GREEN)Dev environment ready! Pre-commit hooks installed.$(RESET)"
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -140,83 +143,176 @@ start-redis:
 	else \
 		echo "$(YELLOW)Please start Redis manually: redis-server$(RESET)"; \
 	fi
-	@echo "$(GREEN)✅ Redis service started$(RESET)"
+	@echo "$(GREEN)Redis service started$(RESET)"
 
 run: check-env start-redis
-	@echo "$(GREEN)🤖 Starting AI Slack Bot...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) app.py
+	@echo "$(GREEN)Starting AI Slack Bot...$(RESET)"
+	cd $(BOT_DIR) && $(UV) python app.py
 
-test: $(VENV)
-	@echo "$(BLUE)Testing all 6 microservices (unit tests only)...$(RESET)"
-	@echo ""
-	@echo "$(BLUE)[1/6] Bot...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow and not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -q
-	@echo ""
-	@echo "$(BLUE)[3/6] Control-plane...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -q
-	@echo ""
-	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -m "not smoke" -q
-	@echo ""
-	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(PYTHON) -m pytest -q
-	@echo ""
-	@echo "$(GREEN)✅ All 6 services tested successfully$(RESET)"
+# ===== TESTING =====
 
-# Ingestion is now handled via scheduled tasks in the tasks service dashboard
-# Visit http://localhost:5001 to configure scheduled Google Drive ingestion jobs
+test:
+	@echo "$(BLUE)Testing all 7 services (unit tests only)...$(RESET)"
+	@echo ""
+	@echo "$(BLUE)[1/7] Bot...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -q
+	@echo ""
+	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -q
+	@echo ""
+	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest -q
+	@echo ""
+	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -q
+	@echo ""
+	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -q
+	@echo ""
+	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest -q
+	@echo ""
+	@echo "$(BLUE)[7/7] Shared...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q
+	@echo ""
+	@echo "$(GREEN)All 7 services tested successfully$(RESET)"
+
+test-fast:
+	@echo "$(BLUE)Quick validation - unit tests only (all services)...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -q --no-header
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -q --no-header
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest -q --no-header
+	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -q --no-header
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -q --no-header
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest -q --no-header
+	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q --no-header
+	@echo "$(GREEN)All tests passed$(RESET)"
+
+test-service:
+	@if [ -z "$(SERVICE)" ]; then \
+		echo "$(RED)Error: Specify SERVICE=<name>$(RESET)"; \
+		echo "  Example: make test-service SERVICE=bot"; \
+		echo "  Available: bot, agent-service, control_plane, tasks, rag-service, dashboard-service, shared"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Testing $(SERVICE)...$(RESET)"
+	@if [ "$(SERVICE)" = "shared" ]; then \
+		cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -v; \
+	elif [ "$(SERVICE)" = "bot" ]; then \
+		cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" -v; \
+	elif [ "$(SERVICE)" = "tasks" ]; then \
+		cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" -v; \
+	elif [ "$(SERVICE)" = "rag-service" ]; then \
+		cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" -v; \
+	elif [ "$(SERVICE)" = "agent-service" ]; then \
+		cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" -v; \
+	else \
+		cd $(PROJECT_ROOT_DIR)$(SERVICE) && PYTHONPATH=. $(UV) pytest -v; \
+	fi
+
+test-coverage:
+	@echo "$(BLUE)Running tests with coverage report...$(RESET)"
+	@echo ""
+	@echo "$(BLUE)[1/7] Bot...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(UV) pytest -m "not integration and not system_flow and not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[2/7] Agent-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(UV) pytest -m "not integration" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[3/7] Control-plane...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(UV) pytest --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[4/7] Tasks...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(UV) pytest -m "not integration and not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[5/7] Rag-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(UV) pytest -m "not smoke" --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[6/7] Dashboard-service...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(UV) pytest --cov=. --cov-report=term-missing --cov-fail-under=70 -q
+	@echo ""
+	@echo "$(BLUE)[7/7] Shared...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=shared $(UV) pytest shared/tests/ -q
+	@echo ""
+	@echo "$(GREEN)All services meet coverage threshold (>70%)$(RESET)"
+
+# ===== LINTING =====
 
 lint:
-	@echo "$(BLUE)🔍 Running unified linting on all services (using $(PYTHON_LINT))...$(RESET)"
-	@if [ -z "$(PYTHON_LINT)" ]; then \
-		echo "$(RED)❌ Error: No Python interpreter with ruff found. Please install ruff:$(RESET)"; \
-		echo "   python -m pip install ruff pyright bandit"; \
-		exit 1; \
-	fi
-	@echo "$(BLUE)📝 Bot...$(RESET)"
-	@$(PYTHON_LINT) -m ruff check $(BOT_DIR) --fix && $(PYTHON_LINT) -m ruff format $(BOT_DIR)
-	@echo "$(BLUE)📝 Agent-service...$(RESET)"
-	@cd agent-service && $(PYTHON_LINT) -m ruff check . --fix && $(PYTHON_LINT) -m ruff format .
-	@echo "$(BLUE)📝 Control-plane...$(RESET)"
-	@cd control_plane && $(PYTHON_LINT) -m ruff check . --fix && $(PYTHON_LINT) -m ruff format .
-	@echo "$(BLUE)📝 Tasks...$(RESET)"
-	@cd tasks && $(PYTHON_LINT) -m ruff check . --fix && $(PYTHON_LINT) -m ruff format .
-	@echo "$(BLUE)📝 Rag-service...$(RESET)"
-	@cd rag-service && $(PYTHON_LINT) -m ruff check . --fix && $(PYTHON_LINT) -m ruff format .
-	@echo "$(BLUE)📝 Dashboard-service...$(RESET)"
-	@cd dashboard-service && $(PYTHON_LINT) -m ruff check . --fix && $(PYTHON_LINT) -m ruff format .
-	@echo "$(GREEN)✅ All services linted and formatted!$(RESET)"
+	@echo "$(BLUE)Running unified linting on all services (auto-fix)...$(RESET)"
+	@for dir in $(SERVICE_DIRS); do \
+		echo "$(BLUE)  $$dir...$(RESET)"; \
+		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) ruff check . --fix && $(UV) ruff format .; \
+	done
+	@echo "$(GREEN)All services linted and formatted!$(RESET)"
 
 lint-check:
-	@echo "$(BLUE)🔍 Running unified linting checks on all services (using $(PYTHON_LINT))...$(RESET)"
-	@if [ -z "$(PYTHON_LINT)" ]; then \
-		echo "$(RED)❌ Error: No Python interpreter with ruff found. Please install ruff:$(RESET)"; \
-		echo "   python -m pip install ruff pyright bandit"; \
-		exit 1; \
+	@echo "$(BLUE)Running unified linting checks on all services...$(RESET)"
+	@for dir in $(SERVICE_DIRS); do \
+		echo "$(BLUE)  $$dir...$(RESET)"; \
+		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) ruff check . && $(UV) ruff format . --check; \
+	done
+	@echo "$(GREEN)All services passed linting checks!$(RESET)"
+
+# ===== QUALITY & CI =====
+
+quality: lint-check test
+	@echo "$(GREEN)Quality pipeline passed (lint + tests)$(RESET)"
+
+ci: lint-check test security docker-build
+	@echo "$(GREEN)Comprehensive CI validation passed!$(RESET)"
+	@echo "$(GREEN)All services: linted, tested, secured, and built$(RESET)"
+
+# ===== SECURITY =====
+
+security:
+	@echo "$(BLUE)Running Bandit security scanner on all services...$(RESET)"
+	@for dir in bot agent-service control_plane tasks rag-service dashboard-service; do \
+		echo "$(BLUE)  $$dir...$(RESET)"; \
+		cd $(PROJECT_ROOT_DIR)$$dir && $(UV) bandit -r . -f txt \
+			--exclude ./.venv,./venv,./node_modules,./build,./dist,./.pytest_cache,./.ruff_cache,./tests \
+			2>/dev/null || true; \
+	done
+	@echo "$(GREEN)Security scans completed$(RESET)"
+
+security-docker:
+	@echo "$(BLUE)Scanning Docker images with Trivy...$(RESET)"
+	@if docker image inspect insightmesh-bot:latest >/dev/null 2>&1; then \
+		for img in bot agent-service control-plane tasks rag-service dashboard-service; do \
+			echo "$(BLUE)  insightmesh-$$img...$(RESET)"; \
+			docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+				aquasec/trivy:latest image --severity HIGH,CRITICAL --format table \
+				insightmesh-$$img:latest 2>/dev/null || true; \
+		done; \
+	else \
+		echo "$(YELLOW)Docker images not built yet. Run 'make docker-build' first.$(RESET)"; \
 	fi
-	@echo "$(BLUE)🔍 Bot...$(RESET)"
-	@$(PYTHON_LINT) -m ruff check $(BOT_DIR) && $(PYTHON_LINT) -m ruff format $(BOT_DIR) --check
-	@echo "$(BLUE)🔍 Agent-service...$(RESET)"
-	@cd agent-service && $(PYTHON_LINT) -m ruff check . && $(PYTHON_LINT) -m ruff format . --check
-	@echo "$(BLUE)🔍 Control-plane...$(RESET)"
-	@cd control_plane && $(PYTHON_LINT) -m ruff check . && $(PYTHON_LINT) -m ruff format . --check
-	@echo "$(BLUE)🔍 Tasks...$(RESET)"
-	@cd tasks && $(PYTHON_LINT) -m ruff check . && $(PYTHON_LINT) -m ruff format . --check
-	@echo "$(BLUE)🔍 Rag-service...$(RESET)"
-	@cd rag-service && $(PYTHON_LINT) -m ruff check . && $(PYTHON_LINT) -m ruff format . --check
-	@echo "$(BLUE)🔍 Dashboard-service...$(RESET)"
-	@cd dashboard-service && $(PYTHON_LINT) -m ruff check . && $(PYTHON_LINT) -m ruff format . --check
-	@echo "$(GREEN)✅ All services passed linting checks!$(RESET)"
+	@echo "$(GREEN)Docker security scans completed$(RESET)"
 
-# Removed redundant targets - use 'make ci' for comprehensive validation
-
-# Removed redundant Docker targets - use start/stop/restart/status instead
+security-full: security security-docker
+	@echo ""
+	@echo "$(BLUE)Extended security scans...$(RESET)"
+	@echo "$(BLUE)Dependency vulnerability audit (pip-audit)...$(RESET)"
+	@if $(UV) pip-audit --help >/dev/null 2>&1; then \
+		$(UV) pip-audit --desc 2>/dev/null || echo "$(YELLOW)pip-audit found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)pip-audit not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install pip-audit$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)Infrastructure security scan (Checkov)...$(RESET)"
+	@if $(UV) checkov --help >/dev/null 2>&1; then \
+		$(UV) checkov --file docker-compose.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)Checkov found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)Checkov not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install checkov$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)Semgrep security analysis...$(RESET)"
+	@if $(UV) semgrep --help >/dev/null 2>&1; then \
+		cd $(BOT_DIR) && $(UV) semgrep --config=auto --quiet --error . 2>/dev/null || echo "$(YELLOW)Semgrep found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)Semgrep not installed. Run: VIRTUAL_ENV=$(VENV) uv pip install semgrep$(RESET)"; \
+	fi
+	@echo "$(GREEN)Extended security scans completed$(RESET)"
 
 # ===== VERSION MANAGEMENT =====
 
@@ -251,24 +347,24 @@ version-bump:
 	esac; \
 	new_version="$${major}.$${minor}.$${patch}"; \
 	echo "$$new_version" > $(VERSION_FILE); \
-	echo "$(GREEN)✅ Version bumped: $$current_version → $$new_version$(RESET)"; \
+	echo "$(GREEN)Version bumped: $$current_version -> $$new_version$(RESET)"; \
 	echo "$(YELLOW)Don't forget to commit the .version file!$(RESET)"
 
 # ===== DOCKER BUILD & PUBLISH =====
 
 # Build with version args injected
 docker-build-versioned: health-ui tasks-ui control-plane-ui dashboard-health-ui
-	@echo "$(BLUE)🔨 Building versioned Docker images (v$(VERSION))...$(RESET)"
+	@echo "$(BLUE)Building versioned Docker images (v$(VERSION))...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && \
 	DOCKER_BUILDKIT=1 docker compose build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_SHA=$(GIT_SHA) \
 		--build-arg BUILD_DATE=$(BUILD_DATE)
-	@echo "$(GREEN)✅ All images built with version $(VERSION)$(RESET)"
+	@echo "$(GREEN)All images built with version $(VERSION)$(RESET)"
 
 # Tag local images with registry prefix and version
 docker-tag:
-	@echo "$(BLUE)🏷️  Tagging images for registry...$(RESET)"
+	@echo "$(BLUE)Tagging images for registry...$(RESET)"
 	@echo "$(YELLOW)Tagging bot...$(RESET)"
 	docker tag insightmesh-bot:latest $(BOT_IMAGE)
 	docker tag insightmesh-bot:latest $(REGISTRY)/$(IMAGE_PREFIX)-bot:latest
@@ -290,16 +386,15 @@ docker-tag:
 	@echo "$(YELLOW)Tagging langsmith-proxy...$(RESET)"
 	docker tag insightmesh-langsmith-proxy:latest $(LANGSMITH_PROXY_IMAGE)
 	docker tag insightmesh-langsmith-proxy:latest $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
-	@echo "$(GREEN)✅ All images tagged for registry$(RESET)"
+	@echo "$(GREEN)All images tagged for registry$(RESET)"
 
 # Push all images to registry
 docker-push:
-	@echo "$(BLUE)📤 Pushing images to registry: $(REGISTRY)$(RESET)"
+	@echo "$(BLUE)Pushing images to registry: $(REGISTRY)$(RESET)"
 	@if [ "$(REGISTRY)" = "localhost" ]; then \
-		echo "$(RED)❌ Error: REGISTRY not set. Use: make docker-push REGISTRY=ghcr.io/yourorg$(RESET)"; \
+		echo "$(RED)Error: REGISTRY not set. Use: make docker-push REGISTRY=ghcr.io/yourorg$(RESET)"; \
 		exit 1; \
 	fi
-	@echo "$(YELLOW)Logging into registry (if needed)...$(RESET)"
 	@echo "$(YELLOW)Pushing version $(VERSION) tags...$(RESET)"
 	docker push $(BOT_IMAGE)
 	docker push $(AGENT_SERVICE_IMAGE)
@@ -316,11 +411,11 @@ docker-push:
 	docker push $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:latest
 	docker push $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:latest
 	docker push $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
-	@echo "$(GREEN)✅ All images pushed to $(REGISTRY)$(RESET)"
+	@echo "$(GREEN)All images pushed to $(REGISTRY)$(RESET)"
 
 # Full release workflow: bump (optional), build, tag, push
 release:
-	@echo "$(BLUE)🚀 Starting release workflow$(RESET)"
+	@echo "$(BLUE)Starting release workflow$(RESET)"
 	@echo "$(BLUE)Current version: $(VERSION)$(RESET)"
 	@read -p "Bump version? (patch|minor|major|no): " bump; \
 	if [ "$$bump" != "no" ]; then \
@@ -333,14 +428,14 @@ release:
 	$(MAKE) docker-tag
 	@echo "$(BLUE)Pushing to registry...$(RESET)"
 	$(MAKE) docker-push
-	@echo "$(GREEN)✅ Release $(VERSION) complete!$(RESET)"
+	@echo "$(GREEN)Release $(VERSION) complete!$(RESET)"
 	@echo "$(YELLOW)To deploy, update docker-compose.prod.yml with version $(VERSION)$(RESET)"
 
 # Build React UIs (required for Docker images)
 health-ui:
 	@echo "$(BLUE)Building React health dashboard...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/bot/health_ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
+	@echo "$(GREEN)Health UI built successfully!$(RESET)"
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
@@ -348,73 +443,64 @@ tasks-ui:
 		if [ -f $(PROJECT_ROOT_DIR)/.env ]; then . $(PROJECT_ROOT_DIR)/.env; fi && \
 		VITE_BASE_PATH=$${TASKS_BASE_PATH:-/} npm run build && \
 		echo "Built with base path: $${TASKS_BASE_PATH:-/}"
-	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
+	@echo "$(GREEN)Tasks UI built successfully!$(RESET)"
 
 control-plane-ui:
 	@echo "$(BLUE)Building React control plane dashboard...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/control_plane/ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)✅ Control Plane UI built successfully!$(RESET)"
+	@echo "$(GREEN)Control Plane UI built successfully!$(RESET)"
 
 dashboard-health-ui:
 	@echo "$(BLUE)Building React dashboard health UI...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)✅ Dashboard Health UI built successfully!$(RESET)"
-
-# Setup SSL certificates (skip if USE_SSL=false)
-setup-ssl:
-	@if [ "$(USE_SSL)" = "false" ]; then \
-		echo "$(YELLOW)⏭️  Skipping SSL setup (USE_SSL=false)$(RESET)"; \
-	else \
-		echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"; \
-		rm -rf $(PROJECT_ROOT_DIR)/.ssl/*-cert.pem $(PROJECT_ROOT_DIR)/.ssl/*-key.pem; \
-		bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh; \
-		echo "$(GREEN)✅ SSL certificates ready!$(RESET)"; \
-	fi
+	@echo "$(GREEN)Dashboard Health UI built successfully!$(RESET)"
 
 docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
-	@echo "$(BLUE)🔨 Building all Docker images...$(RESET)"
+	@echo "$(BLUE)Building all Docker images...$(RESET)"
 	@echo "$(YELLOW)Version: $(VERSION) | SHA: $(GIT_SHA) | Date: $(BUILD_DATE)$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_SHA=$(GIT_SHA) \
 		--build-arg BUILD_DATE=$(BUILD_DATE)
-	@echo "$(GREEN)✅ All images built successfully!$(RESET)"
+	@echo "$(GREEN)All images built successfully!$(RESET)"
+
+# ===== DOCKER STACK =====
 
 # Start full Docker stack
 start: docker-build
-	@echo "$(BLUE)🚀 Starting full InsightMesh stack...$(RESET)"
+	@echo "$(BLUE)Starting full InsightMesh stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
-	@echo "$(GREEN)✅ InsightMesh services started!$(RESET)"
+	@echo "$(GREEN)InsightMesh services started!$(RESET)"
 	@echo "$(BLUE)  - Bot Health: http://localhost:8080$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:5001$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 
 # Stop all containers
 stop:
-	@echo "$(BLUE)🛑 Stopping InsightMesh stack...$(RESET)"
+	@echo "$(BLUE)Stopping InsightMesh stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose down
-	@echo "$(GREEN)✅ All services stopped!$(RESET)"
+	@echo "$(GREEN)All services stopped!$(RESET)"
 
 # Restart everything
 restart: stop start
-	@echo "$(GREEN)✅ Services restarted successfully!$(RESET)"
+	@echo "$(GREEN)Services restarted successfully!$(RESET)"
 
 # Status command - show Docker container status
 status:
-	@echo "$(BLUE)📋 ================================$(RESET)"
-	@echo "$(BLUE)🐳 DOCKER CONTAINER STATUS$(RESET)"
-	@echo "$(BLUE)📋 ================================$(RESET)"
+	@echo "$(BLUE)================================$(RESET)"
+	@echo "$(BLUE)DOCKER CONTAINER STATUS$(RESET)"
+	@echo "$(BLUE)================================$(RESET)"
 	@echo ""
-	@echo "$(YELLOW)🔍 Main Stack Containers:$(RESET)"
-	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "network=insightmesh" 2>/dev/null || echo "$(RED)❌ Main stack not running$(RESET)"
+	@echo "$(YELLOW)Main Stack Containers:$(RESET)"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "network=insightmesh" 2>/dev/null || echo "$(RED)Main stack not running$(RESET)"
 	@echo ""
-	@echo "$(YELLOW)📊 Monitoring Stack Containers:$(RESET)"
-	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)❌ Monitoring stack not running$(RESET)"
+	@echo "$(YELLOW)Monitoring Stack Containers:$(RESET)"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)Monitoring stack not running$(RESET)"
 	@echo ""
-	@echo "$(YELLOW)📈 All InsightMesh Containers:$(RESET)"
-	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)❌ No InsightMesh containers found$(RESET)"
+	@echo "$(YELLOW)All InsightMesh Containers:$(RESET)"
+	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)No InsightMesh containers found$(RESET)"
 	@echo ""
-	@echo "$(BLUE)🌐 Service URLs (if running):$(RESET)"
+	@echo "$(BLUE)Service URLs (if running):$(RESET)"
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
@@ -423,49 +509,7 @@ status:
 	@echo "$(BLUE)  - Loki: http://localhost:3100$(RESET)"
 	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
-# CI pipeline: lint + test + security + build
-ci: lint-check test security-full docker-build
-	@echo "$(GREEN)✅ Comprehensive CI validation passed!$(RESET)"
-	@echo "$(GREEN)✅ All services: linted, tested, secured, and built$(RESET)"
-
-security: $(VENV)
-	@echo "$(BLUE)🔒 Running security scans (Bandit + Trivy)...$(RESET)"
-	@echo "$(BLUE)1/2 Code scanning with Bandit...$(RESET)"
-	-cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f txt --exclude ./.venv,./venv,./node_modules,./build,./dist,./.pytest_cache,./.ruff_cache
-	@echo ""
-	@echo "$(BLUE)2/2 Docker image scanning with Trivy...$(RESET)"
-	@if docker image inspect insightmesh-bot:latest >/dev/null 2>&1; then \
-		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
-			aquasec/trivy:latest image --severity HIGH,CRITICAL --format table insightmesh-bot:latest || true; \
-	else \
-		echo "$(YELLOW)⚠️  Docker images not built yet. Run 'make docker-build' first for full scan.$(RESET)"; \
-	fi
-	@echo "$(GREEN)✅ Security scans completed (warnings above are non-blocking)$(RESET)"
-
-security-full: security
-	@echo ""
-	@echo "$(BLUE)🔒 Extended security scans...$(RESET)"
-	@echo "$(BLUE)3/5 Dependency vulnerability audit (pip-audit)...$(RESET)"
-	@if $(PYTHON) -m pip_audit --help >/dev/null 2>&1; then \
-		$(PYTHON) -m pip_audit --desc -r bot/requirements.txt 2>/dev/null || echo "$(YELLOW)⚠️  pip-audit found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)⚠️  pip-audit not installed. Run: $(PIP) install pip-audit$(RESET)"; \
-	fi
-	@echo ""
-	@echo "$(BLUE)4/5 Infrastructure security scan (Checkov)...$(RESET)"
-	@if $(VENV)/bin/checkov --help >/dev/null 2>&1; then \
-		$(VENV)/bin/checkov --file docker-compose.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)⚠️  Checkov not installed. Run: $(PIP) install checkov$(RESET)"; \
-	fi
-	@echo ""
-	@echo "$(BLUE)5/5 Semgrep security analysis...$(RESET)"
-	@if $(VENV)/bin/semgrep --help >/dev/null 2>&1; then \
-		cd $(BOT_DIR) && $(VENV)/bin/semgrep --config=auto --quiet --error . 2>/dev/null || echo "$(YELLOW)⚠️  Semgrep found issues (review above)$(RESET)"; \
-	else \
-		echo "$(YELLOW)⚠️  Semgrep not installed. Run: $(PIP) install semgrep$(RESET)"; \
-	fi
-	@echo "$(GREEN)✅ Extended security scans completed$(RESET)"
+# ===== CLEANUP =====
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"
@@ -477,19 +521,17 @@ clean:
 	rm -rf $(PROJECT_ROOT_DIR).pyright_cache $(BOT_DIR)/.pyright_cache
 	@echo "$(GREEN)Cleanup completed$(RESET)"
 
-# Removed redundant start-* targets - use 'make start' for Docker stack
-
 # ===== DATABASE MANAGEMENT =====
 
 # Start MySQL databases in Docker (uses main docker-compose.yml)
 db-start:
-	@echo "$(BLUE)🐳 Starting MySQL databases...$(RESET)"
+	@echo "$(BLUE)Starting MySQL databases...$(RESET)"
 	docker compose up -d mysql phpmyadmin
 	@echo "$(BLUE)Waiting for MySQL to be ready...$(RESET)"
 	@timeout=60; \
 	while [ $$timeout -gt 0 ]; do \
 		if docker exec insightmesh-mysql mysqladmin ping -h localhost --silent; then \
-			echo "$(GREEN)✅ MySQL is ready!$(RESET)"; \
+			echo "$(GREEN)MySQL is ready!$(RESET)"; \
 			break; \
 		fi; \
 		echo "$(YELLOW)Waiting... ($$timeout seconds remaining)$(RESET)"; \
@@ -497,74 +539,72 @@ db-start:
 		timeout=$$((timeout-2)); \
 	done; \
 	if [ $$timeout -le 0 ]; then \
-		echo "$(RED)❌ MySQL failed to start within 60 seconds$(RESET)"; \
+		echo "$(RED)MySQL failed to start within 60 seconds$(RESET)"; \
 		exit 1; \
 	fi
-	@echo "$(GREEN)🎉 MySQL databases are running!$(RESET)"
-	@echo "$(YELLOW)📊 phpMyAdmin available at: http://localhost:8081$(RESET)"
+	@echo "$(GREEN)MySQL databases are running!$(RESET)"
+	@echo "$(YELLOW)phpMyAdmin available at: http://localhost:8081$(RESET)"
 
 # Stop MySQL databases
 db-stop:
-	@echo "$(YELLOW)🛑 Stopping MySQL databases...$(RESET)"
+	@echo "$(YELLOW)Stopping MySQL databases...$(RESET)"
 	docker compose stop mysql phpmyadmin
-	@echo "$(GREEN)✅ MySQL databases stopped$(RESET)"
+	@echo "$(GREEN)MySQL databases stopped$(RESET)"
 
 # Generate new migration files
-db-migrate: $(VENV)
-	@echo "$(BLUE)📋 Generating migration files...$(RESET)"
+db-migrate:
+	@echo "$(BLUE)Generating migration files...$(RESET)"
 	@read -p "Enter migration message: " message; \
 	echo "$(BLUE)Generating bot service migration...$(RESET)"; \
-	cd $(BOT_DIR) && $(PYTHON) -m alembic revision --autogenerate -m "$$message"; \
+	cd $(BOT_DIR) && $(UV) alembic revision --autogenerate -m "$$message"; \
 	echo "$(BLUE)Generating tasks service migration...$(RESET)"; \
-	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic revision --autogenerate -m "$$message"
-	@echo "$(GREEN)✅ Migration files generated!$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic revision --autogenerate -m "$$message"
+	@echo "$(GREEN)Migration files generated!$(RESET)"
 
 # Apply pending migrations
-db-upgrade: $(VENV) db-start
-	@echo "$(BLUE)⬆️  Applying migrations...$(RESET)"
+db-upgrade: db-start
+	@echo "$(BLUE)Applying migrations...$(RESET)"
 	@echo "$(BLUE)Upgrading bot database...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) -m alembic upgrade head
+	cd $(BOT_DIR) && $(UV) alembic upgrade head
 	@echo "$(BLUE)Upgrading tasks database...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic upgrade head
-	@echo "$(BLUE)Running Elasticsearch index migrations...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)ingest && $(PYTHON) -c "import asyncio; from services.elasticsearch_migrations import run_elasticsearch_migrations; import os; asyncio.run(run_elasticsearch_migrations(os.getenv('VECTOR_URL', 'http://localhost:9200'), os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base'), 3072))" || echo "$(YELLOW)⚠️  Elasticsearch migrations skipped (service may not be running)$(RESET)"
-	@echo "$(GREEN)✅ All migrations applied successfully!$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic upgrade head
+	@echo "$(GREEN)All migrations applied successfully!$(RESET)"
 
 # Rollback last migration
-db-downgrade: $(VENV)
-	@echo "$(YELLOW)⬇️  Rolling back last migration...$(RESET)"
+db-downgrade:
+	@echo "$(YELLOW)Rolling back last migration...$(RESET)"
 	@echo "$(YELLOW)Rolling back bot database...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) -m alembic downgrade -1
+	cd $(BOT_DIR) && $(UV) alembic downgrade -1
 	@echo "$(YELLOW)Rolling back tasks database...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic downgrade -1
-	@echo "$(GREEN)✅ Rollback completed$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic downgrade -1
+	@echo "$(GREEN)Rollback completed$(RESET)"
 
 # Reset databases (WARNING: destroys data)
 db-reset: db-stop
-	@echo "$(RED)🚨 WARNING: This will destroy all data!$(RESET)"
+	@echo "$(RED)WARNING: This will destroy all data!$(RESET)"
 	@read -p "Are you sure? Type 'yes' to continue: " confirm; \
 	if [ "$$confirm" = "yes" ]; then \
-		echo "$(YELLOW)🔄 Resetting databases...$(RESET)"; \
+		echo "$(YELLOW)Resetting databases...$(RESET)"; \
 		docker volume rm ai-slack-bot_mysql_data 2>/dev/null || true; \
 		$(MAKE) db-start; \
 		$(MAKE) db-upgrade; \
-		echo "$(GREEN)✅ Databases reset and migrations applied$(RESET)"; \
+		echo "$(GREEN)Databases reset and migrations applied$(RESET)"; \
 	else \
-		echo "$(BLUE)❌ Reset cancelled$(RESET)"; \
+		echo "$(BLUE)Reset cancelled$(RESET)"; \
 	fi
 
 # Show migration status
-db-status: $(VENV)
-	@echo "$(BLUE)📊 Database migration status:$(RESET)"
+db-status:
+	@echo "$(BLUE)Database migration status:$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Bot Database (bot):$(RESET)"
-	@cd $(BOT_DIR) && $(PYTHON) -m alembic current -v || echo "$(RED)No migrations applied$(RESET)"
+	@cd $(BOT_DIR) && $(UV) alembic current -v || echo "$(RED)No migrations applied$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)Tasks Database (task):$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic current -v || echo "$(RED)No migrations applied$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && $(UV) alembic current -v || echo "$(RED)No migrations applied$(RESET)"
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
-	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+	@cd $(BOT_DIR) && $(UV) alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
 
 # ===== LIBRECHAT UI =====
 # LibreChat is now included in main docker-compose.yml

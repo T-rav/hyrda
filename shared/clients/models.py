@@ -83,7 +83,9 @@ class RetrievalMetadata(BaseModel):
         ..., ge=0.0, le=1.0, description="Similarity threshold used"
     )
     query_rewritten: bool = Field(..., description="Whether query was rewritten")
-    service: str = Field(default="rag-service", description="Service that handled request")
+    service: str = Field(
+        default="rag-service", description="Service that handled request"
+    )
 
 
 class RetrievalResponse(BaseModel):

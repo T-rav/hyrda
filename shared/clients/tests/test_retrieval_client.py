@@ -154,7 +154,9 @@ class TestHandleHttpError:
         """Test 401 error raises RetrievalAuthError."""
         mock_response = Mock()
         mock_response.status_code = 401
-        error = httpx.HTTPStatusError("Unauthorized", request=Mock(), response=mock_response)
+        error = httpx.HTTPStatusError(
+            "Unauthorized", request=Mock(), response=mock_response
+        )
 
         with pytest.raises(RetrievalAuthError):
             client._handle_http_error(error)
@@ -164,7 +166,9 @@ class TestHandleHttpError:
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = "Internal server error"
-        error = httpx.HTTPStatusError("Server error", request=Mock(), response=mock_response)
+        error = httpx.HTTPStatusError(
+            "Server error", request=Mock(), response=mock_response
+        )
 
         with pytest.raises(RetrievalServiceError) as exc_info:
             client._handle_http_error(error)

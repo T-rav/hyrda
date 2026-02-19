@@ -255,7 +255,7 @@ Production-ready Python Slack bot with:
          ▼
 ┌─────────────────┐     ┌──────────────────┐
 │     Qdrant      │     │    LibreChat     │
-│ (Vector Store)  │     │   (Web UI/3443)  │
+│ (Vector Store)  │     │   (Web UI/3080)  │
 └─────────────────┘     └──────────────────┘
 ```
 
@@ -264,12 +264,11 @@ Production-ready Python Slack bot with:
 | Service | Port | URL | Purpose |
 |---------|------|-----|---------|
 | **Bot** | 8080 | `http://localhost:8080` | Slack event handling |
-| **Control Plane** | 6001 | `https://localhost:6001` | Agent registry, management UI |
-| **Agent Service** | 8000 | `https://localhost:8000` | LangGraph HTTP API |
+| **Control Plane** | 6001 | `http://localhost:6001` | Agent registry, management UI |
+| **Agent Service** | 8000 | `http://localhost:8000` | LangGraph HTTP API |
 | **Tasks** | 5001 | `http://localhost:5001` | Task scheduler, Google Drive auth |
 | **RAG Service** | 8002 | `http://localhost:8002` | Vector search API |
-| **LibreChat** | 3443 | `https://localhost:3443` | Web UI (HTTPS) |
-| **LibreChat HTTP** | 3080 | `http://localhost:3080` | Web UI (HTTP→HTTPS redirect) |
+| **LibreChat** | 3080 | `http://localhost:3080` | Web UI |
 | **Qdrant** | 6333 | `http://localhost:6333` | Vector database |
 | **MySQL** | 3306 | `localhost:3306` | Relational database |
 | **Redis** | 6379 | `localhost:6379` | Cache |
@@ -278,32 +277,13 @@ Production-ready Python Slack bot with:
 
 LibreChat provides a ChatGPT-like interface for direct RAG interaction:
 
-**Start LibreChat:**
-```bash
-docker compose -f docker-compose.librechat.yml up -d
-```
-
 **Access:**
-- HTTPS: `https://localhost:3443` (recommended)
-- HTTP: `http://localhost:3080` (redirects to HTTPS)
+- `http://localhost:3080` (local dev)
+- `/chat/` path in production (behind nginx proxy)
 
 **Architecture:**
-- `librechat` container: Node.js application (internal port 3080)
-- `librechat-nginx` container: Nginx reverse proxy with SSL
+- `librechat` container: Node.js application (port 3080)
 - `librechat-mongodb` container: User data storage
-
-**SSL Certificates (Local Development):**
-```bash
-# Generate trusted local certificates
-brew install mkcert
-mkcert -install
-mkcert localhost 127.0.0.1 ::1
-cp localhost+2.pem .ssl/librechat-cert.pem
-cp localhost+2-key.pem .ssl/librechat-key.pem
-
-# Restart to apply
-docker compose -f docker-compose.librechat.yml restart librechat-nginx
-```
 
 ### Core Structure
 - **bot/app.py**: Main application entry point

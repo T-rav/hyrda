@@ -117,9 +117,7 @@ class TestLangfuseServiceInitialization:
 
     @patch("shared.services.langfuse_service._langfuse_available", True)
     @patch("shared.services.langfuse_service.Langfuse")
-    def test_initialization_with_exception(
-        self, mock_langfuse_class, valid_settings
-    ):
+    def test_initialization_with_exception(self, mock_langfuse_class, valid_settings):
         """Test initialization handles exceptions gracefully"""
         mock_langfuse_class.side_effect = Exception("Connection error")
 
@@ -785,30 +783,36 @@ class TestLangfuseServiceLifetimeStats:
             MagicMock(
                 status=200,
                 json=AsyncMock(return_value={"meta": {"totalItems": 50}}),
-                __aenter__=AsyncMock(return_value=MagicMock(
-                    status=200,
-                    json=AsyncMock(return_value={"meta": {"totalItems": 50}})
-                )),
+                __aenter__=AsyncMock(
+                    return_value=MagicMock(
+                        status=200,
+                        json=AsyncMock(return_value={"meta": {"totalItems": 50}}),
+                    )
+                ),
                 __aexit__=AsyncMock(return_value=None),
             ),
             # Observations response
             MagicMock(
                 status=200,
                 json=AsyncMock(return_value={"meta": {"totalItems": 200}}),
-                __aenter__=AsyncMock(return_value=MagicMock(
-                    status=200,
-                    json=AsyncMock(return_value={"meta": {"totalItems": 200}})
-                )),
+                __aenter__=AsyncMock(
+                    return_value=MagicMock(
+                        status=200,
+                        json=AsyncMock(return_value={"meta": {"totalItems": 200}}),
+                    )
+                ),
                 __aexit__=AsyncMock(return_value=None),
             ),
             # Sessions response
             MagicMock(
                 status=200,
                 json=AsyncMock(return_value={"meta": {"totalItems": 25}}),
-                __aenter__=AsyncMock(return_value=MagicMock(
-                    status=200,
-                    json=AsyncMock(return_value={"meta": {"totalItems": 25}})
-                )),
+                __aenter__=AsyncMock(
+                    return_value=MagicMock(
+                        status=200,
+                        json=AsyncMock(return_value={"meta": {"totalItems": 25}}),
+                    )
+                ),
                 __aexit__=AsyncMock(return_value=None),
             ),
         ]
@@ -816,7 +820,9 @@ class TestLangfuseServiceLifetimeStats:
         # Create session with responses
         response_iter = iter(responses)
         mock_session = MagicMock()
-        mock_session.get = MagicMock(side_effect=lambda *args, **kwargs: next(response_iter))
+        mock_session.get = MagicMock(
+            side_effect=lambda *args, **kwargs: next(response_iter)
+        )
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
@@ -857,10 +863,11 @@ class TestLangfuseServiceLifetimeStats:
         error_response = MagicMock(
             status=500,
             text=AsyncMock(return_value="Internal server error"),
-            __aenter__=AsyncMock(return_value=MagicMock(
-                status=500,
-                text=AsyncMock(return_value="Internal server error")
-            )),
+            __aenter__=AsyncMock(
+                return_value=MagicMock(
+                    status=500, text=AsyncMock(return_value="Internal server error")
+                )
+            ),
             __aexit__=AsyncMock(return_value=None),
         )
 
@@ -942,7 +949,9 @@ class TestLangfuseServiceGlobalFunctions:
         with patch("shared.services.langfuse_service._langfuse_available", True):
             with patch("shared.services.langfuse_service.Langfuse"):
                 # Initialize global service
-                service = initialize_langfuse_service(valid_settings, environment="test")
+                service = initialize_langfuse_service(
+                    valid_settings, environment="test"
+                )
 
                 # Get global service
                 retrieved_service = get_langfuse_service()

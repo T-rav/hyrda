@@ -2,270 +2,117 @@ name: CI Pipeline
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+
 jobs:
-  # ===== BOT SERVICE =====
-  bot-service:
+  # ===== PYTHON SERVICES (Lint + Test) =====
+  python-service:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         task: [lint, test]
-    name: Bot Service ${{ matrix.task }}
+        service:
+          - { name: Bot, dir: bot, markers: "not integration and not system_flow and not smoke", pyright: true, sys-deps: "libffi-dev libssl-dev", cov-fail-under: 70 }
+          - { name: Agent Service, dir: agent-service, markers: "not integration and not smoke", cov-fail-under: 70 }
+          - { name: Control Plane, dir: control_plane, markers: "not integration and not smoke" }
+          - { name: RAG Service, dir: rag-service, markers: "not integration and not smoke" }
+          - { name: Dashboard Service, dir: dashboard-service, markers: "not integration and not smoke", cov-fail-under: 70 }
+          - { name: Tasks, dir: tasks, markers: "not integration and not smoke", sys-deps-test: ffmpeg, cov-fail-under: 70 }
+    name: ${{ matrix.service.name }} ${{ matrix.task }}
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+    - uses: astral-sh/setup-uv@v7
       with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: bot/pyproject.toml
+        enable-cache: true
+
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
     - name: Install system dependencies
+      if: matrix.service.sys-deps
       run: |
         sudo apt-get update
-        sudo apt-get install -y libffi-dev libssl-dev
+        sudo apt-get install -y ${{ matrix.service.sys-deps }}
+
+    - name: Install test system dependencies
+      if: matrix.task == 'test' && matrix.service.sys-deps-test
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.service.sys-deps-test }}
 
     - name: Install Python dependencies
-      working-directory: bot
+      working-directory: ${{ matrix.service.dir }}
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
+        uv venv
+        uv pip install -e ".[dev,test]"
 
-    - name: Run linting and type checking
+    - name: Run linting
       if: matrix.task == 'lint'
-      working-directory: bot
+      working-directory: ${{ matrix.service.dir }}
       run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-        python -m pyright
+        uv run ruff check . --no-fix
+        uv run ruff format --check .
+
+    - name: Run type checking
+      if: matrix.task == 'lint' && matrix.service.pyright
+      working-directory: ${{ matrix.service.dir }}
+      run: uv run pyright
 
     - name: Run tests
       if: matrix.task == 'test'
-      working-directory: bot
+      working-directory: ${{ matrix.service.dir }}
       env:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: |
-        python -m pytest tests/ -v -m "not integration and not system_flow and not smoke" --cov=. --cov-report=term-missing
+        COV_ARGS="--cov=. --cov-report=term-missing"
+        if [ -n "${{ matrix.service.cov-fail-under }}" ]; then
+          COV_ARGS="$COV_ARGS --cov-fail-under=${{ matrix.service.cov-fail-under }}"
+        fi
+        uv run pytest tests/ -v -m "${{ matrix.service.markers }}" $COV_ARGS
 
-  # ===== AGENT SERVICE =====
-  agent-service:
+  # ===== SHARED TESTS (Migration Integrity) =====
+  shared-tests:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, test]
-    name: Agent Service ${{ matrix.task }}
+    timeout-minutes: 5
+    name: Shared Tests
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+    - uses: astral-sh/setup-uv@v7
       with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: agent-service/pyproject.toml
+        enable-cache: true
 
-    - name: Install Python dependencies
-      working-directory: agent-service
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
+
+    - name: Install test dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
+        uv venv
+        uv pip install pytest pytest-asyncio aiohttp httpx pydantic pydantic-settings PyJWT fastapi starlette prometheus-client "langfuse>=3.3.0"
 
-    - name: Run linting
-      if: matrix.task == 'lint'
-      working-directory: agent-service
-      run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-
-    - name: Run tests
-      if: matrix.task == 'test'
-      working-directory: agent-service
-      run: |
-        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
-
-  # ===== CONTROL PLANE =====
-  control-plane:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, test]
-    name: Control Plane ${{ matrix.task }}
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: control_plane/pyproject.toml
-
-    - name: Install Python dependencies
-      working-directory: control_plane
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
-
-    - name: Run linting
-      if: matrix.task == 'lint'
-      working-directory: control_plane
-      run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-
-    - name: Run tests
-      if: matrix.task == 'test'
-      working-directory: control_plane
-      run: |
-        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
-
-  # ===== RAG SERVICE =====
-  rag-service:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, test]
-    name: RAG Service ${{ matrix.task }}
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: rag-service/pyproject.toml
-
-    - name: Install Python dependencies
-      working-directory: rag-service
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
-
-    - name: Run linting
-      if: matrix.task == 'lint'
-      working-directory: rag-service
-      run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-
-    - name: Run tests
-      if: matrix.task == 'test'
-      working-directory: rag-service
-      run: |
-        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
-
-  # ===== DASHBOARD SERVICE =====
-  dashboard-service:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, test]
-    name: Dashboard Service ${{ matrix.task }}
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: dashboard-service/pyproject.toml
-
-    - name: Install Python dependencies
-      working-directory: dashboard-service
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
-
-    - name: Run linting
-      if: matrix.task == 'lint'
-      working-directory: dashboard-service
-      run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-
-    - name: Run tests
-      if: matrix.task == 'test'
-      working-directory: dashboard-service
-      run: |
-        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
-
-  # ===== TASKS SERVICE =====
-  tasks-service:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        task: [lint, test]
-    name: Tasks Service ${{ matrix.task }}
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: tasks/pyproject.toml
-
-    - name: Cache pip packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('tasks/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-
-    - name: Install system dependencies
-      if: matrix.task == 'test'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y ffmpeg
-
-    - name: Install Python dependencies
-      working-directory: tasks
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,test]"
-
-    - name: Run linting and type checking
-      if: matrix.task == 'lint'
-      working-directory: tasks
-      run: |
-        python -m ruff check . --no-fix
-        python -m ruff format --check .
-
-    - name: Run tests with coverage
-      if: matrix.task == 'test'
-      working-directory: tasks
+    - name: Run shared tests
       env:
-        ENVIRONMENT: test
-        LOG_LEVEL: WARNING
-        TASKS_PORT: 5001
-        TASKS_HOST: 0.0.0.0
-        DATABASE_URL: "sqlite:///:memory:"
-        REDIS_URL: "redis://localhost:6379/2"
-      run: |
-        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-fail-under=70 --cov-report=term-missing
+        PYTHONPATH: shared
+      run: uv run pytest shared/tests/ -v
 
-  # ===== REACT UI TESTS =====
+  # ===== REACT UI =====
   react-tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -303,7 +150,7 @@ jobs:
 
     - name: Upload coverage reports
       if: matrix.task == 'test'
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v5
       with:
         directory: tasks/ui/coverage
         flags: react-ui
@@ -312,6 +159,7 @@ jobs:
   # ===== LIBRECHAT BUILD =====
   librechat-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     name: LibreChat Build
 
     steps:
@@ -321,18 +169,14 @@ jobs:
       uses: docker/setup-buildx-action@v3
 
     - name: Pull LibreChat Docker image
-      run: |
-        docker compose pull librechat librechat-mongodb
-
-    - name: Verify image was pulled
-      run: |
-        docker images | grep -E "danny-avila/librechat|mongo"
+      run: docker compose pull librechat librechat-mongodb
 
   # ===== DOCKER SECURITY SCAN =====
   docker-security:
     name: Docker Security Scanning
     runs-on: ubuntu-latest
-    needs: [tasks-service, bot-service]
+    timeout-minutes: 30
+    needs: [python-service]
 
     steps:
     - uses: actions/checkout@v4
@@ -353,25 +197,22 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build Tasks Service Docker image
+    - name: Build Docker images
       run: |
-        docker build -f tasks/Dockerfile -t ai-slack-bot-tasks:latest .
-
-    - name: Build Bot Service Docker image
-      run: |
+        docker build -f tasks/Dockerfile -t insightmesh-tasks:latest .
         docker build -f bot/Dockerfile -t insightmesh-bot:latest .
 
     - name: Run Trivy on Tasks Service
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.34.0
       with:
-        image-ref: 'ai-slack-bot-tasks:latest'
+        image-ref: 'insightmesh-tasks:latest'
         format: 'sarif'
         output: 'trivy-tasks.sarif'
         severity: 'CRITICAL,HIGH'
         exit-code: '0'
 
     - name: Run Trivy on Bot Service
-      uses: aquasecurity/trivy-action@master
+      uses: aquasecurity/trivy-action@0.34.0
       with:
         image-ref: 'insightmesh-bot:latest'
         format: 'sarif'
@@ -400,62 +241,58 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: trivy-security-scan-results
-        path: |
-          trivy-tasks.sarif
-          trivy-bot.sarif
+        path: trivy-*.sarif
 
   # ===== EXTENDED SECURITY ANALYSIS =====
   extended-security:
     name: Extended Security Analysis
     runs-on: ubuntu-latest
-    needs: [bot-service, agent-service, control-plane, rag-service, dashboard-service]
+    timeout-minutes: 20
+    needs: [python-service]
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - uses: astral-sh/setup-uv@v7
       with:
-        python-version: '3.11'
+        enable-cache: true
 
-    - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
+    - name: Set up Python
+      run: uv python install ${{ env.PYTHON_VERSION }}
 
-    - name: Install Bandit
+    - name: Install security tools and service dependencies
       run: |
-        pip install --upgrade pip
-        pip install bandit[toml]
+        uv venv
+        uv pip install "bandit[toml]" pip-audit checkov
+        uv pip install semgrep || echo "Semgrep pip install failed; will use returntocorp/semgrep-action instead"
+        for service in bot agent-service control_plane tasks rag-service dashboard-service; do
+          if [ -f "$service/pyproject.toml" ]; then
+            uv pip install -e "$service/" 2>/dev/null || true
+          fi
+        done
 
-    - name: Run Bandit (Python security)
+    - name: Run Bandit on all services
       run: |
-        bandit -r bot/ -f json -o bandit-results.json --exclude ./bot/tests || true
+        for service in bot agent-service control_plane tasks rag-service dashboard-service; do
+          echo "--- $service ---"
+          uv run bandit -r "$service/" -f json \
+            --exclude "./$service/tests,./$service/.venv,./$service/venv,./$service/node_modules" \
+            -o "bandit-${service}.json"
+        done
       continue-on-error: true
-
-    - name: Install pip-audit
-      run: |
-        pip install pip-audit
 
     - name: Run pip-audit (dependency vulnerabilities)
-      run: |
-        pip-audit --desc -r bot/requirements.txt || true
+      run: uv run pip-audit
       continue-on-error: true
-
-    - name: Install Checkov
-      run: |
-        pip install checkov
 
     - name: Run Checkov (infrastructure security)
-      run: |
-        checkov --file docker-compose.yml --quiet --compact || true
+      run: uv run checkov --file docker-compose.yml --quiet --compact
       continue-on-error: true
 
-    - name: Install Semgrep
-      run: |
-        pip install semgrep
-
-    - name: Run Semgrep (security analysis)
-      run: |
-        semgrep --config=auto --error bot/ || true
+    - name: Run Semgrep on all services
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: auto
       continue-on-error: true
 
     - name: Upload security scan results
@@ -463,5 +300,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: extended-security-scan-results
-        path: |
-          bandit-results.json
+        path: bandit-*.json

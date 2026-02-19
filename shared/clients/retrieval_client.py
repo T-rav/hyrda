@@ -186,7 +186,9 @@ class RetrievalClient:
 _retrieval_client: RetrievalClient | None = None
 
 
-def get_retrieval_client(config: RetrievalClientConfig | None = None) -> RetrievalClient:
+def get_retrieval_client(
+    config: RetrievalClientConfig | None = None,
+) -> RetrievalClient:
     """Get global retrieval client instance.
 
     Args:
