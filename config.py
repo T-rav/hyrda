@@ -12,8 +12,9 @@ class HydraConfig(BaseModel):
     """Configuration for the Hydra orchestrator."""
 
     # Issue selection
-    ready_label: str = Field(
-        default="hydra-ready", description="GitHub issue label to filter by"
+    ready_label: list[str] = Field(
+        default=["hydra-ready"],
+        description="GitHub issue labels to filter by (OR logic)",
     )
     batch_size: int = Field(default=15, ge=1, le=50, description="Issues per batch")
     repo: str = Field(
@@ -51,20 +52,23 @@ class HydraConfig(BaseModel):
     )
 
     # Label lifecycle
-    review_label: str = Field(
-        default="hydra-review", description="Label for issues/PRs under review"
+    review_label: list[str] = Field(
+        default=["hydra-review"],
+        description="Labels for issues/PRs under review (OR logic)",
     )
-    hitl_label: str = Field(
-        default="hydra-hitl",
-        description="Label for issues escalated to human-in-the-loop",
+    hitl_label: list[str] = Field(
+        default=["hydra-hitl"],
+        description="Labels for issues escalated to human-in-the-loop (OR logic)",
     )
-    fixed_label: str = Field(
-        default="hydra-fixed", description="Label applied after PR is merged"
+    fixed_label: list[str] = Field(
+        default=["hydra-fixed"],
+        description="Labels applied after PR is merged (OR logic)",
     )
 
     # Planner configuration
-    planner_label: str = Field(
-        default="hydra-plan", description="Label for issues needing plans"
+    planner_label: list[str] = Field(
+        default=["hydra-plan"],
+        description="Labels for issues needing plans (OR logic)",
     )
     planner_model: str = Field(default="opus", description="Model for planning agents")
     planner_budget_usd: float = Field(
@@ -129,18 +133,24 @@ class HydraConfig(BaseModel):
             )
 
         # Label env var overrides (only apply when still at the default)
-        _ENV_LABEL_MAP: dict[str, tuple[str, str]] = {
-            "HYDRA_LABEL_PLAN": ("planner_label", "hydra-plan"),
-            "HYDRA_LABEL_READY": ("ready_label", "hydra-ready"),
-            "HYDRA_LABEL_REVIEW": ("review_label", "hydra-review"),
-            "HYDRA_LABEL_HITL": ("hitl_label", "hydra-hitl"),
-            "HYDRA_LABEL_FIXED": ("fixed_label", "hydra-fixed"),
+        _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
+            "HYDRA_LABEL_PLAN": ("planner_label", ["hydra-plan"]),
+            "HYDRA_LABEL_READY": ("ready_label", ["hydra-ready"]),
+            "HYDRA_LABEL_REVIEW": ("review_label", ["hydra-review"]),
+            "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
+            "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)
-            env_val = os.environ.get(env_key, "")
-            if current == default_val and env_val:
-                object.__setattr__(self, field_name, env_val)
+            env_val = os.environ.get(env_key)
+            if env_val is not None and current == default_val:
+                # Empty string → empty list (scan-all mode); otherwise split on comma
+                labels = (
+                    [part.strip() for part in env_val.split(",") if part.strip()]
+                    if env_val
+                    else []
+                )
+                object.__setattr__(self, field_name, labels)
 
         return self
 

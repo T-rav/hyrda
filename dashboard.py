@@ -104,47 +104,54 @@ class HydraDashboard:
             try:
                 env = {**os.environ}
                 env.pop("CLAUDECODE", None)
-                proc = await asyncio.create_subprocess_exec(
-                    "gh",
-                    "pr",
-                    "list",
-                    "--repo",
-                    self._config.repo,
-                    "--label",
-                    self._config.review_label,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,url,headRefName,isDraft,title",
-                    "--limit",
-                    "50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                stdout, _ = await proc.communicate()
-                if proc.returncode != 0:
-                    return JSONResponse([])
+                seen: set[int] = set()
+                prs: list[dict[str, object]] = []
 
-                raw = _json.loads(stdout.decode())
-                prs = []
-                for p in raw:
-                    # Extract issue number from branch name agent/issue-N
-                    branch = p.get("headRefName", "")
-                    issue_num = 0
-                    if branch.startswith("agent/issue-"):
-                        with contextlib.suppress(ValueError):
-                            issue_num = int(branch.split("-")[-1])
-                    prs.append(
-                        {
-                            "pr": p["number"],
-                            "issue": issue_num,
-                            "branch": branch,
-                            "url": p.get("url", ""),
-                            "draft": p.get("isDraft", False),
-                            "title": p.get("title", ""),
-                        }
+                for label in self._config.review_label:
+                    proc = await asyncio.create_subprocess_exec(
+                        "gh",
+                        "pr",
+                        "list",
+                        "--repo",
+                        self._config.repo,
+                        "--label",
+                        label,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number,url,headRefName,isDraft,title",
+                        "--limit",
+                        "50",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=env,
                     )
+                    stdout, _ = await proc.communicate()
+                    if proc.returncode != 0:
+                        continue
+
+                    raw = _json.loads(stdout.decode())
+                    for p in raw:
+                        pr_num = p["number"]
+                        if pr_num in seen:
+                            continue
+                        seen.add(pr_num)
+                        # Extract issue number from branch name agent/issue-N
+                        branch = p.get("headRefName", "")
+                        issue_num = 0
+                        if branch.startswith("agent/issue-"):
+                            with contextlib.suppress(ValueError):
+                                issue_num = int(branch.split("-")[-1])
+                        prs.append(
+                            {
+                                "pr": pr_num,
+                                "issue": issue_num,
+                                "branch": branch,
+                                "url": p.get("url", ""),
+                                "draft": p.get("isDraft", False),
+                                "title": p.get("title", ""),
+                            }
+                        )
                 return JSONResponse(prs)
             except Exception:
                 return JSONResponse([])
@@ -158,30 +165,36 @@ class HydraDashboard:
                 env = {**os.environ}
                 env.pop("CLAUDECODE", None)
 
-                # Fetch issues with HITL label
-                proc = await asyncio.create_subprocess_exec(
-                    "gh",
-                    "issue",
-                    "list",
-                    "--repo",
-                    self._config.repo,
-                    "--label",
-                    self._config.hitl_label,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,title,url",
-                    "--limit",
-                    "50",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-                stdout, _ = await proc.communicate()
-                if proc.returncode != 0:
-                    return JSONResponse([])
+                # Fetch issues with any HITL label, deduplicated
+                seen_issues: set[int] = set()
+                raw_issues: list[dict[str, object]] = []
+                for label in self._config.hitl_label:
+                    proc = await asyncio.create_subprocess_exec(
+                        "gh",
+                        "issue",
+                        "list",
+                        "--repo",
+                        self._config.repo,
+                        "--label",
+                        label,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number,title,url",
+                        "--limit",
+                        "50",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=env,
+                    )
+                    stdout, _ = await proc.communicate()
+                    if proc.returncode != 0:
+                        continue
+                    for issue in _json.loads(stdout.decode()):
+                        if issue["number"] not in seen_issues:
+                            seen_issues.add(issue["number"])
+                            raw_issues.append(issue)
 
-                raw_issues = _json.loads(stdout.decode())
                 items = []
                 for issue in raw_issues:
                     branch = f"agent/issue-{issue['number']}"
@@ -275,7 +288,11 @@ class HydraDashboard:
                     "status": status,
                     "config": {
                         "repo": self._config.repo,
-                        "label": self._config.ready_label,
+                        "ready_label": self._config.ready_label,
+                        "planner_label": self._config.planner_label,
+                        "review_label": self._config.review_label,
+                        "hitl_label": self._config.hitl_label,
+                        "fixed_label": self._config.fixed_label,
                         "max_workers": self._config.max_workers,
                         "batch_size": self._config.batch_size,
                         "model": self._config.model,

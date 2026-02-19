@@ -1495,17 +1495,20 @@ class TestFetchReviewablePrsSkipLogic:
             ]
         )
 
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+        call_count = 0
 
         async def fake_gh_run(*args: str) -> str:
+            nonlocal call_count
+            call_count += 1
+            # First call(s): issue fetch from _fetch_issues_by_labels
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            # Subsequent calls: PR lookup
             return pr_json
 
         orch._gh_run = fake_gh_run  # type: ignore[method-assign]
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            prs, issues = await orch._fetch_reviewable_prs()
+        prs, issues = await orch._fetch_reviewable_prs()
 
         assert len(issues) == 1
         assert issues[0].number == 42
@@ -1921,8 +1924,11 @@ class TestPlanPhase:
 
         await orch._plan_issues()
 
-        mock_prs.remove_label.assert_awaited_once_with(42, config.planner_label)
-        mock_prs.add_labels.assert_awaited_once_with(42, [config.ready_label])
+        # With multi-label, remove_label is called once per planner label
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+        mock_prs.add_labels.assert_awaited_once_with(42, [config.ready_label[0]])
 
     @pytest.mark.asyncio
     async def test_plan_issues_skips_label_swap_on_failure(

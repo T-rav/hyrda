@@ -22,7 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--ready-label",
         default="hydra-ready",
-        help="GitHub issue label to filter by (default: hydra-ready)",
+        help="GitHub issue labels to filter by, comma-separated (default: hydra-ready)",
     )
     parser.add_argument(
         "--batch-size",
@@ -79,22 +79,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--review-label",
         default="hydra-review",
-        help="Label for issues/PRs under review (default: hydra-review)",
+        help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
     )
     parser.add_argument(
         "--hitl-label",
         default="hydra-hitl",
-        help="Label for human-in-the-loop escalation (default: hydra-hitl)",
+        help="Labels for human-in-the-loop escalation, comma-separated (default: hydra-hitl)",
     )
     parser.add_argument(
         "--fixed-label",
         default="hydra-fixed",
-        help="Label applied after PR is merged (default: hydra-fixed)",
+        help="Labels applied after PR is merged, comma-separated (default: hydra-fixed)",
     )
     parser.add_argument(
         "--planner-label",
         default="hydra-plan",
-        help="Label for issues needing plans (default: hydra-plan)",
+        help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
         "--planner-model",
@@ -147,10 +147,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _parse_label_arg(value: str) -> list[str]:
+    """Split a comma-separated label string into a list."""
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
 def build_config(args: argparse.Namespace) -> HydraConfig:
     """Convert parsed CLI args into a :class:`HydraConfig`."""
     return HydraConfig(
-        ready_label=args.ready_label,
+        ready_label=_parse_label_arg(args.ready_label),
         batch_size=args.batch_size,
         max_workers=args.max_workers,
         max_budget_usd=args.max_budget_usd,
@@ -160,10 +165,10 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         ci_check_timeout=args.ci_check_timeout,
         ci_poll_interval=args.ci_poll_interval,
         max_ci_fix_attempts=args.max_ci_fix_attempts,
-        review_label=args.review_label,
-        hitl_label=args.hitl_label,
-        fixed_label=args.fixed_label,
-        planner_label=args.planner_label,
+        review_label=_parse_label_arg(args.review_label),
+        hitl_label=_parse_label_arg(args.hitl_label),
+        fixed_label=_parse_label_arg(args.fixed_label),
+        planner_label=_parse_label_arg(args.planner_label),
         planner_model=args.planner_model,
         planner_budget_usd=args.planner_budget_usd,
         repo=args.repo,
