@@ -9,6 +9,9 @@ exclude = ["ui*", "templates*", "tests*"]
 name = "hyrda"
 version = "1.0.0"
 requires-python = ">=3.11,<3.12"
+dependencies = [
+    "pydantic>=2.0.0",
+]
 
 [project.optional-dependencies]
 test = [
