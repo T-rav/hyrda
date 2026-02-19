@@ -108,7 +108,13 @@ class HydraDashboard:
                 prs: list[dict[str, object]] = []
 
                 all_labels = list(
-                    {*self._config.ready_label, *self._config.review_label}
+                    {
+                        *self._config.ready_label,
+                        *self._config.review_label,
+                        *self._config.fixed_label,
+                        *self._config.hitl_label,
+                        *self._config.planner_label,
+                    }
                 )
                 for label in all_labels:
                     proc = await asyncio.create_subprocess_exec(
