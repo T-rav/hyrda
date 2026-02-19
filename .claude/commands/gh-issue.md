@@ -20,7 +20,7 @@ If `$ARGUMENTS` is empty, ask the user to describe the issue.
 Before doing anything else:
 - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
 - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
-- Run `echo "$HYDRA_LABEL_EXPLORE"` — if set, use it as the label for created issues. If empty, default to `hydra-explore`.
+- Run `echo "$HYDRA_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
 
 ### Phase 1: Understand the Request
 

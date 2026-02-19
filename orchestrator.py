@@ -151,6 +151,8 @@ class HydraOrchestrator:
             self._config.poll_interval,
         )
 
+        await self._prs.ensure_labels_exist()
+
         try:
             await asyncio.gather(
                 self._plan_loop(),

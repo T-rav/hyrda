@@ -1530,6 +1530,7 @@ class TestRunLoop:
     async def test_run_sets_running_flag(self, config: HydraConfig) -> None:
         """run() sets _running = True at start."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         observed_running = False
 
         async def plan_and_stop() -> list[PlanResult]:
@@ -1550,6 +1551,7 @@ class TestRunLoop:
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -1568,6 +1570,7 @@ class TestRunLoop:
     ) -> None:
         """run() publishes orchestrator_status events at start and end."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -1597,6 +1600,7 @@ class TestRunLoop:
     async def test_stop_event_terminates_all_loops(self, config: HydraConfig) -> None:
         """Setting _stop_event causes all three loops to exit."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         plan_calls = 0
         impl_calls = 0
@@ -1624,6 +1628,7 @@ class TestRunLoop:
     async def test_loops_run_concurrently(self, config: HydraConfig) -> None:
         """Plan, implement, and review loops run concurrently via asyncio.gather."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         started: list[str] = []
 
@@ -1739,6 +1744,7 @@ class TestStopMechanism:
     @pytest.mark.asyncio
     async def test_running_is_true_during_execution(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         observed_running = False
 
         async def spy_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
@@ -1757,6 +1763,7 @@ class TestStopMechanism:
     @pytest.mark.asyncio
     async def test_running_is_false_after_completion(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -1773,6 +1780,7 @@ class TestStopMechanism:
     async def test_stop_halts_loops(self, config: HydraConfig) -> None:
         """Setting stop event causes loops to exit after current iteration."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         call_count = 0
 
@@ -1794,6 +1802,7 @@ class TestStopMechanism:
     async def test_stop_event_cleared_on_new_run(self, config: HydraConfig) -> None:
         """Calling run() again after stop should reset the stop event."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         orch.request_stop()
         assert orch._stop_event.is_set()
 
@@ -1816,6 +1825,7 @@ class TestStopMechanism:
     async def test_running_false_after_stop(self, config: HydraConfig) -> None:
         """After stop halts the orchestrator, running should be False."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def stop_on_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             orch.request_stop()
@@ -1843,6 +1853,7 @@ class TestPlanPhase:
     ) -> None:
         """Plan and implement should run concurrently in each batch."""
         orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         execution_order: list[str] = []
 
