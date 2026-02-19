@@ -3,7 +3,7 @@ import React from 'react'
 const STAGES = [
   { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage' },
   { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner' },
-  { key: 'implement', label: 'IMPLEMENT', color: '#d29922', role: 'implementer' },
+  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer' },
   { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer' },
 ]
 
@@ -72,9 +72,9 @@ export function Header({
                   borderColor: lit ? stage.color : '#30363d',
                 }}>
                   {stage.label}
-                  <span style={styles.count}>
-                    {agentCount}/{stage.role === 'implementer' ? '∞' : '1'}
-                  </span>
+                  {agentCount > 0 && (
+                    <span style={styles.count}>{agentCount}</span>
+                  )}
                 </div>
               </React.Fragment>
             )
