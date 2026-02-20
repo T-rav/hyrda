@@ -20,6 +20,7 @@ REVIEW_BUDGET ?= 0
 PLANNER_LABEL ?= hydra-plan
 PLANNER_MODEL ?= opus
 PLANNER_BUDGET ?= 0
+REVIEWERS ?= 2
 PORT ?= 5555
 
 # Colors
@@ -82,6 +83,7 @@ run:
 		--planner-label $(PLANNER_LABEL) \
 		--planner-model $(PLANNER_MODEL) \
 		--planner-budget-usd $(PLANNER_BUDGET) \
+		--max-reviewers $(REVIEWERS) \
 		--dashboard-port $(PORT) & \
 	wait
 
