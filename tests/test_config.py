@@ -304,7 +304,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
 
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(

@@ -605,6 +605,70 @@ class TestStopMechanism:
         orch._stop_event.set()
         assert orch.run_status == "stopping"
 
+    def test_has_active_processes_false_when_empty(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch._has_active_processes() is False
+
+    def test_has_active_processes_true_with_planner_proc(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._planners._active_procs.add(mock_proc)
+        assert orch._has_active_processes() is True
+
+    def test_has_active_processes_true_with_agent_proc(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._agents._active_procs.add(mock_proc)
+        assert orch._has_active_processes() is True
+
+    def test_has_active_processes_true_with_reviewer_proc(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._reviewers._active_procs.add(mock_proc)
+        assert orch._has_active_processes() is True
+
+    def test_has_active_processes_true_with_hitl_proc(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._hitl_runner._active_procs.add(mock_proc)
+        assert orch._has_active_processes() is True
+
+    def test_run_status_stopping_with_active_procs_and_not_running(
+        self, config: HydraConfig
+    ) -> None:
+        """run_status returns 'stopping' when stop requested and processes still alive,
+        even if _running is already False."""
+        orch = HydraOrchestrator(config)
+        orch._running = False
+        orch._stop_event.set()
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._agents._active_procs.add(mock_proc)
+        assert orch.run_status == "stopping"
+
+    def test_run_status_idle_after_clean_stop(self, config: HydraConfig) -> None:
+        """run_status returns 'idle' when stop event is set but _running is False
+        and no processes remain — stop completed cleanly."""
+        orch = HydraOrchestrator(config)
+        orch._running = False
+        orch._stop_event.set()
+        assert orch.run_status == "idle"
+
+    def test_run_status_idle_requires_no_active_procs(
+        self, config: HydraConfig
+    ) -> None:
+        """run_status returns 'idle' only when _running=False AND no active processes."""
+        orch = HydraOrchestrator(config)
+        orch._running = False
+        assert orch.run_status == "idle"
+
     def test_running_is_false_initially(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
         assert orch.running is False

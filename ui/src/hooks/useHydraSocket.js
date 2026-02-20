@@ -56,11 +56,23 @@ export function reducer(state, action) {
       return { ...addEvent(state, action), phase: newPhase }
     }
 
-    case 'orchestrator_status':
+    case 'orchestrator_status': {
+      const newStatus = action.data.status
+      const isStopped = newStatus === 'idle' || newStatus === 'done'
       return {
         ...addEvent(state, action),
-        orchestratorStatus: action.data.status,
+        orchestratorStatus: newStatus,
+        ...(isStopped ? {
+          workers: {},
+          sessionTriaged: 0,
+          sessionPlanned: 0,
+          sessionImplemented: 0,
+          sessionReviewed: 0,
+          mergedCount: 0,
+          sessionPrsCount: 0,
+        } : {}),
       }
+    }
 
     case 'worker_update': {
       const { issue, status, worker, role } = action.data
