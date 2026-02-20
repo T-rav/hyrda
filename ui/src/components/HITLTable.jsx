@@ -187,7 +187,7 @@ const btnBase = {
 }
 
 const styles = {
-  container: { padding: 12 },
+  container: { padding: 12, overflowX: 'auto' },
   header: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 12,
@@ -201,7 +201,7 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     height: 200, color: theme.textMuted, fontSize: 13,
   },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  table: { width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 12 },
   th: {
     textAlign: 'left', padding: 8, borderBottom: `1px solid ${theme.border}`,
     color: theme.textMuted, fontSize: 11,

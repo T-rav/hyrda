@@ -122,7 +122,7 @@ const styles = {
     background: theme.surface,
     borderBottom: `1px solid ${theme.border}`,
   },
-  left: { display: 'flex', alignItems: 'flex-end', gap: 8 },
+  left: { display: 'flex', alignItems: 'flex-end', gap: 8, flexShrink: 0 },
   logoImg: { width: 56, height: 56 },
   logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
@@ -132,6 +132,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 14,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   sessionBox: {
     display: 'flex',
@@ -216,7 +218,7 @@ const styles = {
     fontSize: 9,
     fontWeight: 700,
   },
-  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10 },
+  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10, flexShrink: 0 },
   startBtn: {
     padding: '4px 14px',
     borderRadius: 6,

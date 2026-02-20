@@ -311,4 +311,27 @@ describe('Header component', () => {
     const controlsDiv = startBtn.parentElement
     expect(controlsDiv.style.marginLeft).toBe('10px')
   })
+
+  it('left section has flexShrink 0 to prevent collapsing', () => {
+    render(<Header {...defaultProps} />)
+    const logo = screen.getByText('HYDRA')
+    // logo is inside logoGroup -> left div; go up two levels past logoGroup
+    const leftDiv = logo.parentElement.parentElement
+    expect(leftDiv.style.flexShrink).toBe('0')
+  })
+
+  it('controls section has flexShrink 0 to prevent collapsing', () => {
+    render(<Header {...defaultProps} />)
+    const startBtn = screen.getByText('Start')
+    const controlsDiv = startBtn.parentElement
+    expect(controlsDiv.style.flexShrink).toBe('0')
+  })
+
+  it('center section has minWidth 0 and overflow hidden for graceful truncation', () => {
+    render(<Header {...defaultProps} />)
+    const sessionLabel = screen.getByText('Session')
+    const centerDiv = sessionLabel.closest('div').parentElement
+    expect(centerDiv.style.minWidth).toBe('0px')
+    expect(centerDiv.style.overflow).toBe('hidden')
+  })
 })
