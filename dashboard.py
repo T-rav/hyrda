@@ -19,6 +19,7 @@ logger = logging.getLogger("hydra.dashboard")
 # React build output or fallback HTML template
 _UI_DIST_DIR = Path(__file__).parent / "ui" / "dist"
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+_STATIC_DIR = Path(__file__).parent / "static"
 
 
 class HydraDashboard:
@@ -68,6 +69,14 @@ class HydraDashboard:
                     StaticFiles(directory=str(assets_dir)),
                     name="assets",
                 )
+
+        # Serve static files (fallback dashboard JS, etc.)
+        if _STATIC_DIR.exists():
+            app.mount(
+                "/static",
+                StaticFiles(directory=str(_STATIC_DIR)),
+                name="static",
+            )
 
         @app.get("/", response_class=HTMLResponse)
         async def index() -> HTMLResponse:
