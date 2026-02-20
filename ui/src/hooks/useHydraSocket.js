@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useReducer } from 'react'
+import { MAX_EVENTS } from '../constants'
 
 const initialState = {
   connected: false,
@@ -57,11 +58,23 @@ export function reducer(state, action) {
       return { ...addEvent(state, action), phase: newPhase }
     }
 
-    case 'orchestrator_status':
+    case 'orchestrator_status': {
+      const newStatus = action.data.status
+      const isStopped = newStatus === 'idle' || newStatus === 'done' || newStatus === 'stopping'
       return {
         ...addEvent(state, action),
-        orchestratorStatus: action.data.status,
+        orchestratorStatus: newStatus,
+        ...(isStopped ? {
+          workers: {},
+          sessionTriaged: 0,
+          sessionPlanned: 0,
+          sessionImplemented: 0,
+          sessionReviewed: 0,
+          mergedCount: 0,
+          sessionPrsCount: 0,
+        } : {}),
       }
+    }
 
     case 'worker_update': {
       const { issue, status, worker, role } = action.data
@@ -265,6 +278,19 @@ export function reducer(state, action) {
     case 'error':
       return addEvent(state, action)
 
+    case 'BACKFILL_EVENTS': {
+      const existingKeys = new Set(
+        state.events.map(e => `${e.type}|${e.timestamp}`)
+      )
+      const newEvents = action.data
+        .map(e => ({ type: e.type, timestamp: e.timestamp, data: e.data }))
+        .filter(e => !existingKeys.has(`${e.type}|${e.timestamp}`))
+      const merged = [...state.events, ...newEvents]
+        .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+        .slice(0, MAX_EVENTS)
+      return { ...state, events: merged }
+    }
+
     default:
       return addEvent(state, action)
   }
@@ -272,13 +298,14 @@ export function reducer(state, action) {
 
 function addEvent(state, action) {
   const event = { type: action.type, timestamp: action.timestamp, data: action.data }
-  return { ...state, events: [event, ...state.events].slice(0, 500) }
+  return { ...state, events: [event, ...state.events].slice(0, MAX_EVENTS) }
 }
 
 export function useHydraSocket() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
+  const lastEventTsRef = useRef(null)
 
   const fetchLifetimeStats = useCallback(() => {
     fetch('/api/stats')
@@ -344,12 +371,22 @@ export function useHydraSocket() {
         .then(r => r.json())
         .then(data => dispatch({ type: 'METRICS', data }))
         .catch(() => {})
+      // On reconnect, backfill missed events from disk-backed API
+      if (lastEventTsRef.current) {
+        fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
+          .then(r => r.json())
+          .then(events => dispatch({ type: 'BACKFILL_EVENTS', data: events }))
+          .catch(() => {})
+      }
     }
 
     ws.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data)
         dispatch({ type: event.type, data: event.data, timestamp: event.timestamp })
+        if (event.timestamp && (!lastEventTsRef.current || event.timestamp > lastEventTsRef.current)) {
+          lastEventTsRef.current = event.timestamp
+        }
         if (event.type === 'batch_complete') {
           fetchLifetimeStats()
           fetch('/api/metrics').then(r => r.json()).then(data => dispatch({ type: 'METRICS', data })).catch(() => {})

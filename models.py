@@ -172,6 +172,7 @@ class ReviewResult(BaseModel):
     merged: bool = False
     ci_passed: bool | None = None  # None = not checked, True/False = outcome
     ci_fix_attempts: int = 0
+    duration_seconds: float = 0.0
 
 
 # --- Batch ---
