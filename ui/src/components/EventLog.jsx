@@ -1,15 +1,16 @@
 import React from 'react'
+import { theme } from '../theme'
 
 const typeColors = {
-  worker_update: '#58a6ff',
-  phase_change: '#d29922',
-  pr_created: '#3fb950',
-  review_update: '#d18616',
-  merge_update: '#3fb950',
-  error: '#f85149',
-  batch_start: '#58a6ff',
-  batch_complete: '#3fb950',
-  transcript_line: '#8b949e',
+  worker_update: theme.accent,
+  phase_change: theme.yellow,
+  pr_created: theme.green,
+  review_update: theme.orange,
+  merge_update: theme.green,
+  error: theme.red,
+  batch_start: theme.accent,
+  batch_complete: theme.green,
+  transcript_line: theme.textMuted,
 }
 
 function eventSummary(type, data) {
@@ -56,9 +57,9 @@ export function EventLog({ events }) {
 
 const styles = {
   panel: {
-    borderLeft: '1px solid #30363d',
+    borderLeft: `1px solid ${theme.border}`,
     overflowY: 'auto',
-    background: '#161b22',
+    background: theme.surface,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -67,20 +68,20 @@ const styles = {
     fontSize: 11,
     fontWeight: 600,
     textTransform: 'uppercase',
-    color: '#8b949e',
+    color: theme.textMuted,
     letterSpacing: 0.5,
   },
   log: { padding: 8, flex: 1, overflowY: 'auto' },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: 200, color: '#8b949e', fontSize: 13,
+    height: 200, color: theme.textMuted, fontSize: 13,
   },
   item: {
     padding: '6px 8px',
-    borderBottom: '1px solid #30363d',
+    borderBottom: `1px solid ${theme.border}`,
     fontSize: 11,
   },
-  time: { color: '#8b949e', marginRight: 8 },
+  time: { color: theme.textMuted, marginRight: 8 },
   type: { fontWeight: 600, marginRight: 6 },
 }
 
@@ -88,4 +89,4 @@ const styles = {
 export const typeSpanStyles = Object.fromEntries(
   Object.entries(typeColors).map(([k, v]) => [k, { ...styles.type, color: v }])
 )
-export const defaultTypeStyle = { ...styles.type, color: '#8b949e' }
+export const defaultTypeStyle = { ...styles.type, color: theme.textMuted }

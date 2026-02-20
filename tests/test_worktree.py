@@ -64,7 +64,7 @@ class TestCreate:
     async def test_create_calls_git_branch_and_worktree_add(
         self, config, tmp_path: Path
     ) -> None:
-        """create should call 'git branch -f' then 'git worktree add'."""
+        """create should clean up stale branch, fetch main, then 'git branch -f' and 'git worktree add'."""
         manager = WorktreeManager(config)
 
         # Pre-create the base directory so mkdir doesn't cause issues
@@ -76,6 +76,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -85,10 +86,12 @@ class TestCreate:
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
-        # First call: git branch -f
-        assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
-        # Second call: git worktree add
-        assert calls[1].args[:3] == ("git", "worktree", "add")
+        # First call: git fetch origin main
+        assert calls[0].args[:3] == ("git", "fetch", "origin")
+        # Second call: git branch -f
+        assert calls[1].args[:4] == ("git", "branch", "-f", "agent/issue-7")
+        # Third call: git worktree add
+        assert calls[2].args[:3] == ("git", "worktree", "add")
 
     @pytest.mark.asyncio
     async def test_create_fetches_remote_branch_when_exists(
@@ -104,6 +107,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(
                 manager, "_remote_branch_exists", return_value=True
             ) as mock_remote,
@@ -115,9 +119,11 @@ class TestCreate:
 
         mock_remote.assert_awaited_once_with("agent/issue-7")
         calls = mock_exec.call_args_list
-        # First call should be git fetch origin <branch>:<branch>
+        # First call: git fetch origin main
         assert calls[0].args[:3] == ("git", "fetch", "origin")
-        assert "agent/issue-7:agent/issue-7" in calls[0].args
+        # Second call: git fetch with force refspec for the branch
+        assert calls[1].args[:3] == ("git", "fetch", "origin")
+        assert "+refs/heads/agent/issue-7:refs/heads/agent/issue-7" in calls[1].args
         # Should NOT have git branch -f
         for call in calls:
             assert call.args[:3] != ("git", "branch", "-f"), (
@@ -138,6 +144,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -146,8 +153,8 @@ class TestCreate:
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
-        # First call should be git branch -f
-        assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
+        # First call: git fetch origin main; second call: git branch -f
+        assert calls[1].args[:4] == ("git", "branch", "-f", "agent/issue-7")
 
     @pytest.mark.asyncio
     async def test_create_calls_setup_env_create_venv_and_install_hooks(
@@ -165,6 +172,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env", setup_env),
             patch.object(manager, "_create_venv", create_venv),
@@ -187,6 +195,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -374,29 +383,31 @@ class TestDestroyAll:
 # ---------------------------------------------------------------------------
 
 
-class TestRebase:
+class TestMergeMain:
     """Tests for WorktreeManager.rebase."""
 
     @pytest.mark.asyncio
-    async def test_rebase_success_returns_true(self, config, tmp_path: Path) -> None:
-        """rebase should return True when both fetch and rebase succeed."""
+    async def test_merge_main_success_returns_true(
+        self, config, tmp_path: Path
+    ) -> None:
+        """merge_main should return True when fetch, ff-pull, and merge succeed."""
         manager = WorktreeManager(config)
         success_proc = _make_proc()
 
         with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_rebase_failure_aborts_and_returns_false(
+    async def test_merge_main_conflict_aborts_and_returns_false(
         self, config, tmp_path: Path
     ) -> None:
-        """rebase should abort and return False when rebase conflicts occur."""
+        """merge_main should abort and return False when conflicts occur."""
         manager = WorktreeManager(config)
 
-        fetch_proc = _make_proc(returncode=0)
-        rebase_fail_proc = _make_proc(
+        success_proc = _make_proc(returncode=0)
+        merge_fail_proc = _make_proc(
             returncode=1, stderr=b"CONFLICT (content): Merge conflict"
         )
         abort_proc = _make_proc(returncode=0)
@@ -406,16 +417,16 @@ class TestRebase:
         async def fake_exec(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                return fetch_proc  # git fetch succeeds
-            if call_count == 2:
-                return rebase_fail_proc  # git rebase fails
-            return abort_proc  # git rebase --abort
+            if call_count <= 2:
+                return success_proc  # git fetch + ff-only merge succeed
+            if call_count == 3:
+                return merge_fail_proc  # git merge origin/main fails
+            return abort_proc  # git merge --abort
 
         with patch(
             "asyncio.create_subprocess_exec", side_effect=fake_exec
         ) as mock_exec:
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is False
         # Verify abort was called
@@ -423,10 +434,10 @@ class TestRebase:
         assert len(abort_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_rebase_fetch_failure_returns_false(
+    async def test_merge_main_fetch_failure_returns_false(
         self, config, tmp_path: Path
     ) -> None:
-        """rebase should return False if the initial fetch fails."""
+        """merge_main should return False if the initial fetch fails."""
         manager = WorktreeManager(config)
 
         fetch_fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
@@ -442,9 +453,44 @@ class TestRebase:
             return abort_proc
 
         with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._delete_local_branch
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteLocalBranch:
+    """Tests for WorktreeManager._delete_local_branch."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_existing_branch(self, config, tmp_path: Path) -> None:
+        """Should call git branch -D for the given branch."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._delete_local_branch("agent/issue-7")
+
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.args[:4] == ("git", "branch", "-D", "agent/issue-7")
+
+    @pytest.mark.asyncio
+    async def test_swallows_error_when_branch_missing(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should not raise when the branch does not exist."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"error: branch not found")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager._delete_local_branch("agent/issue-999")
 
 
 # ---------------------------------------------------------------------------
@@ -745,6 +791,7 @@ class TestConfigureGitIdentity:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_configure_git_identity", configure_identity),

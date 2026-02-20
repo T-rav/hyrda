@@ -304,7 +304,7 @@ class HydraOrchestrator:
 
                 if result.success and result.plan:
                     # Post plan + branch as comment on the issue
-                    branch = f"agent/issue-{issue.number}"
+                    branch = self._config.branch_for_issue(issue.number)
                     comment_body = (
                         f"## Implementation Plan\n\n"
                         f"{result.plan}\n\n"

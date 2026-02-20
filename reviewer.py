@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -13,7 +11,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
-from stream_parser import StreamParser
+from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.reviewer")
 
@@ -70,6 +68,7 @@ class ReviewRunner:
         try:
             cmd = self._build_command(worktree_path)
             prompt = self._build_review_prompt(pr, issue, diff)
+            before_sha = await self._get_head_sha(worktree_path)
             transcript = await self._execute(cmd, prompt, worktree_path, pr.number)
             result.transcript = transcript
 
@@ -77,8 +76,8 @@ class ReviewRunner:
             result.verdict = self._parse_verdict(transcript)
             result.summary = self._extract_summary(transcript)
 
-            # Check if the reviewer made any commits (fixes)
-            result.fixes_made = await self._has_new_commits(worktree_path)
+            # Check if the reviewer made any commits or left uncommitted changes
+            result.fixes_made = await self._has_changes(worktree_path, before_sha)
 
             # Persist to disk
             self._save_transcript(pr.number, transcript)
@@ -147,11 +146,12 @@ class ReviewRunner:
         try:
             cmd = self._build_command(worktree_path)
             prompt = self._build_ci_fix_prompt(pr, issue, failure_summary, attempt)
+            before_sha = await self._get_head_sha(worktree_path)
             transcript = await self._execute(cmd, prompt, worktree_path, pr.number)
             result.transcript = transcript
             result.verdict = self._parse_verdict(transcript)
             result.summary = self._extract_summary(transcript)
-            result.fixes_made = await self._has_new_commits(worktree_path)
+            result.fixes_made = await self._has_changes(worktree_path, before_sha)
             self._save_transcript(pr.number, transcript)
         except Exception as exc:
             result.verdict = ReviewVerdict.REQUEST_CHANGES
@@ -299,9 +299,7 @@ SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
 
     def terminate(self) -> None:
         """Kill all active reviewer subprocesses."""
-        for proc in list(self._active_procs):
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
+        terminate_processes(self._active_procs)
 
     async def _execute(
         self,
@@ -311,65 +309,15 @@ SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
         pr_number: int,
     ) -> str:
         """Run the claude review process."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(worktree_path),
-            env=env,
-            limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
+        return await stream_claude_process(
+            cmd=cmd,
+            prompt=prompt,
+            cwd=worktree_path,
+            active_procs=self._active_procs,
+            event_bus=self._bus,
+            event_data={"pr": pr_number, "source": "reviewer"},
+            logger=logger,
         )
-        self._active_procs.add(proc)
-
-        try:
-            assert proc.stdin is not None
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-
-            proc.stdin.write(prompt.encode())
-            await proc.stdin.drain()
-            proc.stdin.close()
-
-            # Drain stderr in background to prevent deadlock
-            stderr_task = asyncio.create_task(proc.stderr.read())
-
-            parser = StreamParser()
-            raw_lines: list[str] = []
-            result_text = ""
-            async for raw in proc.stdout:
-                line = raw.decode(errors="replace").rstrip("\n")
-                raw_lines.append(line)
-                if not line.strip():
-                    continue
-
-                display, result = parser.parse(line)
-                if result is not None:
-                    result_text = result
-
-                if display.strip():
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.TRANSCRIPT_LINE,
-                            data={
-                                "pr": pr_number,
-                                "line": display,
-                                "source": "reviewer",
-                            },
-                        )
-                    )
-
-            await stderr_task
-            await proc.wait()
-            return result_text or "\n".join(raw_lines)
-        except asyncio.CancelledError:
-            proc.kill()
-            raise
-        finally:
-            self._active_procs.discard(proc)
 
     def _save_transcript(self, pr_number: int, transcript: str) -> None:
         """Write the review transcript to .hydra/logs/ for post-mortem review."""
@@ -379,19 +327,42 @@ SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
         path.write_text(transcript)
         logger.info("Review transcript saved to %s", path, extra={"pr": pr_number})
 
-    async def _has_new_commits(self, worktree_path: Path) -> bool:
-        """Check if the reviewer added commits (dirty working tree)."""
+    async def _get_head_sha(self, worktree_path: Path) -> str | None:
+        """Return the current HEAD commit SHA in the worktree."""
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git",
-                "diff",
-                "--cached",
-                "--quiet",
+                "rev-parse",
+                "HEAD",
                 cwd=str(worktree_path),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            await proc.communicate()
-            return proc.returncode != 0
+            stdout, _ = await proc.communicate()
+            if proc.returncode == 0:
+                return stdout.decode().strip()
+            return None
+        except FileNotFoundError:
+            return None
+
+    async def _has_changes(self, worktree_path: Path, before_sha: str | None) -> bool:
+        """Check if the agent made commits or left uncommitted changes."""
+        try:
+            # Check 1: new commits (HEAD moved)
+            current_sha = await self._get_head_sha(worktree_path)
+            if current_sha and before_sha and current_sha != before_sha:
+                return True
+
+            # Check 2: uncommitted changes (staged or unstaged)
+            proc = await asyncio.create_subprocess_exec(
+                "git",
+                "status",
+                "--porcelain",
+                cwd=str(worktree_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await proc.communicate()
+            return proc.returncode == 0 and bool(stdout.decode().strip())
         except FileNotFoundError:
             return False
