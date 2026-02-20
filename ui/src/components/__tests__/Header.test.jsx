@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import {
   Header,
   dotConnected, dotDisconnected,
@@ -387,18 +387,15 @@ describe('Header component', () => {
       vi.useRealTimers()
     })
 
-    it('holds Stopping badge briefly after status transitions from stopping to idle', () => {
+    it('clears Stopping immediately when transitioning to idle with no active workers', () => {
       const { rerender } = render(
         <Header {...defaultProps} orchestratorStatus="stopping" workers={{}} />
       )
       expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
 
-      // Transition to idle with no active workers
+      // Transition to idle with no active workers — second effect clears held state early
       rerender(<Header {...defaultProps} orchestratorStatus="idle" workers={{}} />)
 
-      // Should still show Stopping due to minimum hold timer
-      // The second useEffect clears early when !hasActiveWorkers && status !== 'stopping'
-      // so with no active workers, it should clear immediately
       expect(screen.getByText('Start')).toBeInTheDocument()
     })
 
