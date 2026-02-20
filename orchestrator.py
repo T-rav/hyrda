@@ -688,7 +688,7 @@ class HydraOrchestrator:
                 # errors — Hydra merges directly once CI passes.
                 if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
                     await self._prs.submit_review(
-                        pr.number, result.verdict.value, result.summary
+                        pr.number, result.verdict, result.summary
                     )
 
                 self._state.mark_pr(pr.number, result.verdict.value)

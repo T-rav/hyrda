@@ -1315,9 +1315,7 @@ class TestReviewPRs:
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.submit_review.assert_awaited_once_with(
-            101, verdict.value, "Looks good."
-        )
+        mock_prs.submit_review.assert_awaited_once_with(101, verdict, "Looks good.")
 
     @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(
