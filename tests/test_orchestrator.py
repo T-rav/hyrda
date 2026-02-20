@@ -385,7 +385,7 @@ class TestRunFinallyTerminatesRunners:
     async def test_run_finally_terminates_all_runners(
         self, config: HydraConfig
     ) -> None:
-        """When run() exits via stop event, all three runner terminate() are called."""
+        """When run() exits via stop event, runner terminate() methods are called."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
@@ -481,7 +481,7 @@ class TestStopMechanism:
 
     @pytest.mark.asyncio
     async def test_stop_terminates_all_runners(self, config: HydraConfig) -> None:
-        """stop() should call terminate() on planners, agents, and reviewers."""
+        """stop() should call terminate() on planners, agents, and reviewers (HITL tested separately)."""
         orch = HydraOrchestrator(config)
         with (
             patch.object(orch._planners, "terminate") as mock_p,
@@ -1488,6 +1488,36 @@ class TestHITLLoop:
 
         # worktree.create should NOT have been called
         orch._worktrees.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_creates_worktree_when_missing(
+        self, config: HydraConfig
+    ) -> None:
+        """If no worktree exists, one should be created via worktrees.create()."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix it",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        # Do NOT create the worktree dir — it should be missing
+        wt_path = config.worktree_path_for_issue(42)
+        assert not wt_path.is_dir()
+
+        created_wt = config.worktree_base / "issue-42-created"
+        created_wt.mkdir(parents=True, exist_ok=True)
+        orch._worktrees.create = AsyncMock(return_value=created_wt)  # type: ignore[method-assign]
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        orch._worktrees.create.assert_called_once_with(42, config.branch_for_issue(42))
 
     @pytest.mark.asyncio
     async def test_hitl_loop_skips_active_issues(self, config: HydraConfig) -> None:
