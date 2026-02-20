@@ -210,10 +210,11 @@ class HydraOrchestrator:
         try:
             await self._supervise_loops()
         finally:
-            self._running = False
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
+            await asyncio.sleep(0)
+            self._running = False
             await self._publish_status()
             logger.info("Hydra stopped")
 
