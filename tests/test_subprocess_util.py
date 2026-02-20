@@ -166,9 +166,8 @@ def test_make_clean_env_no_gh_token() -> None:
 def test_make_clean_env_does_not_mutate_os_environ() -> None:
     with patch.dict("os.environ", {"CLAUDECODE": "1"}, clear=False):
         make_clean_env(gh_token="ghp_secret")
-    # os.environ should still have CLAUDECODE (not mutated)
-    # Note: patch.dict restores on exit, but inside the context it should be unchanged
-    with patch.dict("os.environ", {"CLAUDECODE": "1"}, clear=False):
+        # Verify os.environ was NOT mutated inside the same context:
+        # CLAUDECODE should still be present (not popped from the real env)
         import os
 
         assert os.environ.get("CLAUDECODE") == "1"
