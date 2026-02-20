@@ -124,9 +124,9 @@ class TestBuildConfig:
         # Check key defaults match HydraConfig
         assert cfg.ready_label == ["hydra-ready"]
         assert cfg.batch_size == 15
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
         assert cfg.max_planners == 1
-        assert cfg.max_reviewers == 2
+        assert cfg.max_reviewers == 5
         assert cfg.max_hitl_workers == 1
         assert cfg.hitl_active_label == ["hydra-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
@@ -155,7 +155,7 @@ class TestBuildConfig:
 
         assert cfg.batch_size == 10
         # Other fields remain at defaults
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
         assert cfg.model == "sonnet"
 
     def test_label_arg_parsed_to_list(self) -> None:
@@ -290,6 +290,16 @@ class TestBuildConfig:
         assert cfg.max_budget_usd == pytest.approx(10.5)
         assert cfg.review_budget_usd == pytest.approx(5.0)
         assert cfg.planner_budget_usd == pytest.approx(3.0)
+
+    def test_min_plan_words_passed_through(self) -> None:
+        args = parse_args(["--min-plan-words", "300"])
+        cfg = build_config(args)
+        assert cfg.min_plan_words == 300
+
+    def test_lite_plan_labels_passed_through(self) -> None:
+        args = parse_args(["--lite-plan-labels", "hotfix,patch,minor"])
+        cfg = build_config(args)
+        assert cfg.lite_plan_labels == ["hotfix", "patch", "minor"]
 
     def test_git_user_name_passed_through(self) -> None:
         args = parse_args(["--git-user-name", "T-rav-Hydra-Ops"])

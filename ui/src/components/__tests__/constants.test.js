@@ -9,7 +9,8 @@ describe('ACTIVE_STATUSES', () => {
 
   it('contains expected active statuses', () => {
     expect(ACTIVE_STATUSES).toEqual([
-      'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'start',
+      'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix',
+      'start', 'merge_main', 'conflict_resolution', 'ci_wait', 'ci_fix', 'merging',
     ])
   })
 
@@ -74,11 +75,23 @@ describe('PIPELINE_STAGES', () => {
     })
   })
 
-  it('every stage has key, label, color, role, and configKey properties', () => {
+  it('maps each stage to the correct subtle color', () => {
+    const subtleMap = Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, s.subtleColor]))
+    expect(subtleMap).toEqual({
+      triage: theme.greenSubtle,
+      plan: theme.purpleSubtle,
+      implement: theme.accentSubtle,
+      review: theme.orangeSubtle,
+      merged: theme.greenSubtle,
+    })
+  })
+
+  it('every stage has key, label, color, subtleColor, role, and configKey properties', () => {
     for (const stage of PIPELINE_STAGES) {
       expect(stage).toHaveProperty('key')
       expect(stage).toHaveProperty('label')
       expect(stage).toHaveProperty('color')
+      expect(stage).toHaveProperty('subtleColor')
       expect(stage).toHaveProperty('role')
       expect(stage).toHaveProperty('configKey')
     }

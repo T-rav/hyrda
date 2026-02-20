@@ -99,6 +99,9 @@ def create_router(
             data = item.model_dump()
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
+            cause = state.get_hitl_cause(item.issue)
+            if cause:
+                data["cause"] = cause
             enriched.append(data)
         return JSONResponse(enriched)
 
@@ -110,6 +113,12 @@ def create_router(
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         correction = body.get("correction", "")
         orch.submit_hitl_correction(issue_number, correction)
+
+        # Swap labels for immediate dashboard feedback
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.hitl_active_label)
+
         await event_bus.publish(
             HydraEvent(
                 type=EventType.HITL_UPDATE,
@@ -129,6 +138,7 @@ def create_router(
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
         await event_bus.publish(
@@ -150,6 +160,7 @@ def create_router(
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
         await pr_manager.close_issue(issue_number)
         await event_bus.publish(
             HydraEvent(

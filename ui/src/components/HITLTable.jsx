@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
+import { PIPELINE_STAGES } from '../constants'
 import { useHITLCorrection } from '../hooks/useHITLCorrection'
 
 export function HITLTable({ items, onRefresh }) {
@@ -66,6 +67,7 @@ export function HITLTable({ items, onRefresh }) {
           <tr>
             <th style={styles.th}>Issue</th>
             <th style={styles.th}>Title</th>
+            <th style={styles.th}>Cause</th>
             <th style={styles.th}>PR</th>
             <th style={styles.th}>Branch</th>
             <th style={styles.th}>Status</th>
@@ -90,6 +92,11 @@ export function HITLTable({ items, onRefresh }) {
                   </td>
                   <td style={styles.td}>{item.title}</td>
                   <td style={styles.td}>
+                    {item.cause
+                      ? <span style={styles.causeText}>{item.cause}</span>
+                      : <span style={styles.causePlaceholder}>—</span>}
+                  </td>
+                  <td style={styles.td}>
                     {item.pr > 0 ? (
                       <a href={item.prUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}
                          onClick={e => e.stopPropagation()}>
@@ -106,7 +113,7 @@ export function HITLTable({ items, onRefresh }) {
                 </tr>
                 {isExpanded && (
                   <tr data-testid={`hitl-detail-${item.issue}`}>
-                    <td colSpan={5} style={styles.detailCell}>
+                    <td colSpan={6} style={styles.detailCell}>
                       <div style={styles.detailPanel}>
                         {item.cause && (
                           <div style={styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
@@ -160,11 +167,18 @@ export function HITLTable({ items, onRefresh }) {
   )
 }
 
+const originColors = Object.fromEntries(
+  PIPELINE_STAGES
+    .filter(s => s.key !== 'merged')
+    .map(s => [`from ${s.key}`, { bg: s.subtleColor, fg: s.color }])
+)
+
 function statusBadgeStyle(status) {
   const colors = {
     pending: { bg: theme.yellowSubtle, fg: theme.yellow },
     processing: { bg: theme.accentSubtle, fg: theme.accent },
     resolved: { bg: theme.greenSubtle, fg: theme.green },
+    ...originColors,
   }
   const { bg, fg } = colors[status] || colors.pending
   return {
@@ -179,7 +193,7 @@ const btnBase = {
 }
 
 const styles = {
-  container: { padding: 12 },
+  container: { padding: 12, overflowX: 'auto' },
   header: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 12,
@@ -193,7 +207,7 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     height: 200, color: theme.textMuted, fontSize: 13,
   },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
+  table: { width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 12 },
   th: {
     textAlign: 'left', padding: 8, borderBottom: `1px solid ${theme.border}`,
     color: theme.textMuted, fontSize: 11,
@@ -203,6 +217,8 @@ const styles = {
   rowExpanded: { background: theme.surfaceInset },
   link: { color: theme.accent, textDecoration: 'none' },
   noPr: { color: theme.textMuted, fontStyle: 'italic' },
+  causeText: { fontSize: 11, color: theme.orange, fontWeight: 500 },
+  causePlaceholder: { color: theme.textMuted, fontStyle: 'italic' },
   detailCell: { padding: 0, borderBottom: `1px solid ${theme.border}` },
   detailPanel: {
     padding: '12px 16px', background: theme.surface,

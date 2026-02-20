@@ -259,6 +259,18 @@ class TestBuildPrompt:
 
         assert "Follow this plan closely" not in prompt
 
+    def test_prompt_includes_ui_guidelines(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include UI guidelines for component reuse and responsive design."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "UI Guidelines" in prompt
+        assert "ui/src/components/" in prompt
+        assert "never duplicate" in prompt.lower()
+        assert "minWidth" in prompt
+        assert "theme" in prompt.lower()
+
     def test_prompt_instructs_no_push_or_pr(
         self, config, event_bus: EventBus, issue
     ) -> None:
@@ -267,6 +279,42 @@ class TestBuildPrompt:
         prompt = runner._build_prompt(issue)
         assert "push" in prompt.lower() or "Do NOT push" in prompt
         assert "pull request" in prompt.lower() or "pr create" in prompt.lower()
+
+    def test_prompt_includes_common_feedback_when_reviews_exist(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include Common Review Feedback when review data exists."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        store = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        for i in range(4):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=90 + i,
+                    issue_number=30 + i,
+                    timestamp="2026-02-20T10:00:00Z",
+                    verdict="request-changes",
+                    summary="Missing test coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "## Common Review Feedback" in prompt
+        assert "Missing or insufficient test coverage" in prompt
+
+    def test_prompt_works_without_review_data(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should work normally when no review data exists."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "## Common Review Feedback" not in prompt
+        # The rest of the prompt should still be there
+        assert "## Instructions" in prompt
+        assert "## Rules" in prompt
 
 
 # ---------------------------------------------------------------------------

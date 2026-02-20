@@ -304,7 +304,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
 
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -328,7 +328,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_reviewers == 2
+        assert cfg.max_reviewers == 5
 
     def test_max_hitl_workers_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -1047,6 +1047,80 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # min_plan_words: ge=50, le=2000
+
+    def test_min_plan_words_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 200
+
+    def test_min_plan_words_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            min_plan_words=100,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 100
+
+    def test_min_plan_words_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                min_plan_words=49,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_min_plan_words_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                min_plan_words=2001,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_new_files_warning: ge=1, le=20
+
+    def test_max_new_files_warning_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_new_files_warning == 5
+
+    def test_max_new_files_warning_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_new_files_warning=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_new_files_warning == 10
+
+    def test_max_new_files_warning_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_new_files_warning=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_new_files_warning_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_new_files_warning=21,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – gh_token resolution
@@ -1225,6 +1299,86 @@ class TestHydraConfigHitlActiveLabel:
             state_file=tmp_path / "s.json",
         )
         assert cfg.hitl_active_label == ["explicit-active"]
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – min_plan_words env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMinPlanWords:
+    """Tests for min_plan_words field and HYDRA_MIN_PLAN_WORDS env var."""
+
+    def test_min_plan_words_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 200
+
+    def test_min_plan_words_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_PLAN_WORDS", "300")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 300
+
+    def test_min_plan_words_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_PLAN_WORDS", "300")
+        cfg = HydraConfig(
+            min_plan_words=100,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 100
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – lite_plan_labels env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigLitePlanLabels:
+    """Tests for lite_plan_labels field and HYDRA_LITE_PLAN_LABELS env var."""
+
+    def test_lite_plan_labels_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["bug", "typo", "docs"]
+
+    def test_lite_plan_labels_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LITE_PLAN_LABELS", "hotfix,patch")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["hotfix", "patch"]
+
+    def test_lite_plan_labels_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LITE_PLAN_LABELS", "hotfix,patch")
+        cfg = HydraConfig(
+            lite_plan_labels=["custom"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["custom"]
 
 
 # ---------------------------------------------------------------------------

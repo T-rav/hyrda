@@ -11,7 +11,7 @@ UV := VIRTUAL_ENV=$(VENV) uv run --active
 
 # CLI argument passthrough
 READY_LABEL ?= hydra-ready
-WORKERS ?= 2
+WORKERS ?= 3
 MODEL ?= opus
 REVIEW_MODEL ?= opus
 BATCH_SIZE ?= 15
@@ -20,7 +20,7 @@ REVIEW_BUDGET ?= 0
 PLANNER_LABEL ?= hydra-plan
 PLANNER_MODEL ?= opus
 PLANNER_BUDGET ?= 0
-REVIEWERS ?= 2
+REVIEWERS ?= 5
 HITL_WORKERS ?= 1
 PORT ?= 5555
 LOG_DIR ?= $(PROJECT_ROOT)/.hydra/logs

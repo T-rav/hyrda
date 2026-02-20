@@ -36,7 +36,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-workers",
         type=int,
         default=None,
-        help="Max concurrent implementation agents (default: 2)",
+        help="Max concurrent implementation agents (default: 3)",
     )
     parser.add_argument(
         "--max-planners",
@@ -48,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-reviewers",
         type=int,
         default=None,
-        help="Max concurrent review agents (default: 1)",
+        help="Max concurrent review agents (default: 5)",
     )
     parser.add_argument(
         "--max-hitl-workers",
@@ -136,6 +136,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=None,
         help="USD budget cap per planning agent (0 = unlimited, default: 0)",
+    )
+    parser.add_argument(
+        "--min-plan-words",
+        type=int,
+        default=None,
+        help="Minimum word count for a valid plan (default: 200)",
+    )
+    parser.add_argument(
+        "--lite-plan-labels",
+        default=None,
+        help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
     )
     parser.add_argument(
         "--repo",
@@ -226,6 +237,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "max_ci_fix_attempts",
         "planner_model",
         "planner_budget_usd",
+        "min_plan_words",
         "repo",
         "main_branch",
         "dashboard_port",
@@ -246,6 +258,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "lite_plan_labels",
     ):
         val = getattr(args, field)
         if val is not None:

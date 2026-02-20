@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
 import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
@@ -11,11 +11,39 @@ export function Header({
   sessionCounts, connected, orchestratorStatus,
   onStart, onStop, phase, workers, config,
 }) {
-  const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
-  const isStopping = orchestratorStatus === 'stopping'
-  const isRunning = orchestratorStatus === 'running'
-
   const workerList = Object.values(workers || {})
+  const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))
+
+  // Track minimum stopping duration to prevent flicker
+  const [stoppingHeld, setStoppingHeld] = useState(false)
+  const stoppingTimer = useRef(null)
+
+  useEffect(() => {
+    if (orchestratorStatus === 'stopping') {
+      setStoppingHeld(true)
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+    } else if (stoppingHeld) {
+      stoppingTimer.current = setTimeout(() => {
+        setStoppingHeld(false)
+      }, 1500)
+    }
+    return () => {
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+    }
+  }, [orchestratorStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear held state early when workers confirm idle and status is not stopping
+  useEffect(() => {
+    if (!hasActiveWorkers && orchestratorStatus !== 'stopping') {
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+      setStoppingHeld(false)
+    }
+  }, [hasActiveWorkers, orchestratorStatus])
+
+  const isStopping = orchestratorStatus === 'stopping' || stoppingHeld
+  const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done') &&
+    !stoppingHeld
+  const isRunning = orchestratorStatus === 'running'
   const workload = {
     total: workerList.length,
     active: workerList.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
@@ -121,7 +149,7 @@ const styles = {
     background: theme.surface,
     borderBottom: `1px solid ${theme.border}`,
   },
-  left: { display: 'flex', alignItems: 'center', gap: 8 },
+  left: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
   logoImg: { width: 56, height: 56 },
   logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
@@ -131,6 +159,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 14,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   sessionBox: {
     display: 'flex',
@@ -215,7 +245,7 @@ const styles = {
     fontSize: 9,
     fontWeight: 700,
   },
-  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10 },
+  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10, flexShrink: 0 },
   startBtn: {
     padding: '4px 14px',
     borderRadius: 6,
