@@ -1313,19 +1313,21 @@ class TestHITLCorrection:
         orch._active_issues.add(99)
         assert orch.get_hitl_status(42) == "pending"
 
-    def test_get_hitl_status_returns_origin_when_stored(
-        self, config: HydraConfig
+    @pytest.mark.parametrize(
+        "label, expected",
+        [
+            ("hydra-find", "from triage"),
+            ("hydra-plan", "from plan"),
+            ("hydra-ready", "from implement"),
+            ("hydra-review", "from review"),
+        ],
+    )
+    def test_get_hitl_status_returns_human_readable_origin(
+        self, config: HydraConfig, label: str, expected: str
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._state.set_hitl_origin(42, "hydra-review")
-        assert orch.get_hitl_status(42) == "from review"
-
-    def test_get_hitl_status_returns_origin_for_triage(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        orch._state.set_hitl_origin(42, "hydra-find")
-        assert orch.get_hitl_status(42) == "from triage"
+        orch._state.set_hitl_origin(42, label)
+        assert orch.get_hitl_status(42) == expected
 
     def test_get_hitl_status_falls_back_to_pending_for_unknown_label(
         self, config: HydraConfig

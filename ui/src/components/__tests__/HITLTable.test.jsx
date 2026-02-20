@@ -60,6 +60,18 @@ describe('HITLTable component', () => {
     expect(screen.getByText('from triage')).toBeInTheDocument()
   })
 
+  it('renders from plan status badge', () => {
+    const items = [{ ...mockItems[0], status: 'from plan' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('from plan')).toBeInTheDocument()
+  })
+
+  it('renders from implement status badge', () => {
+    const items = [{ ...mockItems[0], status: 'from implement' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('from implement')).toBeInTheDocument()
+  })
+
   it('renders unknown status with fallback styling without crashing', () => {
     const items = [{ ...mockItems[0], status: 'unknown-status' }]
     render(<HITLTable items={items} onRefresh={() => {}} />)
