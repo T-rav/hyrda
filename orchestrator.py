@@ -170,7 +170,7 @@ class HydraOrchestrator:
         )
 
     async def run(self) -> None:
-        """Run three independent, continuous loops — plan, implement, review.
+        """Run five independent, continuous loops — triage, plan, implement, review, HITL.
 
         Each loop polls for its own work on ``poll_interval`` and processes
         whatever it finds.  No phase blocks another; new issues are picked
