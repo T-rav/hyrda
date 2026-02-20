@@ -41,6 +41,18 @@ class WorktreeManager:
         wt_path = self._base / f"issue-{issue_number}"
         return wt_path.is_dir()
 
+    async def _delete_local_branch(self, branch: str) -> None:
+        """Delete a local branch if it exists, ignoring errors."""
+        with contextlib.suppress(RuntimeError):
+            await run_subprocess(
+                "git",
+                "branch",
+                "-D",
+                branch,
+                cwd=self._repo_root,
+                gh_token=self._config.gh_token,
+            )
+
     async def _remote_branch_exists(self, branch: str) -> bool:
         """Check whether *branch* exists on the remote."""
         try:
@@ -81,6 +93,20 @@ class WorktreeManager:
         # Ensure base directory exists
         self._base.mkdir(parents=True, exist_ok=True)
 
+        # Clean up any stale local branch (from previous runs) to avoid
+        # fetch conflicts and worktree checkout errors
+        await self._delete_local_branch(branch)
+
+        # Fetch latest main so we branch from the latest state
+        await run_subprocess(
+            "git",
+            "fetch",
+            "origin",
+            self._config.main_branch,
+            cwd=self._repo_root,
+            gh_token=self._config.gh_token,
+        )
+
         # Check if the branch already exists on the remote (resumable work)
         if await self._remote_branch_exists(branch):
             logger.info(
@@ -92,7 +118,7 @@ class WorktreeManager:
                 "git",
                 "fetch",
                 "origin",
-                f"{branch}:{branch}",
+                f"+refs/heads/{branch}:refs/heads/{branch}",
                 cwd=self._repo_root,
                 gh_token=self._config.gh_token,
             )
