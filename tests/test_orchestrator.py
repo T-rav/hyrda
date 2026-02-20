@@ -801,6 +801,7 @@ class TestOrchestratorShutdownLifecycle:
         assert len(orch._planners._active_procs) == 0
         assert len(orch._agents._active_procs) == 0
         assert len(orch._reviewers._active_procs) == 0
+        assert len(orch._hitl_runner._active_procs) == 0
 
     @pytest.mark.asyncio
     async def test_stop_calls_terminate_eagerly_and_in_finally(
@@ -811,11 +812,12 @@ class TestOrchestratorShutdownLifecycle:
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
-        terminate_calls = {"planners": 0, "agents": 0, "reviewers": 0}
+        terminate_calls = {"planners": 0, "agents": 0, "reviewers": 0, "hitl": 0}
 
         orig_p = orch._planners.terminate
         orig_a = orch._agents.terminate
         orig_r = orch._reviewers.terminate
+        orig_h = orch._hitl_runner.terminate
 
         def count_p() -> None:
             terminate_calls["planners"] += 1
@@ -829,9 +831,14 @@ class TestOrchestratorShutdownLifecycle:
             terminate_calls["reviewers"] += 1
             orig_r()
 
+        def count_h() -> None:
+            terminate_calls["hitl"] += 1
+            orig_h()
+
         orch._planners.terminate = count_p  # type: ignore[method-assign]
         orch._agents.terminate = count_a  # type: ignore[method-assign]
         orch._reviewers.terminate = count_r  # type: ignore[method-assign]
+        orch._hitl_runner.terminate = count_h  # type: ignore[method-assign]
 
         async def plan_and_stop() -> list[PlanResult]:
             await orch.stop()
@@ -846,6 +853,7 @@ class TestOrchestratorShutdownLifecycle:
         assert terminate_calls["planners"] == 2
         assert terminate_calls["agents"] == 2
         assert terminate_calls["reviewers"] == 2
+        assert terminate_calls["hitl"] == 2
 
 
 # ---------------------------------------------------------------------------
