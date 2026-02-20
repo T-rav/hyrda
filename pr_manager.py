@@ -524,8 +524,8 @@ class PRManager:
     async def get_pr_checks(self, pr_number: int) -> list[dict[str, str]]:
         """Fetch CI check results for *pr_number*.
 
-        Returns a list of dicts with ``name``, ``state``, and ``conclusion``
-        keys.  Returns an empty list on failure or in dry-run mode.
+        Returns a list of dicts with ``name`` and ``state`` keys.
+        Returns an empty list on failure or in dry-run mode.
         """
         if self._config.dry_run:
             logger.info("[dry-run] Would fetch CI checks for PR #%d", pr_number)
@@ -540,7 +540,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 "--json",
-                "name,state,conclusion",
+                "name,state",
                 cwd=self._config.repo_root,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
@@ -548,7 +548,10 @@ class PRManager:
             logger.warning("Could not fetch CI checks for PR #%d: %s", pr_number, exc)
             return []
 
-    _PASSING_CONCLUSIONS = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PASSING_STATES = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PENDING_STATES = frozenset(
+        {"PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING"}
+    )
 
     async def wait_for_ci(  # noqa: PLR0911
         self,
@@ -575,7 +578,9 @@ class PRManager:
             if not checks:
                 return True, "No CI checks found"
 
-            pending = [c for c in checks if c.get("state", "").upper() != "COMPLETED"]
+            pending = [
+                c for c in checks if c.get("state", "").upper() in self._PENDING_STATES
+            ]
             if pending:
                 await self._bus.publish(
                     HydraEvent(
@@ -596,11 +601,11 @@ class PRManager:
                     elapsed += poll_interval
                     continue
 
-            # All checks completed — check conclusions
+            # All checks completed — check states
             failed = [
                 c["name"]
                 for c in checks
-                if c.get("conclusion", "").upper() not in self._PASSING_CONCLUSIONS
+                if c.get("state", "").upper() not in self._PASSING_STATES
             ]
             passed = not failed
             status = "passed" if passed else "failed"
