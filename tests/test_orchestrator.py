@@ -605,6 +605,67 @@ class TestImplementBatch:
 
 
 # ---------------------------------------------------------------------------
+# _implement_one — direct unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestImplementOne:
+    """Tests for _implement_one called directly (not through _implement_batch)."""
+
+    @pytest.mark.asyncio
+    async def test_success_returns_worker_result(self, config: HydraConfig) -> None:
+        """Basic success path: worktree, agent run, push, PR creation, label swap."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        semaphore = asyncio.Semaphore(2)
+
+        mock_wt, mock_prs = _setup_implement_mocks(orch, config, [issue])
+
+        result = await orch._implement_one(0, issue, semaphore)
+
+        assert result.issue_number == 42
+        assert result.success is True
+        assert orch._state.get_issue_status(42) == "success"
+        mock_prs.create_pr.assert_awaited_once()
+        mock_prs.remove_label.assert_awaited()
+        mock_prs.add_labels.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_early_return_when_stopped(self, config: HydraConfig) -> None:
+        """If _stop_event is set before calling, return early with error."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        semaphore = asyncio.Semaphore(2)
+
+        orch._stop_event.set()
+
+        result = await orch._implement_one(0, issue, semaphore)
+
+        assert result.error == "stopped"
+        assert result.issue_number == 42
+
+    @pytest.mark.asyncio
+    async def test_reuses_existing_worktree(self, config: HydraConfig) -> None:
+        """If worktree dir already exists, skip create and reuse it."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(77)
+        semaphore = asyncio.Semaphore(2)
+
+        # Pre-create worktree directory to simulate resume
+        wt_path = config.worktree_base / "issue-77"
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        mock_wt, _ = _setup_implement_mocks(
+            orch, config, [issue], create_pr_return=make_pr_info(101, 77)
+        )
+
+        await orch._implement_one(0, issue, semaphore)
+
+        # create should NOT have been called since worktree already exists
+        mock_wt.create.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
 # Implement includes push + PR creation
 # ---------------------------------------------------------------------------
 
@@ -1361,6 +1422,106 @@ class TestReviewPRs:
 
         mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
         mock_prs.submit_review.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# _review_one_pr — direct unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestReviewOnePr:
+    """Tests for _review_one_pr called directly (not through _review_prs)."""
+
+    @pytest.mark.asyncio
+    async def test_approve_and_merge(self, config: HydraConfig) -> None:
+        """Basic approve path with merge."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+        issue_map = {42: issue}
+        semaphore = asyncio.Semaphore(2)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        result = await orch._review_one_pr(0, pr, issue_map, semaphore)
+
+        assert result.merged is True
+        mock_prs.merge_pr.assert_awaited_once_with(101)
+        mock_reviewers.review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_issue_not_found(self, config: HydraConfig) -> None:
+        """Pass empty issue_map; verify 'Issue not found' result."""
+        orch = HydraOrchestrator(config)
+        pr = make_pr_info(101, 999, draft=False)
+        issue_map: dict[int, GitHubIssue] = {}
+        semaphore = asyncio.Semaphore(2)
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
+        orch._prs = mock_prs
+
+        wt = config.worktree_base / "issue-999"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        result = await orch._review_one_pr(0, pr, issue_map, semaphore)
+
+        assert result.pr_number == 101
+        assert result.summary == "Issue not found"
+
+    @pytest.mark.asyncio
+    async def test_pushes_fixes(self, config: HydraConfig) -> None:
+        """When fixes_made=True, push_branch should be called."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+        issue_map = {42: issue}
+        semaphore = asyncio.Semaphore(2)
+
+        review_result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        review_result.fixes_made = True
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(return_value=review_result)
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_one_pr(0, pr, issue_map, semaphore)
+
+        # push_branch called for fixes
+        mock_prs.push_branch.assert_awaited()
 
 
 # ---------------------------------------------------------------------------
