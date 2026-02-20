@@ -984,7 +984,10 @@ class TestHydraConfigValidationConstraints:
 class TestHydraConfigGhToken:
     """Tests for the gh_token field and HYDRA_GH_TOKEN env var resolution."""
 
-    def test_gh_token_default_is_empty(self, tmp_path: Path) -> None:
+    def test_gh_token_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GH_TOKEN", raising=False)
         cfg = HydraConfig(
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
