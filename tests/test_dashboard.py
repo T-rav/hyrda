@@ -1722,3 +1722,109 @@ class TestWebSocketErrorLogging:
             # logger.warning should NOT have been called with WebSocket error messages
             for call in mock_logger.warning.call_args_list:
                 assert "WebSocket error" not in str(call)
+
+
+# ---------------------------------------------------------------------------
+# Static file serving and template cleanup (issue #24)
+# ---------------------------------------------------------------------------
+
+
+class TestStaticDashboardJS:
+    """Tests for serving /static/dashboard.js."""
+
+    def test_static_dashboard_js_is_served(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /static/dashboard.js returns 200 when the static dir exists."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        # Create a real static/ dir with a dashboard.js file
+        static_dir = tmp_path / "static"
+        static_dir.mkdir()
+        js_file = static_dir / "dashboard.js"
+        js_file.write_text("// dashboard JS")
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with patch("dashboard._STATIC_DIR", static_dir):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/static/dashboard.js")
+
+        assert response.status_code == 200
+        assert "// dashboard JS" in response.text
+
+
+class TestFallbackTemplateExternalJS:
+    """Tests that the fallback template references external JS and has no inline onclick."""
+
+    def test_fallback_template_references_external_js(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The fallback HTML includes a script tag pointing to /static/dashboard.js."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with (
+            patch("dashboard._UI_DIST_DIR", tmp_path / "no-dist"),
+            patch("dashboard._STATIC_DIR", tmp_path / "no-static"),
+        ):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/")
+
+        body = response.text
+        assert 'src="/static/dashboard.js"' in body
+
+    def test_fallback_template_has_no_inline_onclick(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The fallback HTML must not contain any inline onclick attributes."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with (
+            patch("dashboard._UI_DIST_DIR", tmp_path / "no-dist"),
+            patch("dashboard._STATIC_DIR", tmp_path / "no-static"),
+        ):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/")
+
+        body = response.text
+        assert "onclick=" not in body
+
+    def test_fallback_template_has_no_inline_script_block(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The fallback template should not have a large inline <script> block."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with (
+            patch("dashboard._UI_DIST_DIR", tmp_path / "no-dist"),
+            patch("dashboard._STATIC_DIR", tmp_path / "no-static"),
+        ):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/")
+
+        body = response.text
+        # The template should not have inline JS with WebSocket logic
+        assert "new WebSocket" not in body
+        assert "function handleEvent" not in body
