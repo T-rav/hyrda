@@ -327,6 +327,9 @@ class HydraDashboard:
                 try:
                     await ws.send_text(event.model_dump_json())
                 except Exception:
+                    logger.warning(
+                        "WebSocket error during history replay", exc_info=True
+                    )
                     break
 
             # Stream live events
@@ -337,6 +340,7 @@ class HydraDashboard:
             except WebSocketDisconnect:
                 pass
             except Exception:
+                logger.warning("WebSocket error during live streaming", exc_info=True)
                 pass
             finally:
                 self._bus.unsubscribe(queue)
