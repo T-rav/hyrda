@@ -27,6 +27,7 @@ class EventType(StrEnum):
     CI_CHECK = "ci_check"
     ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
+    HITL_UPDATE = "hitl_update"
     ORCHESTRATOR_STATUS = "orchestrator_status"
     ERROR = "error"
 

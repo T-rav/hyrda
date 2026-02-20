@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from subprocess_util import run_subprocess
+from subprocess_util import make_clean_env, run_subprocess
 
 
 def _make_proc(
@@ -133,3 +133,41 @@ async def test_no_cwd_when_none() -> None:
 
     call_kwargs = mock_exec.call_args.kwargs
     assert call_kwargs["cwd"] is None
+
+
+# --- make_clean_env ---
+
+
+def test_make_clean_env_strips_claudecode() -> None:
+    with patch.dict("os.environ", {"CLAUDECODE": "1", "HOME": "/tmp"}, clear=False):
+        env = make_clean_env()
+    assert "CLAUDECODE" not in env
+
+
+def test_make_clean_env_preserves_other_vars() -> None:
+    with patch.dict("os.environ", {"FOO": "bar", "HOME": "/tmp"}, clear=True):
+        env = make_clean_env()
+    assert env["FOO"] == "bar"
+    assert env["HOME"] == "/tmp"
+
+
+def test_make_clean_env_sets_gh_token() -> None:
+    env = make_clean_env(gh_token="ghp_secret")
+    assert env["GH_TOKEN"] == "ghp_secret"
+
+
+def test_make_clean_env_no_gh_token() -> None:
+    env_without_token = {"HOME": "/tmp", "PATH": "/usr/bin"}
+    with patch.dict("os.environ", env_without_token, clear=True):
+        env = make_clean_env()
+    assert "GH_TOKEN" not in env
+
+
+def test_make_clean_env_does_not_mutate_os_environ() -> None:
+    with patch.dict("os.environ", {"CLAUDECODE": "1"}, clear=False):
+        make_clean_env(gh_token="ghp_secret")
+        # Verify os.environ was NOT mutated inside the same context:
+        # CLAUDECODE should still be present (not popped from the real env)
+        import os
+
+        assert os.environ.get("CLAUDECODE") == "1"

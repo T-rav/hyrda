@@ -17,10 +17,11 @@ If `$ARGUMENTS` is empty, ask the user to describe the issue.
 
 ### Phase 0: Resolve Configuration
 
-Before doing anything else:
-- Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
-- Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
-- Run `echo "$HYDRA_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
+Before doing anything else, resolve these three values. Use the EXACT fallback logic below — do NOT pass empty strings to `gh issue create`:
+
+1. **REPO**: Run `echo "$HYDRA_GITHUB_REPO"`. If the output is empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+2. **ASSIGNEE**: Run `echo "$HYDRA_GITHUB_ASSIGNEE"`. If the output is empty, extract the owner from the repo slug (the part before `/`).
+3. **LABEL**: Run `echo "$HYDRA_LABEL_PLAN"`. If the output is empty, **hardcode `hydra-plan`**. NEVER pass an empty `--label` flag.
 
 ### Phase 1: Understand the Request
 
@@ -28,6 +29,12 @@ Parse `$ARGUMENTS` to understand what the user wants filed as an issue. Identify
 - What area of the codebase is involved
 - What the problem or feature request is
 - Any specific services, files, or patterns mentioned
+
+**Epic detection:** If the user mentions "epic", "break into sub-issues", "multiple parts", or describes a large multi-component feature, treat this as an EPIC:
+- Prefix the title with `[Epic]`
+- Do NOT use the `hydra-plan` label — use NO automation label (the parent epic is a tracking issue, not implementable)
+- Create sub-issues separately, each WITH the `hydra-plan` label
+- Link sub-issues in the epic body with checkboxes: `- [ ] #123 — title`
 
 ### Phase 2: Research the Codebase
 
@@ -44,18 +51,24 @@ This research makes the issue actionable rather than vague.
 
 Before creating, search for existing issues:
 ```bash
-gh issue list --repo $REPO --label $LABEL --state open --search "<key terms>"
+gh issue list --repo $REPO --label hydra-plan --state open --search "<key terms>"
 ```
 
 If a matching open issue already exists, tell the user and show the link instead of creating a duplicate.
 
 ### Phase 4: Create the Issue
 
+**CRITICAL RULES:**
+- The issue body MUST be detailed (at least 200 characters). NEVER create an issue with an empty or one-line body.
+- ALL of the user's input from `$ARGUMENTS` goes into the BODY, not the title. The title is a short summary YOU write.
+- The `--label` flag MUST have a non-empty value. Use `hydra-plan` as default.
+- Use `--body-file` with a temp file for long bodies to avoid shell escaping issues.
+
 Create the issue using `gh issue create` with:
-- **Label**: `$LABEL`
+- **Label**: `$LABEL` (MUST be non-empty — default `hydra-plan`)
 - **Assignee**: `$ASSIGNEE`
-- **Title**: Concise, descriptive (under 70 chars)
-- **Body**: Well-structured with the sections below
+- **Title**: Concise, descriptive (under 70 chars) — this is a SHORT summary, NOT the user's full input
+- **Body**: Well-structured with the sections below. MUST be at least 200 characters.
 
 #### Issue Body Structure
 
@@ -90,6 +103,25 @@ Reference existing patterns in the codebase that should be followed.
 ```
 
 #### gh issue create command
+
+For long bodies, use a temp file to avoid shell escaping issues:
+
+```bash
+BODY_FILE=$(mktemp)
+cat > "$BODY_FILE" <<'ISSUE_EOF'
+<body content here>
+ISSUE_EOF
+
+gh issue create --repo $REPO \
+  --assignee $ASSIGNEE \
+  --label $LABEL \
+  --title "<title>" \
+  --body-file "$BODY_FILE"
+
+rm -f "$BODY_FILE"
+```
+
+For shorter bodies, the HEREDOC approach also works:
 
 ```bash
 gh issue create --repo $REPO \
