@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraConfig
+from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager
 from reviewer import ReviewRunner
@@ -30,6 +31,7 @@ class ReviewPhase:
         stop_event: asyncio.Event,
         active_issues: set[int],
         agents: AgentRunner | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -39,6 +41,7 @@ class ReviewPhase:
         self._stop_event = stop_event
         self._active_issues = active_issues
         self._agents = agents
+        self._bus = event_bus or EventBus()
 
     async def review_prs(
         self,
@@ -56,7 +59,23 @@ class ReviewPhase:
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
                 self._active_issues.add(pr.issue_number)
+
                 try:
+                    # Publish a start event immediately so the dashboard
+                    # shows this worker as active during pre-review work
+                    # (worktree creation, merge, conflict resolution).
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.REVIEW_UPDATE,
+                            data={
+                                "pr": pr.number,
+                                "issue": pr.issue_number,
+                                "worker": idx,
+                                "status": "start",
+                                "role": "reviewer",
+                            },
+                        )
+                    )
                     issue = issue_map.get(pr.issue_number)
                     if issue is None:
                         return ReviewResult(
@@ -91,8 +110,7 @@ class ReviewPhase:
                         await self._prs.push_branch(wt_path, pr.branch)
                     else:
                         logger.warning(
-                            "PR #%d merge conflict resolution failed"
-                            " — escalating to HITL",
+                            "PR #%d merge conflict resolution failed — escalating to HITL",
                             pr.number,
                         )
                         await self._prs.post_pr_comment(

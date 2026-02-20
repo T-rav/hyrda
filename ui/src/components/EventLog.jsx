@@ -1,7 +1,7 @@
 import React from 'react'
 import { theme } from '../theme'
 
-const typeColors = {
+export const typeColors = {
   worker_update: theme.accent,
   phase_change: theme.yellow,
   pr_created: theme.green,
@@ -13,7 +13,7 @@ const typeColors = {
   transcript_line: theme.textMuted,
 }
 
-function eventSummary(type, data) {
+export function eventSummary(type, data) {
   switch (type) {
     case 'batch_start': return `Batch ${data.batch} started`
     case 'phase_change': return data.phase

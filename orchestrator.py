@@ -86,6 +86,7 @@ class HydraOrchestrator:
             self._stop_event,
             self._active_issues,
             agents=self._agents,
+            event_bus=self._bus,
         )
 
     @property
