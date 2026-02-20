@@ -1321,6 +1321,81 @@ class TestPlanPhase:
         # Not all 3 should have completed — stop event triggers cancellation
         assert len(results) < len(issues)
 
+    @pytest.mark.asyncio
+    async def test_plan_issues_escalates_to_hitl_after_retry_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed retry triggers HITL label swap and comment."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            plan="Bad plan",
+            summary="Failed",
+            retry_attempted=True,
+            validation_errors=[
+                "Missing required section: ## Testing Strategy",
+                "Plan has 10 words, minimum is 200",
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        # HITL comment should be posted
+        mock_prs.post_comment.assert_awaited_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "Plan Validation Failed" in comment
+        assert "Testing Strategy" in comment
+
+        # Planner label removed, HITL label added
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+        mock_prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
+
+        # HITL origin and cause tracked in state
+        assert orch._state.get_hitl_origin(42) == config.planner_label[0]
+        assert orch._state.get_hitl_cause(42) == "Plan validation failed after retry"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_no_hitl_on_failure_without_retry(
+        self, config: HydraConfig
+    ) -> None:
+        """Normal failure (no retry) should NOT escalate to HITL."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+            retry_attempted=False,
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.post_comment.assert_not_awaited()
+        mock_prs.remove_label.assert_not_awaited()
+        mock_prs.add_labels.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # HITL correction tracking
