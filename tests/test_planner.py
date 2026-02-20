@@ -289,6 +289,22 @@ def test_build_prompt_handles_multiple_images(config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# _build_prompt - UI exploration guidance
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_ui_exploration_guidance(config, event_bus, issue):
+    """Planner prompt should include UI exploration patterns."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "ui/src/components/" in prompt
+    assert "constants.js" in prompt
+    assert "theme.js" in prompt
+    assert "types.js" in prompt
+
+
+# ---------------------------------------------------------------------------
 # _extract_plan
 # ---------------------------------------------------------------------------
 
