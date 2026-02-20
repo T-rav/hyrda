@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Hydra** is a parallel Claude Code issue processor — a multi-agent orchestration system that automates the full GitHub issue lifecycle via git issues and labels.
+**Hydra** — Intent in. Software out. A multi-agent orchestration system that automates the full GitHub issue lifecycle via git issues and labels.
 
 ## Architecture
 

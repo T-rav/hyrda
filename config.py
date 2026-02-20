@@ -30,6 +30,9 @@ class HydraConfig(BaseModel):
     max_reviewers: int = Field(
         default=2, ge=1, le=10, description="Concurrent review agents"
     )
+    max_hitl_workers: int = Field(
+        default=1, ge=1, le=5, description="Concurrent HITL correction agents"
+    )
     max_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
     )
@@ -71,6 +74,10 @@ class HydraConfig(BaseModel):
     hitl_label: list[str] = Field(
         default=["hydra-hitl"],
         description="Labels for issues escalated to human-in-the-loop (OR logic)",
+    )
+    hitl_active_label: list[str] = Field(
+        default=["hydra-hitl-active"],
+        description="Labels for HITL items being actively processed (OR logic)",
     )
     fixed_label: list[str] = Field(
         default=["hydra-fixed"],
@@ -158,6 +165,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_READY       → ready_label  (implement stage)
             HYDRA_LABEL_REVIEW      → review_label
             HYDRA_LABEL_HITL        → hitl_label
+            HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
         """
         # Paths
@@ -197,6 +205,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_READY": ("ready_label", ["hydra-ready"]),
             "HYDRA_LABEL_REVIEW": ("review_label", ["hydra-review"]),
             "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
+            "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():

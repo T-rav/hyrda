@@ -1,4 +1,4 @@
-# Makefile for Hydra — Parallel Claude Code Issue Processor
+# Makefile for Hydra — Intent in. Software out.
 
 HYDRA_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(HYDRA_DIR))
@@ -21,6 +21,7 @@ PLANNER_LABEL ?= hydra-plan
 PLANNER_MODEL ?= opus
 PLANNER_BUDGET ?= 0
 REVIEWERS ?= 2
+HITL_WORKERS ?= 1
 PORT ?= 5555
 
 # Colors
@@ -33,7 +34,7 @@ RESET := \033[0m
 .PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels
 
 help:
-	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
+	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
 	@echo ""
 	@echo "$(GREEN)Commands:$(RESET)"
 	@echo "  make dev            Start backend + Vite frontend dev server"
@@ -65,6 +66,7 @@ help:
 	@echo "  PLANNER_LABEL    Planner issue label (default: hydra-plan)"
 	@echo "  PLANNER_MODEL    Planner model (default: opus)"
 	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
+	@echo "  HITL_WORKERS     Max concurrent HITL agents (default: 1)"
 	@echo "  PORT             Dashboard port (default: 5555)"
 
 run:
@@ -84,6 +86,7 @@ run:
 		--planner-model $(PLANNER_MODEL) \
 		--planner-budget-usd $(PLANNER_BUDGET) \
 		--max-reviewers $(REVIEWERS) \
+		--max-hitl-workers $(HITL_WORKERS) \
 		--dashboard-port $(PORT) & \
 	wait
 
@@ -181,6 +184,7 @@ ensure-labels:
 	@gh label create "$(READY_LABEL)" --repo "$(REPO_SLUG)" --color 0e8a16 --description "Issue ready for implementation" --force 2>/dev/null || true
 	@gh label create "hydra-review" --repo "$(REPO_SLUG)" --color fbca04 --description "Issue/PR under review" --force 2>/dev/null || true
 	@gh label create "hydra-hitl" --repo "$(REPO_SLUG)" --color d93f0b --description "Escalated to human-in-the-loop" --force 2>/dev/null || true
+	@gh label create "hydra-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
 	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
 	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
 
