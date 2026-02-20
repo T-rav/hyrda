@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraEvent
 from state import StateTracker
+from tests.conftest import ReviewMockBuilder
 
 if TYPE_CHECKING:
     from config import HydraConfig
@@ -729,25 +730,8 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=make_review_result(101, 42))
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        # Ensure worktree path exists
+        mock_reviewers, _, _ = ReviewMockBuilder(orch, config).build()
         wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
         orch._state.set_worktree(42, str(wt))
 
         results = await orch._review_prs([pr], [issue])
@@ -761,26 +745,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -803,26 +768,14 @@ class TestReviewPRs:
             return make_review_result(pr.number, issue.number)
 
         orch = HydraOrchestrator(config)
-        orch._reviewers.review = fake_review  # type: ignore[method-assign]
 
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
+        ReviewMockBuilder(orch, config).with_review_side_effect(fake_review).build()
 
         issues = [make_issue(i) for i in range(1, 7)]
         prs = [make_pr_info(100 + i, i, draft=False) for i in range(1, 7)]
 
         for i in range(1, 7):
-            wt = config.worktree_base / f"issue-{i}"
-            wt.mkdir(parents=True, exist_ok=True)
+            (config.worktree_base / f"issue-{i}").mkdir(parents=True, exist_ok=True)
 
         await orch._review_prs(prs, issues)
 
@@ -857,26 +810,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         results = await orch._review_prs([pr], [issue])
 
@@ -890,26 +824,11 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(
-                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
-            )
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_verdict(ReviewVerdict.REQUEST_CHANGES)
+            .build()
         )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
 
         results = await orch._review_prs([pr], [issue])
 
@@ -925,24 +844,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).with_merge_return(False).build()
 
         results = await orch._review_prs([pr], [issue])
 
@@ -957,27 +859,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.pull_main = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -994,26 +876,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1032,24 +895,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).with_merge_return(False).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1066,26 +912,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1100,24 +927,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).with_merge_return(False).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1132,28 +942,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1168,28 +957,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1208,28 +976,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=verdict)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).with_verdict(verdict).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1246,34 +993,18 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = ReviewResult(
+        empty_summary_review = ReviewResult(
             pr_number=101,
             issue_number=42,
             verdict=ReviewVerdict.APPROVE,
             summary="",
             fixes_made=False,
         )
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_review_result(empty_summary_review)
+            .build()
+        )
 
         await orch._review_prs([pr], [issue])
 
@@ -1288,12 +1019,6 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
         call_order: list[str] = []
 
         async def fake_post_pr_comment(pr_number: int, body: str) -> None:
@@ -1303,22 +1028,12 @@ class TestReviewPRs:
             call_order.append("merge")
             return True
 
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = fake_post_pr_comment
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.merge_pr = fake_merge
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_pr_method("post_pr_comment", fake_post_pr_comment)
+            .with_pr_method("merge_pr", fake_merge)
+            .build()
+        )
 
         await orch._review_prs([pr], [issue])
 
@@ -1334,28 +1049,9 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config).with_merge_return(False).build()
+        )
 
         await orch._review_prs([pr], [issue])
 
