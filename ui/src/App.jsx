@@ -7,9 +7,9 @@ import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { theme } from './theme'
+import { ACTIVE_STATUSES } from './constants'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
   const {
