@@ -7,8 +7,10 @@ const statusColors = {
   running:    { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
   planning:   { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
   testing:    { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
-  committing: { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
-  done:       { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  committing:  { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  quality_fix: { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  reviewing:   { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  done:        { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
   failed:     { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
 }
 
@@ -60,6 +62,16 @@ describe('WorkerList component', () => {
     expect(screen.getByText('Planners')).toBeInTheDocument()
     expect(screen.getByText('Implementers')).toBeInTheDocument()
     expect(screen.getByText('Reviewers')).toBeInTheDocument()
+  })
+
+  it('renders workers with reviewing and planning statuses', () => {
+    const workers = {
+      'review-1': { status: 'reviewing', title: 'Review PR', branch: 'feat', worker: 0, role: 'reviewer' },
+      3: { status: 'planning', title: 'Plan issue', branch: '', worker: 1, role: 'planner' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('reviewing')).toBeInTheDocument()
+    expect(screen.getByText('planning')).toBeInTheDocument()
   })
 
   it('renders workers with pre-computed styles', () => {
