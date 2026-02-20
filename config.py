@@ -29,7 +29,7 @@ class HydraConfig(BaseModel):
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )
     max_reviewers: int = Field(
-        default=3, ge=1, le=10, description="Concurrent review agents"
+        default=5, ge=1, le=10, description="Concurrent review agents"
     )
     max_hitl_workers: int = Field(
         default=1, ge=1, le=5, description="Concurrent HITL correction agents"
