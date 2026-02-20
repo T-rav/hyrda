@@ -82,7 +82,7 @@ export default function App() {
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs'
-                ? <>Pull Requests{state.prs.length > 0 && <span style={styles.tabBadge}>{state.prs.length}</span>}</>
+                ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
                 : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}

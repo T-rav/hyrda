@@ -1,31 +1,54 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { tabActiveStyle, tabInactiveStyle, tabBadgeStyle } from '../../App'
 
 vi.mock('../../hooks/useHydraSocket', () => ({
-  useHydraSocket: () => ({
-    workers: {
-      1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
-    },
-    prs: [],
-    events: [],
-    connected: true,
-    orchestratorStatus: 'running',
-    sessionPrsCount: 0,
-    mergedCount: 0,
-    config: {},
-    phase: 'implement',
-    lifetimeStats: null,
-  }),
+  useHydraSocket: vi.fn(),
 }))
 
 vi.mock('../../hooks/useHumanInput', () => ({
   useHumanInput: () => ({ requests: {}, submit: vi.fn() }),
 }))
 
+import { useHydraSocket } from '../../hooks/useHydraSocket'
+import App from '../../App'
+
+function makeState(overrides = {}) {
+  return {
+    connected: false,
+    batchNum: 0,
+    phase: 'idle',
+    orchestratorStatus: 'idle',
+    workers: {},
+    prs: [],
+    reviews: [],
+    mergedCount: 0,
+    sessionPrsCount: 0,
+    lifetimeStats: null,
+    config: null,
+    events: [],
+    hitlItems: [],
+    humanInputRequests: {},
+    submitHumanInput: vi.fn(),
+    refreshHitl: vi.fn(),
+    ...overrides,
+  }
+}
+
 describe('App worker select tab switching', () => {
-  it('clicking a worker switches to transcript tab', async () => {
-    const { default: App } = await import('../../App')
+  beforeEach(() => {
+    useHydraSocket.mockReturnValue(makeState({
+      connected: true,
+      orchestratorStatus: 'running',
+      phase: 'implement',
+      workers: {
+        1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
+      },
+      config: {},
+    }))
+  })
+
+  it('clicking a worker switches to transcript tab', () => {
     render(<App />)
 
     // Switch to Pull Requests tab first
@@ -38,8 +61,7 @@ describe('App worker select tab switching', () => {
     expect(screen.getByText('line 1')).toBeInTheDocument()
   })
 
-  it('clicking a worker when already on transcript tab keeps transcript active', async () => {
-    const { default: App } = await import('../../App')
+  it('clicking a worker when already on transcript tab keeps transcript active', () => {
     render(<App />)
 
     // We start on transcript tab by default, click the worker via its card
@@ -102,35 +124,6 @@ describe('tabBadgeStyle', () => {
     expect(tabBadgeStyle).toBe(tabBadgeStyle)
   })
 })
-
-// Mock hooks to control state for render tests
-vi.mock('../../hooks/useHydraSocket', () => ({
-  useHydraSocket: vi.fn(),
-}))
-
-vi.mock('../../hooks/useHumanInput', () => ({
-  useHumanInput: () => ({ requests: {}, submit: vi.fn() }),
-}))
-
-import { useHydraSocket } from '../../hooks/useHydraSocket'
-import App from '../../App'
-
-function makeState(overrides = {}) {
-  return {
-    connected: false,
-    phase: 'idle',
-    orchestratorStatus: 'idle',
-    workers: {},
-    prs: [],
-    reviews: [],
-    mergedCount: 0,
-    sessionPrsCount: 0,
-    lifetimeStats: null,
-    config: null,
-    events: [],
-    ...overrides,
-  }
-}
 
 function getPrTab() {
   return screen.getByText('Pull Requests').closest('div')
