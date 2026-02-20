@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from config import HydraConfig
-from events import EventBus, HydraEvent
+from events import EventBus
 from state import StateTracker
 
 if TYPE_CHECKING:
@@ -320,26 +320,24 @@ class HydraDashboard:
             # Events published between snapshot and subscribe are picked
             # up by the live queue, never sent twice.
             history = self._bus.get_history()
-            queue = self._bus.subscribe()
 
-            # Send history on connect
-            for event in history:
+            async with self._bus.subscription() as queue:
+                # Send history on connect
+                for event in history:
+                    try:
+                        await ws.send_text(event.model_dump_json())
+                    except Exception:
+                        return
+
+                # Stream live events
                 try:
-                    await ws.send_text(event.model_dump_json())
+                    while True:
+                        event = await queue.get()
+                        await ws.send_text(event.model_dump_json())
+                except WebSocketDisconnect:
+                    pass
                 except Exception:
-                    break
-
-            # Stream live events
-            try:
-                while True:
-                    event: HydraEvent = await queue.get()
-                    await ws.send_text(event.model_dump_json())
-            except WebSocketDisconnect:
-                pass
-            except Exception:
-                pass
-            finally:
-                self._bus.unsubscribe(queue)
+                    pass
 
         self._app = app
         return app
