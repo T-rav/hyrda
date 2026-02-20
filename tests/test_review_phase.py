@@ -325,6 +325,33 @@ class TestReviewPRs:
         phase._prs.add_pr_labels.assert_awaited_once_with(101, ["hydra-hitl"])
 
     @pytest.mark.asyncio
+    async def test_review_conflict_escalation_records_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict escalation should record review_label as HITL origin."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
+
+    @pytest.mark.asyncio
     async def test_review_merge_conflict_resolved_by_agent(
         self, config: HydraConfig
     ) -> None:
@@ -418,6 +445,35 @@ class TestReviewPRs:
         phase._prs.add_labels.assert_any_await(42, ["hydra-hitl"])
         phase._prs.add_pr_labels.assert_any_await(101, ["hydra-hitl"])
         phase._prs.remove_pr_label.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_records_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge failure escalation should record review_label as HITL origin."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
 
     @pytest.mark.asyncio
     async def test_review_merge_records_lifetime_stats(
@@ -1054,6 +1110,49 @@ class TestWaitAndFixCI:
         assert (42, "hydra-review") in remove_calls
         add_calls = [c.args for c in phase._prs.add_labels.call_args_list]
         assert (42, ["hydra-hitl"]) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_escalation_records_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """CI failure escalation should record review_label as HITL origin."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = _make_phase(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
 
 
 # ---------------------------------------------------------------------------

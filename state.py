@@ -118,6 +118,22 @@ class StateTracker:
     def get_pr_status(self, pr_number: int) -> str | None:
         return self._data.reviewed_prs.get(str(pr_number))
 
+    # --- HITL origin tracking ---
+
+    def set_hitl_origin(self, issue_number: int, label: str) -> None:
+        """Record the label that was active before HITL escalation."""
+        self._data.hitl_origins[str(issue_number)] = label
+        self.save()
+
+    def get_hitl_origin(self, issue_number: int) -> str | None:
+        """Return the pre-HITL label for *issue_number*, or *None*."""
+        return self._data.hitl_origins.get(str(issue_number))
+
+    def remove_hitl_origin(self, issue_number: int) -> None:
+        """Clear the HITL origin record for *issue_number*."""
+        self._data.hitl_origins.pop(str(issue_number), None)
+        self.save()
+
     # --- batch tracking ---
 
     def get_current_batch(self) -> int:

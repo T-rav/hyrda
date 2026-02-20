@@ -205,6 +205,7 @@ class StateData(BaseModel):
     active_worktrees: dict[str, str] = Field(default_factory=dict)
     active_branches: dict[str, str] = Field(default_factory=dict)
     reviewed_prs: dict[str, str] = Field(default_factory=dict)
+    hitl_origins: dict[str, str] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
     last_updated: str | None = None
 
@@ -243,10 +244,12 @@ class ControlStatusConfig(BaseModel):
     planner_label: list[str] = Field(default_factory=list)
     review_label: list[str] = Field(default_factory=list)
     hitl_label: list[str] = Field(default_factory=list)
+    hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0
+    max_hitl_workers: int = 0
     batch_size: int = 0
     model: str = ""
 

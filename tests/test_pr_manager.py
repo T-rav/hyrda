@@ -1397,6 +1397,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         planner_label=["custom-plan"],
         review_label=["custom-review"],
         hitl_label=["custom-hitl"],
+        hitl_active_label=["custom-hitl-active"],
         fixed_label=["custom-fixed"],
         repo=config.repo,
         repo_root=tmp_path,
@@ -1423,6 +1424,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-ready",
         "custom-review",
         "custom-hitl",
+        "custom-hitl-active",
         "custom-fixed",
     }
 
