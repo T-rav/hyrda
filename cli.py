@@ -184,6 +184,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Enable debug-level logging",
     )
     parser.add_argument(
+        "--log-file",
+        default=".hydra/logs/hydra.log",
+        help="Path to log file for structured JSON logging (default: .hydra/logs/hydra.log)",
+    )
+    parser.add_argument(
         "--clean",
         action="store_true",
         help="Remove all worktrees and state, then exit",
@@ -276,11 +281,17 @@ async def _run_main(config: HydraConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
     if config.dashboard_enabled:
         from dashboard import HydraDashboard
-        from events import EventBus, EventType, HydraEvent
+        from events import EventBus, EventLog, EventType, HydraEvent
         from models import Phase
         from state import StateTracker
 
-        bus = EventBus()
+        event_log = EventLog(config.event_log_path)
+        bus = EventBus(event_log=event_log)
+        await bus.rotate_log(
+            config.event_log_max_size_mb * 1024 * 1024,
+            config.event_log_retention_days,
+        )
+        await bus.load_history_from_disk()
         state = StateTracker(config.state_file)
 
         dashboard = HydraDashboard(
@@ -310,7 +321,16 @@ async def _run_main(config: HydraConfig) -> None:
                 await dashboard._orchestrator.stop()
             await dashboard.stop()
     else:
-        orchestrator = HydraOrchestrator(config)
+        from events import EventBus, EventLog
+
+        event_log = EventLog(config.event_log_path)
+        bus = EventBus(event_log=event_log)
+        await bus.rotate_log(
+            config.event_log_max_size_mb * 1024 * 1024,
+            config.event_log_retention_days,
+        )
+        await bus.load_history_from_disk()
+        orchestrator = HydraOrchestrator(config, event_bus=bus)
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
@@ -326,7 +346,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     level = logging.DEBUG if args.verbose else logging.INFO
-    setup_logging(level=level, json_output=not args.verbose)
+    setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
 

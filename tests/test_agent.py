@@ -259,6 +259,18 @@ class TestBuildPrompt:
 
         assert "Follow this plan closely" not in prompt
 
+    def test_prompt_includes_ui_guidelines(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include UI guidelines for component reuse and responsive design."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "UI Guidelines" in prompt
+        assert "ui/src/components/" in prompt
+        assert "never duplicate" in prompt.lower()
+        assert "minWidth" in prompt
+        assert "theme" in prompt.lower()
+
     def test_prompt_instructs_no_push_or_pr(
         self, config, event_bus: EventBus, issue
     ) -> None:

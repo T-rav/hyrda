@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
-import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
+import { tabActiveStyle, tabInactiveStyle, tabBadgeStyle, hitlBadgeStyle } from '../../App'
 
 const { mockSocketState } = vi.hoisted(() => ({
   mockSocketState: {
@@ -29,6 +29,7 @@ vi.mock('../../hooks/useHydraSocket', () => ({
 
 beforeEach(() => {
   mockSocketState.hitlItems = []
+  mockSocketState.prs = []
   cleanup()
 })
 
@@ -133,5 +134,61 @@ describe('App pre-computed tab styles', () => {
         marginLeft: 6,
       })
     })
+  })
+})
+
+describe('tabBadgeStyle', () => {
+  it('has expected badge properties', () => {
+    expect(tabBadgeStyle).toMatchObject({
+      marginLeft: 6,
+      padding: '1px 6px',
+      borderRadius: 10,
+      fontSize: 10,
+      fontWeight: 600,
+      background: 'var(--border)',
+      color: 'var(--text-muted)',
+    })
+  })
+
+  it('is referentially stable', () => {
+    expect(tabBadgeStyle).toBe(tabBadgeStyle)
+  })
+})
+
+describe('PR tab badge rendering', () => {
+  it('shows Pull Requests label without badge when no PRs exist', async () => {
+    mockSocketState.prs = []
+    const { default: App } = await import('../../App')
+    render(<App />)
+    const tab = screen.getByText('Pull Requests').closest('div')
+    expect(tab).toBeInTheDocument()
+    expect(tab.querySelector('span')).toBeNull()
+  })
+
+  it('shows badge with count when PRs exist', async () => {
+    mockSocketState.prs = [
+      { pr: 1, title: 'PR 1' },
+      { pr: 2, title: 'PR 2' },
+      { pr: 3, title: 'PR 3' },
+    ]
+    const { default: App } = await import('../../App')
+    render(<App />)
+    const tab = screen.getByText('Pull Requests').closest('div')
+    expect(tab.querySelector('span')).not.toBeNull()
+    expect(tab.querySelector('span').textContent).toBe('3')
+  })
+
+  it('shows no badge when prs is empty after having items', async () => {
+    mockSocketState.prs = [{ pr: 1, title: 'PR 1' }]
+    const { default: App } = await import('../../App')
+    const { unmount } = render(<App />)
+    const tab = screen.getByText('Pull Requests').closest('div')
+    expect(tab.querySelector('span')).not.toBeNull()
+
+    unmount()
+    mockSocketState.prs = []
+    render(<App />)
+    const tab2 = screen.getByText('Pull Requests').closest('div')
+    expect(tab2.querySelector('span')).toBeNull()
   })
 })

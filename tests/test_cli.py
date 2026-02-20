@@ -81,6 +81,16 @@ class TestParseArgs:
         assert args.verbose is False
         assert args.clean is False
 
+    def test_log_file_default(self) -> None:
+        """--log-file should default to .hydra/logs/hydra.log."""
+        args = parse_args([])
+        assert args.log_file == ".hydra/logs/hydra.log"
+
+    def test_log_file_explicit_value(self) -> None:
+        """An explicit --log-file value should be preserved."""
+        args = parse_args(["--log-file", "/tmp/custom.log"])
+        assert args.log_file == "/tmp/custom.log"
+
     def test_explicit_int_arg_preserved(self) -> None:
         args = parse_args(["--batch-size", "10"])
         assert args.batch_size == 10
