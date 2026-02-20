@@ -917,10 +917,81 @@ class TestReviewPRs:
         mock_prs.merge_pr.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_review_merge_failure_sets_merged_false(
+    async def test_review_rebases_before_reviewing(self, config: HydraConfig) -> None:
+        """_review_prs should rebase onto main and push before reviewing."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.rebase = AsyncMock(return_value=True)
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        mock_wt.rebase.assert_awaited_once()
+        mock_prs.push_branch.assert_awaited()
+        mock_reviewers.review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_rebase_conflict_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When merge fails, result.merged should remain False."""
+        """When pre-review rebase fails (conflicts), should skip review and escalate."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.rebase = AsyncMock(return_value=False)  # Conflicts
+        orch._worktrees = mock_wt
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        assert "conflicts" in results[0].summary.lower()
+        # Review should NOT have been called
+        mock_reviewers.review.assert_not_awaited()
+        # Should escalate to HITL
+        mock_prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_escalates_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """When merge fails after successful rebase, should escalate to HITL."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -935,10 +1006,14 @@ class TestReviewPRs:
         mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
         mock_prs.push_branch = AsyncMock(return_value=True)
         mock_prs.merge_pr = AsyncMock(return_value=False)
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
+        mock_wt.rebase = AsyncMock(return_value=True)
         orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"
@@ -947,6 +1022,13 @@ class TestReviewPRs:
         results = await orch._review_prs([pr], [issue])
 
         assert results[0].merged is False
+        hitl_calls = [
+            c
+            for c in mock_prs.post_pr_comment.call_args_list
+            if "Merge failed" in str(c)
+        ]
+        assert len(hitl_calls) == 1
+        mock_prs.add_labels.assert_any_await(42, ["hydra-hitl"])
 
     @pytest.mark.asyncio
     async def test_review_merge_records_lifetime_stats(
@@ -1233,9 +1315,7 @@ class TestReviewPRs:
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.submit_review.assert_awaited_once_with(
-            101, verdict.value, "Looks good."
-        )
+        mock_prs.submit_review.assert_awaited_once_with(101, verdict, "Looks good.")
 
     @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(
@@ -1359,7 +1439,10 @@ class TestReviewPRs:
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+        # Review comment + HITL escalation comment
+        comment_bodies = [c.args[1] for c in mock_prs.post_pr_comment.call_args_list]
+        assert "Looks good." in comment_bodies
+        assert any("Merge failed" in b for b in comment_bodies)
         mock_prs.submit_review.assert_not_awaited()
 
 

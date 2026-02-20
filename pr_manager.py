@@ -11,7 +11,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo
+from models import GitHubIssue, PRInfo, ReviewVerdict
 from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.pr_manager")
@@ -307,25 +307,26 @@ class PRManager:
                     exc,
                 )
 
-    async def submit_review(self, pr_number: int, verdict: str, body: str) -> bool:
+    async def submit_review(
+        self, pr_number: int, verdict: ReviewVerdict, body: str
+    ) -> bool:
         """Submit a formal GitHub PR review.
 
-        *verdict* should be ``"approve"``, ``"request-changes"``, or
-        ``"comment"``.  Returns *True* on success.
+        *verdict* is a :class:`ReviewVerdict` enum member.
+        Returns *True* on success.
         """
         flag_map = {
-            "approve": "--approve",
-            "request-changes": "--request-changes",
-            "comment": "--comment",
+            ReviewVerdict.APPROVE: "--approve",
+            ReviewVerdict.REQUEST_CHANGES: "--request-changes",
+            ReviewVerdict.COMMENT: "--comment",
         }
-        flag = flag_map.get(verdict)
-        if flag is None:
-            logger.error("Unknown review verdict %r for PR #%d", verdict, pr_number)
-            return False
+        flag = flag_map[verdict]
 
         if self._config.dry_run:
             logger.info(
-                "[dry-run] Would submit %s review on PR #%d", verdict, pr_number
+                "[dry-run] Would submit %s review on PR #%d",
+                verdict.value,
+                pr_number,
             )
             return True
 
@@ -346,7 +347,7 @@ class PRManager:
         except RuntimeError as exc:
             logger.error(
                 "Could not submit %s review on PR #%d: %s",
-                verdict,
+                verdict.value,
                 pr_number,
                 exc,
             )

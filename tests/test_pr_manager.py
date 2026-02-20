@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from events import EventType
+from models import ReviewVerdict
 from pr_manager import PRManager
 
 # ---------------------------------------------------------------------------
@@ -252,7 +253,7 @@ async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_p
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "Looks good")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "Looks good")
 
     assert result is True
     cmd = (
@@ -287,7 +288,9 @@ async def test_submit_review_request_changes_calls_correct_flag(
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "request-changes", "Needs work")
+        result = await mgr.submit_review(
+            101, ReviewVerdict.REQUEST_CHANGES, "Needs work"
+        )
 
     assert result is True
     cmd = (
@@ -314,7 +317,7 @@ async def test_submit_review_comment_calls_correct_flag(config, event_bus, tmp_p
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "comment", "FYI note")
+        result = await mgr.submit_review(101, ReviewVerdict.COMMENT, "FYI note")
 
     assert result is True
     cmd = (
@@ -332,7 +335,7 @@ async def test_submit_review_dry_run(dry_config, event_bus):
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "LGTM")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "LGTM")
 
     mock_create.assert_not_called()
     assert result is True
@@ -354,22 +357,9 @@ async def test_submit_review_failure_returns_false(config, event_bus, tmp_path):
     mock_create = _make_subprocess_mock(returncode=1, stderr="review failed")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "LGTM")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "LGTM")
 
     assert result is False
-
-
-@pytest.mark.asyncio
-async def test_submit_review_unknown_verdict_returns_false(config, event_bus):
-    """submit_review with invalid verdict should return False without calling subprocess."""
-    mgr = _make_manager(config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "invalid-verdict", "body")
-
-    assert result is False
-    mock_create.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

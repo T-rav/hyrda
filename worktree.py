@@ -279,13 +279,15 @@ class WorktreeManager:
             logger.warning("uv sync failed in %s: %s", wt_path, exc)
 
     async def _install_hooks(self, wt_path: Path) -> None:
-        """Run ``pre-commit install`` in the worktree."""
+        """Point the worktree at the shared .githooks directory."""
         try:
             await run_subprocess(
-                "pre-commit",
-                "install",
+                "git",
+                "config",
+                "core.hooksPath",
+                ".githooks",
                 cwd=wt_path,
                 gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
-            logger.warning("pre-commit install failed: %s", exc)
+            logger.warning("git hooks setup failed: %s", exc)
