@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { theme } from '../theme'
+import { ACTIVE_STATUSES } from '../constants'
 
 export function TranscriptView({ workers, selectedWorker }) {
   const containerRef = useRef(null)
@@ -40,6 +41,7 @@ export function TranscriptView({ workers, selectedWorker }) {
   // No worker selected — show combined feed from all active workers
   const allLines = []
   for (const [key, w] of Object.entries(workers)) {
+    if (!ACTIVE_STATUSES.includes(w.status)) continue
     for (const line of w.transcript) {
       allLines.push({ key, role: w.role, line })
     }
