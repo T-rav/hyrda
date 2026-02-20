@@ -25,6 +25,41 @@ def _make_runner(config, event_bus):
     return PlannerRunner(config=config, event_bus=event_bus)
 
 
+def _valid_plan(*, word_pad: int = 200) -> str:
+    """Return a plan with all required sections that passes validation."""
+    padding = " ".join(["word"] * max(0, word_pad - 80))
+    return (
+        "## Files to Modify\n\n"
+        "- src/models.py — add new data model\n"
+        "- src/config.py — add configuration field\n\n"
+        "## New Files\n\n"
+        "None\n\n"
+        "## Implementation Steps\n\n"
+        "1. Add the new model class to models.py\n"
+        "2. Add configuration field to config.py\n"
+        "3. Wire up the new model in the orchestrator\n"
+        "4. Add validation logic\n\n"
+        "## Testing Strategy\n\n"
+        "- Add tests/test_models.py for the new model\n"
+        "- Add tests/test_config.py for the new config field\n\n"
+        "## Acceptance Criteria\n\n"
+        "- New model can be created and serialized\n"
+        "- Config field is validated correctly\n\n"
+        "## Key Considerations\n\n"
+        "- Backward compatibility with existing serialization\n"
+        f"- Edge cases around empty values\n\n{padding}"
+    )
+
+
+def _valid_transcript(*, word_pad: int = 200) -> str:
+    """Return a transcript containing a valid plan."""
+    return (
+        "Analysis complete.\n"
+        f"PLAN_START\n{_valid_plan(word_pad=word_pad)}\nPLAN_END\n"
+        "SUMMARY: Implementation plan for the feature"
+    )
+
+
 # ---------------------------------------------------------------------------
 # _build_command
 # ---------------------------------------------------------------------------
@@ -419,48 +454,144 @@ def test_significant_words_empty_string(config, event_bus):
 
 
 # ---------------------------------------------------------------------------
-# _validate_plan
+# _validate_plan — schema validation
 # ---------------------------------------------------------------------------
 
 
-def test_validate_plan_returns_true_when_overlap(config, event_bus):
+def test_validate_plan_all_sections_present(config, event_bus):
+    """A valid plan with all 6 sections and sufficient words passes."""
     from models import GitHubIssue
 
     runner = _make_runner(config, event_bus)
     issue = GitHubIssue(number=1, title="Fix authentication handler")
-    plan = "Step 1: Modify the authentication module"
-    assert runner._validate_plan(issue, plan) is True
+    errors = runner._validate_plan(issue, _valid_plan())
+    assert errors == []
 
 
-def test_validate_plan_returns_false_when_no_overlap(config, event_bus):
+def test_validate_plan_missing_section_returns_errors(config, event_bus):
+    """Plan missing '## Testing Strategy' returns that specific error."""
     from models import GitHubIssue
 
     runner = _make_runner(config, event_bus)
     issue = GitHubIssue(number=1, title="Fix authentication handler")
-    plan = "Step 1: Modify the database schema for migrations"
-    assert runner._validate_plan(issue, plan) is False
+    plan = _valid_plan().replace("## Testing Strategy", "## Tests")
+    errors = runner._validate_plan(issue, plan)
+    assert any("Testing Strategy" in e for e in errors)
 
 
-def test_validate_plan_returns_true_when_title_has_no_significant_words(
-    config, event_bus
-):
-    """If the title is all short/stop words, validation passes vacuously."""
+def test_validate_plan_missing_multiple_sections(config, event_bus):
+    """Plan missing 3 sections returns 3 corresponding errors."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix auth")
+    plan = _valid_plan()
+    plan = plan.replace("## Testing Strategy", "## Tests")
+    plan = plan.replace("## Acceptance Criteria", "## Done")
+    plan = plan.replace("## Key Considerations", "## Notes")
+    errors = runner._validate_plan(issue, plan)
+    missing = [e for e in errors if "Missing required section" in e]
+    assert len(missing) == 3
+
+
+def test_validate_plan_files_to_modify_requires_file_path(config, event_bus):
+    """Files to Modify section present but with no file paths fails."""
     from models import GitHubIssue
 
     runner = _make_runner(config, event_bus)
     issue = GitHubIssue(number=1, title="Fix it")
-    plan = "Step 1: Do the thing"
-    assert runner._validate_plan(issue, plan) is True
+    plan = _valid_plan().replace(
+        "- src/models.py — add new data model\n"
+        "- src/config.py — add configuration field",
+        "- Some vague description without paths",
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert any("file path" in e for e in errors)
 
 
-def test_validate_plan_logs_warning_on_mismatch(config, event_bus):
+def test_validate_plan_testing_strategy_requires_test_reference(config, event_bus):
+    """Testing Strategy section present but with no test file references fails."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix it")
+    plan = _valid_plan().replace(
+        "- Add tests/test_models.py for the new model\n"
+        "- Add tests/test_config.py for the new config field",
+        "- Write some unit checks\n- Verify behavior manually",
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert any("test file" in e for e in errors)
+
+
+def test_validate_plan_implementation_steps_requires_three(config, event_bus):
+    """Less than 3 numbered steps fails."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix it")
+    plan = _valid_plan().replace(
+        "1. Add the new model class to models.py\n"
+        "2. Add configuration field to config.py\n"
+        "3. Wire up the new model in the orchestrator\n"
+        "4. Add validation logic",
+        "1. Do the thing\n2. Done",
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert any("3 numbered steps" in e for e in errors)
+
+
+def test_validate_plan_minimum_word_count(config, event_bus):
+    """Plan below min_plan_words fails."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix it")
+    # Create a short plan that has all sections but few words
+    short_plan = (
+        "## Files to Modify\n\n- src/app.py — fix\n\n"
+        "## New Files\n\nNone\n\n"
+        "## Implementation Steps\n\n1. A\n2. B\n3. C\n\n"
+        "## Testing Strategy\n\n- tests/test_app.py\n\n"
+        "## Acceptance Criteria\n\n- Done\n\n"
+        "## Key Considerations\n\n- None\n"
+    )
+    errors = runner._validate_plan(issue, short_plan)
+    assert any("words" in e for e in errors)
+
+
+def test_validate_plan_word_count_configurable(event_bus, tmp_path):
+    """Custom min_plan_words is respected."""
+    from models import GitHubIssue
+
+    cfg = ConfigFactory.create(min_plan_words=50, repo_root=tmp_path)
+    runner = _make_runner(cfg, event_bus)
+    issue = GitHubIssue(number=1, title="Fix it")
+    # This plan has all sections but only ~50 words
+    plan = (
+        "## Files to Modify\n\n- src/app.py — fix bug\n\n"
+        "## New Files\n\nNone\n\n"
+        "## Implementation Steps\n\n1. Fix the bug in app.py\n"
+        "2. Update the tests for the fix\n"
+        "3. Run the test suite to verify\n\n"
+        "## Testing Strategy\n\n- tests/test_app.py covers the fix\n\n"
+        "## Acceptance Criteria\n\n- Bug is fixed\n\n"
+        "## Key Considerations\n\n- Backward compatibility\n"
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert not any("words" in e for e in errors)
+
+
+def test_validate_plan_logs_warning_on_word_mismatch(config, event_bus):
+    """Word-overlap check logs a warning but doesn't produce errors."""
     from unittest.mock import patch as mock_patch
 
     from models import GitHubIssue
 
     runner = _make_runner(config, event_bus)
     issue = GitHubIssue(number=1, title="Fix authentication handler")
-    plan = "Step 1: Modify the database schema"
+    # Valid plan but title words don't overlap with plan
+    plan = _valid_plan().replace("authentication", "database")
 
     with mock_patch("planner.logger") as mock_logger:
         runner._validate_plan(issue, plan)
@@ -547,14 +678,7 @@ def test_extract_new_issues_multiline_body(config, event_bus):
 @pytest.mark.asyncio
 async def test_plan_success_path(config, event_bus, issue, tmp_path):
     runner = _make_runner(config, event_bus)
-    transcript = (
-        "Analysis complete.\n"
-        "PLAN_START\n"
-        "Step 1: Modify models.py\n"
-        "Step 2: Write tests\n"
-        "PLAN_END\n"
-        "SUMMARY: Two-step implementation plan"
-    )
+    transcript = _valid_transcript()
 
     mock_execute = AsyncMock(return_value=transcript)
 
@@ -566,9 +690,9 @@ async def test_plan_success_path(config, event_bus, issue, tmp_path):
 
     assert result.issue_number == issue.number
     assert result.success is True
-    assert result.plan == "Step 1: Modify models.py\nStep 2: Write tests"
-    assert result.summary == "Two-step implementation plan"
-    assert result.transcript == transcript
+    assert "## Files to Modify" in result.plan
+    assert result.summary == "Implementation plan for the feature"
+    assert result.validation_errors == []
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +799,7 @@ def test_save_plan_creates_plans_directory(event_bus, tmp_path):
 async def test_planner_events_include_planner_role(config, event_bus, issue, tmp_path):
     """PLANNER_UPDATE events should carry role='planner'."""
     runner = _make_runner(config, event_bus)
-    transcript = "PLAN_START\nStep 1\nPLAN_END\nSUMMARY: done"
+    transcript = _valid_transcript()
 
     with (
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
@@ -694,7 +818,7 @@ async def test_planner_events_include_planner_role(config, event_bus, issue, tmp
 async def test_plan_emits_planning_and_done_events(config, event_bus, issue, tmp_path):
     """Status should go through planning → done on success."""
     runner = _make_runner(config, event_bus)
-    transcript = "PLAN_START\nStep 1\nPLAN_END\nSUMMARY: done"
+    transcript = _valid_transcript()
 
     with (
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
@@ -800,3 +924,566 @@ async def test_execute_uses_large_stream_limit(config, event_bus, issue, tmp_pat
 
     kwargs = mock_exec.call_args[1]
     assert kwargs["limit"] == 1024 * 1024
+
+
+# ---------------------------------------------------------------------------
+# Phase -1 gates
+# ---------------------------------------------------------------------------
+
+
+def test_phase_minus_one_simplicity_gate_warns_on_many_new_files(config, event_bus):
+    """Creating > max_new_files_warning new files produces a warning."""
+    runner = _make_runner(config, event_bus)
+    plan = _valid_plan().replace(
+        "## New Files\n\nNone",
+        "## New Files\n\n"
+        "- src/new1.py\n- src/new2.py\n- src/new3.py\n"
+        "- src/new4.py\n- src/new5.py\n- src/new6.py",
+    )
+    blocking, warnings = runner._run_phase_minus_one_gates(plan)
+    assert not blocking
+    assert any("Simplicity gate" in w for w in warnings)
+
+
+def test_phase_minus_one_test_first_gate_rejects_later(config, event_bus):
+    """'tests will be added later' in Testing Strategy is rejected."""
+    runner = _make_runner(config, event_bus)
+    plan = _valid_plan().replace(
+        "- Add tests/test_models.py for the new model\n"
+        "- Add tests/test_config.py for the new config field",
+        "Tests will be added later after implementation is stable.",
+    )
+    blocking, _ = runner._run_phase_minus_one_gates(plan)
+    assert any("Test-first gate" in e for e in blocking)
+
+
+def test_phase_minus_one_test_first_gate_rejects_tbd(config, event_bus):
+    """'TBD' in Testing Strategy is rejected."""
+    runner = _make_runner(config, event_bus)
+    plan = _valid_plan().replace(
+        "- Add tests/test_models.py for the new model\n"
+        "- Add tests/test_config.py for the new config field",
+        "TBD",
+    )
+    blocking, _ = runner._run_phase_minus_one_gates(plan)
+    assert any("Test-first gate" in e for e in blocking)
+
+
+def test_phase_minus_one_test_first_gate_accepts_valid(config, event_bus):
+    """A proper testing strategy passes the test-first gate."""
+    runner = _make_runner(config, event_bus)
+    blocking, _ = runner._run_phase_minus_one_gates(_valid_plan())
+    assert not any("Test-first gate" in e for e in blocking)
+
+
+def test_phase_minus_one_constitution_gate_skipped_when_no_file(config, event_bus):
+    """No constitution.md = gate passes with no errors."""
+    runner = _make_runner(config, event_bus)
+    blocking, warnings = runner._run_phase_minus_one_gates(_valid_plan())
+    assert not any("Constitution gate" in e for e in blocking)
+    assert not any("Constitution gate" in w for w in warnings)
+
+
+def test_phase_minus_one_constitution_gate_reads_file(event_bus, tmp_path):
+    """When constitution.md exists, its principles are checked against the plan."""
+    cfg = ConfigFactory.create(repo_root=tmp_path)
+    (tmp_path / "constitution.md").write_text(
+        "# Principles\n\n- never delete user data\n- always validate input\n"
+    )
+    runner = _make_runner(cfg, event_bus)
+    plan = _valid_plan() + "\nWe will never delete user data from the database.\n"
+    blocking, _ = runner._run_phase_minus_one_gates(plan)
+    assert any("Constitution gate" in e for e in blocking)
+
+
+# ---------------------------------------------------------------------------
+# Retry flow
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_plan_retries_on_validation_failure(config, event_bus, issue):
+    """First attempt fails validation, second succeeds."""
+    runner = _make_runner(config, event_bus)
+
+    bad_transcript = "PLAN_START\nJust a one-liner.\nPLAN_END\nSUMMARY: bad"
+    good_transcript = _valid_transcript()
+
+    call_count = {"n": 0}
+
+    async def mock_execute(cmd, prompt, cwd, issue_number):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return bad_transcript
+        return good_transcript
+
+    with (
+        patch.object(runner, "_execute", side_effect=mock_execute),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    assert call_count["n"] == 2
+    assert result.retry_attempted is False
+
+
+@pytest.mark.asyncio
+async def test_plan_retry_prompt_includes_feedback(config, event_bus, issue):
+    """Retry prompt contains specific validation errors."""
+    runner = _make_runner(config, event_bus)
+
+    bad_transcript = "PLAN_START\nJust a one-liner.\nPLAN_END\nSUMMARY: bad"
+
+    prompts_used: list[str] = []
+
+    async def mock_execute(cmd, prompt, cwd, issue_number):
+        prompts_used.append(prompt)
+        if len(prompts_used) == 1:
+            return bad_transcript
+        return _valid_transcript()
+
+    with (
+        patch.object(runner, "_execute", side_effect=mock_execute),
+        patch.object(runner, "_save_transcript"),
+    ):
+        await runner.plan(issue, worker_id=0)
+
+    assert len(prompts_used) == 2
+    retry_prompt = prompts_used[1]
+    assert "Validation Errors" in retry_prompt
+    assert "Missing required section" in retry_prompt
+
+
+@pytest.mark.asyncio
+async def test_plan_gives_up_after_two_failures(config, event_bus, issue):
+    """Both attempts fail — result has retry_attempted=True."""
+    runner = _make_runner(config, event_bus)
+
+    bad_transcript = "PLAN_START\nJust a one-liner.\nPLAN_END\nSUMMARY: bad"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=bad_transcript)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is False
+    assert result.retry_attempted is True
+    assert len(result.validation_errors) > 0
+
+
+@pytest.mark.asyncio
+async def test_plan_no_retry_on_first_success(config, event_bus, issue):
+    """Valid first attempt doesn't trigger retry."""
+    runner = _make_runner(config, event_bus)
+
+    mock_execute = AsyncMock(return_value=_valid_transcript())
+
+    with (
+        patch.object(runner, "_execute", mock_execute),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    assert result.retry_attempted is False
+    # _execute called only once
+    mock_execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_plan_retry_emits_retrying_status(config, event_bus, issue):
+    """RETRYING status event is emitted when retrying."""
+    runner = _make_runner(config, event_bus)
+
+    bad_transcript = "PLAN_START\nJust a one-liner.\nPLAN_END\nSUMMARY: bad"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=bad_transcript)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        await runner.plan(issue, worker_id=0)
+
+    events = event_bus.get_history()
+    planner_events = [e for e in events if e.type == EventType.PLANNER_UPDATE]
+    statuses = [e.data["status"] for e in planner_events]
+    assert PlannerStatus.RETRYING.value in statuses
+
+
+@pytest.mark.asyncio
+async def test_plan_emits_validating_status(config, event_bus, issue):
+    """VALIDATING status event is emitted before validation."""
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=_valid_transcript())),
+        patch.object(runner, "_save_transcript"),
+    ):
+        await runner.plan(issue, worker_id=0)
+
+    events = event_bus.get_history()
+    planner_events = [e for e in events if e.type == EventType.PLANNER_UPDATE]
+    statuses = [e.data["status"] for e in planner_events]
+    assert PlannerStatus.VALIDATING.value in statuses
+
+
+# ---------------------------------------------------------------------------
+# _build_retry_prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_retry_prompt_includes_issue_and_errors(config, event_bus, issue):
+    """Retry prompt contains issue title, failed plan, and errors."""
+    runner = _make_runner(config, event_bus)
+    failed_plan = "Some bad plan text"
+    errors = ["Missing required section: ## Testing Strategy", "Plan has 10 words"]
+
+    prompt = runner._build_retry_prompt(issue, failed_plan, errors)
+
+    assert f"#{issue.number}" in prompt
+    assert issue.title in prompt
+    assert "Some bad plan text" in prompt
+    assert "Missing required section: ## Testing Strategy" in prompt
+    assert "Plan has 10 words" in prompt
+    assert "PLAN_START" in prompt
+    assert "PLAN_END" in prompt
+
+
+# ---------------------------------------------------------------------------
+# _build_prompt — schema requirements
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_required_schema_headers(config, event_bus, issue):
+    """The updated prompt should mention all 6 required section headers."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "## Files to Modify" in prompt
+    assert "## New Files" in prompt
+    assert "## Implementation Steps" in prompt
+    assert "## Testing Strategy" in prompt
+    assert "## Acceptance Criteria" in prompt
+    assert "## Key Considerations" in prompt
+    assert "REQUIRED SCHEMA" in prompt
+
+
+def test_build_prompt_warns_about_rejection(config, event_bus, issue):
+    """The prompt should warn that plans with missing sections will be rejected."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "rejected" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# REQUIRED_SECTIONS constant
+# ---------------------------------------------------------------------------
+
+
+def test_required_sections_has_six_entries(config, event_bus):
+    """PlannerRunner.REQUIRED_SECTIONS should have 6 entries."""
+    assert len(PlannerRunner.REQUIRED_SECTIONS) == 6
+    assert "## Files to Modify" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## New Files" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## Implementation Steps" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## Testing Strategy" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## Acceptance Criteria" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## Key Considerations" in PlannerRunner.REQUIRED_SECTIONS
+
+
+# ---------------------------------------------------------------------------
+# [NEEDS CLARIFICATION] markers
+# ---------------------------------------------------------------------------
+
+
+def test_validate_plan_accepts_three_clarification_markers(config, event_bus):
+    """Plans with 0-3 [NEEDS CLARIFICATION] markers are acceptable."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    plan = _valid_plan() + (
+        "\n[NEEDS CLARIFICATION: unclear if OAuth or JWT]\n"
+        "[NEEDS CLARIFICATION: which database?]\n"
+        "[NEEDS CLARIFICATION: migration strategy?]\n"
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert not any("NEEDS CLARIFICATION" in e for e in errors)
+
+
+def test_validate_plan_rejects_four_clarification_markers(config, event_bus):
+    """Plans with 4+ [NEEDS CLARIFICATION] markers escalate."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    plan = _valid_plan() + (
+        "\n[NEEDS CLARIFICATION: unclear if OAuth or JWT]\n"
+        "[NEEDS CLARIFICATION: which database?]\n"
+        "[NEEDS CLARIFICATION: migration strategy?]\n"
+        "[NEEDS CLARIFICATION: backward compat?]\n"
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert any("NEEDS CLARIFICATION" in e for e in errors)
+    assert any("4" in e for e in errors if "NEEDS CLARIFICATION" in e)
+
+
+def test_validate_plan_zero_clarification_markers_ok(config, event_bus):
+    """Plans with no [NEEDS CLARIFICATION] markers pass."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    errors = runner._validate_plan(issue, _valid_plan())
+    assert not any("NEEDS CLARIFICATION" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# _build_prompt — [NEEDS CLARIFICATION] instruction
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_clarification_instruction(config, event_bus, issue):
+    """Prompt should instruct the planner about [NEEDS CLARIFICATION] markers."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+    assert "NEEDS CLARIFICATION" in prompt
+
+
+def test_build_retry_prompt_includes_clarification_instruction(
+    config, event_bus, issue
+):
+    """Retry prompt should also mention [NEEDS CLARIFICATION] markers."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(issue, "failed plan", ["some error"])
+    assert "NEEDS CLARIFICATION" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Scale detection
+# ---------------------------------------------------------------------------
+
+
+def test_detect_plan_scale_lite_by_label(config, event_bus):
+    """Issues with a lite-plan label (e.g. 'bug') get a lite plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash", labels=["bug"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_lite_label_case_insensitive(config, event_bus):
+    """Label matching is case-insensitive."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix typo", labels=["BUG"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_lite_by_short_body_and_title(config, event_bus):
+    """Short body + small-fix title keyword → lite plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1, title="Fix typo in README", body="Small change needed.", labels=[]
+    )
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_full_by_default(config, event_bus):
+    """Issues without lite labels or short body default to full plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1,
+        title="Add authentication system",
+        body="A" * 600,
+        labels=["feature"],
+    )
+    assert runner._detect_plan_scale(issue) == "full"
+
+
+def test_detect_plan_scale_short_body_but_no_fix_keyword(config, event_bus):
+    """Short body without small-fix keyword in title → full plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1,
+        title="Implement new auth system",
+        body="Short body",
+        labels=[],
+    )
+    assert runner._detect_plan_scale(issue) == "full"
+
+
+def test_detect_plan_scale_custom_lite_labels(event_bus, tmp_path):
+    """Custom lite_plan_labels config is respected."""
+    from models import GitHubIssue
+
+    cfg = ConfigFactory.create(
+        lite_plan_labels=["hotfix", "patch"],
+        repo_root=tmp_path,
+    )
+    runner = _make_runner(cfg, event_bus)
+    issue = GitHubIssue(number=1, title="Critical fix", labels=["hotfix"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+    issue2 = GitHubIssue(number=2, title="Add authentication", labels=["bug"])
+    assert runner._detect_plan_scale(issue2) == "full"
+
+
+# ---------------------------------------------------------------------------
+# Lite plan validation
+# ---------------------------------------------------------------------------
+
+
+def _lite_plan() -> str:
+    """Return a plan with only lite-required sections."""
+    return (
+        "## Files to Modify\n\n"
+        "- src/app.py — fix the crash\n\n"
+        "## Implementation Steps\n\n"
+        "1. Identify the root cause in app.py\n"
+        "2. Apply the fix to the affected function\n"
+        "3. Add error handling for edge case\n\n"
+        "## Testing Strategy\n\n"
+        "- Add tests/test_app.py for the crash scenario\n"
+    )
+
+
+def test_validate_lite_plan_accepts_three_sections(config, event_bus):
+    """A lite plan with only 3 sections passes validation."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    errors = runner._validate_plan(issue, _lite_plan(), scale="lite")
+    assert errors == []
+
+
+def test_validate_lite_plan_no_minimum_word_count(config, event_bus):
+    """Lite plans skip the minimum word count check."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    # _lite_plan() is well under 200 words
+    errors = runner._validate_plan(issue, _lite_plan(), scale="lite")
+    assert not any("words" in e for e in errors)
+
+
+def test_validate_lite_plan_rejects_missing_required_section(config, event_bus):
+    """Lite plan missing a required section (e.g. Testing Strategy) is rejected."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    plan = _lite_plan().replace("## Testing Strategy", "## Tests")
+    errors = runner._validate_plan(issue, plan, scale="lite")
+    assert any("Testing Strategy" in e for e in errors)
+
+
+def test_validate_full_plan_rejects_lite_sections_only(config, event_bus):
+    """A full plan with only 3 sections fails (missing Acceptance Criteria etc.)."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Add feature")
+    errors = runner._validate_plan(issue, _lite_plan(), scale="full")
+    missing = [e for e in errors if "Missing required section" in e]
+    assert (
+        len(missing) >= 3
+    )  # Missing New Files, Acceptance Criteria, Key Considerations
+
+
+# ---------------------------------------------------------------------------
+# Lite plan — Phase -1 gates skipped
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_lite_plan_skips_phase_minus_one_gates(config, event_bus):
+    """Lite plan issues should not run Phase -1 gates."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix typo", labels=["bug"])
+
+    lite_transcript = f"PLAN_START\n{_lite_plan()}\nPLAN_END\nSUMMARY: Fix the crash"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=lite_transcript)),
+        patch.object(runner, "_save_transcript"),
+        patch.object(runner, "_run_phase_minus_one_gates") as mock_gates,
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    mock_gates.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Pre-mortem prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_pre_mortem_for_full(config, event_bus, issue):
+    """Full plan prompt includes the pre-mortem section."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue, scale="full")
+    assert "pre-mortem" in prompt.lower()
+    assert "top 3 most likely reasons" in prompt.lower()
+
+
+def test_build_prompt_no_pre_mortem_for_lite(config, event_bus, issue):
+    """Lite plan prompt does NOT include the pre-mortem section."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue, scale="lite")
+    assert "pre-mortem" not in prompt.lower()
+
+
+def test_build_prompt_indicates_plan_mode(config, event_bus, issue):
+    """Prompt indicates the plan mode (LITE or FULL)."""
+    runner = _make_runner(config, event_bus)
+
+    full_prompt = runner._build_prompt(issue, scale="full")
+    assert "FULL" in full_prompt
+
+    lite_prompt = runner._build_prompt(issue, scale="lite")
+    assert "LITE" in lite_prompt
+
+
+# ---------------------------------------------------------------------------
+# Lite plan retry prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_retry_prompt_lite_has_fewer_sections(config, event_bus, issue):
+    """Retry prompt for lite plan only lists 3 required sections."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(
+        issue, "failed plan", ["some error"], scale="lite"
+    )
+    assert "## Files to Modify" in prompt
+    assert "## Implementation Steps" in prompt
+    assert "## Testing Strategy" in prompt
+    assert "## Acceptance Criteria" not in prompt
+    assert "## Key Considerations" not in prompt
+
+
+def test_build_retry_prompt_full_has_all_sections(config, event_bus, issue):
+    """Retry prompt for full plan lists all 6 required sections."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(
+        issue, "failed plan", ["some error"], scale="full"
+    )
+    assert "## Files to Modify" in prompt
+    assert "## Acceptance Criteria" in prompt
+    assert "## Key Considerations" in prompt
