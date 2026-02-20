@@ -646,3 +646,28 @@ class TestAttemptCapEscalation:
         cause = phase._state.get_hitl_cause(42)
         assert cause is not None
         assert "Exceeded max implementation attempts" in cause
+
+    @pytest.mark.asyncio
+    async def test_escalation_cleans_up_active_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """HITL escalation must remove issue from both in-memory and persisted active sets."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(cfg, [issue])
+
+        # Pre-set to 1 (at max) — next attempt will exceed
+        phase._state.increment_issue_attempts(42)
+
+        await phase.run_batch()
+
+        # Both in-memory and persisted active issue must be cleaned up
+        assert 42 not in phase._active_issues
+        assert 42 not in phase._state.get_active_issue_numbers()
