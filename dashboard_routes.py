@@ -132,6 +132,7 @@ def create_router(
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
         await event_bus.publish(
@@ -153,6 +154,7 @@ def create_router(
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
         await pr_manager.close_issue(issue_number)
         await event_bus.publish(
             HydraEvent(
