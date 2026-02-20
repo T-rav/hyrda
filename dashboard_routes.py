@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -56,7 +57,19 @@ def create_router(
         return JSONResponse(state.get_lifetime_stats())
 
     @router.get("/api/events")
-    async def get_events() -> JSONResponse:
+    async def get_events(since: str | None = None) -> JSONResponse:
+        if since is not None:
+            from datetime import datetime
+
+            try:
+                since_dt = datetime.fromisoformat(since)
+                if since_dt.tzinfo is None:
+                    since_dt = since_dt.replace(tzinfo=UTC)
+                events = await event_bus.load_events_since(since_dt)
+                if events is not None:
+                    return JSONResponse([e.model_dump() for e in events])
+            except (ValueError, TypeError):
+                pass  # Fall through to in-memory history
         history = event_bus.get_history()
         return JSONResponse([e.model_dump() for e in history])
 

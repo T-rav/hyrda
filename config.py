@@ -116,6 +116,24 @@ class HydraConfig(BaseModel):
     )
     state_file: Path = Field(default=Path("."), description="Path to state JSON file")
 
+    # Event persistence
+    event_log_path: Path = Field(
+        default=Path("."),
+        description="Path to event log JSONL file",
+    )
+    event_log_max_size_mb: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max event log file size in MB before rotation",
+    )
+    event_log_retention_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Days of event history to retain during rotation",
+    )
+
     # Dashboard
     dashboard_port: int = Field(
         default=5555, ge=1024, le=65535, description="Dashboard web UI port"
@@ -175,6 +193,8 @@ class HydraConfig(BaseModel):
             self.worktree_base = self.repo_root.parent / "hyrda-worktrees"
         if self.state_file == Path("."):
             self.state_file = self.repo_root / ".hydra" / "state.json"
+        if self.event_log_path == Path("."):
+            self.event_log_path = self.repo_root / ".hydra" / "events.jsonl"
 
         # Repo slug: env var → git remote → empty
         if not self.repo:
