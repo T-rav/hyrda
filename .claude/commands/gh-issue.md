@@ -32,7 +32,7 @@ Parse `$ARGUMENTS` to understand what the user wants filed as an issue. Identify
 
 **Epic detection:** If the user mentions "epic", "break into sub-issues", "multiple parts", or describes a large multi-component feature, treat this as an EPIC:
 - Prefix the title with `[Epic]`
-- Do NOT use the `hydra-plan` label — use NO automation label (the parent epic is a tracking issue, not implementable)
+- Use the `hydra-epic` label (NOT `hydra-plan` — the parent epic is a tracking issue, not implementable)
 - Create sub-issues separately, each WITH the `hydra-plan` label
 - Link sub-issues in the epic body with checkboxes: `- [ ] #123 — title`
 

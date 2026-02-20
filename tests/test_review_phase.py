@@ -1660,3 +1660,174 @@ class TestReviewUpdateStartEvent:
         ]
         assert len(start_events) == 1
         assert "worker" in start_events[0].data
+
+
+# ---------------------------------------------------------------------------
+# Review insight integration
+# ---------------------------------------------------------------------------
+
+
+class TestReviewInsightIntegration:
+    """Tests for review insight recording during the review flow."""
+
+    @pytest.mark.asyncio
+    async def test_review_records_insight_after_review(
+        self, config: HydraConfig
+    ) -> None:
+        """After a review, a record should be appended to the insight store."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Check that a review record was written
+        reviews_path = config.repo_root / ".hydra" / "memory" / "reviews.jsonl"
+        assert reviews_path.exists()
+        lines = reviews_path.read_text().strip().splitlines()
+        assert len(lines) == 1
+
+    @pytest.mark.asyncio
+    async def test_review_insight_files_proposal_when_threshold_met(
+        self, config: HydraConfig
+    ) -> None:
+        """When a category crosses the threshold, an improvement issue is filed."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-populate the insight store with records near threshold
+        store = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        for i in range(3):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=90 + i,
+                    issue_number=30 + i,
+                    timestamp="2026-02-20T10:00:00Z",
+                    verdict="request-changes",
+                    summary="Missing test coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        # This review will also have "test" in summary → missing_tests
+        review_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Missing test coverage for edge cases",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.create_issue = AsyncMock(return_value=999)
+        phase._prs.submit_review = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should have filed an improvement issue
+        phase._prs.create_issue.assert_awaited_once()
+        call_args = phase._prs.create_issue.call_args
+        assert "[Review Insight]" in call_args.args[0]
+        assert "hydra-improve" in call_args.args[2]
+        assert "hydra-hitl" in call_args.args[2]
+
+    @pytest.mark.asyncio
+    async def test_review_insight_does_not_refile_proposed_category(
+        self, config: HydraConfig
+    ) -> None:
+        """Once a category has been proposed, it should not be re-filed."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-populate and mark as proposed
+        store = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        for i in range(4):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=90 + i,
+                    issue_number=30 + i,
+                    timestamp="2026-02-20T10:00:00Z",
+                    verdict="request-changes",
+                    summary="Missing test coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+        store.mark_category_proposed("missing_tests")
+
+        review_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Missing test coverage",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.create_issue = AsyncMock(return_value=999)
+        phase._prs.submit_review = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should NOT have filed an improvement issue
+        phase._prs.create_issue.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_review_insight_failure_does_not_crash_review(
+        self, config: HydraConfig
+    ) -> None:
+        """If insight recording fails, the review should still complete."""
+        from unittest.mock import patch
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        # Make the insight store raise
+        with patch.object(
+            phase._insights, "append_review", side_effect=OSError("disk full")
+        ):
+            results = await phase.review_prs([pr], [issue])
+
+        # Review should still succeed
+        assert len(results) == 1
+        assert results[0].merged is True
