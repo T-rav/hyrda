@@ -390,12 +390,12 @@ class TestMergeMain:
     async def test_merge_main_success_returns_true(
         self, config, tmp_path: Path
     ) -> None:
-        """merge_main should return True when both fetch and merge succeed."""
+        """merge_main should return True when fetch, ff-pull, and merge succeed."""
         manager = WorktreeManager(config)
         success_proc = _make_proc()
 
         with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await manager.merge_main(tmp_path)
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is True
 
@@ -406,7 +406,7 @@ class TestMergeMain:
         """merge_main should abort and return False when conflicts occur."""
         manager = WorktreeManager(config)
 
-        fetch_proc = _make_proc(returncode=0)
+        success_proc = _make_proc(returncode=0)
         merge_fail_proc = _make_proc(
             returncode=1, stderr=b"CONFLICT (content): Merge conflict"
         )
@@ -417,16 +417,16 @@ class TestMergeMain:
         async def fake_exec(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
-                return fetch_proc  # git fetch succeeds
-            if call_count == 2:
-                return merge_fail_proc  # git merge fails
+            if call_count <= 2:
+                return success_proc  # git fetch + ff-only merge succeed
+            if call_count == 3:
+                return merge_fail_proc  # git merge origin/main fails
             return abort_proc  # git merge --abort
 
         with patch(
             "asyncio.create_subprocess_exec", side_effect=fake_exec
         ) as mock_exec:
-            result = await manager.merge_main(tmp_path)
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is False
         # Verify abort was called
@@ -453,7 +453,7 @@ class TestMergeMain:
             return abort_proc
 
         with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
-            result = await manager.merge_main(tmp_path)
+            result = await manager.merge_main(tmp_path, "agent/issue-7")
 
         assert result is False
 

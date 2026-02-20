@@ -643,7 +643,7 @@ class HydraOrchestrator:
                 # Merge main into the branch before reviewing so we review
                 # up-to-date code.  Merge (not rebase) keeps the push
                 # fast-forward so no force-push is needed.
-                merged_main = await self._worktrees.merge_main(wt_path)
+                merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
                 if merged_main:
                     await self._prs.push_branch(wt_path, pr.branch)
                 else:
