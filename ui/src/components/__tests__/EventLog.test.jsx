@@ -3,15 +3,15 @@ import { render, screen } from '@testing-library/react'
 import { EventLog, typeSpanStyles, defaultTypeStyle } from '../EventLog'
 
 const typeColors = {
-  worker_update: '#58a6ff',
-  phase_change: '#d29922',
-  pr_created: '#3fb950',
-  review_update: '#d18616',
-  merge_update: '#3fb950',
-  error: '#f85149',
-  batch_start: '#58a6ff',
-  batch_complete: '#3fb950',
-  transcript_line: '#8b949e',
+  worker_update: 'var(--accent)',
+  phase_change: 'var(--yellow)',
+  pr_created: 'var(--green)',
+  review_update: 'var(--orange)',
+  merge_update: 'var(--green)',
+  error: 'var(--red)',
+  batch_start: 'var(--accent)',
+  batch_complete: 'var(--green)',
+  transcript_line: 'var(--text-muted)',
 }
 
 describe('EventLog pre-computed styles', () => {
@@ -31,11 +31,11 @@ describe('EventLog pre-computed styles', () => {
     }
   })
 
-  it('defaultTypeStyle has color #8b949e and base style properties', () => {
+  it('defaultTypeStyle has textMuted color and base style properties', () => {
     expect(defaultTypeStyle).toMatchObject({
       fontWeight: 600,
       marginRight: 6,
-      color: '#8b949e',
+      color: 'var(--text-muted)',
     })
   })
 

@@ -28,7 +28,7 @@ class HydraConfig(BaseModel):
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )
     max_reviewers: int = Field(
-        default=1, ge=1, le=10, description="Concurrent review agents"
+        default=2, ge=1, le=10, description="Concurrent review agents"
     )
     max_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
@@ -134,6 +134,14 @@ class HydraConfig(BaseModel):
     )
 
     model_config = {"arbitrary_types_allowed": True}
+
+    def branch_for_issue(self, issue_number: int) -> str:
+        """Return the canonical branch name for a given issue number."""
+        return f"agent/issue-{issue_number}"
+
+    def worktree_path_for_issue(self, issue_number: int) -> Path:
+        """Return the worktree directory path for a given issue number."""
+        return self.worktree_base / f"issue-{issue_number}"
 
     @model_validator(mode="after")
     def resolve_defaults(self) -> HydraConfig:

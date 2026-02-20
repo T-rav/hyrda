@@ -10,6 +10,10 @@
  * @typedef {{ pr: number, issue: number, branch: string, draft: boolean, url: string }} PRData
  *
  * @typedef {{ pr: number, verdict: string, summary: string, duration?: number }} ReviewData
+ *
+ * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string }} HITLItem
+ *
+ * @typedef {Record<string, string>} HumanInputRequests
  */
 
 export {}
