@@ -19,6 +19,8 @@ const initialState = {
   events: [],     // HydraEvent[] (most recent first)
   hitlItems: [],  // HITLItem[]
   humanInputRequests: {},  // Record<string, string>
+  backgroundWorkers: [],  // BackgroundWorkerState[]
+  metrics: null,  // MetricsData | null
 }
 
 export function reducer(state, action) {
@@ -245,6 +247,21 @@ export function reducer(state, action) {
         hitlUpdate: action.data,
       }
 
+    case 'background_worker_status': {
+      const { worker, status, last_run, details } = action.data
+      const existing = state.backgroundWorkers.filter(w => w.name !== worker)
+      return {
+        ...addEvent(state, action),
+        backgroundWorkers: [...existing, { name: worker, status, last_run, details }],
+      }
+    }
+
+    case 'BACKGROUND_WORKERS':
+      return { ...state, backgroundWorkers: action.data }
+
+    case 'METRICS':
+      return { ...state, metrics: action.data }
+
     case 'error':
       return addEvent(state, action)
 
@@ -317,13 +334,26 @@ export function useHydraSocket() {
         .catch(() => {})
       // Fetch HITL items on connect
       fetchHitlItems()
+      // Fetch background worker status on connect
+      fetch('/api/system/workers')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers }))
+        .catch(() => {})
+      // Fetch metrics on connect
+      fetch('/api/metrics')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'METRICS', data }))
+        .catch(() => {})
     }
 
     ws.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data)
         dispatch({ type: event.type, data: event.data, timestamp: event.timestamp })
-        if (event.type === 'batch_complete') fetchLifetimeStats()
+        if (event.type === 'batch_complete') {
+          fetchLifetimeStats()
+          fetch('/api/metrics').then(r => r.json()).then(data => dispatch({ type: 'METRICS', data })).catch(() => {})
+        }
         if (event.type === 'hitl_update') fetchHitlItems()
       } catch { /* ignore parse errors */ }
     }

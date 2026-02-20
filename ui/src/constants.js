@@ -18,3 +18,13 @@ export const PIPELINE_STAGES = [
   { key: 'review',    label: 'Review',    color: theme.orange,      subtleColor: theme.orangeSubtle, role: 'reviewer',    configKey: 'max_reviewers' },
   { key: 'merged',    label: 'Merged',    color: theme.green,       subtleColor: theme.greenSubtle,  role: null,           configKey: null },
 ]
+
+/**
+ * Background worker definitions — system maintenance loops that run independently of the pipeline.
+ */
+export const BACKGROUND_WORKERS = [
+  { key: 'memory_sync',     label: 'Memory Sync',     color: theme.accent },
+  { key: 'retrospective',   label: 'Retrospective',   color: theme.purple },
+  { key: 'metrics',         label: 'Metrics',          color: theme.yellow },
+  { key: 'review_insights', label: 'Review Insights',  color: theme.orange },
+]

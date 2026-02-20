@@ -20,6 +20,8 @@ const initialState = {
   events: [],
   hitlItems: [],
   humanInputRequests: {},
+  backgroundWorkers: [],
+  metrics: null,
 }
 
 describe('useHydraSocket reducer', () => {
@@ -345,6 +347,69 @@ describe('useHydraSocket reducer', () => {
       expect(state.sessionPlanned).toBe(1)
       expect(state.sessionImplemented).toBe(0)
       expect(state.sessionReviewed).toBe(0)
+    })
+  })
+
+  describe('background worker status', () => {
+    it('initial state includes backgroundWorkers and metrics', () => {
+      expect(initialState.backgroundWorkers).toEqual([])
+      expect(initialState.metrics).toBeNull()
+    })
+
+    it('background_worker_status event updates backgroundWorkers array', () => {
+      const next = reducer(initialState, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: { count: 5 } },
+        timestamp: '2026-01-01T00:00:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].name).toBe('memory_sync')
+      expect(next.backgroundWorkers[0].status).toBe('ok')
+    })
+
+    it('background_worker_status event for existing worker replaces entry', () => {
+      const state = {
+        ...initialState,
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: {} }],
+      }
+      const next = reducer(state, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'error', last_run: '2026-01-01T00:01:00Z', details: {} },
+        timestamp: '2026-01-01T00:01:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].status).toBe('error')
+    })
+
+    it('BACKGROUND_WORKERS action sets the full array', () => {
+      const workers = [
+        { name: 'memory_sync', status: 'ok', last_run: null, details: {} },
+        { name: 'metrics', status: 'disabled', last_run: null, details: {} },
+      ]
+      const next = reducer(initialState, { type: 'BACKGROUND_WORKERS', data: workers })
+      expect(next.backgroundWorkers).toEqual(workers)
+    })
+
+    it('METRICS action sets metrics state', () => {
+      const metricsData = { lifetime: { issues_completed: 5, prs_merged: 3 }, rates: { merge_rate: 0.6 } }
+      const next = reducer(initialState, { type: 'METRICS', data: metricsData })
+      expect(next.metrics).toEqual(metricsData)
+    })
+
+    it('phase_change does NOT reset backgroundWorkers on new run', () => {
+      const state = {
+        ...initialState,
+        phase: 'idle',
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok' }],
+        metrics: { lifetime: { issues_completed: 1 }, rates: {} },
+      }
+      const next = reducer(state, {
+        type: 'phase_change',
+        data: { phase: 'plan' },
+        timestamp: new Date().toISOString(),
+      })
+      expect(next.backgroundWorkers).toEqual([{ name: 'memory_sync', status: 'ok' }])
+      expect(next.metrics).toEqual({ lifetime: { issues_completed: 1 }, rates: {} })
     })
   })
 })
