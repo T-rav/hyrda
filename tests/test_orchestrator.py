@@ -1412,20 +1412,13 @@ class TestFetchReviewablePrs:
             ]
         )
 
-        call_count = 0
-
-        async def fake_gh_run(*args: str) -> str:
-            nonlocal call_count
-            call_count += 1
-            # First call(s): issue fetch from _fetch_issues_by_labels
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
-            # Subsequent calls: PR lookup
             return pr_json
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert len(issues) == 1
         assert issues[0].number == 42
@@ -1445,14 +1438,13 @@ class TestFetchReviewablePrs:
             ]
         )
 
-        async def fake_gh_run(*args: str) -> str:
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
             return pr_json
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert len(prs) == 1
         assert prs[0].number == 200
@@ -1470,14 +1462,13 @@ class TestFetchReviewablePrs:
         """gh CLI failure (RuntimeError) skips that issue's PR but preserves issues."""
         orch = HydraOrchestrator(config)
 
-        async def fake_gh_run(*args: str) -> str:
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
             raise RuntimeError("Command failed (rc=1): some error")
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert prs == []
         assert len(issues) == 1
@@ -1490,14 +1481,13 @@ class TestFetchReviewablePrs:
         """Invalid JSON from gh CLI skips that issue's PR but preserves issues."""
         orch = HydraOrchestrator(config)
 
-        async def fake_gh_run(*args: str) -> str:
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
             return "not-valid-json"
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert prs == []
         assert len(issues) == 1
@@ -1518,14 +1508,13 @@ class TestFetchReviewablePrs:
             ]
         )
 
-        async def fake_gh_run(*args: str) -> str:
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
             return pr_json
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert prs == []
         assert len(issues) == 1
@@ -1538,14 +1527,13 @@ class TestFetchReviewablePrs:
         """Empty JSON array from PR lookup means no PRInfo is created."""
         orch = HydraOrchestrator(config)
 
-        async def fake_gh_run(*args: str) -> str:
+        async def fake_run(*args: str, **kwargs: Any) -> str:
             if "issue" in args:
                 return RAW_ISSUE_JSON
             return "[]"
 
-        orch._gh_run = fake_gh_run  # type: ignore[method-assign]
-
-        prs, issues = await orch._fetch_reviewable_prs()
+        with patch("orchestrator.run_subprocess", side_effect=fake_run):
+            prs, issues = await orch._fetch_reviewable_prs()
 
         assert prs == []
         assert len(issues) == 1
@@ -2670,53 +2658,6 @@ class TestWaitAndFixCI:
         assert (42, ["hydra-hitl"]) in add_calls
 
 
-# ---------------------------------------------------------------------------
-# _gh_run — gh_token injection
-# ---------------------------------------------------------------------------
-
-
-class TestGhRunGhToken:
-    """Tests for GH_TOKEN injection in HydraOrchestrator._gh_run."""
-
-    @pytest.mark.asyncio
-    async def test_gh_run_injects_token_into_env(self, tmp_path: Path) -> None:
-        """When gh_token is set, _gh_run should inject GH_TOKEN into subprocess env."""
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create(
-            gh_token="ghp_orch_secret",
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        orch = HydraOrchestrator(cfg)
-
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
-        mock_create = AsyncMock(return_value=mock_proc)
-
-        with patch("asyncio.create_subprocess_exec", mock_create):
-            await orch._gh_run("gh", "issue", "list")
-
-        call_kwargs = mock_create.call_args.kwargs
-        assert call_kwargs["env"]["GH_TOKEN"] == "ghp_orch_secret"
-
-    @pytest.mark.asyncio
-    async def test_gh_run_does_not_inject_token_when_empty(
-        self, config, tmp_path: Path
-    ) -> None:
-        """When gh_token is empty, _gh_run should not forcibly set GH_TOKEN."""
-        orch = HydraOrchestrator(config)
-
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(b"ok", b""))
-        mock_create = AsyncMock(return_value=mock_proc)
-
-        with patch("asyncio.create_subprocess_exec", mock_create):
-            await orch._gh_run("gh", "issue", "list")
-
-        call_kwargs = mock_create.call_args.kwargs
-        # GH_TOKEN should be whatever was inherited, not overridden
-        assert call_kwargs["env"].get("GH_TOKEN") != ""
+# NOTE: Tests for the subprocess helper (stdout parsing, error handling,
+# GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
+# since the logic was extracted into subprocess_util.run_subprocess.

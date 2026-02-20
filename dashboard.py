@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -11,6 +10,7 @@ from config import HydraConfig
 from events import EventBus, HydraEvent
 from models import ControlStatusConfig, ControlStatusResponse, HITLItem, PRListItem
 from state import StateTracker
+from subprocess_util import run_subprocess
 
 if TYPE_CHECKING:
     from orchestrator import HydraOrchestrator
@@ -103,8 +103,6 @@ class HydraDashboard:
             import json as _json
 
             try:
-                env = {**os.environ}
-                env.pop("CLAUDECODE", None)
                 seen: set[int] = set()
                 prs: list[PRListItem] = []
 
@@ -118,29 +116,27 @@ class HydraDashboard:
                     }
                 )
                 for label in all_labels:
-                    proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "pr",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,url,headRefName,isDraft,title",
-                        "--limit",
-                        "50",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    stdout, _ = await proc.communicate()
-                    if proc.returncode != 0:
+                    try:
+                        stdout = await run_subprocess(
+                            "gh",
+                            "pr",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--label",
+                            label,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,url,headRefName,isDraft,title",
+                            "--limit",
+                            "50",
+                            gh_token=self._config.gh_token,
+                        )
+                    except RuntimeError:
                         continue
 
-                    raw = _json.loads(stdout.decode())
+                    raw = _json.loads(stdout)
                     for p in raw:
                         pr_num = p["number"]
                         if pr_num in seen:
@@ -172,35 +168,30 @@ class HydraDashboard:
             import json as _json
 
             try:
-                env = {**os.environ}
-                env.pop("CLAUDECODE", None)
-
                 # Fetch issues with any HITL label, deduplicated
                 seen_issues: set[int] = set()
                 raw_issues: list[dict[str, Any]] = []
                 for label in self._config.hitl_label:
-                    proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "issue",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,title,url",
-                        "--limit",
-                        "50",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    stdout, _ = await proc.communicate()
-                    if proc.returncode != 0:
+                    try:
+                        stdout = await run_subprocess(
+                            "gh",
+                            "issue",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--label",
+                            label,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,title,url",
+                            "--limit",
+                            "50",
+                            gh_token=self._config.gh_token,
+                        )
+                    except RuntimeError:
                         continue
-                    for issue in _json.loads(stdout.decode()):
+                    for issue in _json.loads(stdout):
                         if issue["number"] not in seen_issues:
                             seen_issues.add(issue["number"])
                             raw_issues.append(issue)
@@ -209,32 +200,31 @@ class HydraDashboard:
                 for issue in raw_issues:
                     branch = f"agent/issue-{issue['number']}"
                     # Look up the PR for this issue's branch
-                    pr_proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "pr",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--head",
-                        branch,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,url",
-                        "--limit",
-                        "1",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    pr_stdout, _ = await pr_proc.communicate()
                     pr_number = 0
                     pr_url = ""
-                    if pr_proc.returncode == 0:
-                        pr_data = _json.loads(pr_stdout.decode())
+                    try:
+                        pr_stdout = await run_subprocess(
+                            "gh",
+                            "pr",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--head",
+                            branch,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,url",
+                            "--limit",
+                            "1",
+                            gh_token=self._config.gh_token,
+                        )
+                        pr_data = _json.loads(pr_stdout)
                         if pr_data:
                             pr_number = pr_data[0]["number"]
                             pr_url = pr_data[0].get("url", "")
+                    except RuntimeError:
+                        pass
 
                     items.append(
                         HITLItem(

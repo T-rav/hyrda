@@ -12,6 +12,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo
+from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.pr_manager")
 
@@ -51,7 +52,7 @@ class PRManager:
             label_names = getattr(self._config, field)
             for label_name in label_names:
                 try:
-                    await self._run(
+                    await run_subprocess(
                         "gh",
                         "label",
                         "create",
@@ -64,6 +65,7 @@ class PRManager:
                         description,
                         "--force",
                         cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
                     )
                     logger.debug("Ensured label %r exists", label_name)
                 except RuntimeError as exc:
@@ -79,7 +81,7 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "push",
                 "--no-verify",
@@ -87,6 +89,7 @@ class PRManager:
                 "origin",
                 branch,
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -98,13 +101,14 @@ class PRManager:
         if self._config.dry_run:
             return False
         try:
-            output = await self._run(
+            output = await run_subprocess(
                 "git",
                 "ls-remote",
                 "--heads",
                 "origin",
                 branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return bool(output.strip())
         except RuntimeError:
@@ -219,7 +223,7 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "pr",
                 "merge",
@@ -229,6 +233,7 @@ class PRManager:
                 "--squash",
                 "--delete-branch",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
 
             await self._bus.publish(
@@ -353,7 +358,7 @@ class PRManager:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "issue",
                     "edit",
@@ -363,6 +368,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -377,7 +383,7 @@ class PRManager:
         if self._config.dry_run:
             return
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "issue",
                 "edit",
@@ -387,6 +393,7 @@ class PRManager:
                 "--remove-label",
                 label,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.warning(
@@ -402,7 +409,7 @@ class PRManager:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "pr",
                     "edit",
@@ -412,6 +419,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -469,7 +477,7 @@ class PRManager:
     async def get_pr_diff(self, pr_number: int) -> str:
         """Fetch the diff for *pr_number*."""
         try:
-            return await self._run(
+            return await run_subprocess(
                 "gh",
                 "pr",
                 "diff",
@@ -477,6 +485,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.error("Could not get diff for PR #%d: %s", pr_number, exc)
@@ -485,7 +494,7 @@ class PRManager:
     async def get_pr_status(self, pr_number: int) -> dict[str, object]:
         """Fetch PR status as JSON."""
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "view",
@@ -495,6 +504,7 @@ class PRManager:
                 "--json",
                 "number,state,mergeable,title,isDraft",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
@@ -507,12 +517,13 @@ class PRManager:
             logger.info("[dry-run] Would pull main")
             return True
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "pull",
                 "origin",
                 self._config.main_branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -532,7 +543,7 @@ class PRManager:
             return []
 
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "checks",
@@ -542,6 +553,7 @@ class PRManager:
                 "--json",
                 "name,state,conclusion",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
@@ -661,29 +673,12 @@ class PRManager:
         try:
             with os.fdopen(fd, "w") as f:
                 f.write(body)
-            return await self._run(*cmd, "--body-file", tmp_path, cwd=cwd)
+            return await run_subprocess(
+                *cmd,
+                "--body-file",
+                tmp_path,
+                cwd=cwd,
+                gh_token=self._config.gh_token,
+            )
         finally:
             Path(tmp_path).unlink(missing_ok=True)
-
-    # --- subprocess helper ---
-
-    async def _run(self, *cmd: str, cwd: Path) -> str:
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-        if self._config.gh_token:
-            env["GH_TOKEN"] = self._config.gh_token
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()

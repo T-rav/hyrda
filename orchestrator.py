@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 from pathlib import Path
 
 from agent import AgentRunner
@@ -25,6 +24,7 @@ from planner import PlannerRunner
 from pr_manager import PRManager
 from reviewer import ReviewRunner
 from state import StateTracker
+from subprocess_util import run_subprocess
 from triage import TriageRunner
 from worktree import WorktreeManager
 
@@ -266,7 +266,7 @@ class HydraOrchestrator:
             if label is not None:
                 cmd += ["--label", label]
             try:
-                raw = await self._gh_run(*cmd)
+                raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
                 for item in json.loads(raw):
                     seen.setdefault(item["number"], item)
             except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
@@ -500,7 +500,7 @@ class HydraOrchestrator:
         for issue in issues:
             branch = f"agent/issue-{issue.number}"
             try:
-                raw = await self._gh_run(
+                raw = await run_subprocess(
                     "gh",
                     "pr",
                     "list",
@@ -514,6 +514,7 @@ class HydraOrchestrator:
                     "number,url,isDraft",
                     "--limit",
                     "1",
+                    gh_token=self._config.gh_token,
                 )
                 prs_json = json.loads(raw)
                 if prs_json:
@@ -533,26 +534,6 @@ class HydraOrchestrator:
         non_draft = [p for p in pr_infos if not p.draft and p.number > 0]
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
-
-    async def _gh_run(self, *cmd: str) -> str:
-        """Run a gh CLI command and return stdout."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-        if self._config.gh_token:
-            env["GH_TOKEN"] = self._config.gh_token
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()
 
     async def _implement_batch(
         self,

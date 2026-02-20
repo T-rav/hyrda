@@ -327,9 +327,9 @@ class TestDestroyAll:
 
         with (
             patch.object(manager, "destroy", side_effect=fake_destroy),
-            patch.object(manager, "_run", new_callable=AsyncMock),
+            patch("worktree.run_subprocess", new_callable=AsyncMock),
         ):
-            # Also patch _run for the final prune
+            # Also patch run_subprocess for the final prune
             await manager.destroy_all()
 
         assert sorted(destroyed) == [1, 2]
@@ -362,7 +362,7 @@ class TestDestroyAll:
 
         with (
             patch.object(manager, "destroy", side_effect=fake_destroy),
-            patch.object(manager, "_run", new_callable=AsyncMock),
+            patch("worktree.run_subprocess", new_callable=AsyncMock),
         ):
             await manager.destroy_all()
 
@@ -680,113 +680,6 @@ class TestInstallHooks:
             await manager._install_hooks(tmp_path)
 
 
-# ---------------------------------------------------------------------------
-# WorktreeManager._run
-# ---------------------------------------------------------------------------
-
-
-class TestRun:
-    """Tests for WorktreeManager._run instance method."""
-
-    @pytest.mark.asyncio
-    async def test_run_returns_stdout_on_success(self, config, tmp_path: Path) -> None:
-        """_run should return the decoded stdout string on zero exit code."""
-        manager = WorktreeManager(config)
-        success_proc = _make_proc(returncode=0, stdout=b"hello world")
-
-        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await manager._run("echo", "hello world", cwd=tmp_path)
-
-        assert result == "hello world"
-
-    @pytest.mark.asyncio
-    async def test_run_raises_runtime_error_on_non_zero_exit(
-        self, config, tmp_path: Path
-    ) -> None:
-        """_run should raise RuntimeError when the subprocess exits non-zero."""
-        manager = WorktreeManager(config)
-        fail_proc = _make_proc(returncode=1, stderr=b"fatal error")
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
-            pytest.raises(RuntimeError, match="fatal error"),
-        ):
-            await manager._run("false", cwd=tmp_path)
-
-    @pytest.mark.asyncio
-    async def test_run_error_message_includes_command_and_returncode(
-        self, config, tmp_path: Path
-    ) -> None:
-        """RuntimeError message should include the command tuple and return code."""
-        manager = WorktreeManager(config)
-        fail_proc = _make_proc(returncode=2, stderr=b"bad argument")
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
-            pytest.raises(RuntimeError) as exc_info,
-        ):
-            await manager._run("git", "push", cwd=tmp_path)
-
-        msg = str(exc_info.value)
-        assert "rc=2" in msg
-
-    @pytest.mark.asyncio
-    async def test_run_strips_whitespace_from_stdout(
-        self, config, tmp_path: Path
-    ) -> None:
-        """_run should strip leading/trailing whitespace from the returned stdout."""
-        manager = WorktreeManager(config)
-        success_proc = _make_proc(returncode=0, stdout=b"  trimmed output  \n")
-
-        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await manager._run("cmd", cwd=tmp_path)
-
-        assert result == "trimmed output"
-
-
-# ---------------------------------------------------------------------------
-# WorktreeManager._run — gh_token injection
-# ---------------------------------------------------------------------------
-
-
-class TestRunGhToken:
-    """Tests for GH_TOKEN injection in WorktreeManager._run."""
-
-    @pytest.mark.asyncio
-    async def test_run_injects_gh_token_into_env(self, tmp_path: Path) -> None:
-        """When gh_token is set, _run should inject GH_TOKEN into the subprocess env."""
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create(
-            gh_token="ghp_wt_secret",
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        manager = WorktreeManager(cfg)
-        success_proc = _make_proc(returncode=0, stdout=b"ok")
-
-        with patch(
-            "asyncio.create_subprocess_exec", return_value=success_proc
-        ) as mock_exec:
-            await manager._run("git", "push", cwd=tmp_path)
-
-        call_kwargs = mock_exec.call_args.kwargs
-        assert call_kwargs["env"]["GH_TOKEN"] == "ghp_wt_secret"
-
-    @pytest.mark.asyncio
-    async def test_run_does_not_inject_gh_token_when_empty(
-        self, config, tmp_path: Path
-    ) -> None:
-        """When gh_token is empty, _run should not forcibly set GH_TOKEN."""
-        manager = WorktreeManager(config)
-        success_proc = _make_proc(returncode=0, stdout=b"ok")
-
-        with patch(
-            "asyncio.create_subprocess_exec", return_value=success_proc
-        ) as mock_exec:
-            await manager._run("git", "push", cwd=tmp_path)
-
-        call_kwargs = mock_exec.call_args.kwargs
-        # GH_TOKEN should be whatever was inherited, not overridden
-        assert call_kwargs["env"].get("GH_TOKEN") != ""
+# NOTE: Tests for the subprocess helper (stdout parsing, error handling,
+# GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
+# since the logic was extracted into subprocess_util.run_subprocess.
