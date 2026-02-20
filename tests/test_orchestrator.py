@@ -374,6 +374,65 @@ class TestRunLoop:
 
 
 # ---------------------------------------------------------------------------
+# run() finally block — subprocess cleanup
+# ---------------------------------------------------------------------------
+
+
+class TestRunFinallyTerminatesRunners:
+    """Tests that run() finally block terminates all runners."""
+
+    @pytest.mark.asyncio
+    async def test_run_finally_terminates_all_runners(
+        self, config: HydraConfig
+    ) -> None:
+        """When run() exits via stop event, all three runner terminate() are called."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        with (
+            patch.object(orch._planners, "terminate") as mock_p,
+            patch.object(orch._agents, "terminate") as mock_a,
+            patch.object(orch._reviewers, "terminate") as mock_r,
+        ):
+            await orch.run()
+
+        mock_p.assert_called_once()
+        mock_a.assert_called_once()
+        mock_r.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_terminates_on_exception(self, config: HydraConfig) -> None:
+        """If asyncio.gather raises, runners are still terminated in the finally block."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        async def exploding_plan() -> list[PlanResult]:
+            raise RuntimeError("boom")
+
+        orch._plan_issues = exploding_plan  # type: ignore[method-assign]
+        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        with (
+            patch.object(orch._planners, "terminate") as mock_p,
+            patch.object(orch._agents, "terminate") as mock_a,
+            patch.object(orch._reviewers, "terminate") as mock_r,
+            pytest.raises(RuntimeError, match="boom"),
+        ):
+            await orch.run()
+
+        mock_p.assert_called_once()
+        mock_a.assert_called_once()
+        mock_r.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Constructor injection
 # ---------------------------------------------------------------------------
 
