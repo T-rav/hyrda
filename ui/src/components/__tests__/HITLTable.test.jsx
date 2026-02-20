@@ -264,4 +264,17 @@ describe('HITLTable component', () => {
     const row = screen.getByTestId('hitl-row-7')
     expect(row).toHaveTextContent('—')
   })
+
+  it('container has overflowX auto for horizontal scrolling', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const table = screen.getByText('Fix widget').closest('table')
+    const container = table.parentElement
+    expect(container.style.overflowX).toBe('auto')
+  })
+
+  it('table has minWidth to prevent column squishing', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const table = screen.getByText('Fix widget').closest('table')
+    expect(table.style.minWidth).toBe('600px')
+  })
 })
