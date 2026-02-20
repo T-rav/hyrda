@@ -109,7 +109,7 @@ _Include this section only when the issue involves frontend/UI changes. Skip ent
 - List any components in `ui/src/components/` that overlap with the proposed change
 
 ### Responsive requirements:
-- Min-width constraints needed (reference `ui/src/theme.js` breakpoints)
+- Min-width constraints needed
 - Viewport or container-size considerations
 
 ### Shared code:
