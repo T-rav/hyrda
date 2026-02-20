@@ -99,6 +99,9 @@ def create_router(
             data = item.model_dump()
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
+            cause = state.get_hitl_cause(item.issue)
+            if cause:
+                data["cause"] = cause
             enriched.append(data)
         return JSONResponse(enriched)
 
