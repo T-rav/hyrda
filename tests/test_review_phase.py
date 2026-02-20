@@ -1343,7 +1343,107 @@ class TestResolveMergeConflicts:
 
 
 # ---------------------------------------------------------------------------
-# _active_issues cleanup (Bugs 1 & 2)
+# Review exception isolation
+# ---------------------------------------------------------------------------
+
+
+class TestReviewExceptionIsolation:
+    """Tests that _review_one catches exceptions and returns failed results."""
+
+    @pytest.mark.asyncio
+    async def test_review_exception_returns_failed_result(
+        self, config: HydraConfig
+    ) -> None:
+        """When reviewer.review raises, should return ReviewResult with error summary."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            side_effect=RuntimeError("reviewer crashed")
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert len(results) == 1
+        assert results[0].pr_number == 101
+        assert "unexpected error" in results[0].summary.lower()
+
+    @pytest.mark.asyncio
+    async def test_review_exception_releases_active_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When review crashes, issue should be removed from active_issues."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            side_effect=RuntimeError("reviewer crashed")
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_review_exception_does_not_crash_batch(
+        self, config: HydraConfig
+    ) -> None:
+        """With 2 PRs, first review crashing should not prevent the second."""
+        phase = _make_phase(config)
+        issues = [make_issue(1), make_issue(2)]
+        prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
+
+        call_count = 0
+
+        async def sometimes_crashing_review(
+            pr: PRInfo,
+            issue: GitHubIssue,
+            wt_path: Path,
+            diff: str,
+            worker_id: int = 0,
+        ) -> ReviewResult:
+            nonlocal call_count
+            call_count += 1
+            if pr.issue_number == 1:
+                raise RuntimeError("reviewer crashed for PR 1")
+            return make_review_result(pr.number, issue.number)
+
+        phase._reviewers.review = sometimes_crashing_review  # type: ignore[method-assign]
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        for i in (1, 2):
+            wt = config.worktree_base / f"issue-{i}"
+            wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs(prs, issues)
+
+        # Both results should be returned
+        assert len(results) == 2
+        result_map = {r.pr_number: r for r in results}
+        # PR 101 (issue 1) should have error summary
+        assert "unexpected error" in result_map[101].summary.lower()
+        # PR 102 (issue 2) should have succeeded
+        assert result_map[102].summary == "Looks good."
+
+
+# ---------------------------------------------------------------------------
+# _active_issues cleanup
 # ---------------------------------------------------------------------------
 
 
@@ -1383,11 +1483,12 @@ class TestActiveIssuesCleanup:
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
 
-        # The exception should propagate but _active_issues should be clean
-        with pytest.raises(RuntimeError, match="merge exploded"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_exception_during_review(
@@ -1405,10 +1506,12 @@ class TestActiveIssuesCleanup:
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
 
-        with pytest.raises(RuntimeError, match="review crashed"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_exception_during_worktree_create(
@@ -1424,10 +1527,12 @@ class TestActiveIssuesCleanup:
         )
 
         # No worktree dir exists, so create() will be called
-        with pytest.raises(RuntimeError, match="worktree create failed"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_happy_path(
@@ -1456,7 +1561,7 @@ class TestActiveIssuesCleanup:
 
 
 # ---------------------------------------------------------------------------
-# REVIEW_UPDATE start event (Bug 3)
+# REVIEW_UPDATE start event
 # ---------------------------------------------------------------------------
 
 

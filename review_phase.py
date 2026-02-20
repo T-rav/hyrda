@@ -229,6 +229,17 @@ class ReviewPhase:
                         )
 
                     return result
+                except Exception:
+                    logger.exception(
+                        "Review failed for PR #%d (issue #%d)",
+                        pr.number,
+                        pr.issue_number,
+                    )
+                    return ReviewResult(
+                        pr_number=pr.number,
+                        issue_number=pr.issue_number,
+                        summary="Review failed due to unexpected error",
+                    )
                 finally:
                     self._active_issues.discard(pr.issue_number)
 
