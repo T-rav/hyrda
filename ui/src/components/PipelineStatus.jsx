@@ -1,12 +1,10 @@
 import React from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
-const STAGES = [
-  { key: 'plan',      label: 'Plan',      color: theme.purple, role: 'planner' },
-  { key: 'implement', label: 'Implement', color: theme.yellow, role: 'implementer' },
-  { key: 'review',    label: 'Review',    color: theme.orange, role: 'reviewer' },
-]
+const STAGES = PIPELINE_STAGES
+  .filter(s => s.role != null && s.key !== 'triage')
+  .map(s => s.key === 'implement' ? { ...s, color: theme.yellow } : s)
 
 function countByRole(workers) {
   const list = Object.values(workers)

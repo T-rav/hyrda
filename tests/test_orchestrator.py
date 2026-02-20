@@ -46,6 +46,18 @@ def make_issue(
     )
 
 
+def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
+    """Mock all fetcher methods so no real gh CLI calls are made.
+
+    Required for tests that go through run() since exception isolation
+    catches errors from unmocked fetcher calls instead of propagating them.
+    """
+    orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    orch._fetcher.fetch_ready_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+    orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+
 def make_worker_result(
     issue_number: int = 42,
     branch: str = "agent/issue-42",
@@ -258,6 +270,7 @@ class TestRunLoop:
         """run() sets _running = True at start."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
         observed_running = False
 
         async def plan_and_stop() -> list[PlanResult]:
@@ -279,6 +292,7 @@ class TestRunLoop:
     ) -> None:
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -298,6 +312,7 @@ class TestRunLoop:
         """run() publishes orchestrator_status events at start and end."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -328,6 +343,7 @@ class TestRunLoop:
         """Setting _stop_event causes all three loops to exit."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         plan_calls = 0
 
@@ -350,6 +366,7 @@ class TestRunLoop:
         """Plan, implement, and review loops run concurrently via asyncio.gather."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         started: list[str] = []
 
@@ -388,13 +405,14 @@ class TestRunFinallyTerminatesRunners:
         """When run() exits via stop event, all three runner terminate() are called."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
             return []
 
         orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
-        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
 
         with (
             patch.object(orch._planners, "terminate") as mock_p,
@@ -408,25 +426,34 @@ class TestRunFinallyTerminatesRunners:
         mock_r.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_run_terminates_on_exception(self, config: HydraConfig) -> None:
-        """If asyncio.gather raises, runners are still terminated in the finally block."""
+    async def test_run_terminates_on_loop_exception(self, config: HydraConfig) -> None:
+        """If a loop exception is caught, runners are still terminated on stop."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
-        async def exploding_plan() -> list[PlanResult]:
-            raise RuntimeError("boom")
+        call_count = 0
 
-        orch._plan_issues = exploding_plan  # type: ignore[method-assign]
-        orch._implement_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        async def exploding_then_stopping() -> list[PlanResult]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("boom")
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = exploding_then_stopping  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
 
         with (
             patch.object(orch._planners, "terminate") as mock_p,
             patch.object(orch._agents, "terminate") as mock_a,
             patch.object(orch._reviewers, "terminate") as mock_r,
-            pytest.raises(RuntimeError, match="boom"),
         ):
             await orch.run()
 
+        # Exception was caught (not re-raised), loop continued, stop was set
+        assert call_count == 2
         mock_p.assert_called_once()
         mock_a.assert_called_once()
         mock_r.assert_called_once()
@@ -539,6 +566,7 @@ class TestStopMechanism:
     async def test_running_is_true_during_execution(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
         observed_running = False
 
         async def spy_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
@@ -558,6 +586,7 @@ class TestStopMechanism:
     async def test_running_is_false_after_completion(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         async def plan_and_stop() -> list[PlanResult]:
             orch._stop_event.set()
@@ -575,6 +604,7 @@ class TestStopMechanism:
         """Setting stop event causes loops to exit after current iteration."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         call_count = 0
 
@@ -597,6 +627,7 @@ class TestStopMechanism:
         """Calling run() again after stop should reset the stop event."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
         await orch.request_stop()
         assert orch._stop_event.is_set()
 
@@ -620,6 +651,7 @@ class TestStopMechanism:
         """After stop halts the orchestrator, running should be False."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         async def stop_on_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             await orch.request_stop()
@@ -737,6 +769,35 @@ class TestTriageFindIssues:
         assert orch._state.get_hitl_origin(2) == "hydra-find"
 
     @pytest.mark.asyncio
+    async def test_triage_escalation_sets_hitl_cause(self, config: HydraConfig) -> None:
+        """Escalating an unready issue should record cause in state."""
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(2, title="Fix the bug please", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(
+                issue_number=2,
+                ready=False,
+                reasons=["Body is too short or empty (minimum 50 characters)"],
+            )
+        )
+        orch._triage = mock_triage
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        await orch._triage_find_issues()
+
+        assert orch._state.get_hitl_cause(2) == "Insufficient issue detail for triage"
+
+    @pytest.mark.asyncio
     async def test_triage_skips_when_no_find_label_configured(self) -> None:
         from tests.helpers import ConfigFactory
 
@@ -809,6 +870,7 @@ class TestPlanPhase:
         """Triage, plan, implement, review should all run concurrently."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
 
         execution_order: list[str] = []
 
@@ -1261,3 +1323,255 @@ class TestHITLCorrection:
         orch = HydraOrchestrator(config)
         orch.skip_hitl_issue(99)  # Should not raise
         assert 99 not in orch._hitl_corrections
+
+
+# ---------------------------------------------------------------------------
+# Exception isolation — polling loops
+# ---------------------------------------------------------------------------
+
+
+class TestLoopExceptionIsolation:
+    """Each polling loop catches exceptions per-iteration and continues."""
+
+    @pytest.mark.asyncio
+    async def test_triage_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """An exception in _triage_find_issues should not crash the triage loop."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_triage() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("triage boom")
+            orch._stop_event.set()
+
+        orch._triage_find_issues = failing_triage  # type: ignore[method-assign]
+
+        # Run just the triage loop directly
+        await orch._triage_loop()
+
+        # Loop ran twice: first call raised, second set stop
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_plan_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """An exception in _plan_issues should not crash the plan loop."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_plan() -> list[PlanResult]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("plan boom")
+            orch._stop_event.set()
+            return []
+
+        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
+        orch._plan_issues = failing_plan  # type: ignore[method-assign]
+
+        await orch._plan_loop()
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_implement_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """An exception in run_batch should not crash the implement loop."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_batch() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("implement boom")
+            orch._stop_event.set()
+            return [], []
+
+        orch._implementer.run_batch = failing_batch  # type: ignore[method-assign]
+
+        await orch._implement_loop()
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_review_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """An exception in fetch_reviewable_prs should not crash the review loop."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_fetch(
+            active: object,
+        ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("review boom")
+            orch._stop_event.set()
+            return [], []
+
+        orch._fetcher.fetch_reviewable_prs = failing_fetch  # type: ignore[method-assign]
+
+        await orch._review_loop()
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_error_event_published_on_triage_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Triage loop exception should publish ERROR event with source=triage."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_triage() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("triage error")
+            orch._stop_event.set()
+
+        orch._triage_find_issues = failing_triage  # type: ignore[method-assign]
+
+        await orch._triage_loop()
+
+        error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "triage"
+        assert "Triage loop error" in error_events[0].data["message"]
+
+    @pytest.mark.asyncio
+    async def test_error_event_published_on_implement_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Implement loop exception should publish ERROR event with source=implement."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_batch() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("implement error")
+            orch._stop_event.set()
+            return [], []
+
+        orch._implementer.run_batch = failing_batch  # type: ignore[method-assign]
+
+        await orch._implement_loop()
+
+        error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "implement"
+
+    @pytest.mark.asyncio
+    async def test_error_event_published_on_review_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Review loop exception should publish ERROR event with source=review."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_fetch(
+            active: object,
+        ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("review error")
+            orch._stop_event.set()
+            return [], []
+
+        orch._fetcher.fetch_reviewable_prs = failing_fetch  # type: ignore[method-assign]
+
+        await orch._review_loop()
+
+        error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "review"
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates_through_loop(
+        self, config: HydraConfig
+    ) -> None:
+        """CancelledError should NOT be caught — it propagates for clean shutdown."""
+        orch = HydraOrchestrator(config)
+
+        async def cancelling_batch() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            raise asyncio.CancelledError()
+
+        orch._implementer.run_batch = cancelling_batch  # type: ignore[method-assign]
+
+        with pytest.raises(asyncio.CancelledError):
+            await orch._implement_loop()
+
+
+# ---------------------------------------------------------------------------
+# Exception isolation — supervisor
+# ---------------------------------------------------------------------------
+
+
+class TestSupervisorLoops:
+    """Tests for the _supervise_loops supervisor that restarts crashed loops."""
+
+    @pytest.mark.asyncio
+    async def test_run_completes_normally_with_stop(self, config: HydraConfig) -> None:
+        """run() should complete normally when stop is set, even with supervisor."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert not orch.running
+
+    @pytest.mark.asyncio
+    async def test_exception_in_one_loop_does_not_stop_others(
+        self, config: HydraConfig
+    ) -> None:
+        """If one loop crashes despite try/except, others should keep running."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        implement_calls = 0
+
+        async def failing_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal implement_calls
+            implement_calls += 1
+            if implement_calls == 1:
+                raise RuntimeError("implement crash")
+            orch._stop_event.set()
+            return [], []
+
+        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = failing_implement  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        # Use instant sleep to avoid 30s poll_interval delays
+        async def instant_sleep(seconds: int) -> None:
+            await asyncio.sleep(0)
+
+        orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # The implement loop continued after the error (ran at least twice)
+        assert implement_calls >= 2
+        assert not orch.running

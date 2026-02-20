@@ -74,6 +74,24 @@ describe('WorkerList component', () => {
     expect(screen.getByText('planning')).toBeInTheDocument()
   })
 
+  it('renders quality_fix worker with correct badge text', () => {
+    const workers = {
+      1: { status: 'quality_fix', title: 'Fix quality', branch: 'fix-branch', worker: 0, role: 'implementer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('quality_fix')).toBeInTheDocument()
+  })
+
+  it('counts quality_fix workers as active in RoleSection', () => {
+    const workers = {
+      1: { status: 'quality_fix', title: 'Fix quality', branch: 'fix-branch', worker: 0, role: 'implementer' },
+      2: { status: 'queued', title: 'Queued issue', branch: '', worker: 1, role: 'implementer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    // Implementers section should show 1/2 (1 active out of 2 total)
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+  })
+
   it('renders workers with pre-computed styles', () => {
     const workers = {
       1: { status: 'running', title: 'Test issue', branch: 'test-branch', worker: 0, role: 'implementer' },
