@@ -945,3 +945,18 @@ async def test_fix_ci_dry_run_records_duration(
     result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
 
     assert result.duration_seconds >= 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_failure_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(side_effect=RuntimeError("boom"))),
+    ):
+        result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds > 0
