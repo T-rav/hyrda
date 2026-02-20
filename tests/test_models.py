@@ -635,6 +635,7 @@ class TestReviewResult:
             summary="Looks great!",
             fixes_made=True,
             transcript="Reviewed 5 files.",
+            duration_seconds=12.3,
         )
 
         # Assert
@@ -644,6 +645,15 @@ class TestReviewResult:
         assert review.summary == "Looks great!"
         assert review.fixes_made is True
         assert review.transcript == "Reviewed 5 files."
+        assert review.duration_seconds == pytest.approx(12.3)
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=42.5)
+        assert review.duration_seconds == pytest.approx(42.5)
 
     def test_ci_passed_defaults_to_none(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)

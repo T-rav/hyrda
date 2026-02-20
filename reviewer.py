@@ -63,6 +63,7 @@ class ReviewRunner:
             logger.info("[dry-run] Would review PR #%d", pr.number)
             result.verdict = ReviewVerdict.APPROVE
             result.summary = "Dry-run: auto-approved"
+            result.duration_seconds = time.monotonic() - start
             return result
 
         try:
@@ -102,6 +103,7 @@ class ReviewRunner:
             )
         )
 
+        result.duration_seconds = time.monotonic() - start
         return result
 
     async def fix_ci(
@@ -119,6 +121,7 @@ class ReviewRunner:
         parse verdict, check commits.  Returns a :class:`ReviewResult`
         with verdict APPROVE (fixed) or REQUEST_CHANGES (could not fix).
         """
+        start = time.monotonic()
         result = ReviewResult(
             pr_number=pr.number,
             issue_number=issue.number,
@@ -141,6 +144,7 @@ class ReviewRunner:
             logger.info("[dry-run] Would fix CI for PR #%d", pr.number)
             result.verdict = ReviewVerdict.APPROVE
             result.summary = "Dry-run: CI fix skipped"
+            result.duration_seconds = time.monotonic() - start
             return result
 
         try:
@@ -172,6 +176,7 @@ class ReviewRunner:
             )
         )
 
+        result.duration_seconds = time.monotonic() - start
         return result
 
     def _build_ci_fix_prompt(
