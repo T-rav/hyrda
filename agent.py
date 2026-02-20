@@ -187,6 +187,13 @@ class AgentRunner:
 7. Run `make quality` to verify the full quality gate (lint + typecheck + security + tests).
 8. Commit your changes with a message: "Fixes #{issue.number}: <concise summary>"
 
+## UI Guidelines
+
+- Before creating UI components, search `ui/src/components/` for existing patterns to reuse.
+- Import constants, types, and shared styles from centralized modules (e.g. `ui/src/constants.js`, `ui/src/theme.js`) — never duplicate.
+- Apply responsive design: set `minWidth` on layout containers, use `flexShrink: 0` on fixed-width panels.
+- Match existing spacing (4px grid), colors (CSS variables from `theme.js`), and component conventions.
+
 ## Rules
 
 - Follow the project's CLAUDE.md guidelines strictly.
