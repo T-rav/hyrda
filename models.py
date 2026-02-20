@@ -64,6 +64,8 @@ class PlannerStatus(StrEnum):
 
     QUEUED = "queued"
     PLANNING = "planning"
+    VALIDATING = "validating"
+    RETRYING = "retrying"
     DONE = "done"
     FAILED = "failed"
 
@@ -87,6 +89,8 @@ class PlanResult(BaseModel):
     transcript: str = ""
     duration_seconds: float = 0.0
     new_issues: list[NewIssueSpec] = Field(default_factory=list)
+    validation_errors: list[str] = Field(default_factory=list)
+    retry_attempted: bool = False
 
 
 # --- Worker ---
@@ -135,6 +139,19 @@ class PRInfo(BaseModel):
 # --- Reviews ---
 
 
+class HITLResult(BaseModel):
+    """Outcome of an HITL correction agent run."""
+
+    issue_number: int
+    success: bool = False
+    error: str | None = None
+    transcript: str = ""
+    duration_seconds: float = 0.0
+
+
+# --- Reviews ---
+
+
 class ReviewerStatus(StrEnum):
     """Lifecycle status of a reviewer agent."""
 
@@ -165,6 +182,7 @@ class ReviewResult(BaseModel):
     merged: bool = False
     ci_passed: bool | None = None  # None = not checked, True/False = outcome
     ci_fix_attempts: int = 0
+    duration_seconds: float = 0.0
 
 
 # --- Batch ---

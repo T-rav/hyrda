@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { reducer } from '../useHydraSocket'
+import { MAX_EVENTS } from '../../constants'
 
 const initialState = {
   connected: false,
@@ -345,6 +346,176 @@ describe('useHydraSocket reducer', () => {
       expect(state.sessionPlanned).toBe(1)
       expect(state.sessionImplemented).toBe(0)
       expect(state.sessionReviewed).toBe(0)
+    })
+  })
+
+  describe('event cap (MAX_EVENTS)', () => {
+    it('addEvent caps events at MAX_EVENTS', () => {
+      const state = {
+        ...initialState,
+        events: Array.from({ length: MAX_EVENTS }, (_, i) => ({
+          type: 'worker_update',
+          timestamp: `2024-01-01T00:00:${String(i).padStart(6, '0')}Z`,
+          data: {},
+        })),
+      }
+      const next = reducer(state, {
+        type: 'error',
+        data: { message: 'overflow' },
+        timestamp: '2024-01-02T00:00:00Z',
+      })
+      expect(next.events).toHaveLength(MAX_EVENTS)
+      expect(next.events[0].type).toBe('error')
+    })
+
+    it('addEvent does not truncate below MAX_EVENTS', () => {
+      const state = { ...initialState, events: [] }
+      const next = reducer(state, {
+        type: 'error',
+        data: { message: 'test' },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.events).toHaveLength(1)
+    })
+  })
+
+  describe('BACKFILL_EVENTS', () => {
+    it('merges new events without duplicating existing', () => {
+      const existing = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:02Z', data: { batch: 2 } },
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+      ]
+      const state = { ...initialState, events: existing }
+      const backfill = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:00Z', data: { phase: 'plan' } },
+      ]
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(3)
+      expect(next.events[0].timestamp).toBe('2024-01-01T00:00:02Z')
+      expect(next.events[2].timestamp).toBe('2024-01-01T00:00:00Z')
+    })
+
+    it('populates empty state', () => {
+      const backfill = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+      ]
+      const next = reducer(initialState, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(1)
+      expect(next.events[0].type).toBe('batch_start')
+    })
+
+    it('with empty data is a no-op', () => {
+      const state = {
+        ...initialState,
+        events: [
+          { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: {} },
+        ],
+      }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: [] })
+      expect(next.events).toHaveLength(1)
+    })
+
+    it('caps combined events at MAX_EVENTS', () => {
+      const existing = Array.from({ length: 3000 }, (_, i) => ({
+        type: 'worker_update',
+        timestamp: `2024-01-01T01:00:${String(i).padStart(6, '0')}Z`,
+        data: {},
+      }))
+      const backfill = Array.from({ length: 3000 }, (_, i) => ({
+        type: 'phase_change',
+        timestamp: `2024-01-01T00:00:${String(i).padStart(6, '0')}Z`,
+        data: {},
+      }))
+      const state = { ...initialState, events: existing }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(MAX_EVENTS)
+    })
+
+    it('sorts merged events newest-first', () => {
+      const existing = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:03Z', data: {} },
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: {} },
+      ]
+      const backfill = [
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:04Z', data: {} },
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:02Z', data: {} },
+      ]
+      const state = { ...initialState, events: existing }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(4)
+      expect(next.events.map(e => e.timestamp)).toEqual([
+        '2024-01-01T00:00:04Z',
+        '2024-01-01T00:00:03Z',
+        '2024-01-01T00:00:02Z',
+        '2024-01-01T00:00:01Z',
+      ])
+    })
+  })
+
+  describe('orchestrator_status clears stale session state', () => {
+    const staleState = {
+      ...initialState,
+      orchestratorStatus: 'running',
+      workers: {
+        1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+        'plan-2': { status: 'planning', worker: 2, role: 'planner', title: 'Plan Issue #2', branch: '', transcript: [], pr: null },
+      },
+      sessionTriaged: 3,
+      sessionPlanned: 2,
+      sessionImplemented: 5,
+      sessionReviewed: 4,
+      mergedCount: 1,
+      sessionPrsCount: 3,
+    }
+
+    it('clears workers and session stats when status transitions to idle', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'idle' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('idle')
+      expect(next.workers).toEqual({})
+      expect(next.sessionTriaged).toBe(0)
+      expect(next.sessionPlanned).toBe(0)
+      expect(next.sessionImplemented).toBe(0)
+      expect(next.sessionReviewed).toBe(0)
+      expect(next.mergedCount).toBe(0)
+      expect(next.sessionPrsCount).toBe(0)
+    })
+
+    it('clears workers and session stats when status transitions to done', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'done' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('done')
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
+    })
+
+    it('preserves workers and session stats when status is running', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'running' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('running')
+      expect(Object.keys(next.workers)).toHaveLength(2)
+      expect(next.sessionImplemented).toBe(5)
+    })
+
+    it('clears workers and session stats when status is stopping', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'stopping' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('stopping')
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
     })
   })
 })

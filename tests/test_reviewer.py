@@ -145,6 +145,46 @@ def test_build_review_prompt_excludes_ui_criteria_when_no_ui_files(
     assert "theme.js" not in prompt
 
 
+def test_build_review_prompt_skips_local_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=2)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run `make lint`, `make test`, or `make quality`" in prompt
+    assert "CI will verify" in prompt
+
+
+def test_build_review_prompt_runs_local_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Run `make lint` and `make test`" in prompt
+    assert "Do NOT run" not in prompt
+
+
+def test_build_review_prompt_fix_section_skips_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=1)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run tests locally" in prompt
+
+
+def test_build_review_prompt_fix_section_runs_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "make test-fast" in prompt
+
+
 # ---------------------------------------------------------------------------
 # _parse_verdict
 # ---------------------------------------------------------------------------
@@ -873,3 +913,94 @@ async def test_fix_ci_publishes_ci_check_events(
     statuses = [e.data["status"] for e in ci_events]
     assert ReviewerStatus.FIXING.value in statuses
     assert ReviewerStatus.FIX_DONE.value in statuses
+
+
+# ---------------------------------------------------------------------------
+# duration_seconds recording
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_review_success_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+    transcript = "VERDICT: APPROVE\nSUMMARY: looks good"
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_review_dry_run_records_duration(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(dry_config, event_bus)
+
+    result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds >= 0
+
+
+@pytest.mark.asyncio
+async def test_review_failure_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(side_effect=RuntimeError("boom"))),
+    ):
+        result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_records_duration(config, event_bus, pr_info, issue, tmp_path):
+    runner = _make_runner(config, event_bus)
+    transcript = "VERDICT: APPROVE\nSUMMARY: Fixed"
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=True)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_dry_run_records_duration(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(dry_config, event_bus)
+
+    result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds >= 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_failure_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(side_effect=RuntimeError("boom"))),
+    ):
+        result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds > 0
