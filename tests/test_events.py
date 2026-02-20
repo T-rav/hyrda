@@ -421,3 +421,57 @@ class TestEventBusSlowSubscriber:
 
         # History should contain all 10, regardless of subscriber drops
         assert len(bus.get_history()) == 10
+
+
+# ---------------------------------------------------------------------------
+# Subscription context manager
+# ---------------------------------------------------------------------------
+
+
+class TestEventBusSubscription:
+    async def test_subscription_yields_queue_that_receives_events(self) -> None:
+        bus = EventBus()
+        async with bus.subscription() as queue:
+            event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+            await bus.publish(event)
+            received = queue.get_nowait()
+            assert received is event
+
+    async def test_subscription_unsubscribes_on_exit(self) -> None:
+        bus = EventBus()
+        async with bus.subscription() as queue:
+            pass  # immediately exit
+
+        # After exiting, queue should no longer receive events
+        await bus.publish(HydraEvent(type=EventType.ERROR))
+        assert queue.empty()
+        assert len(bus._subscribers) == 0
+
+    async def test_subscription_unsubscribes_on_exception(self) -> None:
+        bus = EventBus()
+        with __import__("contextlib").suppress(RuntimeError):
+            async with bus.subscription():
+                raise RuntimeError("boom")
+
+        # Cleanup must have happened despite the exception
+        assert len(bus._subscribers) == 0
+
+    async def test_subscription_respects_max_queue(self) -> None:
+        bus = EventBus()
+        async with bus.subscription(max_queue=42) as queue:
+            assert queue.maxsize == 42
+
+    async def test_multiple_concurrent_subscriptions(self) -> None:
+        bus = EventBus()
+        async with bus.subscription() as q1:
+            async with bus.subscription() as q2:
+                event1 = HydraEvent(type=EventType.PHASE_CHANGE, data={"n": 1})
+                await bus.publish(event1)
+                assert q1.get_nowait() is event1
+                assert q2.get_nowait() is event1
+
+            # q2's context has exited; only q1 remains
+            event2 = HydraEvent(type=EventType.PHASE_CHANGE, data={"n": 2})
+            await bus.publish(event2)
+            assert q1.get_nowait() is event2
+            assert q2.empty()

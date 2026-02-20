@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from config import HydraConfig
-from events import EventBus, HydraEvent
+from events import EventBus
 from models import ControlStatusConfig, ControlStatusResponse, HITLItem, PRListItem
 from state import StateTracker
 from subprocess_util import run_subprocess
@@ -309,30 +309,29 @@ class HydraDashboard:
             # Events published between snapshot and subscribe are picked
             # up by the live queue, never sent twice.
             history = self._bus.get_history()
-            queue = self._bus.subscribe()
 
-            # Send history on connect
-            for event in history:
+            async with self._bus.subscription() as queue:
+                # Send history on connect
+                for event in history:
+                    try:
+                        await ws.send_text(event.model_dump_json())
+                    except Exception:
+                        logger.warning(
+                            "WebSocket error during history replay", exc_info=True
+                        )
+                        return
+
+                # Stream live events
                 try:
-                    await ws.send_text(event.model_dump_json())
+                    while True:
+                        event = await queue.get()
+                        await ws.send_text(event.model_dump_json())
+                except WebSocketDisconnect:
+                    pass
                 except Exception:
                     logger.warning(
-                        "WebSocket error during history replay", exc_info=True
+                        "WebSocket error during live streaming", exc_info=True
                     )
-                    break
-
-            # Stream live events
-            try:
-                while True:
-                    event: HydraEvent = await queue.get()
-                    await ws.send_text(event.model_dump_json())
-            except WebSocketDisconnect:
-                pass
-            except Exception:
-                logger.warning("WebSocket error during live streaming", exc_info=True)
-                pass
-            finally:
-                self._bus.unsubscribe(queue)
 
         self._app = app
         return app
