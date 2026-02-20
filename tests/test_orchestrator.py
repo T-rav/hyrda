@@ -587,6 +587,14 @@ class TestStopMechanism:
         orch._reviewers._active_procs.add(mock_proc)
         assert orch._has_active_processes() is True
 
+    def test_has_active_processes_true_with_hitl_proc(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
+        orch._hitl_runner._active_procs.add(mock_proc)
+        assert orch._has_active_processes() is True
+
     def test_run_status_stopping_with_active_procs_and_not_running(
         self, config: HydraConfig
     ) -> None:
@@ -598,6 +606,14 @@ class TestStopMechanism:
         mock_proc = AsyncMock(spec=asyncio.subprocess.Process)
         orch._agents._active_procs.add(mock_proc)
         assert orch.run_status == "stopping"
+
+    def test_run_status_idle_after_clean_stop(self, config: HydraConfig) -> None:
+        """run_status returns 'idle' when stop event is set but _running is False
+        and no processes remain — stop completed cleanly."""
+        orch = HydraOrchestrator(config)
+        orch._running = False
+        orch._stop_event.set()
+        assert orch.run_status == "idle"
 
     def test_run_status_idle_requires_no_active_procs(
         self, config: HydraConfig

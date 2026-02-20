@@ -121,6 +121,7 @@ class HydraOrchestrator:
             self._planners._active_procs
             or self._agents._active_procs
             or self._reviewers._active_procs
+            or self._hitl_runner._active_procs
         )
 
     @property
