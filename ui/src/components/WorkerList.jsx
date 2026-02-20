@@ -21,6 +21,12 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
 
   return (
     <div style={styles.sidebar}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
       <RoleSection
         label="Triage"
         entries={triagers}
