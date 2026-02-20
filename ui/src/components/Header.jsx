@@ -1,5 +1,6 @@
 import React from 'react'
 import { theme } from '../theme'
+import { ACTIVE_STATUSES } from '../constants'
 
 const STAGES = [
   { key: 'triage',    label: 'TRIAGE',    color: theme.triageGreen, role: 'triage',      configKey: null },
@@ -12,8 +13,6 @@ const SESSION_STAGES = [
   ...STAGES,
   { key: 'merged', label: 'MERGED', color: theme.green },
 ]
-
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export function Header({
   sessionCounts, connected, orchestratorStatus,
