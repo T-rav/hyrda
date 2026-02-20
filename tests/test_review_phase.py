@@ -754,6 +754,89 @@ class TestReviewPRs:
         phase._prs.submit_review.assert_awaited_once_with(101, verdict, "Looks good.")
 
     @pytest.mark.asyncio
+    async def test_review_request_changes_self_review_falls_back_gracefully(
+        self, config: HydraConfig
+    ) -> None:
+        """When submit_review raises SelfReviewError, state should still be marked."""
+        from pr_manager import SelfReviewError
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock(
+            side_effect=SelfReviewError(
+                "Can not request changes on your own pull request"
+            )
+        )
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert len(results) == 1
+        # PR should still be marked with request-changes verdict
+        assert phase._state.get_pr_status(101) == "request-changes"
+        # Issue should be marked as reviewed
+        assert phase._state.get_issue_status(42) == "reviewed"
+        # Review summary was posted as PR comment
+        phase._prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+        # No exception propagated — result is returned normally
+        assert results[0].verdict == ReviewVerdict.REQUEST_CHANGES
+
+    @pytest.mark.asyncio
+    async def test_review_self_review_error_does_not_crash_batch(
+        self, config: HydraConfig
+    ) -> None:
+        """With multiple PRs, a SelfReviewError on one should not block others."""
+        from pr_manager import SelfReviewError
+
+        phase = _make_phase(config)
+        issues = [make_issue(1), make_issue(2)]
+        prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
+
+        async def fake_review(pr, issue, wt_path, diff, worker_id=0):
+            return make_review_result(
+                pr.number, issue.number, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+
+        call_count = 0
+
+        async def fake_submit_review(pr_number, verdict, summary):
+            nonlocal call_count
+            call_count += 1
+            if pr_number == 101:
+                raise SelfReviewError(
+                    "Can not request changes on your own pull request"
+                )
+            return True
+
+        phase._reviewers.review = fake_review  # type: ignore[method-assign]
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = fake_submit_review  # type: ignore[method-assign]
+
+        for i in (1, 2):
+            wt = config.worktree_base / f"issue-{i}"
+            wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs(prs, issues)
+
+        # Both PRs should have been processed
+        assert len(results) == 2
+        # Both PRs marked in state
+        assert phase._state.get_pr_status(101) == "request-changes"
+        assert phase._state.get_pr_status(102) == "request-changes"
+
+    @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(
         self, config: HydraConfig
     ) -> None:
