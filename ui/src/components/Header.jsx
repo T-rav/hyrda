@@ -1,5 +1,6 @@
 import React from 'react'
 import { theme } from '../theme'
+import { ACTIVE_STATUSES } from '../constants'
 
 const STAGES = [
   { key: 'triage',    label: 'TRIAGE',    color: theme.triageGreen, role: 'triage',      configKey: null },
@@ -8,63 +9,65 @@ const STAGES = [
   { key: 'review',    label: 'REVIEW',    color: theme.orange,      role: 'reviewer',    configKey: 'max_reviewers' },
 ]
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
-
-function countByRole(workers, activeOnly) {
-  const list = Object.values(workers)
-  const f = activeOnly
-    ? (role) => list.filter(w => w.role === role && ACTIVE_STATUSES.includes(w.status)).length
-    : (role) => list.filter(w => w.role === role).length
-  const implFilter = activeOnly
-    ? list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage' && ACTIVE_STATUSES.includes(w.status)).length
-    : list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length
-  return {
-    triage: f('triage'),
-    planner: f('planner'),
-    implementer: implFilter,
-    reviewer: f('reviewer'),
-  }
-}
+const SESSION_STAGES = [
+  ...STAGES,
+  { key: 'merged', label: 'MERGED', color: theme.green },
+]
 
 export function Header({
-  prsCount, mergedCount, issuesFound,
-  connected, orchestratorStatus,
-  onStart, onStop,
-  phase, workers, config,
+  sessionCounts, connected, orchestratorStatus,
+  onStart, onStop, phase, workers, config,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
-  const activeCounts = countByRole(workers || {}, true)
-  const totalCounts = countByRole(workers || {}, false)
+
+  const workerList = Object.values(workers || {})
+  const workload = {
+    total: workerList.length,
+    active: workerList.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
+    done: workerList.filter(w => w.status === 'done').length,
+    failed: workerList.filter(w => w.status === 'failed').length,
+  }
 
   return (
     <header style={styles.header}>
       <div style={styles.left}>
         <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
-        <span style={styles.logo}>
-          HYDRA
-          <span style={styles.subtitle}>Parallel Issue Processor</span>
-        </span>
+        <div style={styles.logoGroup}>
+          <span style={styles.logo}>HYDRA</span>
+          <span style={styles.subtitle}>Intent in. Software out.</span>
+        </div>
         <span style={connected ? dotConnected : dotDisconnected} />
       </div>
       <div style={styles.center}>
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
-          <div style={styles.stats}>
-            <Stat label="Triage" value={Object.values(workers || {}).filter(w => w.role === 'triage').length} />
-            <Stat label="New Issues" value={issuesFound} />
-            <Stat label="PRs" value={prsCount} />
-            <Stat label="Merged" value={mergedCount} />
+          <div style={styles.sessionPills}>
+            {SESSION_STAGES.map((stage, i) => (
+              <React.Fragment key={stage.key}>
+                {i > 0 && <span style={styles.sessionArrow}>{'\u2192'}</span>}
+                <span style={sessionPillStyles[stage.key]}>
+                  {stage.label}
+                  <span style={styles.sessionCount}>{sessionCounts[stage.key] || 0}</span>
+                </span>
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={styles.workload}>
+            <span>{workload.total} total</span>
+            <span style={styles.workloadSep}>|</span>
+            <span style={styles.workloadActive}>{workload.active} active</span>
+            <span style={styles.workloadSep}>|</span>
+            <span style={styles.workloadDone}>{workload.done} done</span>
+            <span style={styles.workloadSep}>|</span>
+            <span style={styles.workloadFailed}>{workload.failed} failed</span>
           </div>
         </div>
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
-            const activeCount = activeCounts[stage.role] || 0
-            const totalCount = totalCounts[stage.role] || 0
             const maxCount = stage.configKey && config ? config[stage.configKey] : 1
             const lit = isRunning
-            const dimmed = !isRunning
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
@@ -104,14 +107,6 @@ export function Header({
   )
 }
 
-function Stat({ label, value }) {
-  return (
-    <span style={styles.stat}>
-      {label} <b style={styles.statVal}>{value}</b>
-    </span>
-  )
-}
-
 const styles = {
   header: {
     gridColumn: '1 / -1',
@@ -124,8 +119,9 @@ const styles = {
   },
   left: { display: 'flex', alignItems: 'center', gap: 8 },
   logoImg: { width: 56, height: 56 },
+  logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
-  subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12, marginLeft: 8 },
+  subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   center: {
     display: 'flex',
@@ -140,6 +136,7 @@ const styles = {
     borderRadius: 8,
     padding: '6px 14px',
     background: theme.bg,
+    flexWrap: 'wrap',
   },
   sessionLabel: {
     color: theme.textMuted,
@@ -148,9 +145,47 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
-  stats: { display: 'flex', gap: 16, fontSize: 12 },
-  stat: { color: theme.textMuted },
-  statVal: { color: theme.text },
+  sessionPills: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  sessionPill: {
+    padding: '2px 8px',
+    borderRadius: 10,
+    fontSize: 10,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    border: '1px solid',
+    whiteSpace: 'nowrap',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sessionCount: {
+    background: theme.overlay,
+    borderRadius: 6,
+    padding: '0px 5px',
+    fontSize: 9,
+    fontWeight: 700,
+  },
+  sessionArrow: {
+    color: theme.textInactive,
+    fontSize: 10,
+    margin: '0 1px',
+  },
+  workload: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 10,
+    color: theme.textMuted,
+  },
+  workloadSep: { color: theme.border },
+  workloadActive: { color: theme.accent },
+  workloadDone: { color: theme.green },
+  workloadFailed: { color: theme.red },
   pills: { display: 'flex', alignItems: 'center', gap: 0 },
   pill: {
     padding: '4px 14px',
@@ -223,6 +258,16 @@ export const headerConnectorStyles = Object.fromEntries(
   STAGES.map(s => [s.key, {
     lit: { ...styles.connector, background: s.color },
     dim: { ...styles.connector, background: s.color + '55' },
+  }])
+)
+
+// Pre-computed session pill styles per stage
+export const sessionPillStyles = Object.fromEntries(
+  SESSION_STAGES.map(s => [s.key, {
+    ...styles.sessionPill,
+    background: s.color + '20',
+    color: s.color,
+    borderColor: s.color + '44',
   }])
 )
 

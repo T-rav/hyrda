@@ -46,13 +46,18 @@
       border-bottom: 1px solid var(--border);
     }
 
+    .logo-group {
+      display: flex;
+      flex-direction: column;
+    }
+
     .logo {
       font-size: 18px;
       font-weight: 700;
       color: var(--accent);
     }
 
-    .logo span { color: var(--text-muted); font-weight: 400; font-size: 12px; margin-left: 8px; }
+    .logo-subtitle { color: var(--text-muted); font-weight: 400; font-size: 12px; }
 
     .header-stats {
       display: flex;
@@ -308,8 +313,9 @@
 <body>
   <div class="layout">
     <header>
-      <div>
-        <span class="logo">HYDRA <span>Parallel Issue Processor</span></span>
+      <div class="logo-group">
+        <span class="logo">HYDRA</span>
+        <span class="logo-subtitle">Intent in. Software out.</span>
       </div>
       <div class="header-stats">
         <span class="stat">Batch <b id="batch-num">0</b></span>

@@ -1,13 +1,12 @@
 import React from 'react'
 import { theme } from '../theme'
+import { ACTIVE_STATUSES } from '../constants'
 
 const STAGES = [
   { key: 'plan',      label: 'Plan',      color: theme.purple, role: 'planner' },
   { key: 'implement', label: 'Implement', color: theme.yellow, role: 'implementer' },
   { key: 'review',    label: 'Review',    color: theme.orange, role: 'reviewer' },
 ]
-
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
 
 function countByRole(workers) {
   const list = Object.values(workers)

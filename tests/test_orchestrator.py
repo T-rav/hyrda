@@ -707,6 +707,37 @@ class TestTriageFindIssues:
         assert "Body is too short" in comment
 
     @pytest.mark.asyncio
+    async def test_triage_escalation_records_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Escalating an unready issue should record find_label as HITL origin."""
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(2, title="Fix the bug please", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(
+                issue_number=2,
+                ready=False,
+                reasons=["Body is too short or empty (minimum 50 characters)"],
+            )
+        )
+        orch._triage = mock_triage
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        await orch._triage_find_issues()
+
+        assert orch._state.get_hitl_origin(2) == "hydra-find"
+
+    @pytest.mark.asyncio
     async def test_triage_skips_when_no_find_label_configured(self) -> None:
         from tests.helpers import ConfigFactory
 
@@ -1172,3 +1203,62 @@ class TestPlanPhase:
 
         # Not all 3 should have completed — stop event triggers cancellation
         assert len(results) < len(issues)
+
+
+# ---------------------------------------------------------------------------
+# HITL correction tracking
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCorrection:
+    """Tests for HITL correction methods on HydraOrchestrator."""
+
+    def test_hitl_corrections_starts_empty(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch._hitl_corrections == {}
+
+    def test_submit_hitl_correction_stores_correction(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch.submit_hitl_correction(42, "Mock the database connection")
+        assert orch._hitl_corrections[42] == "Mock the database connection"
+
+    def test_submit_hitl_correction_overwrites_previous(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch.submit_hitl_correction(42, "First attempt")
+        orch.submit_hitl_correction(42, "Second attempt")
+        assert orch._hitl_corrections[42] == "Second attempt"
+
+    def test_get_hitl_status_returns_pending_by_default(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_get_hitl_status_returns_processing_when_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_issues.add(42)
+        assert orch.get_hitl_status(42) == "processing"
+
+    def test_get_hitl_status_returns_pending_when_not_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_issues.add(99)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_skip_hitl_issue_removes_correction(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch._hitl_corrections[42] = "Some correction"
+        orch.skip_hitl_issue(42)
+        assert 42 not in orch._hitl_corrections
+
+    def test_skip_hitl_issue_safe_when_no_correction(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch.skip_hitl_issue(99)  # Should not raise
+        assert 99 not in orch._hitl_corrections

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
+import { ACTIVE_STATUSES } from '../constants'
 
 const statusColors = {
   queued:      { bg: theme.mutedSubtle,  fg: theme.textMuted },
@@ -9,11 +10,11 @@ const statusColors = {
   committing:  { bg: theme.orangeSubtle, fg: theme.orange },
   quality_fix: { bg: theme.yellowSubtle, fg: theme.yellow },
   merge_fix:   { bg: theme.orangeSubtle, fg: theme.orange },
+  reviewing:   { bg: theme.orangeSubtle, fg: theme.orange },
   done:        { bg: theme.greenSubtle,  fg: theme.green },
   failed:      { bg: theme.redSubtle,    fg: theme.red },
 }
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)

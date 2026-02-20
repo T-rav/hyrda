@@ -1,50 +1,198 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { HITLTable } from '../HITLTable'
 
-describe('HITLTable', () => {
-  it('renders "No stuck PRs" when items is empty array', () => {
+const mockItems = [
+  {
+    issue: 42,
+    title: 'Fix widget',
+    issueUrl: 'https://github.com/org/repo/issues/42',
+    pr: 99,
+    prUrl: 'https://github.com/org/repo/pull/99',
+    branch: 'agent/issue-42',
+    cause: 'CI failure',
+    status: 'pending',
+  },
+  {
+    issue: 10,
+    title: 'Broken thing',
+    issueUrl: '',
+    pr: 0,
+    prUrl: '',
+    branch: 'agent/issue-10',
+    cause: '',
+    status: 'processing',
+  },
+]
+
+beforeEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('HITLTable component', () => {
+  it('renders table with items', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('#42')).toBeInTheDocument()
+    expect(screen.getByText('Fix widget')).toBeInTheDocument()
+    expect(screen.getByText('#99')).toBeInTheDocument()
+    expect(screen.getByText('agent/issue-42')).toBeInTheDocument()
+  })
+
+  it('shows empty state when no items', () => {
     render(<HITLTable items={[]} onRefresh={() => {}} />)
     expect(screen.getByText('No stuck PRs')).toBeInTheDocument()
   })
 
-  it('renders items passed via props', () => {
-    const items = [
-      { issue: 10, title: 'Bug fix', issueUrl: 'https://github.com/r/issues/10', pr: 20, prUrl: 'https://github.com/r/pull/20', branch: 'agent/issue-10' },
-      { issue: 11, title: 'Feature', issueUrl: 'https://github.com/r/issues/11', pr: 0, prUrl: '', branch: 'agent/issue-11' },
-    ]
-    render(<HITLTable items={items} onRefresh={() => {}} />)
-    expect(screen.getByText('#10')).toBeInTheDocument()
-    expect(screen.getByText('Bug fix')).toBeInTheDocument()
-    expect(screen.getByText('#20')).toBeInTheDocument()
-    expect(screen.getByText('#11')).toBeInTheDocument()
-    expect(screen.getByText('Feature')).toBeInTheDocument()
-    expect(screen.getByText('No PR')).toBeInTheDocument()
+  it('renders status column header', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('Status')).toBeInTheDocument()
   })
 
-  it('shows correct count in header', () => {
-    const items = [
-      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
-      { issue: 11, title: 'Feat', issueUrl: '', pr: 21, prUrl: '', branch: 'b2' },
-    ]
-    render(<HITLTable items={items} onRefresh={() => {}} />)
+  it('renders status badges for each item', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('pending')).toBeInTheDocument()
+    expect(screen.getByText('processing')).toBeInTheDocument()
+  })
+
+  it('expands row on click to show detail panel', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.getByTestId('hitl-detail-42')).toBeInTheDocument()
+    expect(screen.getByTestId('hitl-textarea-42')).toBeInTheDocument()
+    expect(screen.getByTestId('hitl-retry-42')).toBeInTheDocument()
+    expect(screen.getByTestId('hitl-skip-42')).toBeInTheDocument()
+    expect(screen.getByTestId('hitl-close-42')).toBeInTheDocument()
+  })
+
+  it('collapses row on second click', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.getByTestId('hitl-detail-42')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.queryByTestId('hitl-detail-42')).not.toBeInTheDocument()
+  })
+
+  it('shows cause badge when cause is non-empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.getByTestId('hitl-cause-42')).toBeInTheDocument()
+    expect(screen.getByText('Cause: CI failure')).toBeInTheDocument()
+  })
+
+  it('hides cause badge when cause is empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-10'))
+    expect(screen.queryByTestId('hitl-cause-10')).not.toBeInTheDocument()
+  })
+
+  it('updates correction text area state', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    const textarea = screen.getByTestId('hitl-textarea-42')
+    fireEvent.change(textarea, { target: { value: 'Mock the DB' } })
+    expect(textarea.value).toBe('Mock the DB')
+  })
+
+  it('retry button is disabled when textarea is empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.getByTestId('hitl-retry-42')).toBeDisabled()
+  })
+
+  it('retry button is enabled when textarea has text', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    const textarea = screen.getByTestId('hitl-textarea-42')
+    fireEvent.change(textarea, { target: { value: 'Fix the tests' } })
+    expect(screen.getByTestId('hitl-retry-42')).not.toBeDisabled()
+  })
+
+  it('calls correct API on retry click', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+    const onRefresh = vi.fn()
+
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    const textarea = screen.getByTestId('hitl-textarea-42')
+    fireEvent.change(textarea, { target: { value: 'Fix the tests' } })
+    fireEvent.click(screen.getByTestId('hitl-retry-42'))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/hitl/42/correct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correction: 'Fix the tests' }),
+      })
+    })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('calls correct API on skip click', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+    const onRefresh = vi.fn()
+
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    fireEvent.click(screen.getByTestId('hitl-skip-42'))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/hitl/42/skip', {
+        method: 'POST',
+      })
+    })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('calls correct API on close click with confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+    const onRefresh = vi.fn()
+
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    fireEvent.click(screen.getByTestId('hitl-close-42'))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/hitl/42/close', {
+        method: 'POST',
+      })
+    })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('does not call close API when confirmation is cancelled', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const fetchMock = vi.fn()
+    global.fetch = fetchMock
+
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    fireEvent.click(screen.getByTestId('hitl-close-42'))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows item count in header', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     expect(screen.getByText('2 issues stuck on CI')).toBeInTheDocument()
   })
 
-  it('shows singular when one item', () => {
-    const items = [
-      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
-    ]
-    render(<HITLTable items={items} onRefresh={() => {}} />)
+  it('shows singular form for one item', () => {
+    render(<HITLTable items={[mockItems[0]]} onRefresh={() => {}} />)
     expect(screen.getByText('1 issue stuck on CI')).toBeInTheDocument()
   })
 
   it('refresh button calls onRefresh prop', () => {
     const onRefresh = vi.fn()
-    const items = [
-      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
-    ]
-    render(<HITLTable items={items} onRefresh={onRefresh} />)
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
     fireEvent.click(screen.getByText('Refresh'))
     expect(onRefresh).toHaveBeenCalledOnce()
   })
@@ -54,5 +202,10 @@ describe('HITLTable', () => {
     render(<HITLTable items={[]} onRefresh={() => {}} />)
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
+  })
+
+  it('shows "No PR" when pr is 0', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('No PR')).toBeInTheDocument()
   })
 })
