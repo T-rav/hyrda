@@ -44,6 +44,12 @@ Before writing the issue, explore the codebase to gather concrete context:
 - Identify specific file paths, function names, and line numbers
 - Check for existing related patterns or prior art in the codebase
 - Look at how similar things are already done elsewhere
+- **If the issue involves UI changes:**
+  - Explore `ui/src/components/` for existing component patterns that overlap or could be reused
+  - Check `ui/src/constants.js` for shared constants (e.g., `PIPELINE_STAGES`, `ACTIVE_STATUSES`)
+  - Check `ui/src/types.js` for shared type definitions
+  - Check `ui/src/theme.js` for the design system's color tokens and spacing values
+  - Note the styling approach used in similar components (inline styles, CSS modules, etc.)
 
 This research makes the issue actionable rather than vague.
 
@@ -94,6 +100,20 @@ Reference existing patterns in the codebase that should be followed.
 
 ### Key integration points:
 - List functions, classes, or patterns to hook into
+
+## UI/UX Considerations (if applicable)
+
+_Include this section only when the issue involves frontend/UI changes. Skip entirely for backend-only issues._
+
+### Existing components to reuse or extend:
+- List any components in `ui/src/components/` that overlap with the proposed change
+
+### Responsive requirements:
+- Min-width constraints needed (reference `ui/src/theme.js` breakpoints)
+- Viewport or container-size considerations
+
+### Shared code:
+- Constants, types, or styles to import from centralized modules (`constants.js`, `types.js`, `theme.js`)
 
 ## Acceptance Criteria
 
