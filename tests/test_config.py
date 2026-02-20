@@ -1382,6 +1382,77 @@ class TestHydraConfigLitePlanLabels:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – improve_label / memory_label env var overrides
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigImproveLabelAndMemoryLabel:
+    """Tests for improve_label and memory_label fields and env var overrides."""
+
+    def test_improve_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["hydra-improve"]
+
+    def test_memory_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["hydra-memory"]
+
+    def test_improve_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "custom-improve")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["custom-improve"]
+
+    def test_memory_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_MEMORY", "custom-memory")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["custom-memory"]
+
+    def test_improve_label_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "env-improve")
+        cfg = HydraConfig(
+            improve_label=["explicit-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["explicit-improve"]
+
+    def test_memory_label_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_MEMORY", "env-memory")
+        cfg = HydraConfig(
+            memory_label=["explicit-memory"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["explicit-memory"]
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers
 # ---------------------------------------------------------------------------
 

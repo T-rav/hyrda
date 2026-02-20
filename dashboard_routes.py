@@ -187,7 +187,7 @@ def create_router(
             await pr_manager.remove_label(issue_number, lbl)
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
-        await pr_manager.add_labels(issue_number, [config.memory_label[0]])
+        await pr_manager.add_labels(issue_number, config.memory_label)
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
         await event_bus.publish(
