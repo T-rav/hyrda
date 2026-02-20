@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -90,6 +91,58 @@ def make_review_result(
         summary="Looks good.",
         fixes_made=False,
     )
+
+
+def _setup_implement_mocks(
+    orch: HydraOrchestrator,
+    config: HydraConfig,
+    issues: list[GitHubIssue],
+    *,
+    agent_run: Any | None = None,
+    success: bool = True,
+    push_return: bool = True,
+    create_pr_return: PRInfo | None = None,
+) -> tuple[AsyncMock, AsyncMock]:
+    """Wire standard _implement_batch mocks into *orch*.
+
+    Returns ``(mock_wt, mock_prs)`` so tests can assert on them.
+    """
+    if agent_run is None:
+
+        async def _default_agent_run(
+            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number,
+                success=success,
+                worktree_path=str(wt_path),
+            )
+
+        agent_run = _default_agent_run
+
+    orch._agents.run = agent_run  # type: ignore[method-assign]
+    orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+    mock_wt = AsyncMock()
+    mock_wt.create = AsyncMock(
+        side_effect=lambda num, branch: config.worktree_base / f"issue-{num}"
+    )
+    orch._worktrees = mock_wt
+
+    mock_prs = AsyncMock()
+    mock_prs.push_branch = AsyncMock(return_value=push_return)
+    mock_prs.create_pr = AsyncMock(
+        return_value=create_pr_return
+        if create_pr_return is not None
+        else make_pr_info()
+    )
+    mock_prs.add_labels = AsyncMock()
+    mock_prs.remove_label = AsyncMock()
+    mock_prs.post_comment = AsyncMock()
+    mock_prs.add_pr_labels = AsyncMock()
+    orch._prs = mock_prs
+
+    return mock_wt, mock_prs
 
 
 # Raw gh issue list JSON fixture
@@ -445,7 +498,7 @@ class TestImplementBatch:
         orch = HydraOrchestrator(config)
         issues = [make_issue(1), make_issue(2)]
 
-        results = [
+        expected = [
             make_worker_result(
                 issue_number=1, worktree_path=str(config.worktree_base / "issue-1")
             ),
@@ -457,23 +510,9 @@ class TestImplementBatch:
         async def fake_agent_run(
             issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
         ) -> WorkerResult:
-            return next(r for r in results if r.issue_number == issue.number)
+            return next(r for r in expected if r.issue_number == issue.number)
 
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(
-            side_effect=lambda num, branch: config.worktree_base / f"issue-{num}"
-        )
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _setup_implement_mocks(orch, config, issues, agent_run=fake_agent_run)
 
         returned, fetched = await orch._implement_batch()
         assert len(returned) == 2
@@ -502,21 +541,7 @@ class TestImplementBatch:
         issues = [make_issue(i) for i in range(1, 6)]
 
         orch = HydraOrchestrator(config)  # max_workers=2 from conftest
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(
-            side_effect=lambda num, branch: config.worktree_base / f"issue-{num}"
-        )
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _setup_implement_mocks(orch, config, issues, agent_run=fake_agent_run)
 
         await orch._implement_batch()
 
@@ -527,26 +552,7 @@ class TestImplementBatch:
         orch = HydraOrchestrator(config)
         issue = make_issue(55)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=True, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-55")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _setup_implement_mocks(orch, config, [issue])
 
         await orch._implement_batch()
 
@@ -560,26 +566,7 @@ class TestImplementBatch:
         orch = HydraOrchestrator(config)
         issue = make_issue(66)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=False, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-66")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info())
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _setup_implement_mocks(orch, config, [issue], success=False)
 
         await orch._implement_batch()
 
@@ -607,27 +594,9 @@ class TestImplementBatch:
         wt_path = config.worktree_base / "issue-77"
         wt_path.mkdir(parents=True, exist_ok=True)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=True, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock()
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.post_comment = AsyncMock()
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 77))
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        mock_wt, _ = _setup_implement_mocks(
+            orch, config, [issue], create_pr_return=make_pr_info(101, 77)
+        )
 
         await orch._implement_batch()
 
@@ -649,26 +618,9 @@ class TestImplementIncludesPush:
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=True, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42))
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _setup_implement_mocks(
+            orch, config, [issue], create_pr_return=make_pr_info(101, 42)
+        )
 
         results, _ = await orch._implement_batch()
 
@@ -684,26 +636,13 @@ class TestImplementIncludesPush:
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=False, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42, draft=True))
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
+        _, mock_prs = _setup_implement_mocks(
+            orch,
+            config,
+            [issue],
+            success=False,
+            create_pr_return=make_pr_info(101, 42, draft=True),
+        )
 
         await orch._implement_batch()
 
@@ -721,24 +660,7 @@ class TestImplementIncludesPush:
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
 
-        async def fake_agent_run(
-            issue: GitHubIssue, wt_path: Path, branch: str, worker_id: int = 0
-        ) -> WorkerResult:
-            return make_worker_result(
-                issue_number=issue.number, success=True, worktree_path=str(wt_path)
-            )
-
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
-        mock_prs.push_branch = AsyncMock(return_value=False)
-        mock_prs.create_pr = AsyncMock()
-        orch._prs = mock_prs
+        _, mock_prs = _setup_implement_mocks(orch, config, [issue], push_return=False)
 
         results, _ = await orch._implement_batch()
 
@@ -770,20 +692,15 @@ class TestImplementIncludesPush:
                 issue_number=issue.number, success=True, worktree_path=str(wt_path)
             )
 
-        orch._agents.run = fake_agent_run  # type: ignore[method-assign]
-        orch._fetch_ready_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
-
-        mock_wt = AsyncMock()
-        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
-        orch._worktrees = mock_wt
-
-        mock_prs = AsyncMock()
+        _, mock_prs = _setup_implement_mocks(
+            orch,
+            config,
+            [issue],
+            agent_run=fake_agent_run,
+            create_pr_return=make_pr_info(101, 42),
+        )
         mock_prs.push_branch = fake_push
         mock_prs.post_comment = fake_comment
-        mock_prs.create_pr = AsyncMock(return_value=make_pr_info(101, 42))
-        mock_prs.add_labels = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        orch._prs = mock_prs
 
         await orch._implement_batch()
 
