@@ -72,7 +72,7 @@ def make_review_result(
     )
 
 
-def _make_phase(config: HydraConfig) -> ReviewPhase:
+def _make_phase(config: HydraConfig, *, agents: AsyncMock | None = None) -> ReviewPhase:
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
     stop_event = asyncio.Event()
@@ -92,6 +92,7 @@ def _make_phase(config: HydraConfig) -> ReviewPhase:
         prs=mock_prs,
         stop_event=stop_event,
         active_issues=active_issues,
+        agents=agents,
     )
 
     return phase
@@ -293,15 +294,22 @@ class TestReviewPRs:
     async def test_review_merge_conflict_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When pre-review merge fails (conflicts), should skip review and escalate."""
-        phase = _make_phase(config)
+        """When merge fails and agent can't resolve, should escalate to HITL."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
         phase._prs.post_pr_comment = AsyncMock()
         phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
         phase._worktrees.merge_main = AsyncMock(return_value=False)  # Conflicts
+        # Agent resolution also fails
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
@@ -312,7 +320,65 @@ class TestReviewPRs:
         assert "conflicts" in results[0].summary.lower()
         # Review should NOT have been called
         phase._reviewers.review.assert_not_awaited()
-        # Should escalate to HITL
+        # Should escalate to HITL on both issue and PR
+        phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
+        phase._prs.add_pr_labels.assert_awaited_once_with(101, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_review_merge_conflict_resolved_by_agent(
+        self, config: HydraConfig
+    ) -> None:
+        """When merge fails but agent resolves conflicts, review should proceed."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)  # Conflicts
+        # But agent resolves them
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        # Agent resolved conflicts, so review should proceed and merge
+        phase._reviewers.review.assert_awaited_once()
+        assert results[0].merged is True
+
+    @pytest.mark.asyncio
+    async def test_review_merge_conflict_no_agent_escalates(
+        self, config: HydraConfig
+    ) -> None:
+        """When no agent runner is configured, conflicts escalate directly to HITL."""
+        phase = _make_phase(config)  # No agents passed
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        assert "conflicts" in results[0].summary.lower()
         phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
 
     @pytest.mark.asyncio
@@ -332,7 +398,9 @@ class TestReviewPRs:
         phase._prs.merge_pr = AsyncMock(return_value=False)
         phase._prs.post_pr_comment = AsyncMock()
         phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
         phase._worktrees.merge_main = AsyncMock(return_value=True)
 
         wt = config.worktree_base / "issue-42"
@@ -348,6 +416,8 @@ class TestReviewPRs:
         ]
         assert len(hitl_calls) == 1
         phase._prs.add_labels.assert_any_await(42, ["hydra-hitl"])
+        phase._prs.add_pr_labels.assert_any_await(101, ["hydra-hitl"])
+        phase._prs.remove_pr_label.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_review_merge_records_lifetime_stats(
@@ -979,8 +1049,91 @@ class TestWaitAndFixCI:
         assert len(ci_comments) == 1
         assert "Failed checks: ci" in ci_comments[0][1]
 
-        # Should swap label to hydra-hitl
+        # Should swap label to hydra-hitl on both issue and PR
         remove_calls = [c.args for c in phase._prs.remove_label.call_args_list]
         assert (42, "hydra-review") in remove_calls
         add_calls = [c.args for c in phase._prs.add_labels.call_args_list]
         assert (42, ["hydra-hitl"]) in add_calls
+
+
+# ---------------------------------------------------------------------------
+# _resolve_merge_conflicts
+# ---------------------------------------------------------------------------
+
+
+class TestResolveMergeConflicts:
+    """Tests for the _resolve_merge_conflicts method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_no_agents(self, config: HydraConfig) -> None:
+        """Without an agent runner, should return False immediately."""
+        phase = _make_phase(config)  # No agents
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_start_merge_is_clean(
+        self, config: HydraConfig
+    ) -> None:
+        """If start_merge_main returns True (no conflicts), return True."""
+        mock_agents = AsyncMock()
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=True)
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        # Agent should NOT have been invoked
+        mock_agents._execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_runs_agent_and_verifies_on_conflicts(
+        self, config: HydraConfig
+    ) -> None:
+        """Should run the agent and verify quality when there are conflicts."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        mock_agents._build_command.assert_called_once()
+        mock_agents._execute.assert_awaited_once()
+        mock_agents._verify_result.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_aborts_merge_on_agent_exception(self, config: HydraConfig) -> None:
+        """On agent exception, should abort merge and return False."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        phase._worktrees.abort_merge.assert_awaited_once()
