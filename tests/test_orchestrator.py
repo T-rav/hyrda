@@ -667,6 +667,196 @@ class TestStopMechanism:
 
 
 # ---------------------------------------------------------------------------
+# Shutdown lifecycle
+# ---------------------------------------------------------------------------
+
+
+class TestOrchestratorShutdownLifecycle:
+    """Tests for the full shutdown lifecycle: stop → drain → idle.
+
+    These verify race conditions and state transitions during the
+    stop() → finally block → idle sequence that the basic stop
+    mechanism tests don't cover.
+    """
+
+    @pytest.mark.asyncio
+    async def test_running_stays_true_during_supervise_cleanup(
+        self, config: HydraConfig
+    ) -> None:
+        """_running stays True while _supervise_loops is cleaning up tasks."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+        running_after_stop = None
+
+        async def plan_capture_and_stop() -> list[PlanResult]:
+            nonlocal running_after_stop
+            orch._stop_event.set()
+            # Yield to let supervisor detect the stop event
+            await asyncio.sleep(0)
+            running_after_stop = orch._running
+            return []
+
+        orch._plan_issues = plan_capture_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert running_after_stop is True
+        assert orch._running is False
+
+    @pytest.mark.asyncio
+    async def test_run_status_is_stopping_during_shutdown(
+        self, config: HydraConfig
+    ) -> None:
+        """run_status returns 'stopping' after stop() but before run() exits."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+        captured_status = None
+
+        async def plan_capture_and_stop() -> list[PlanResult]:
+            nonlocal captured_status
+            await orch.stop()
+            captured_status = orch.run_status
+            return []
+
+        orch._plan_issues = plan_capture_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert captured_status == "stopping"
+
+    @pytest.mark.asyncio
+    async def test_run_status_is_idle_after_full_shutdown(
+        self, config: HydraConfig
+    ) -> None:
+        """run_status returns 'idle' after run() fully completes."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert orch.run_status == "idle"
+        assert not orch._running
+        assert orch._stop_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_status_event_sequence_on_stop(self, config: HydraConfig) -> None:
+        """ORCHESTRATOR_STATUS events follow running → stopping → idle sequence."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            await orch.stop()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        published: list[HydraEvent] = []
+        original_publish = orch._bus.publish
+
+        async def capturing_publish(event: HydraEvent) -> None:
+            published.append(event)
+            await original_publish(event)
+
+        orch._bus.publish = capturing_publish  # type: ignore[method-assign]
+
+        await orch.run()
+
+        statuses = [
+            e.data["status"]
+            for e in published
+            if e.type == EventType.ORCHESTRATOR_STATUS
+        ]
+        assert statuses == ["running", "stopping", "idle"]
+
+    @pytest.mark.asyncio
+    async def test_no_orphaned_processes_after_stop(self, config: HydraConfig) -> None:
+        """All runner _active_procs sets are empty after run() returns."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert len(orch._planners._active_procs) == 0
+        assert len(orch._agents._active_procs) == 0
+        assert len(orch._reviewers._active_procs) == 0
+        assert len(orch._hitl_runner._active_procs) == 0
+
+    @pytest.mark.asyncio
+    async def test_stop_calls_terminate_eagerly_and_in_finally(
+        self, config: HydraConfig
+    ) -> None:
+        """stop() terminates eagerly; finally block terminates again (belt-and-suspenders)."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        terminate_calls = {"planners": 0, "agents": 0, "reviewers": 0, "hitl": 0}
+
+        orig_p = orch._planners.terminate
+        orig_a = orch._agents.terminate
+        orig_r = orch._reviewers.terminate
+        orig_h = orch._hitl_runner.terminate
+
+        def count_p() -> None:
+            terminate_calls["planners"] += 1
+            orig_p()
+
+        def count_a() -> None:
+            terminate_calls["agents"] += 1
+            orig_a()
+
+        def count_r() -> None:
+            terminate_calls["reviewers"] += 1
+            orig_r()
+
+        def count_h() -> None:
+            terminate_calls["hitl"] += 1
+            orig_h()
+
+        orch._planners.terminate = count_p  # type: ignore[method-assign]
+        orch._agents.terminate = count_a  # type: ignore[method-assign]
+        orch._reviewers.terminate = count_r  # type: ignore[method-assign]
+        orch._hitl_runner.terminate = count_h  # type: ignore[method-assign]
+
+        async def plan_and_stop() -> list[PlanResult]:
+            await orch.stop()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # stop() calls terminate once, finally block calls again = 2 each
+        assert terminate_calls["planners"] == 2
+        assert terminate_calls["agents"] == 2
+        assert terminate_calls["reviewers"] == 2
+        assert terminate_calls["hitl"] == 2
+
+
+# ---------------------------------------------------------------------------
 # Triage phase
 # ---------------------------------------------------------------------------
 
