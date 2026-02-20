@@ -104,6 +104,22 @@ class HydraConfig(BaseModel):
     planner_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
     )
+    min_plan_words: int = Field(
+        default=200,
+        ge=50,
+        le=2000,
+        description="Minimum word count for a valid plan",
+    )
+    max_new_files_warning: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Warn if plan creates more than this many new files",
+    )
+    lite_plan_labels: list[str] = Field(
+        default=["bug", "typo", "docs"],
+        description="Issue labels that trigger a lite plan (fewer required sections)",
+    )
 
     # Metric thresholds for improvement proposals
     quality_fix_rate_threshold: float = Field(
@@ -205,6 +221,7 @@ class HydraConfig(BaseModel):
             HYDRA_GH_TOKEN          → gh_token
             HYDRA_GIT_USER_NAME     → git_user_name
             HYDRA_GIT_USER_EMAIL    → git_user_email
+            HYDRA_MIN_PLAN_WORDS    → min_plan_words
             HYDRA_LABEL_FIND        → find_label   (discovery stage)
             HYDRA_LABEL_PLAN        → planner_label
             HYDRA_LABEL_READY       → ready_label  (implement stage)
@@ -244,6 +261,21 @@ class HydraConfig(BaseModel):
             env_email = os.environ.get("HYDRA_GIT_USER_EMAIL", "")
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
+
+        # Planner env var overrides (only apply when still at the default)
+        env_min_words = os.environ.get("HYDRA_MIN_PLAN_WORDS")
+        if env_min_words is not None and self.min_plan_words == 200:
+            object.__setattr__(self, "min_plan_words", int(env_min_words))
+
+        env_lite_labels = os.environ.get("HYDRA_LITE_PLAN_LABELS")
+        if env_lite_labels is not None and self.lite_plan_labels == [
+            "bug",
+            "typo",
+            "docs",
+        ]:
+            parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
+            if parsed:
+                object.__setattr__(self, "lite_plan_labels", parsed)
 
         # gh retry override
         if self.gh_max_retries == 3:  # still at default
