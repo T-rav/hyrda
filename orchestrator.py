@@ -640,9 +640,11 @@ class HydraOrchestrator:
                     # Create a fresh worktree for review
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
 
-                # Rebase onto main before reviewing so we review up-to-date code
-                rebased = await self._worktrees.rebase(wt_path, pr.branch)
-                if rebased:
+                # Merge main into the branch before reviewing so we review
+                # up-to-date code.  Merge (not rebase) keeps the push
+                # fast-forward so no force-push is needed.
+                merged_main = await self._worktrees.merge_main(wt_path)
+                if merged_main:
                     await self._prs.push_branch(wt_path, pr.branch)
                 else:
                     logger.warning(
