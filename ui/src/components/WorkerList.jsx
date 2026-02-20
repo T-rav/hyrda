@@ -10,6 +10,7 @@ const statusColors = {
   committing:  { bg: theme.orangeSubtle, fg: theme.orange },
   quality_fix: { bg: theme.yellowSubtle, fg: theme.yellow },
   reviewing:   { bg: theme.orangeSubtle, fg: theme.orange },
+  start:       { bg: theme.orangeSubtle, fg: theme.orange },
   done:        { bg: theme.greenSubtle,  fg: theme.green },
   failed:     { bg: theme.redSubtle,    fg: theme.red },
 }
