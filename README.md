@@ -113,7 +113,7 @@ HYDRA_LABEL_FIXED=hydra-fixed
 
 ### 4. Create GitHub labels
 
-Hydra uses 6 lifecycle labels. Create them in your repo (reads label names from `.env`):
+Hydra uses 7 lifecycle labels. Create them in your repo (reads label names from `.env`):
 
 ```bash
 # From the hydra directory (auto-detects your repo from git remote)
