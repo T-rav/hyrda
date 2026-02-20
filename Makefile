@@ -21,6 +21,7 @@ PLANNER_LABEL ?= hydra-plan
 PLANNER_MODEL ?= opus
 PLANNER_BUDGET ?= 0
 REVIEWERS ?= 2
+HITL_WORKERS ?= 1
 PORT ?= 5555
 
 # Colors
@@ -65,6 +66,7 @@ help:
 	@echo "  PLANNER_LABEL    Planner issue label (default: hydra-plan)"
 	@echo "  PLANNER_MODEL    Planner model (default: opus)"
 	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
+	@echo "  HITL_WORKERS     Max concurrent HITL agents (default: 1)"
 	@echo "  PORT             Dashboard port (default: 5555)"
 
 run:
@@ -84,6 +86,7 @@ run:
 		--planner-model $(PLANNER_MODEL) \
 		--planner-budget-usd $(PLANNER_BUDGET) \
 		--max-reviewers $(REVIEWERS) \
+		--max-hitl-workers $(HITL_WORKERS) \
 		--dashboard-port $(PORT) & \
 	wait
 

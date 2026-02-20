@@ -50,6 +50,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max concurrent review agents (default: 1)",
     )
     parser.add_argument(
+        "--max-hitl-workers",
+        type=int,
+        default=None,
+        help="Max concurrent HITL correction agents (default: 1)",
+    )
+    parser.add_argument(
         "--max-budget-usd",
         type=float,
         default=None,
@@ -98,6 +104,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--hitl-label",
         default=None,
         help="Labels for human-in-the-loop escalation, comma-separated (default: hydra-hitl)",
+    )
+    parser.add_argument(
+        "--hitl-active-label",
+        default=None,
+        help="Labels for HITL items being actively processed, comma-separated (default: hydra-hitl-active)",
     )
     parser.add_argument(
         "--fixed-label",
@@ -199,6 +210,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "max_workers",
         "max_planners",
         "max_reviewers",
+        "max_hitl_workers",
         "max_budget_usd",
         "model",
         "review_model",
@@ -224,6 +236,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ready_label",
         "review_label",
         "hitl_label",
+        "hitl_active_label",
         "fixed_label",
         "find_label",
         "planner_label",

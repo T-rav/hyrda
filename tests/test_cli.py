@@ -45,6 +45,7 @@ class TestParseArgs:
             "max_workers",
             "max_planners",
             "max_reviewers",
+            "max_hitl_workers",
             "max_budget_usd",
             "model",
             "review_model",
@@ -54,6 +55,7 @@ class TestParseArgs:
             "max_ci_fix_attempts",
             "review_label",
             "hitl_label",
+            "hitl_active_label",
             "fixed_label",
             "find_label",
             "planner_label",
@@ -111,6 +113,8 @@ class TestBuildConfig:
         assert cfg.max_workers == 2
         assert cfg.max_planners == 1
         assert cfg.max_reviewers == 2
+        assert cfg.max_hitl_workers == 1
+        assert cfg.hitl_active_label == ["hydra-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
         assert cfg.model == "sonnet"
         assert cfg.review_model == "opus"
@@ -211,6 +215,8 @@ class TestBuildConfig:
                 "c",
                 "--hitl-label",
                 "d,e",
+                "--hitl-active-label",
+                "d2,e2",
                 "--fixed-label",
                 "f",
                 "--find-label",
@@ -224,6 +230,7 @@ class TestBuildConfig:
         assert cfg.ready_label == ["a", "b"]
         assert cfg.review_label == ["c"]
         assert cfg.hitl_label == ["d", "e"]
+        assert cfg.hitl_active_label == ["d2", "e2"]
         assert cfg.fixed_label == ["f"]
         assert cfg.find_label == ["g", "h"]
         assert cfg.planner_label == ["i"]
@@ -279,6 +286,16 @@ class TestBuildConfig:
         args = parse_args(["--git-user-email", "bot@example.com"])
         cfg = build_config(args)
         assert cfg.git_user_email == "bot@example.com"
+
+    def test_max_hitl_workers_passed_through(self) -> None:
+        args = parse_args(["--max-hitl-workers", "3"])
+        cfg = build_config(args)
+        assert cfg.max_hitl_workers == 3
+
+    def test_hitl_active_label_passed_through(self) -> None:
+        args = parse_args(["--hitl-active-label", "my-active"])
+        cfg = build_config(args)
+        assert cfg.hitl_active_label == ["my-active"]
 
     def test_git_identity_defaults_to_none_in_parse_args(self) -> None:
         args = parse_args([])
