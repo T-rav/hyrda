@@ -5,7 +5,7 @@
  *
  * @typedef {'queued'|'running'|'testing'|'committing'|'done'|'failed'} WorkerStatus
  *
- * @typedef {{ status: WorkerStatus, worker: number, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
+ * @typedef {{ status: WorkerStatus, worker: number, role: string, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *
  * @typedef {{ pr: number, issue: number, branch: string, draft: boolean, url: string }} PRData
  *
