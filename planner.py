@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -13,7 +11,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
-from stream_parser import StreamParser
+from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.planner")
 
@@ -106,25 +104,53 @@ class PlannerRunner:
             cmd.extend(["--max-budget-usd", str(self._config.planner_budget_usd)])
         return cmd
 
-    # Maximum characters for issue body and comments in the prompt
-    _MAX_BODY_CHARS = 10_000
-    _MAX_COMMENT_CHARS = 2_000
+    # Maximum characters for issue body and comments in the prompt.
+    # Keep conservative to avoid hitting Claude CLI's internal text-splitter
+    # limits (RecursiveCharacterTextSplitter fails on very long unsplittable lines).
+    _MAX_BODY_CHARS = 4_000
+    _MAX_COMMENT_CHARS = 1_000
+    _MAX_LINE_CHARS = 500
+
+    @staticmethod
+    def _truncate_text(text: str, char_limit: int, line_limit: int) -> str:
+        """Truncate *text* at a line boundary, also breaking long lines.
+
+        Lines exceeding *line_limit* are hard-truncated to avoid producing
+        unsplittable chunks that crash Claude CLI's text splitter.
+        """
+        lines: list[str] = []
+        total = 0
+        for raw_line in text.splitlines():
+            capped = (
+                raw_line[:line_limit] + "…" if len(raw_line) > line_limit else raw_line
+            )
+            if total + len(capped) + 1 > char_limit:
+                break
+            lines.append(capped)
+            total += len(capped) + 1  # +1 for newline
+        result = "\n".join(lines)
+        if len(result) < len(text):
+            result += "\n\n…(truncated)"
+        return result
 
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the planning prompt for the agent."""
         comments_section = ""
         if issue.comments:
             truncated = [
-                c[: self._MAX_COMMENT_CHARS]
-                + ("…" if len(c) > self._MAX_COMMENT_CHARS else "")
+                self._truncate_text(c, self._MAX_COMMENT_CHARS, self._MAX_LINE_CHARS)
                 for c in issue.comments
             ]
             formatted = "\n".join(f"- {c}" for c in truncated)
             comments_section = f"\n\n## Discussion\n{formatted}"
 
-        body = issue.body or ""
-        if len(body) > self._MAX_BODY_CHARS:
-            body = body[: self._MAX_BODY_CHARS] + "\n\n…(truncated)"
+        body = self._truncate_text(
+            issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
+        )
+
+        find_label = (
+            self._config.find_label[0] if self._config.find_label else "hydra-find"
+        )
 
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
@@ -200,13 +226,16 @@ you can file them as new GitHub issues using these markers:
 NEW_ISSUES_START
 - title: Short issue title
   body: Description of the issue
-  labels: label1, label2
+  labels: {find_label}
 - title: Another issue
   body: Another description
-  labels: tech-debt
+  labels: {find_label}
 NEW_ISSUES_END
 
 Only include this section if you actually discover issues worth filing.
+
+**IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
+Do NOT invent labels. All discovered issues enter the pipeline via the find label.
 """
 
     @staticmethod
@@ -342,9 +371,7 @@ Only include this section if you actually discover issues worth filing.
 
     def terminate(self) -> None:
         """Kill all active planner subprocesses."""
-        for proc in list(self._active_procs):
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
+        terminate_processes(self._active_procs)
 
     async def _execute(
         self,
@@ -354,92 +381,26 @@ Only include this section if you actually discover issues worth filing.
         issue_number: int,
     ) -> str:
         """Run the claude planning process."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(cwd),
-            env=env,
-        )
-        self._active_procs.add(proc)
-
-        try:
-            assert proc.stdin is not None
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-
-            proc.stdin.write(prompt.encode())
-            await proc.stdin.drain()
-            proc.stdin.close()
-
-            # Drain stderr in background to prevent deadlock
-            stderr_task = asyncio.create_task(proc.stderr.read())
-
-            parser = StreamParser()
-            raw_lines: list[str] = []
-            result_text = ""
-            accumulated_text = ""
-            plan_complete = False
-            async for raw in proc.stdout:
-                line = raw.decode(errors="replace").rstrip("\n")
-                raw_lines.append(line)
-                if not line.strip():
-                    continue
-
-                display, result = parser.parse(line)
-                if result is not None:
-                    result_text = result
-
-                if display.strip():
-                    accumulated_text += display + "\n"
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.TRANSCRIPT_LINE,
-                            data={
-                                "issue": issue_number,
-                                "line": display,
-                                "source": "planner",
-                            },
-                        )
-                    )
-
-                # Once we have the plan markers, the planner is done.
-                # Kill the subprocess to avoid getting stuck in hook
-                # feedback loops (the stop hook fires and the agent
-                # keeps responding to it indefinitely).
-                if not plan_complete and "PLAN_END" in accumulated_text:
-                    plan_complete = True
-                    logger.info(
-                        "Plan markers found for issue #%d — terminating planner",
-                        issue_number,
-                    )
-                    proc.kill()
-                    break
-
-            stderr_bytes = await stderr_task
-            await proc.wait()
-
-            if not plan_complete and proc.returncode != 0:
-                stderr_text = stderr_bytes.decode(errors="replace").strip()
-                logger.warning(
-                    "Planner process exited with code %d for issue #%d: %s",
-                    proc.returncode,
+        def _check_plan_complete(accumulated: str) -> bool:
+            if "PLAN_END" in accumulated:
+                logger.info(
+                    "Plan markers found for issue #%d — terminating planner",
                     issue_number,
-                    stderr_text[:500],
                 )
+                return True
+            return False
 
-            # Return the result text for plan extraction,
-            # falling back to accumulated display text, then raw output.
-            return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
-        except asyncio.CancelledError:
-            proc.kill()
-            raise
-        finally:
-            self._active_procs.discard(proc)
+        return await stream_claude_process(
+            cmd=cmd,
+            prompt=prompt,
+            cwd=cwd,
+            active_procs=self._active_procs,
+            event_bus=self._bus,
+            event_data={"issue": issue_number, "source": "planner"},
+            logger=logger,
+            on_output=_check_plan_complete,
+        )
 
     async def _emit_status(
         self, issue_number: int, worker_id: int, status: PlannerStatus

@@ -41,7 +41,7 @@ export function PRTable({ prs }) {
 }
 
 const styles = {
-  container: { padding: 12 },
+  container: { padding: 12, flex: 1, overflowY: 'auto' },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     height: 200, color: theme.textMuted, fontSize: 13,

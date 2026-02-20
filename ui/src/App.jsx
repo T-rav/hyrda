@@ -45,9 +45,9 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={state.prs.length}
+        prsCount={state.sessionPrsCount}
         mergedCount={state.mergedCount}
-        issuesFound={Object.values(state.workers).filter(w => w.role !== 'triage').length}
+        issuesFound={state.lifetimeStats?.issues_created ?? 0}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
@@ -72,10 +72,7 @@ export default function App() {
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                ...styles.tab,
-                ...(activeTab === tab ? styles.tabActive : {}),
-              }}
+              style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
@@ -157,3 +154,7 @@ const styles = {
   timelineTime: { color: theme.textMuted, marginRight: 8 },
   timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
 }
+
+// Pre-computed tab style variants (avoids object spread in .map())
+export const tabInactiveStyle = styles.tab
+export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }

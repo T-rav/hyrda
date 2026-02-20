@@ -41,14 +41,12 @@ export function Header({
   return (
     <header style={styles.header}>
       <div style={styles.left}>
+        <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
         <span style={styles.logo}>
           HYDRA
           <span style={styles.subtitle}>Parallel Issue Processor</span>
         </span>
-        <span style={{
-          ...styles.dot,
-          background: connected ? theme.green : theme.red,
-        }} />
+        <span style={connected ? dotConnected : dotDisconnected} />
       </div>
       <div style={styles.center}>
         <div style={styles.sessionBox}>
@@ -70,22 +68,11 @@ export function Header({
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
-                  <div style={{
-                    ...styles.connector,
-                    background: lit ? stage.color : dimmed ? stage.color + '55' : theme.border,
-                  }} />
+                  <div style={headerConnectorStyles[stage.key][lit ? 'lit' : 'dim']} />
                 )}
-                <div style={{
-                  ...styles.pill,
-                  background: lit ? stage.color : dimmed ? stage.color + '20' : theme.surfaceInset,
-                  color: lit ? theme.bg : dimmed ? stage.color + '99' : theme.textInactive,
-                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : theme.border,
-                }}>
+                <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
                   {stage.label}
-                  <span style={{
-                    ...styles.count,
-                    opacity: lit ? 1 : 0.6,
-                  }}>{maxCount}</span>
+                  <span style={lit ? countLit : countDim}>{maxCount}</span>
                 </div>
               </React.Fragment>
             )
@@ -95,11 +82,7 @@ export function Header({
       <div style={styles.controls}>
         {canStart && (
           <button
-            style={{
-              ...styles.startBtn,
-              opacity: connected ? 1 : 0.4,
-              cursor: connected ? 'pointer' : 'not-allowed',
-            }}
+            style={connected ? startBtnEnabled : startBtnDisabled}
             onClick={onStart}
             disabled={!connected}
           >
@@ -139,7 +122,8 @@ const styles = {
     background: theme.surface,
     borderBottom: `1px solid ${theme.border}`,
   },
-  left: { display: 'flex', alignItems: 'center', gap: 10 },
+  left: { display: 'flex', alignItems: 'center', gap: 8 },
+  logoImg: { width: 56, height: 56 },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
   subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12, marginLeft: 8 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
@@ -222,3 +206,30 @@ const styles = {
     fontWeight: 600,
   },
 }
+
+// Pre-computed connection dot variants
+export const dotConnected = { ...styles.dot, background: theme.green }
+export const dotDisconnected = { ...styles.dot, background: theme.red }
+
+// Pre-computed per-stage pill/connector variants (avoids object spread in .map())
+export const pillStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.pill, background: s.color, color: theme.bg, borderColor: s.color },
+    dim: { ...styles.pill, background: s.color + '20', color: s.color + '99', borderColor: s.color + '55' },
+  }])
+)
+
+export const headerConnectorStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.connector, background: s.color },
+    dim: { ...styles.connector, background: s.color + '55' },
+  }])
+)
+
+// Pre-computed count style variants
+export const countLit = { ...styles.count, opacity: 1 }
+export const countDim = { ...styles.count, opacity: 0.6 }
+
+// Pre-computed start button variants
+export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
+export const startBtnDisabled = { ...styles.startBtn, opacity: 0.4, cursor: 'not-allowed' }
