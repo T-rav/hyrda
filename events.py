@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import os
+import tempfile
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("hydra.events")
 
 
 class EventType(StrEnum):
@@ -40,6 +46,138 @@ class HydraEvent(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+class EventLog:
+    """Append-only JSONL file for persisting events to disk.
+
+    Each event is serialized as a single JSON line. Corrupt lines
+    are skipped during loading (logged as warnings, never crash).
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+    def _append_sync(self, line: str) -> None:
+        """Synchronous append — called via ``asyncio.to_thread``."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._path, "a") as f:
+            f.write(line + "\n")
+            f.flush()
+
+    async def append(self, event: HydraEvent) -> None:
+        """Serialize *event* to JSON and append a line to the log file."""
+        line = event.model_dump_json()
+        await asyncio.to_thread(self._append_sync, line)
+
+    def _load_sync(
+        self,
+        since: datetime | None = None,
+        max_events: int = 5000,
+    ) -> list[HydraEvent]:
+        """Synchronous load — called via ``asyncio.to_thread``."""
+        if not self._path.exists():
+            return []
+
+        events: list[HydraEvent] = []
+        with open(self._path) as f:
+            for line_num, raw_line in enumerate(f, 1):
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    event = HydraEvent.model_validate_json(stripped)
+                except Exception:
+                    logger.warning(
+                        "Skipping corrupt event log line %d in %s",
+                        line_num,
+                        self._path,
+                    )
+                    continue
+
+                if since is not None:
+                    try:
+                        ts = datetime.fromisoformat(event.timestamp)
+                        if ts < since:
+                            continue
+                    except (ValueError, TypeError):
+                        pass  # Keep events with unparseable timestamps
+
+                events.append(event)
+
+        # Return only the last max_events
+        if len(events) > max_events:
+            events = events[-max_events:]
+        return events
+
+    async def load(
+        self,
+        since: datetime | None = None,
+        max_events: int = 5000,
+    ) -> list[HydraEvent]:
+        """Read events from the JSONL file, optionally filtered by timestamp."""
+        return await asyncio.to_thread(self._load_sync, since, max_events)
+
+    def _rotate_sync(self, max_size_bytes: int, max_age_days: int) -> None:
+        """Synchronous rotation — called via ``asyncio.to_thread``."""
+        if not self._path.exists():
+            return
+
+        try:
+            file_size = self._path.stat().st_size
+        except OSError:
+            return
+
+        if file_size <= max_size_bytes:
+            return
+
+        cutoff = datetime.now(UTC) - timedelta(days=max_age_days)
+        kept_lines: list[str] = []
+
+        with open(self._path) as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    event = HydraEvent.model_validate_json(stripped)
+                    ts = datetime.fromisoformat(event.timestamp)
+                    if ts >= cutoff:
+                        kept_lines.append(stripped)
+                except Exception:
+                    # Drop corrupt / unparseable lines during rotation
+                    continue
+
+        # Atomic write: temp file + os.replace (same pattern as StateTracker)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(
+            dir=self._path.parent,
+            prefix=".events-",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w") as f:
+                for line in kept_lines:
+                    f.write(line + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
+
+    async def rotate(self, max_size_bytes: int, max_age_days: int) -> None:
+        """Rotate the log file if it exceeds *max_size_bytes*.
+
+        Keeps only events within *max_age_days*. Uses atomic write
+        (temp file + ``os.replace``) following the ``StateTracker`` pattern.
+        """
+        await asyncio.to_thread(self._rotate_sync, max_size_bytes, max_age_days)
+
+
 class EventBus:
     """Async pub/sub bus with history replay.
 
@@ -47,10 +185,15 @@ class EventBus:
     :class:`HydraEvent` objects as they are published.
     """
 
-    def __init__(self, max_history: int = 5000) -> None:
+    def __init__(
+        self,
+        max_history: int = 5000,
+        event_log: EventLog | None = None,
+    ) -> None:
         self._subscribers: list[asyncio.Queue[HydraEvent]] = []
         self._history: list[HydraEvent] = []
         self._max_history = max_history
+        self._event_log = event_log
 
     async def publish(self, event: HydraEvent) -> None:
         """Publish *event* to all subscribers and append to history."""
@@ -65,6 +208,16 @@ class EventBus:
                 with contextlib.suppress(asyncio.QueueEmpty):
                     queue.get_nowait()
                 queue.put_nowait(event)
+
+        if self._event_log is not None:
+            asyncio.ensure_future(self._event_log.append(event))
+
+    async def load_history_from_disk(self) -> None:
+        """Populate in-memory history from the on-disk event log."""
+        if self._event_log is None:
+            return
+        events = await self._event_log.load(max_events=self._max_history)
+        self._history = events
 
     def subscribe(self, max_queue: int = 500) -> asyncio.Queue[HydraEvent]:
         """Return a new queue that will receive future events."""

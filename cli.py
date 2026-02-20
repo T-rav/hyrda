@@ -276,11 +276,13 @@ async def _run_main(config: HydraConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
     if config.dashboard_enabled:
         from dashboard import HydraDashboard
-        from events import EventBus, EventType, HydraEvent
+        from events import EventBus, EventLog, EventType, HydraEvent
         from models import Phase
         from state import StateTracker
 
-        bus = EventBus()
+        event_log = EventLog(config.event_log_path)
+        bus = EventBus(event_log=event_log)
+        await bus.load_history_from_disk()
         state = StateTracker(config.state_file)
 
         dashboard = HydraDashboard(
@@ -310,7 +312,12 @@ async def _run_main(config: HydraConfig) -> None:
                 await dashboard._orchestrator.stop()
             await dashboard.stop()
     else:
-        orchestrator = HydraOrchestrator(config)
+        from events import EventBus, EventLog
+
+        event_log = EventLog(config.event_log_path)
+        bus = EventBus(event_log=event_log)
+        await bus.load_history_from_disk()
+        orchestrator = HydraOrchestrator(config, event_bus=bus)
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
