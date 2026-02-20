@@ -44,9 +44,13 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={state.sessionPrsCount}
-        mergedCount={state.mergedCount}
-        issuesFound={state.lifetimeStats?.issues_created ?? 0}
+        sessionCounts={{
+          triage: state.sessionTriaged,
+          plan: state.sessionPlanned,
+          implement: state.sessionImplemented,
+          review: state.sessionReviewed,
+          merged: state.mergedCount,
+        }}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
