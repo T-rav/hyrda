@@ -21,6 +21,7 @@ from models import (
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
+from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
@@ -86,6 +87,7 @@ class HydraOrchestrator:
             self._stop_event,
             self._active_issues,
         )
+        self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._reviewer = ReviewPhase(
             config,
             self._state,
@@ -96,6 +98,7 @@ class HydraOrchestrator:
             self._active_issues,
             agents=self._agents,
             event_bus=self._bus,
+            retrospective=self._retrospective,
         )
 
     @property

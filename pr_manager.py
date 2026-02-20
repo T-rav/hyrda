@@ -536,6 +536,23 @@ class PRManager:
             logger.error("Could not get diff for PR #%d: %s", pr_number, exc)
             return ""
 
+    async def get_pr_diff_names(self, pr_number: int) -> list[str]:
+        """Fetch the list of files changed in *pr_number*."""
+        try:
+            output = await self._run_gh(
+                "gh",
+                "pr",
+                "diff",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--name-only",
+            )
+            return [f.strip() for f in output.strip().splitlines() if f.strip()]
+        except RuntimeError as exc:
+            logger.error("Could not get diff file names for PR #%d: %s", pr_number, exc)
+            return []
+
     async def get_pr_status(self, pr_number: int) -> dict[str, object]:
         """Fetch PR status as JSON."""
         try:

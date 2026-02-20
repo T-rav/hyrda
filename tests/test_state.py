@@ -633,6 +633,7 @@ class TestToDict:
             "reviewed_prs",
             "hitl_origins",
             "hitl_causes",
+            "worker_result_meta",
             "lifetime_stats",
             "last_updated",
         }
@@ -855,6 +856,7 @@ class TestStateDataModel:
         assert data.reviewed_prs == {}
         assert data.hitl_origins == {}
         assert data.hitl_causes == {}
+        assert data.worker_result_meta == {}
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
@@ -914,6 +916,67 @@ class TestStateDataModel:
         restored = StateData.model_validate_json(raw)
         assert restored.processed_issues["1"] == "success"
         assert restored.lifetime_stats.prs_merged == 1
+
+
+class TestWorkerResultMeta:
+    """Tests for worker result metadata tracking."""
+
+    def test_set_and_get_worker_result_meta(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        meta = {"quality_fix_attempts": 2, "duration_seconds": 120.5, "error": None}
+        tracker.set_worker_result_meta(42, meta)
+        assert tracker.get_worker_result_meta(42) == meta
+
+    def test_get_returns_empty_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_worker_result_meta(999) == {}
+
+    def test_set_triggers_save(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_worker_result_meta(42, {"quality_fix_attempts": 1})
+        assert state_file.exists()
+
+    def test_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        meta = {"quality_fix_attempts": 3, "duration_seconds": 200.0}
+        tracker.set_worker_result_meta(42, meta)
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_worker_result_meta(42) == meta
+
+    def test_multiple_issues_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_worker_result_meta(1, {"quality_fix_attempts": 0})
+        tracker.set_worker_result_meta(2, {"quality_fix_attempts": 3})
+        assert tracker.get_worker_result_meta(1) == {"quality_fix_attempts": 0}
+        assert tracker.get_worker_result_meta(2) == {"quality_fix_attempts": 3}
+
+    def test_overwrites_previous_meta(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_worker_result_meta(42, {"quality_fix_attempts": 1})
+        tracker.set_worker_result_meta(42, {"quality_fix_attempts": 5})
+        assert tracker.get_worker_result_meta(42) == {"quality_fix_attempts": 5}
+
+    def test_migration_adds_worker_result_meta_to_old_file(
+        self, tmp_path: Path
+    ) -> None:
+        """Loading a state file without worker_result_meta should default to {}."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_worker_result_meta(42) == {}
+        assert tracker.get_current_batch() == 5
 
 
 class TestLifetimeStatsModel:
