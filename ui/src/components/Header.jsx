@@ -34,10 +34,10 @@ export function Header({
     <header style={styles.header}>
       <div style={styles.left}>
         <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
-        <span style={styles.logo}>
-          HYDRA
-          <span style={styles.subtitle}>Parallel Issue Processor</span>
-        </span>
+        <div style={styles.logoGroup}>
+          <span style={styles.logo}>HYDRA</span>
+          <span style={styles.subtitle}>Intent in. Software out.</span>
+        </div>
         <span style={connected ? dotConnected : dotDisconnected} />
       </div>
       <div style={styles.center}>
@@ -119,8 +119,9 @@ const styles = {
   },
   left: { display: 'flex', alignItems: 'center', gap: 8 },
   logoImg: { width: 56, height: 56 },
+  logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
-  subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12, marginLeft: 8 },
+  subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   center: {
     display: 'flex',

@@ -18,7 +18,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         prog="hydra",
-        description="Hydra — Parallel Claude Code Issue Processor",
+        description="Hydra — Intent in. Software out.",
     )
 
     parser.add_argument(
