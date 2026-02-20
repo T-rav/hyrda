@@ -83,7 +83,7 @@ export default function App() {
           {activeTab === 'transcript' && (
             <TranscriptView workers={state.workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable prs={state.prs} />}
+          {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable />}
           {activeTab === 'timeline' && (
             <div style={styles.timeline}>
