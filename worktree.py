@@ -189,11 +189,12 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
-    async def merge_main(self, worktree_path: Path) -> bool:
-        """Merge latest main into the current branch inside *worktree_path*.
+    async def merge_main(self, worktree_path: Path, branch: str) -> bool:
+        """Merge latest main into *branch* inside *worktree_path*.
 
-        Uses merge (not rebase) so the push remains fast-forward and
-        doesn't require ``--force``.
+        First pulls the branch itself so the local copy is in sync with
+        the remote, then merges ``origin/main``.  Because this uses merge
+        the subsequent push is always fast-forward.
 
         Returns *True* on success, *False* if conflicts arise.
         """
@@ -203,6 +204,16 @@ class WorktreeManager:
                 "fetch",
                 "origin",
                 self._config.main_branch,
+                branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            # Fast-forward local branch to match remote so push stays ff
+            await run_subprocess(
+                "git",
+                "merge",
+                "--ff-only",
+                f"origin/{branch}",
                 cwd=worktree_path,
                 gh_token=self._config.gh_token,
             )
