@@ -116,6 +116,35 @@ def test_build_review_prompt_includes_review_instructions(
     assert "REQUEST_CHANGES" in prompt
 
 
+def test_build_review_prompt_includes_ui_criteria_when_diff_has_ui_files(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    diff = (
+        "diff --git a/ui/src/components/Foo.jsx b/ui/src/components/Foo.jsx\n"
+        "+import React from 'react';\n"
+        "+export const Foo = () => <div>Hello</div>;\n"
+    )
+    prompt = runner._build_review_prompt(pr_info, issue, diff)
+
+    assert "DRY" in prompt
+    assert "Responsive" in prompt
+    assert "Style consistency" in prompt
+    assert "Component reuse" in prompt
+    assert "theme.js" in prompt
+
+
+def test_build_review_prompt_excludes_ui_criteria_when_no_ui_files(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    diff = "diff --git a/reviewer.py b/reviewer.py\n+# backend-only change\n"
+    prompt = runner._build_review_prompt(pr_info, issue, diff)
+
+    assert "DRY" not in prompt
+    assert "theme.js" not in prompt
+
+
 # ---------------------------------------------------------------------------
 # _parse_verdict
 # ---------------------------------------------------------------------------
