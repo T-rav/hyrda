@@ -93,6 +93,14 @@ class HydraConfig(BaseModel):
 
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
+    git_user_name: str = Field(
+        default="",
+        description="Git user.name for worktree commits; falls back to global git config if empty",
+    )
+    git_user_email: str = Field(
+        default="",
+        description="Git user.email for worktree commits; falls back to global git config if empty",
+    )
 
     # Paths (auto-detected)
     repo_root: Path = Field(default=Path("."), description="Repository root directory")
@@ -127,6 +135,14 @@ class HydraConfig(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def branch_for_issue(self, issue_number: int) -> str:
+        """Return the canonical branch name for a given issue number."""
+        return f"agent/issue-{issue_number}"
+
+    def worktree_path_for_issue(self, issue_number: int) -> Path:
+        """Return the worktree directory path for a given issue number."""
+        return self.worktree_base / f"issue-{issue_number}"
+
     @model_validator(mode="after")
     def resolve_defaults(self) -> HydraConfig:
         """Resolve paths, repo slug, and apply env var overrides.
@@ -135,6 +151,8 @@ class HydraConfig(BaseModel):
             HYDRA_GITHUB_REPO       → repo
             HYDRA_GITHUB_ASSIGNEE   → (used by slash commands only)
             HYDRA_GH_TOKEN          → gh_token
+            HYDRA_GIT_USER_NAME     → git_user_name
+            HYDRA_GIT_USER_EMAIL    → git_user_email
             HYDRA_LABEL_FIND        → find_label   (discovery stage)
             HYDRA_LABEL_PLAN        → planner_label
             HYDRA_LABEL_READY       → ready_label  (implement stage)
@@ -161,6 +179,16 @@ class HydraConfig(BaseModel):
             env_token = os.environ.get("HYDRA_GH_TOKEN", "")
             if env_token:
                 object.__setattr__(self, "gh_token", env_token)
+
+        # Git identity: explicit value → HYDRA_GIT_USER_NAME/EMAIL env var
+        if not self.git_user_name:
+            env_name = os.environ.get("HYDRA_GIT_USER_NAME", "")
+            if env_name:
+                object.__setattr__(self, "git_user_name", env_name)
+        if not self.git_user_email:
+            env_email = os.environ.get("HYDRA_GIT_USER_EMAIL", "")
+            if env_email:
+                object.__setattr__(self, "git_user_email", env_email)
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

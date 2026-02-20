@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraEvent
 from state import StateTracker
+from tests.conftest import ReviewMockBuilder
 
 if TYPE_CHECKING:
     from config import HydraConfig
@@ -790,25 +791,8 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=make_review_result(101, 42))
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        # Ensure worktree path exists
+        mock_reviewers, _, _ = ReviewMockBuilder(orch, config).build()
         wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
         orch._state.set_worktree(42, str(wt))
 
         results = await orch._review_prs([pr], [issue])
@@ -822,26 +806,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -864,26 +829,14 @@ class TestReviewPRs:
             return make_review_result(pr.number, issue.number)
 
         orch = HydraOrchestrator(config)
-        orch._reviewers.review = fake_review  # type: ignore[method-assign]
 
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
+        ReviewMockBuilder(orch, config).with_review_side_effect(fake_review).build()
 
         issues = [make_issue(i) for i in range(1, 7)]
         prs = [make_pr_info(100 + i, i, draft=False) for i in range(1, 7)]
 
         for i in range(1, 7):
-            wt = config.worktree_base / f"issue-{i}"
-            wt.mkdir(parents=True, exist_ok=True)
+            (config.worktree_base / f"issue-{i}").mkdir(parents=True, exist_ok=True)
 
         await orch._review_prs(prs, issues)
 
@@ -918,26 +871,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         results = await orch._review_prs([pr], [issue])
 
@@ -951,26 +885,11 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(
-                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
-            )
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_verdict(ReviewVerdict.REQUEST_CHANGES)
+            .build()
         )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
 
         results = await orch._review_prs([pr], [issue])
 
@@ -978,10 +897,10 @@ class TestReviewPRs:
         mock_prs.merge_pr.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_review_merge_failure_sets_merged_false(
+    async def test_review_merges_main_before_reviewing(
         self, config: HydraConfig
     ) -> None:
-        """When merge fails, result.merged should remain False."""
+        """_review_prs should merge main into the branch and push before reviewing."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -995,11 +914,14 @@ class TestReviewPRs:
         mock_prs = AsyncMock()
         mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
         mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
         orch._prs = mock_prs
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
+        mock_wt.merge_main = AsyncMock(return_value=True)
         orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"
@@ -1007,7 +929,118 @@ class TestReviewPRs:
 
         results = await orch._review_prs([pr], [issue])
 
+        assert results[0].merged is True
+        mock_wt.merge_main.assert_awaited_once()
+        mock_prs.push_branch.assert_awaited_once()
+        mock_reviewers.review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_conflict_resolved_by_agent(self, config: HydraConfig) -> None:
+        """When merge conflicts, agent resolves them and review proceeds."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.merge_main = AsyncMock(return_value=False)  # Conflicts
+        mock_wt.start_merge_main = AsyncMock(return_value=False)  # Has conflicts
+        orch._worktrees = mock_wt
+
+        mock_agents = AsyncMock()
+        mock_agents._build_command = lambda wt: ["claude", "-p"]
+        mock_agents._execute = AsyncMock(return_value="resolved")
+        mock_agents._verify_result = AsyncMock(return_value=(True, "OK"))
+        orch._agents = mock_agents
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        mock_wt.start_merge_main.assert_awaited_once()
+        mock_agents._execute.assert_awaited_once()
+        mock_reviewers.review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_conflict_agent_fails_escalates_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """When agent cannot resolve conflicts, escalate to HITL."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.merge_main = AsyncMock(return_value=False)  # Conflicts
+        mock_wt.start_merge_main = AsyncMock(return_value=False)
+        mock_wt.abort_merge = AsyncMock()
+        orch._worktrees = mock_wt
+
+        mock_agents = AsyncMock()
+        mock_agents._build_command = lambda wt: ["claude", "-p"]
+        mock_agents._execute = AsyncMock(return_value="failed")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        orch._agents = mock_agents
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
         assert results[0].merged is False
+        assert "conflicts" in results[0].summary.lower()
+        mock_reviewers.review.assert_not_awaited()
+        mock_prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_escalates_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """When merge fails after successful rebase, should escalate to HITL."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config).with_merge_return(False).build()
+        )
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        hitl_calls = [
+            c
+            for c in mock_prs.post_pr_comment.call_args_list
+            if "Merge failed" in str(c)
+        ]
+        assert len(hitl_calls) == 1
+        mock_prs.add_labels.assert_any_await(42, ["hydra-hitl"])
 
     @pytest.mark.asyncio
     async def test_review_merge_records_lifetime_stats(
@@ -1018,27 +1051,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.pull_main = AsyncMock()
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1055,26 +1068,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1093,24 +1087,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).with_merge_return(False).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1127,26 +1104,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1161,24 +1119,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(
-            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-        )
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        ReviewMockBuilder(orch, config).with_merge_return(False).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1193,28 +1134,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1229,28 +1149,7 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).build()
 
         await orch._review_prs([pr], [issue])
 
@@ -1269,34 +1168,11 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=verdict)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = ReviewMockBuilder(orch, config).with_verdict(verdict).build()
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.submit_review.assert_awaited_once_with(
-            101, verdict.value, "Looks good."
-        )
+        mock_prs.submit_review.assert_awaited_once_with(101, verdict, "Looks good.")
 
     @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(
@@ -1307,34 +1183,18 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = ReviewResult(
+        empty_summary_review = ReviewResult(
             pr_number=101,
             issue_number=42,
             verdict=ReviewVerdict.APPROVE,
             summary="",
             fixes_made=False,
         )
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_review_result(empty_summary_review)
+            .build()
+        )
 
         await orch._review_prs([pr], [issue])
 
@@ -1349,12 +1209,6 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
         call_order: list[str] = []
 
         async def fake_post_pr_comment(pr_number: int, body: str) -> None:
@@ -1364,22 +1218,12 @@ class TestReviewPRs:
             call_order.append("merge")
             return True
 
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = fake_post_pr_comment
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.merge_pr = fake_merge
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config)
+            .with_pr_method("post_pr_comment", fake_post_pr_comment)
+            .with_pr_method("merge_pr", fake_merge)
+            .build()
+        )
 
         await orch._review_prs([pr], [issue])
 
@@ -1395,32 +1239,16 @@ class TestReviewPRs:
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
-        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
-
-        mock_reviewers = AsyncMock()
-        mock_reviewers.review = AsyncMock(return_value=review)
-        orch._reviewers = mock_reviewers
-
-        mock_prs = AsyncMock()
-        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
-        mock_prs.push_branch = AsyncMock(return_value=True)
-        mock_prs.post_pr_comment = AsyncMock()
-        mock_prs.submit_review = AsyncMock(return_value=True)
-        mock_prs.merge_pr = AsyncMock(return_value=False)
-        mock_prs.remove_label = AsyncMock()
-        mock_prs.add_labels = AsyncMock()
-        orch._prs = mock_prs
-
-        mock_wt = AsyncMock()
-        mock_wt.destroy = AsyncMock()
-        orch._worktrees = mock_wt
-
-        wt = config.worktree_base / "issue-42"
-        wt.mkdir(parents=True, exist_ok=True)
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config).with_merge_return(False).build()
+        )
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+        # Review comment + HITL escalation comment
+        comment_bodies = [c.args[1] for c in mock_prs.post_pr_comment.call_args_list]
+        assert "Looks good." in comment_bodies
+        assert any("Merge failed" in b for b in comment_bodies)
         mock_prs.submit_review.assert_not_awaited()
 
 
@@ -3102,6 +2930,267 @@ class TestWaitAndFixCI:
         assert "Failed checks: ci" in ci_comments[0][1]
 
         # Should swap label to hydra-hitl
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-hitl"]) in add_calls
+
+
+# ---------------------------------------------------------------------------
+# Direct unit tests for _wait_and_fix_ci (calls the method in isolation)
+# ---------------------------------------------------------------------------
+
+
+class TestWaitAndFixCIDirect:
+    """Direct unit tests for _wait_and_fix_ci — calls the method in isolation."""
+
+    def _make_orch(self, config: HydraConfig) -> HydraOrchestrator:
+        orch = HydraOrchestrator(config)
+        orch._worktrees = AsyncMock()
+        return orch
+
+    @pytest.mark.asyncio
+    async def test_ci_passes_first_check(self, config: HydraConfig) -> None:
+        """CI passes on first check — returns True, fix_ci never called."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(True, "All checks passed"))
+        orch._prs = mock_prs
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        passed = await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        assert passed is True
+        assert result.ci_passed is True
+        assert result.ci_fix_attempts == 0
+        mock_reviewers.fix_ci.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_ci_fails_fix_succeeds_retry_passes(
+        self, config: HydraConfig
+    ) -> None:
+        """CI fails, fix agent makes changes, CI passes on retry."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+
+        ci_results = [(False, "Failed checks"), (True, "All checks passed")]
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(side_effect=ci_results)
+        mock_prs.push_branch = AsyncMock()
+        orch._prs = mock_prs
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        passed = await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        assert passed is True
+        assert result.ci_passed is True
+        assert result.ci_fix_attempts == 1
+        mock_prs.push_branch.assert_awaited_once_with(wt_path, pr.branch)
+
+    @pytest.mark.asyncio
+    async def test_ci_fails_max_attempts_escalates(self, config: HydraConfig) -> None:
+        """CI fails after max fix attempts — escalates to HITL."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks"))
+        mock_prs.push_branch = AsyncMock()
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        passed = await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        assert passed is False
+        assert result.ci_passed is False
+        assert result.ci_fix_attempts == 1
+
+        # Verify CI failure comment
+        comment_args = mock_prs.post_pr_comment.call_args.args
+        assert comment_args[0] == 101
+        assert "CI failed" in comment_args[1]
+
+        # Verify HITL label swap
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-hitl"]) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_fix_ci_raises_exception(self, config: HydraConfig) -> None:
+        """fix_ci raising an exception should propagate — not silently swallowed."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks"))
+        orch._prs = mock_prs
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock(side_effect=RuntimeError("Agent crashed"))
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        with pytest.raises(RuntimeError, match="Agent crashed"):
+            await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+    @pytest.mark.asyncio
+    async def test_stop_event_passed_to_wait_for_ci(self, config: HydraConfig) -> None:
+        """Stop event should be threaded through to wait_for_ci."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+        orch._stop_event.set()
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Cancelled"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        # Verify stop_event was passed as the 4th argument to wait_for_ci
+        call_args = mock_prs.wait_for_ci.call_args_list[0]
+        assert call_args.args[3] is orch._stop_event
+
+    @pytest.mark.asyncio
+    async def test_zero_max_attempts_checks_ci_no_fix(
+        self, config: HydraConfig
+    ) -> None:
+        """max_ci_fix_attempts=0 checks CI once but never calls fix_ci."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=0,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        orch = self._make_orch(cfg)
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.fix_ci = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        wt_path = config.worktree_base / "issue-42"
+
+        passed = await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        assert passed is False
+        assert result.ci_passed is False
+        assert result.ci_fix_attempts == 0
+        mock_reviewers.fix_ci.assert_not_awaited()
+
+        # Should still escalate to HITL
+        mock_prs.post_pr_comment.assert_awaited_once()
+        comment_args = mock_prs.post_pr_comment.call_args.args
+        assert "CI failed" in comment_args[1]
         remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
         assert (42, "hydra-review") in remove_calls
         add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
