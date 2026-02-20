@@ -24,7 +24,7 @@ class HydraConfig(BaseModel):
     )
 
     # Worker configuration
-    max_workers: int = Field(default=2, ge=1, le=10, description="Concurrent agents")
+    max_workers: int = Field(default=3, ge=1, le=10, description="Concurrent agents")
     max_planners: int = Field(
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )

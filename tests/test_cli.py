@@ -124,7 +124,7 @@ class TestBuildConfig:
         # Check key defaults match HydraConfig
         assert cfg.ready_label == ["hydra-ready"]
         assert cfg.batch_size == 15
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
         assert cfg.max_planners == 1
         assert cfg.max_reviewers == 5
         assert cfg.max_hitl_workers == 1
@@ -155,7 +155,7 @@ class TestBuildConfig:
 
         assert cfg.batch_size == 10
         # Other fields remain at defaults
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
         assert cfg.model == "sonnet"
 
     def test_label_arg_parsed_to_list(self) -> None:
