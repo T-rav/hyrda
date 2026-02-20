@@ -302,7 +302,6 @@ class HydraOrchestrator:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
             try:
-                await self._triage_find_issues()
                 await self._plan_issues()
             except Exception:
                 logger.exception("Plan loop iteration failed — will retry next cycle")
