@@ -11,7 +11,7 @@ const mockItems = [
     prUrl: 'https://github.com/org/repo/pull/99',
     branch: 'agent/issue-42',
     cause: 'CI failure',
-    status: 'pending',
+    status: 'from review',
   },
   {
     issue: 10,
@@ -59,8 +59,32 @@ describe('HITLTable component', () => {
 
   it('renders status badges for each item', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
-    expect(screen.getAllByText('pending')).toHaveLength(2)
+    expect(screen.getByText('from review')).toBeInTheDocument()
     expect(screen.getByText('processing')).toBeInTheDocument()
+  })
+
+  it('renders from triage status badge', () => {
+    const items = [{ ...mockItems[0], status: 'from triage' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('from triage')).toBeInTheDocument()
+  })
+
+  it('renders from plan status badge', () => {
+    const items = [{ ...mockItems[0], status: 'from plan' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('from plan')).toBeInTheDocument()
+  })
+
+  it('renders from implement status badge', () => {
+    const items = [{ ...mockItems[0], status: 'from implement' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('from implement')).toBeInTheDocument()
+  })
+
+  it('renders unknown status with fallback styling without crashing', () => {
+    const items = [{ ...mockItems[0], status: 'unknown-status' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('unknown-status')).toBeInTheDocument()
   })
 
   it('expands row on click to show detail panel', () => {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
+import { PIPELINE_STAGES } from '../constants'
 import { useHITLCorrection } from '../hooks/useHITLCorrection'
 
 export function HITLTable({ items, onRefresh }) {
@@ -166,11 +167,18 @@ export function HITLTable({ items, onRefresh }) {
   )
 }
 
+const originColors = Object.fromEntries(
+  PIPELINE_STAGES
+    .filter(s => s.key !== 'merged')
+    .map(s => [`from ${s.key}`, { bg: s.subtleColor, fg: s.color }])
+)
+
 function statusBadgeStyle(status) {
   const colors = {
     pending: { bg: theme.yellowSubtle, fg: theme.yellow },
     processing: { bg: theme.accentSubtle, fg: theme.accent },
     resolved: { bg: theme.greenSubtle, fg: theme.green },
+    ...originColors,
   }
   const { bg, fg } = colors[status] || colors.pending
   return {
