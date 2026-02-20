@@ -222,7 +222,7 @@ const styles = {
     fontSize: 9,
     fontWeight: 700,
   },
-  controls: { display: 'flex', alignItems: 'center', gap: 10 },
+  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10 },
   startBtn: {
     padding: '4px 14px',
     borderRadius: 6,
