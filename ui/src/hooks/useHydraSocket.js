@@ -15,6 +15,27 @@ const initialState = {
   events: [],     // HydraEvent[] (most recent first)
   hitlItems: [],  // HITLItem[]
   humanInputRequests: {},  // Record<string, string>
+  issues: {},     // { [issueNumber]: IssueStream }
+}
+
+function updateIssue(issues, issueNumber, updates) {
+  if (!issueNumber) return issues
+  const existing = issues[issueNumber] || {
+    number: issueNumber,
+    title: `Issue #${issueNumber}`,
+    body: '',
+    status: 'submitted',
+    createdAt: new Date().toISOString(),
+    events: [],
+    prNumber: null,
+    prUrl: null,
+    planSummary: null,
+    verdict: null,
+  }
+  return {
+    ...issues,
+    [issueNumber]: { ...existing, ...updates },
+  }
 }
 
 export function reducer(state, action) {
@@ -42,6 +63,7 @@ export function reducer(state, action) {
           mergedCount: 0,
           sessionPrsCount: 0,
           hitlItems: [],
+          issues: {},
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -64,12 +86,18 @@ export function reducer(state, action) {
         transcript: [],
         pr: null,
       }
+      const workerTitle = action.data.title || existing.title
+      const issueStatus = status === 'done' ? 'done' : status === 'failed' ? 'failed' : 'implementing'
       return {
         ...state,
         workers: {
           ...state.workers,
-          [issue]: { ...existing, status, worker, role: role || existing.role },
+          [issue]: { ...existing, status, worker, role: role || existing.role, title: workerTitle },
         },
+        issues: updateIssue(state.issues, issue, {
+          status: issueStatus,
+          title: workerTitle,
+        }),
       }
     }
 
@@ -98,6 +126,10 @@ export function reducer(state, action) {
         ...addEvent(state, action),
         prs: [...state.prs, action.data],
         sessionPrsCount: state.sessionPrsCount + 1,
+        issues: updateIssue(state.issues, action.data.issue, {
+          prNumber: action.data.pr,
+          prUrl: action.data.url,
+        }),
       }
 
     case 'triage_update': {
@@ -121,6 +153,10 @@ export function reducer(state, action) {
             ? { ...existingTriage, status: triageStatus }
             : triageWorker,
         },
+        issues: updateIssue(state.issues, action.data.issue, {
+          status: 'triaging',
+          title: action.data.title || undefined,
+        }),
       }
     }
 
@@ -138,6 +174,8 @@ export function reducer(state, action) {
         pr: null,
       }
       const existingPlanner = state.workers[planKey]
+      const planIssueStatus = planStatus === 'done' ? 'planning'
+        : planStatus === 'failed' ? 'stuck' : 'planning'
       return {
         ...addEvent(state, action),
         workers: {
@@ -146,6 +184,10 @@ export function reducer(state, action) {
             ? { ...existingPlanner, status: planStatus }
             : planWorker,
         },
+        issues: updateIssue(state.issues, action.data.issue, {
+          status: planIssueStatus,
+          planSummary: action.data.summary || undefined,
+        }),
       }
     }
 
@@ -168,14 +210,23 @@ export function reducer(state, action) {
           ? { ...existingReviewer, status: reviewStatus }
           : reviewWorker,
       }
+      const reviewIssueUpdates = {
+        status: 'reviewing',
+        verdict: action.data.verdict || undefined,
+      }
       if (action.data.status === 'done') {
         return {
           ...addEvent(state, action),
           workers: updatedWorkers,
           reviews: [...state.reviews, action.data],
+          issues: updateIssue(state.issues, action.data.issue, reviewIssueUpdates),
         }
       }
-      return { ...addEvent(state, action), workers: updatedWorkers }
+      return {
+        ...addEvent(state, action),
+        workers: updatedWorkers,
+        issues: updateIssue(state.issues, action.data.issue, reviewIssueUpdates),
+      }
     }
 
     case 'merge_update': {
@@ -189,6 +240,9 @@ export function reducer(state, action) {
         mergedCount: isMerged
           ? state.mergedCount + 1
           : state.mergedCount,
+        issues: isMerged
+          ? updateIssue(state.issues, action.data.issue, { status: 'merged' })
+          : state.issues,
       }
     }
 
@@ -212,6 +266,17 @@ export function reducer(state, action) {
       delete next[action.data.issueNumber]
       return { ...state, humanInputRequests: next }
     }
+
+    case 'INTENT_SUBMITTED':
+      return {
+        ...state,
+        issues: updateIssue(state.issues, action.data.issueNumber, {
+          title: action.data.title,
+          body: action.data.text,
+          status: 'submitted',
+          createdAt: new Date().toISOString(),
+        }),
+      }
 
     case 'batch_complete':
       return {
@@ -332,5 +397,5 @@ export function useHydraSocket() {
     }
   }, [connect])
 
-  return { ...state, submitHumanInput, refreshHitl: fetchHitlItems }
+  return { ...state, dispatch, submitHumanInput, refreshHitl: fetchHitlItems }
 }

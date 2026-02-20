@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
-import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
+import { layoutStyle, mainStyle, transcriptOverlayStyle } from '../../App'
 
 const { mockSocketState } = vi.hoisted(() => ({
   mockSocketState: {
@@ -18,6 +18,21 @@ const { mockSocketState } = vi.hoisted(() => ({
     lifetimeStats: null,
     hitlItems: [],
     humanInputRequests: {},
+    issues: {
+      1: {
+        number: 1,
+        title: 'Test issue',
+        body: 'test body',
+        status: 'implementing',
+        createdAt: '2024-01-01T00:00:00Z',
+        events: [],
+        prNumber: null,
+        prUrl: null,
+        planSummary: null,
+        verdict: null,
+      },
+    },
+    dispatch: () => {},
     submitHumanInput: () => {},
     refreshHitl: () => {},
   },
@@ -29,109 +44,105 @@ vi.mock('../../hooks/useHydraSocket', () => ({
 
 beforeEach(() => {
   mockSocketState.hitlItems = []
+  mockSocketState.issues = {
+    1: {
+      number: 1,
+      title: 'Test issue',
+      body: 'test body',
+      status: 'implementing',
+      createdAt: '2024-01-01T00:00:00Z',
+      events: [],
+      prNumber: null,
+      prUrl: null,
+      planSummary: null,
+      verdict: null,
+    },
+  }
   cleanup()
 })
 
-describe('App worker select tab switching', () => {
-  it('clicking a worker switches to transcript tab', async () => {
+describe('App stream-first layout', () => {
+  it('renders intent input', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
 
-    // Switch to Pull Requests tab first
-    fireEvent.click(screen.getByText('Pull Requests'))
-
-    // Click the worker card
-    fireEvent.click(screen.getByText('#1'))
-
-    // Transcript tab should now be active and transcript content visible
-    expect(screen.getByText('line 1')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('What do you want to build?')).toBeInTheDocument()
   })
 
-  it('clicking a worker when already on transcript tab keeps transcript active', async () => {
+  it('renders stream view with issue cards', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
 
-    // We start on transcript tab by default, click the worker via its card
+    // #1 appears in both sidebar and stream view
+    const issueRefs = screen.getAllByText('#1')
+    expect(issueRefs.length).toBeGreaterThanOrEqual(2) // sidebar + stream
+    // Title appears in both sidebar card and issue card
+    expect(screen.getAllByText('Test issue').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows empty state when no issues', async () => {
+    mockSocketState.issues = {}
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    expect(screen.getByText('No activity yet')).toBeInTheDocument()
+  })
+
+  it('clicking a worker opens transcript overlay', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    // Click the worker card in sidebar
     const workerCards = screen.getAllByText('#1')
-    fireEvent.click(workerCards[0]) // sidebar card is the first match
+    fireEvent.click(workerCards[0])
 
-    // Should still be on transcript tab with content visible
-    expect(screen.getByText('line 1')).toBeInTheDocument()
+    // Should show the Close button in transcript overlay
+    expect(screen.getByText('Close')).toBeInTheDocument()
   })
-})
 
-describe('HITL badge rendering', () => {
-  it('shows no badge when hitlItems is empty', async () => {
+  it('close button dismisses transcript overlay', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
 
-    const hitlTab = screen.getByText('HITL')
-    expect(hitlTab.querySelector('span')).toBeNull()
-  })
+    // Click worker to open overlay
+    const workerCards = screen.getAllByText('#1')
+    fireEvent.click(workerCards[0])
+    expect(screen.getByText('Close')).toBeInTheDocument()
 
-  it('shows badge with count when hitlItems has entries', async () => {
-    mockSocketState.hitlItems = [
-      { issue: 1, title: 'Bug A', pr: 10, branch: 'fix-a', issueUrl: '#', prUrl: '#' },
-      { issue: 2, title: 'Bug B', pr: 11, branch: 'fix-b', issueUrl: '#', prUrl: '#' },
-      { issue: 3, title: 'Bug C', pr: 12, branch: 'fix-c', issueUrl: '#', prUrl: '#' },
-    ]
-    const { default: App } = await import('../../App')
-    render(<App />)
-
-    expect(screen.getByText('3')).toBeInTheDocument()
+    // Click Close to dismiss
+    fireEvent.click(screen.getByText('Close'))
+    expect(screen.queryByText('Close')).toBeNull()
   })
 })
 
-describe('App pre-computed tab styles', () => {
-  it('tabInactiveStyle has base tab properties', () => {
-    expect(tabInactiveStyle).toMatchObject({
-      padding: '10px 20px',
-      fontSize: 12,
-      fontWeight: 600,
-      color: 'var(--text-muted)',
-      cursor: 'pointer',
-      borderBottom: '2px solid transparent',
+describe('App pre-computed styles', () => {
+  it('layoutStyle has grid layout properties', () => {
+    expect(layoutStyle).toMatchObject({
+      display: 'grid',
+      gridTemplateRows: 'auto 1fr',
+      gridTemplateColumns: '280px 1fr',
+      height: '100vh',
     })
   })
 
-  it('tabActiveStyle includes both tab and tabActive properties', () => {
-    expect(tabActiveStyle).toMatchObject({
-      padding: '10px 20px',
-      fontSize: 12,
-      fontWeight: 600,
-      color: 'var(--accent)',
-      cursor: 'pointer',
-      borderBottomColor: 'var(--accent)',
+  it('mainStyle has flex column layout', () => {
+    expect(mainStyle).toMatchObject({
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
     })
   })
 
-  it('tabActiveStyle overrides color from tabActive', () => {
-    // tabActive color (var(--accent)) should override base tab color (var(--text-muted))
-    expect(tabActiveStyle.color).toBe('var(--accent)')
+  it('transcriptOverlayStyle has fixed positioning', () => {
+    expect(transcriptOverlayStyle).toMatchObject({
+      position: 'fixed',
+      zIndex: 100,
+    })
   })
 
   it('style objects are referentially stable', () => {
-    expect(tabActiveStyle).toBe(tabActiveStyle)
-    expect(tabInactiveStyle).toBe(tabInactiveStyle)
-    expect(hitlBadgeStyle).toBe(hitlBadgeStyle)
-  })
-
-  describe('hitlBadgeStyle', () => {
-    it('has red background and white text', () => {
-      expect(hitlBadgeStyle).toMatchObject({
-        background: 'var(--red)',
-        color: 'var(--white)',
-      })
-    })
-
-    it('has pill-shaped badge properties', () => {
-      expect(hitlBadgeStyle).toMatchObject({
-        fontSize: 10,
-        fontWeight: 700,
-        borderRadius: 10,
-        padding: '1px 6px',
-        marginLeft: 6,
-      })
-    })
+    expect(layoutStyle).toBe(layoutStyle)
+    expect(mainStyle).toBe(mainStyle)
+    expect(transcriptOverlayStyle).toBe(transcriptOverlayStyle)
   })
 })

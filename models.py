@@ -234,6 +234,21 @@ class HITLItem(BaseModel):
     branch: str = ""
 
 
+class IntentRequest(BaseModel):
+    """User intent submitted via the dashboard."""
+
+    text: str
+    labels: list[str] = Field(default_factory=list)
+
+
+class IntentResponse(BaseModel):
+    """Response after creating an issue from an intent."""
+
+    issue_number: int
+    title: str
+    url: str = ""
+
+
 class ControlStatusConfig(BaseModel):
     """Config subset returned by GET /api/control/status."""
 

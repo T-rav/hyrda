@@ -1,40 +1,27 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useHydraSocket } from './hooks/useHydraSocket'
 import { Header } from './components/Header'
 import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
-import { PRTable } from './components/PRTable'
-import { HumanInputBanner } from './components/HumanInputBanner'
-import { HITLTable } from './components/HITLTable'
+import { IntentInput } from './components/IntentInput'
+import { StreamView } from './components/StreamView'
 import { theme } from './theme'
-
-const TABS = ['transcript', 'prs', 'hitl', 'timeline']
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
   const {
-    connected, batchNum, phase, orchestratorStatus, workers, reviews,
-    mergedCount, sessionPrsCount, lifetimeStats, config, events,
-    hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
+    connected, phase, orchestratorStatus, workers,
+    mergedCount, sessionPrsCount, lifetimeStats, config, issues,
+    hitlItems, humanInputRequests, dispatch, submitHumanInput, refreshHitl,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
-  const [activeTab, setActiveTab] = useState('transcript')
+
   const handleWorkerSelect = useCallback((worker) => {
     setSelectedWorker(worker)
-    setActiveTab('transcript')
   }, [])
 
-  // Auto-select the first active worker when none is selected
-  useEffect(() => {
-    if (selectedWorker !== null && workers[selectedWorker]) return
-    const active = Object.entries(workers).find(
-      ([, w]) => ACTIVE_STATUSES.includes(w.status)
-    )
-    if (active) {
-      const key = active[0]
-      setSelectedWorker(isNaN(Number(key)) ? key : Number(key))
-    }
-  }, [workers, selectedWorker])
+  const handleCloseTranscript = useCallback(() => {
+    setSelectedWorker(null)
+  }, [])
 
   const handleStart = useCallback(async () => {
     try {
@@ -47,6 +34,25 @@ export default function App() {
       await fetch('/api/control/stop', { method: 'POST' })
     } catch { /* ignore */ }
   }, [])
+
+  const handleIntent = useCallback(async (text) => {
+    const resp = await fetch('/api/intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    })
+    if (resp.ok) {
+      const data = await resp.json()
+      dispatch({
+        type: 'INTENT_SUBMITTED',
+        data: {
+          issueNumber: data.issue_number,
+          title: data.title,
+          text,
+        },
+      })
+    }
+  }, [dispatch])
 
   return (
     <div style={styles.layout}>
@@ -71,44 +77,34 @@ export default function App() {
       />
 
       <div style={styles.main}>
-        <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
+        <IntentInput onSubmit={handleIntent} />
 
-        <div style={styles.tabs}>
-          {TABS.map((tab) => (
-            <div
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
-            >
-              {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? (
-                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </div>
-          ))}
-        </div>
-
-        <div style={styles.tabContent}>
-          {activeTab === 'transcript' && (
-            <TranscriptView workers={workers} selectedWorker={selectedWorker} />
-          )}
-          {activeTab === 'prs' && <PRTable />}
-          {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'timeline' && (
-            <div style={styles.timeline}>
-              {events.map((e, i) => (
-                <div key={i} style={styles.timelineItem}>
-                  <span style={styles.timelineTime}>
-                    {new Date(e.timestamp).toLocaleTimeString()}
-                  </span>
-                  <span style={styles.timelineType}>{e.type.replace(/_/g, ' ')}</span>
-                  <span>{JSON.stringify(e.data).slice(0, 120)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <StreamView
+          issues={issues}
+          workers={workers}
+          humanInputRequests={humanInputRequests}
+          onHumanInputSubmit={submitHumanInput}
+        />
       </div>
 
+      {selectedWorker !== null && (
+        <div style={styles.transcriptOverlay}>
+          <div style={styles.transcriptPanel}>
+            <div style={styles.transcriptHeader}>
+              <span style={styles.transcriptTitle}>
+                Worker #{selectedWorker}
+              </span>
+              <button
+                style={styles.closeButton}
+                onClick={handleCloseTranscript}
+              >
+                Close
+              </button>
+            </div>
+            <TranscriptView workers={workers} selectedWorker={selectedWorker} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -119,60 +115,59 @@ const styles = {
     gridTemplateRows: 'auto 1fr',
     gridTemplateColumns: '280px 1fr',
     height: '100vh',
+    position: 'relative',
   },
   main: {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
   },
-  tabs: {
+  transcriptOverlay: {
+    position: 'fixed',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: '50%',
+    minWidth: 400,
+    maxWidth: 800,
+    background: theme.overlay,
+    zIndex: 100,
     display: 'flex',
+  },
+  transcriptPanel: {
+    flex: 1,
+    background: theme.bg,
+    borderLeft: `1px solid ${theme.border}`,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  transcriptHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px 16px',
     borderBottom: `1px solid ${theme.border}`,
     background: theme.surface,
   },
-  tab: {
-    padding: '10px 20px',
-    fontSize: 12,
+  transcriptTitle: {
     fontWeight: 600,
-    color: theme.textMuted,
+    fontSize: 13,
+    color: theme.textBright,
+  },
+  closeButton: {
+    padding: '4px 12px',
+    background: theme.surface,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 6,
+    color: theme.text,
     cursor: 'pointer',
-    borderBottom: '2px solid transparent',
-    transition: 'all 0.15s',
-  },
-  tabActive: {
-    color: theme.accent,
-    borderBottomColor: theme.accent,
-  },
-  tabContent: {
-    flex: 1,
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  timeline: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: 8,
-  },
-  timelineItem: {
-    padding: '6px 8px',
-    borderBottom: `1px solid ${theme.border}`,
-    fontSize: 11,
-  },
-  timelineTime: { color: theme.textMuted, marginRight: 8 },
-  timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
-  hitlBadge: {
-    background: theme.red,
-    color: theme.white,
-    fontSize: 10,
-    fontWeight: 700,
-    borderRadius: 10,
-    padding: '1px 6px',
-    marginLeft: 6,
+    fontFamily: 'inherit',
+    fontSize: 12,
   },
 }
 
-// Pre-computed tab style variants (avoids object spread in .map())
-export const tabInactiveStyle = styles.tab
-export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
-export const hitlBadgeStyle = styles.hitlBadge
+// Pre-computed style exports for testing
+export const layoutStyle = styles.layout
+export const mainStyle = styles.main
+export const transcriptOverlayStyle = styles.transcriptOverlay

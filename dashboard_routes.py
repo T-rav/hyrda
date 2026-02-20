@@ -13,7 +13,12 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from config import HydraConfig
 from events import EventBus, HydraEvent
-from models import ControlStatusConfig, ControlStatusResponse
+from models import (
+    ControlStatusConfig,
+    ControlStatusResponse,
+    IntentRequest,
+    IntentResponse,
+)
 from pr_manager import PRManager
 from state import StateTracker
 
@@ -146,6 +151,38 @@ def create_router(
             ),
         )
         return JSONResponse(response.model_dump())
+
+    @router.post("/api/intent")
+    async def create_intent(body: IntentRequest) -> JSONResponse:
+        """Create a GitHub issue from a user intent."""
+        text = body.text.strip()
+        if not text:
+            return JSONResponse({"error": "text must not be empty"}, status_code=400)
+
+        title = text[:70]
+        issue_body = text + "\n\n---\n*Submitted via Hydra Dashboard*"
+
+        labels = body.labels if body.labels else []
+        if config.find_label:
+            labels = labels or list(config.find_label)
+        elif config.planner_label:
+            labels = labels or list(config.planner_label)
+
+        issue_number = await pr_manager.create_issue(
+            title=title,
+            body=issue_body,
+            labels=labels,
+        )
+        if issue_number == 0:
+            return JSONResponse({"error": "Failed to create issue"}, status_code=500)
+
+        url = f"https://github.com/{config.repo}/issues/{issue_number}"
+        response = IntentResponse(
+            issue_number=issue_number,
+            title=title,
+            url=url,
+        )
+        return JSONResponse(response.model_dump(), status_code=201)
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
