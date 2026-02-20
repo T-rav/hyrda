@@ -1750,6 +1750,26 @@ class TestHITLSkipEndpoint:
         assert hitl_events[0].data["status"] == "resolved"
         assert hitl_events[0].data["action"] == "skip"
 
+    def test_skip_removes_hitl_origin_from_state(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-review")
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock):
+            client.post("/api/hitl/42/skip")
+
+        assert state.get_hitl_origin(42) is None
+
 
 # ---------------------------------------------------------------------------
 # POST /api/hitl/{issue}/close
@@ -1839,6 +1859,26 @@ class TestHITLCloseEndpoint:
         assert hitl_events[0].data["issue"] == 42
         assert hitl_events[0].data["status"] == "resolved"
         assert hitl_events[0].data["action"] == "close"
+
+    def test_close_removes_hitl_origin_from_state(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-review")
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.close_issue", new_callable=AsyncMock):
+            client.post("/api/hitl/42/close")
+
+        assert state.get_hitl_origin(42) is None
 
 
 # ---------------------------------------------------------------------------
