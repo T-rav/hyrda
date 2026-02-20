@@ -28,6 +28,13 @@ from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
 
+_HITL_ORIGIN_DISPLAY: dict[str, str] = {
+    "hydra-find": "from triage",
+    "hydra-plan": "from plan",
+    "hydra-ready": "from implement",
+    "hydra-review": "from review",
+}
+
 
 class HydraOrchestrator:
     """Coordinates the full Hydra pipeline.
@@ -135,9 +142,18 @@ class HydraOrchestrator:
         self._hitl_corrections[issue_number] = correction
 
     def get_hitl_status(self, issue_number: int) -> str:
-        """Return the HITL status for an issue: processing if active, else pending."""
+        """Return the HITL status for an issue.
+
+        Returns ``"processing"`` for actively-running issues, or a
+        human-readable origin label (e.g. ``"from review"``) for items
+        waiting on human action.  Falls back to ``"pending"`` when no
+        origin data is available.
+        """
         if issue_number in self._active_issues:
             return "processing"
+        origin = self._state.get_hitl_origin(issue_number)
+        if origin:
+            return _HITL_ORIGIN_DISPLAY.get(origin, "pending")
         return "pending"
 
     def skip_hitl_issue(self, issue_number: int) -> None:
