@@ -58,7 +58,7 @@ export function reducer(state, action) {
 
     case 'orchestrator_status': {
       const newStatus = action.data.status
-      const isStopped = newStatus === 'idle' || newStatus === 'done'
+      const isStopped = newStatus === 'idle' || newStatus === 'done' || newStatus === 'stopping'
       return {
         ...addEvent(state, action),
         orchestratorStatus: newStatus,
