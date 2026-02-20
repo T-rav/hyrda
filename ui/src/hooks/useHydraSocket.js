@@ -10,6 +10,10 @@ const initialState = {
   reviews: [],    // ReviewData[]
   mergedCount: 0,
   sessionPrsCount: 0,
+  sessionTriaged: 0,
+  sessionPlanned: 0,
+  sessionImplemented: 0,
+  sessionReviewed: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
@@ -41,6 +45,10 @@ export function reducer(state, action) {
           reviews: [],
           mergedCount: 0,
           sessionPrsCount: 0,
+          sessionTriaged: 0,
+          sessionPlanned: 0,
+          sessionImplemented: 0,
+          sessionReviewed: 0,
           hitlItems: [],
         }
       }
@@ -64,8 +72,12 @@ export function reducer(state, action) {
         transcript: [],
         pr: null,
       }
+      const prevStatus = existing?.status
+      const newImplemented = status === 'done' && prevStatus !== 'done'
+        ? state.sessionImplemented + 1 : state.sessionImplemented
       return {
         ...state,
+        sessionImplemented: newImplemented,
         workers: {
           ...state.workers,
           [issue]: { ...existing, status, worker, role: role || existing.role },
@@ -114,8 +126,11 @@ export function reducer(state, action) {
         pr: null,
       }
       const existingTriage = state.workers[triageKey]
+      const newTriaged = triageStatus === 'done' && existingTriage?.status !== 'done'
+        ? state.sessionTriaged + 1 : state.sessionTriaged
       return {
         ...addEvent(state, action),
+        sessionTriaged: newTriaged,
         workers: {
           ...state.workers,
           [triageKey]: existingTriage
@@ -139,8 +154,11 @@ export function reducer(state, action) {
         pr: null,
       }
       const existingPlanner = state.workers[planKey]
+      const newPlanned = planStatus === 'done' && existingPlanner?.status !== 'done'
+        ? state.sessionPlanned + 1 : state.sessionPlanned
       return {
         ...addEvent(state, action),
+        sessionPlanned: newPlanned,
         workers: {
           ...state.workers,
           [planKey]: existingPlanner
@@ -163,6 +181,8 @@ export function reducer(state, action) {
         pr: action.data.pr,
       }
       const existingReviewer = state.workers[reviewKey]
+      const newReviewed = reviewStatus === 'done' && existingReviewer?.status !== 'done'
+        ? state.sessionReviewed + 1 : state.sessionReviewed
       const updatedWorkers = {
         ...state.workers,
         [reviewKey]: existingReviewer
@@ -172,6 +192,7 @@ export function reducer(state, action) {
       if (action.data.status === 'done') {
         return {
           ...addEvent(state, action),
+          sessionReviewed: newReviewed,
           workers: updatedWorkers,
           reviews: [...state.reviews, action.data],
         }

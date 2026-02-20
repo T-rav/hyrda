@@ -3,9 +3,9 @@
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
  *
- * @typedef {'queued'|'running'|'planning'|'reviewing'|'evaluating'|'testing'|'committing'|'quality_fix'|'done'|'failed'} WorkerStatus
+ * @typedef {'queued'|'planning'|'running'|'evaluating'|'testing'|'committing'|'quality_fix'|'reviewing'|'done'|'failed'} WorkerStatus
  *
- * @typedef {{ status: WorkerStatus, worker: number, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
+ * @typedef {{ status: WorkerStatus, worker: number, role: string, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *
  * @typedef {{ pr: number, issue: number, branch: string, draft: boolean, url: string }} PRData
  *
