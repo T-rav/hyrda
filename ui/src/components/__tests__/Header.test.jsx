@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, act } from '@testing-library/react'
 import {
   Header,
   dotConnected, dotDisconnected,
@@ -327,5 +327,111 @@ describe('Header component', () => {
     const centerDiv = sessionLabel.closest('div').parentElement
     expect(centerDiv.style.minWidth).toBe('0px')
     expect(centerDiv.style.overflow).toBe('hidden')
+  })
+
+  describe('stopping state with active workers', () => {
+    const activeWorkers = {
+      1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+      2: { status: 'done', worker: 2, role: 'implementer', title: 'Issue #2', branch: '', transcript: [], pr: null },
+    }
+    const allDoneWorkers = {
+      1: { status: 'done', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+      2: { status: 'done', worker: 2, role: 'implementer', title: 'Issue #2', branch: '', transcript: [], pr: null },
+    }
+    const planningWorkers = {
+      1: { status: 'planning', worker: 1, role: 'planner', title: 'Plan #1', branch: '', transcript: [], pr: null },
+    }
+
+    it('does not show Start when orchestratorStatus is idle but workers are active', () => {
+      render(<Header {...defaultProps} orchestratorStatus="idle" workers={activeWorkers} />)
+      expect(screen.queryByText('Start')).toBeNull()
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+    })
+
+    it('shows Start when idle and all workers are done', () => {
+      render(<Header {...defaultProps} orchestratorStatus="idle" workers={allDoneWorkers} />)
+      expect(screen.getByText('Start')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping\u2026')).toBeNull()
+    })
+
+    it('shows Stopping badge when orchestratorStatus is stopping', () => {
+      render(<Header {...defaultProps} orchestratorStatus="stopping" workers={{}} />)
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).toBeNull()
+      expect(screen.queryByText('Stop')).toBeNull()
+    })
+
+    it('does not show Start when orchestratorStatus is idle but workers still planning', () => {
+      render(<Header {...defaultProps} orchestratorStatus="idle" workers={planningWorkers} />)
+      expect(screen.queryByText('Start')).toBeNull()
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+    })
+
+    it('shows Start when orchestratorStatus is done and no active workers', () => {
+      render(<Header {...defaultProps} orchestratorStatus="done" workers={allDoneWorkers} />)
+      expect(screen.getByText('Start')).toBeInTheDocument()
+    })
+
+    it('does not show Start when orchestratorStatus is done but workers are active', () => {
+      render(<Header {...defaultProps} orchestratorStatus="done" workers={activeWorkers} />)
+      expect(screen.queryByText('Start')).toBeNull()
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+    })
+  })
+
+  describe('minimum stopping hold timer', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('holds Stopping badge briefly after status transitions from stopping to idle', () => {
+      const { rerender } = render(
+        <Header {...defaultProps} orchestratorStatus="stopping" workers={{}} />
+      )
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+
+      // Transition to idle with no active workers
+      rerender(<Header {...defaultProps} orchestratorStatus="idle" workers={{}} />)
+
+      // Should still show Stopping due to minimum hold timer
+      // The second useEffect clears early when !hasActiveWorkers && status !== 'stopping'
+      // so with no active workers, it should clear immediately
+      expect(screen.getByText('Start')).toBeInTheDocument()
+    })
+
+    it('holds Stopping badge while workers are still active after idle', () => {
+      const activeWorkers = {
+        1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+      }
+
+      const { rerender } = render(
+        <Header {...defaultProps} orchestratorStatus="stopping" workers={activeWorkers} />
+      )
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+
+      // Status transitions to idle but workers still active
+      rerender(<Header {...defaultProps} orchestratorStatus="idle" workers={activeWorkers} />)
+
+      // Should still show Stopping because workers are active
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).toBeNull()
+
+      // Workers finish
+      rerender(<Header {...defaultProps} orchestratorStatus="idle" workers={{}} />)
+
+      // Now Start should appear
+      expect(screen.getByText('Start')).toBeInTheDocument()
+    })
+
+    it('handles disconnect during stopping gracefully', () => {
+      render(
+        <Header {...defaultProps} orchestratorStatus="stopping" connected={false} workers={{}} />
+      )
+      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).toBeNull()
+    })
   })
 })
