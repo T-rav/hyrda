@@ -60,23 +60,22 @@ class ReviewPhase:
             async with semaphore:
                 self._active_issues.add(pr.issue_number)
 
-                # Publish a start event immediately so the dashboard
-                # shows this worker as active during pre-review work
-                # (worktree creation, merge, conflict resolution).
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.REVIEW_UPDATE,
-                        data={
-                            "pr": pr.number,
-                            "issue": pr.issue_number,
-                            "worker": idx,
-                            "status": "start",
-                            "role": "reviewer",
-                        },
-                    )
-                )
-
                 try:
+                    # Publish a start event immediately so the dashboard
+                    # shows this worker as active during pre-review work
+                    # (worktree creation, merge, conflict resolution).
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.REVIEW_UPDATE,
+                            data={
+                                "pr": pr.number,
+                                "issue": pr.issue_number,
+                                "worker": idx,
+                                "status": "start",
+                                "role": "reviewer",
+                            },
+                        )
+                    )
                     issue = issue_map.get(pr.issue_number)
                     if issue is None:
                         return ReviewResult(
