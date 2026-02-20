@@ -1307,6 +1307,10 @@ class TestPlanPhase:
             assert (42, lbl) in remove_calls
         mock_prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
 
+        # HITL origin and cause tracked in state
+        assert orch._state.get_hitl_origin(42) == config.planner_label[0]
+        assert orch._state.get_hitl_cause(42) == "Plan validation failed after retry"
+
     @pytest.mark.asyncio
     async def test_plan_issues_no_hitl_on_failure_without_retry(
         self, config: HydraConfig

@@ -190,6 +190,7 @@ class HydraConfig(BaseModel):
             HYDRA_GH_TOKEN          → gh_token
             HYDRA_GIT_USER_NAME     → git_user_name
             HYDRA_GIT_USER_EMAIL    → git_user_email
+            HYDRA_MIN_PLAN_WORDS    → min_plan_words
             HYDRA_LABEL_FIND        → find_label   (discovery stage)
             HYDRA_LABEL_PLAN        → planner_label
             HYDRA_LABEL_READY       → ready_label  (implement stage)
@@ -229,6 +230,11 @@ class HydraConfig(BaseModel):
             env_email = os.environ.get("HYDRA_GIT_USER_EMAIL", "")
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
+
+        # Planner env var overrides (only apply when still at the default)
+        env_min_words = os.environ.get("HYDRA_MIN_PLAN_WORDS")
+        if env_min_words is not None and self.min_plan_words == 200:
+            object.__setattr__(self, "min_plan_words", int(env_min_words))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

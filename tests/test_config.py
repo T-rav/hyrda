@@ -1302,6 +1302,46 @@ class TestHydraConfigHitlActiveLabel:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – min_plan_words env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMinPlanWords:
+    """Tests for min_plan_words field and HYDRA_MIN_PLAN_WORDS env var."""
+
+    def test_min_plan_words_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 200
+
+    def test_min_plan_words_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_PLAN_WORDS", "300")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 300
+
+    def test_min_plan_words_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_PLAN_WORDS", "300")
+        cfg = HydraConfig(
+            min_plan_words=100,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 100
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers
 # ---------------------------------------------------------------------------
 

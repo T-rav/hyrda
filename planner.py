@@ -290,6 +290,13 @@ Plans missing any required section will be rejected and you will be asked to ret
 - `## Acceptance Criteria` — extracted or synthesized from the issue
 - `## Key Considerations` — edge cases, backward compatibility, dependencies
 
+## Handling Uncertainty
+
+If any requirement is ambiguous or has multiple valid interpretations, mark it with
+`[NEEDS CLARIFICATION: <brief description of what's unclear>]` rather than making
+assumptions. This is preferred over guessing. Plans with 0-3 markers are acceptable;
+plans with 4 or more markers will be escalated for human review.
+
 ## Optional: Discovered Issues
 
 If you discover bugs, tech debt, or out-of-scope work during exploration,
@@ -426,6 +433,16 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
         min_words = self._config.min_plan_words
         if word_count < min_words:
             errors.append(f"Plan has {word_count} words, minimum is {min_words}")
+
+        # --- [NEEDS CLARIFICATION] marker count ---
+        clarification_markers = re.findall(
+            r"\[NEEDS CLARIFICATION(?::\s*[^\]]+)?\]", plan, re.IGNORECASE
+        )
+        if len(clarification_markers) >= 4:
+            errors.append(
+                f"Plan has {len(clarification_markers)} [NEEDS CLARIFICATION] markers "
+                f"(max 3) — issue needs more detail before implementation"
+            )
 
         # --- Soft word-overlap check (warning only) ---
         title_words = self._significant_words(issue.title)
@@ -624,6 +641,9 @@ Your plan MUST include ALL of the following sections with these EXACT headers:
 - `## Testing Strategy` — what tests to write and what to verify (must reference specific test file paths or patterns; do NOT defer testing)
 - `## Acceptance Criteria` — extracted or synthesized from the issue
 - `## Key Considerations` — edge cases, backward compatibility, dependencies
+
+If any requirement is ambiguous, mark it with `[NEEDS CLARIFICATION: <description>]`
+rather than guessing. Plans with 4+ markers will be escalated for human review.
 
 Output your corrected plan between these exact markers:
 

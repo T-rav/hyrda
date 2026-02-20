@@ -473,6 +473,13 @@ class HydraOrchestrator:
                     await self._prs.post_comment(issue.number, hitl_comment)
                     for lbl in self._config.planner_label:
                         await self._prs.remove_label(issue.number, lbl)
+                    self._state.set_hitl_origin(
+                        issue.number, self._config.planner_label[0]
+                    )
+                    self._state.set_hitl_cause(
+                        issue.number,
+                        "Plan validation failed after retry",
+                    )
                     await self._prs.add_labels(
                         issue.number, [self._config.hitl_label[0]]
                     )

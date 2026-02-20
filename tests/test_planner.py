@@ -1191,3 +1191,71 @@ def test_required_sections_has_six_entries(config, event_bus):
     assert "## Testing Strategy" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Acceptance Criteria" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Key Considerations" in PlannerRunner.REQUIRED_SECTIONS
+
+
+# ---------------------------------------------------------------------------
+# [NEEDS CLARIFICATION] markers
+# ---------------------------------------------------------------------------
+
+
+def test_validate_plan_accepts_three_clarification_markers(config, event_bus):
+    """Plans with 0-3 [NEEDS CLARIFICATION] markers are acceptable."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    plan = _valid_plan() + (
+        "\n[NEEDS CLARIFICATION: unclear if OAuth or JWT]\n"
+        "[NEEDS CLARIFICATION: which database?]\n"
+        "[NEEDS CLARIFICATION: migration strategy?]\n"
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert not any("NEEDS CLARIFICATION" in e for e in errors)
+
+
+def test_validate_plan_rejects_four_clarification_markers(config, event_bus):
+    """Plans with 4+ [NEEDS CLARIFICATION] markers escalate."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    plan = _valid_plan() + (
+        "\n[NEEDS CLARIFICATION: unclear if OAuth or JWT]\n"
+        "[NEEDS CLARIFICATION: which database?]\n"
+        "[NEEDS CLARIFICATION: migration strategy?]\n"
+        "[NEEDS CLARIFICATION: backward compat?]\n"
+    )
+    errors = runner._validate_plan(issue, plan)
+    assert any("NEEDS CLARIFICATION" in e for e in errors)
+    assert any("4" in e for e in errors if "NEEDS CLARIFICATION" in e)
+
+
+def test_validate_plan_zero_clarification_markers_ok(config, event_bus):
+    """Plans with no [NEEDS CLARIFICATION] markers pass."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix authentication handler")
+    errors = runner._validate_plan(issue, _valid_plan())
+    assert not any("NEEDS CLARIFICATION" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# _build_prompt — [NEEDS CLARIFICATION] instruction
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_clarification_instruction(config, event_bus, issue):
+    """Prompt should instruct the planner about [NEEDS CLARIFICATION] markers."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+    assert "NEEDS CLARIFICATION" in prompt
+
+
+def test_build_retry_prompt_includes_clarification_instruction(
+    config, event_bus, issue
+):
+    """Retry prompt should also mention [NEEDS CLARIFICATION] markers."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(issue, "failed plan", ["some error"])
+    assert "NEEDS CLARIFICATION" in prompt
