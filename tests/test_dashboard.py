@@ -1321,3 +1321,107 @@ class TestHITLRoute:
         assert len(body) == 1
         assert body[0]["pr"] == 0
         assert body[0]["prUrl"] == ""
+
+
+# ---------------------------------------------------------------------------
+# WebSocket error logging
+# ---------------------------------------------------------------------------
+
+
+class TestWebSocketErrorLogging:
+    """Tests that unexpected WebSocket errors are logged, not silently swallowed."""
+
+    def test_websocket_logs_warning_on_history_replay_error(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """When send_text raises during history replay, a warning is logged."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+
+        # Publish an event so history is non-empty
+        async def publish() -> None:
+            await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"batch": 1}))
+
+        asyncio.run(publish())
+
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        with patch("dashboard.logger") as mock_logger:
+            with (
+                patch(
+                    "starlette.websockets.WebSocket.send_text",
+                    side_effect=RuntimeError("serialization failed"),
+                ),
+                client.websocket_connect("/ws"),
+            ):
+                pass
+
+            mock_logger.warning.assert_any_call(
+                "WebSocket error during history replay", exc_info=True
+            )
+
+    def test_websocket_logs_warning_on_live_stream_error(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """When send_text raises during live streaming, a warning is logged."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        # Pre-populate a queue with one event so queue.get() returns immediately
+        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+        pre_populated_queue: asyncio.Queue[HydraEvent] = asyncio.Queue()
+        pre_populated_queue.put_nowait(event)
+
+        with patch("dashboard.logger") as mock_logger:
+            # subscribe() returns the pre-populated queue (no history, so
+            # send_text is only called during the live streaming phase)
+            with (
+                patch.object(bus, "subscribe", return_value=pre_populated_queue),
+                patch.object(bus, "get_history", return_value=[]),
+                patch(
+                    "starlette.websockets.WebSocket.send_text",
+                    side_effect=RuntimeError("live stream send failed"),
+                ),
+                client.websocket_connect("/ws"),
+            ):
+                pass
+
+            mock_logger.warning.assert_any_call(
+                "WebSocket error during live streaming", exc_info=True
+            )
+
+    def test_websocket_disconnect_not_logged(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """WebSocketDisconnect should be handled silently (no warning logged)."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        with patch("dashboard.logger") as mock_logger:
+            with client.websocket_connect("/ws"):
+                # Just connect and disconnect normally
+                pass
+
+            # logger.warning should NOT have been called with WebSocket error messages
+            for call in mock_logger.warning.call_args_list:
+                assert "WebSocket error" not in str(call)

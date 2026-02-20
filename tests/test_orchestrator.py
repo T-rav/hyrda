@@ -1663,6 +1663,51 @@ class TestFetchReviewablePrs:
         assert issues == []
         mock_create.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_implement_releases_active_issues_for_review(
+        self, config: HydraConfig
+    ) -> None:
+        """After implementation, issue should be removed from _active_issues
+        so the review loop can pick it up."""
+        orch = HydraOrchestrator(config)
+
+        # Stub fetches to return one issue
+        orch._fetch_ready_issues = AsyncMock(  # type: ignore[method-assign]
+            return_value=[
+                GitHubIssue(
+                    number=42,
+                    title="Test",
+                    body="body",
+                    labels=["test-label"],
+                )
+            ],
+        )
+
+        # Stub worktree creation and agent run
+        orch._worktrees.create = AsyncMock(  # type: ignore[method-assign]
+            return_value=Path("/tmp/wt-42"),
+        )
+        orch._agents.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=WorkerResult(
+                issue_number=42,
+                branch="agent/issue-42",
+                worktree_path="/tmp/wt-42",
+                success=True,
+            ),
+        )
+        orch._prs.push_branch = AsyncMock(return_value=True)  # type: ignore[method-assign]
+        orch._prs.create_pr = AsyncMock(return_value=None)  # type: ignore[method-assign]
+        orch._prs.remove_label = AsyncMock()  # type: ignore[method-assign]
+        orch._prs.add_labels = AsyncMock()  # type: ignore[method-assign]
+        orch._prs.post_comment = AsyncMock()  # type: ignore[method-assign]
+
+        results, _ = await orch._implement_batch()
+
+        assert len(results) == 1
+        assert results[0].success is True
+        # Issue should have been released from _active_issues
+        assert 42 not in orch._active_issues
+
 
 # ---------------------------------------------------------------------------
 # run() loop

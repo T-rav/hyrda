@@ -1,6 +1,12 @@
-# Hydra
+<p align="center">
+  <img src="docs/hydra-logo.png" alt="Hydra" width="200">
+</p>
 
-Multi-agent orchestration system that automates the full GitHub issue lifecycle using Claude Code. Label an issue, Hydra plans it, implements it, opens a PR, reviews it, waits for CI, and auto-merges.
+<h1 align="center">Hydra</h1>
+
+<p align="center">
+  Multi-agent orchestration system that automates the full GitHub issue lifecycle using Claude Code. Label an issue, Hydra plans it, implements it, opens a PR, reviews it, waits for CI, and auto-merges.
+</p>
 
 ## How It Works
 

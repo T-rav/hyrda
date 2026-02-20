@@ -40,6 +40,7 @@ export function Header({
   return (
     <header style={styles.header}>
       <div style={styles.left}>
+        <img src="/hydra-logo.png" alt="Hydra" style={styles.logoImg} />
         <span style={styles.logo}>
           HYDRA
           <span style={styles.subtitle}>Parallel Issue Processor</span>
@@ -138,7 +139,8 @@ const styles = {
     background: '#161b22',
     borderBottom: '1px solid #30363d',
   },
-  left: { display: 'flex', alignItems: 'center', gap: 10 },
+  left: { display: 'flex', alignItems: 'center', gap: 8 },
+  logoImg: { width: 40, height: 40 },
   logo: { fontSize: 18, fontWeight: 700, color: '#58a6ff' },
   subtitle: { color: '#8b949e', fontWeight: 400, fontSize: 12, marginLeft: 8 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
