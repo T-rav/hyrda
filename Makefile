@@ -1,4 +1,4 @@
-# Makefile for Hydra — Parallel Claude Code Issue Processor
+# Makefile for Hydra — Intent in. Software out.
 
 HYDRA_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(HYDRA_DIR))
@@ -34,7 +34,7 @@ RESET := \033[0m
 .PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels
 
 help:
-	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
+	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
 	@echo ""
 	@echo "$(GREEN)Commands:$(RESET)"
 	@echo "  make dev            Start backend + Vite frontend dev server"

@@ -3,8 +3,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { theme } from '../theme'
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
-
 export function TranscriptView({ workers, selectedWorker }) {
   const containerRef = useRef(null)
 
