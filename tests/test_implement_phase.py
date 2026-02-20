@@ -500,3 +500,129 @@ class TestWorkerExceptionIsolation:
         assert result_map[1].success is False
         assert result_map[1].error is not None
         assert result_map[2].success is True
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle metric recording
+# ---------------------------------------------------------------------------
+
+
+class TestImplementLifecycleMetrics:
+    """Tests that run_batch records new lifecycle metrics in state."""
+
+    @pytest.mark.asyncio
+    async def test_records_implementation_duration(self, config: HydraConfig) -> None:
+        """Successful implementation should record duration in state."""
+        issue = make_issue(42)
+
+        async def agent_with_duration(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                duration_seconds=60.5,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=agent_with_duration)
+        await phase.run_batch()
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_implementation_seconds"] == pytest.approx(60.5)
+
+    @pytest.mark.asyncio
+    async def test_does_not_record_zero_duration(self, config: HydraConfig) -> None:
+        """Zero duration should not be recorded."""
+        issue = make_issue(42)
+
+        async def agent_zero_duration(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                duration_seconds=0.0,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=agent_zero_duration)
+        await phase.run_batch()
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_implementation_seconds"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_records_quality_fix_rounds(self, config: HydraConfig) -> None:
+        """Quality fix attempts should be recorded in state."""
+        issue = make_issue(42)
+
+        async def agent_with_qf(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                quality_fix_attempts=2,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=agent_with_qf)
+        await phase.run_batch()
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_quality_fix_rounds"] == 2
+
+    @pytest.mark.asyncio
+    async def test_does_not_record_zero_quality_fix_rounds(
+        self, config: HydraConfig
+    ) -> None:
+        """Zero quality fix attempts should not be recorded."""
+        issue = make_issue(42)
+
+        phase, _, _ = _make_phase(config, [issue])
+        await phase.run_batch()
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_quality_fix_rounds"] == 0
+
+    @pytest.mark.asyncio
+    async def test_accumulates_across_multiple_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """Metrics should accumulate across multiple issues in a batch."""
+        issues = [make_issue(1), make_issue(2)]
+
+        async def agent_with_metrics(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                duration_seconds=30.0,
+                quality_fix_attempts=1,
+            )
+
+        phase, _, _ = _make_phase(config, issues, agent_run=agent_with_metrics)
+        await phase.run_batch()
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_implementation_seconds"] == pytest.approx(60.0)
+        assert stats["total_quality_fix_rounds"] == 2

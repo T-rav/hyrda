@@ -56,6 +56,35 @@ def create_router(
     async def get_stats() -> JSONResponse:
         return JSONResponse(state.get_lifetime_stats())
 
+    @router.get("/api/metrics")
+    async def get_metrics() -> JSONResponse:
+        stats = state.get_lifetime_stats()
+        total_issues = stats.get("issues_completed", 0)
+        total_prs = stats.get("prs_merged", 0)
+        total_approvals = stats.get("total_review_approvals", 0)
+        total_request_changes = stats.get("total_review_request_changes", 0)
+        total_reviews = total_approvals + total_request_changes
+        total_qf = stats.get("total_quality_fix_rounds", 0)
+        total_fixes = stats.get("total_reviewer_fixes", 0)
+        total_impl_secs = stats.get("total_implementation_seconds", 0.0)
+        total_hitl = stats.get("total_hitl_escalations", 0)
+
+        metrics = {
+            "quality_fix_rate": total_qf / total_issues if total_issues else 0.0,
+            "first_pass_approval_rate": (
+                total_approvals / total_reviews if total_reviews else 0.0
+            ),
+            "hitl_escalation_rate": total_hitl / total_issues if total_issues else 0.0,
+            "avg_quality_fix_rounds": total_qf / total_issues if total_issues else 0.0,
+            "avg_implementation_seconds": (
+                total_impl_secs / total_issues if total_issues else 0.0
+            ),
+            "reviewer_fix_rate": total_fixes / total_reviews if total_reviews else 0.0,
+            "total_issues": total_issues,
+            "total_prs": total_prs,
+        }
+        return JSONResponse(metrics)
+
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:
         if since is not None:

@@ -384,6 +384,7 @@ class HydraOrchestrator:
                     issue.number,
                     "Insufficient issue detail for triage",
                 )
+                self._state.record_hitl_escalation()
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"

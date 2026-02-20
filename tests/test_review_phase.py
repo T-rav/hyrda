@@ -1660,3 +1660,314 @@ class TestReviewUpdateStartEvent:
         ]
         assert len(start_events) == 1
         assert "worker" in start_events[0].data
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle metric recording
+# ---------------------------------------------------------------------------
+
+
+class TestLifecycleMetricRecording:
+    """Tests that review_prs records new lifecycle metrics in state."""
+
+    @pytest.mark.asyncio
+    async def test_records_review_verdict_approve(self, config: HydraConfig) -> None:
+        """Approving a PR should record an approval verdict in state."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_review_approvals"] == 1
+        assert stats["total_review_request_changes"] == 0
+
+    @pytest.mark.asyncio
+    async def test_records_review_verdict_request_changes(
+        self, config: HydraConfig
+    ) -> None:
+        """Request-changes verdict should record in state."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Needs changes.",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_review_request_changes"] == 1
+        assert stats["total_review_approvals"] == 0
+
+    @pytest.mark.asyncio
+    async def test_records_reviewer_fixes(self, config: HydraConfig) -> None:
+        """When reviewer makes fixes, it should be counted."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="Fixed and approved.",
+            fixes_made=True,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_reviewer_fixes"] == 1
+
+    @pytest.mark.asyncio
+    async def test_records_review_duration(self, config: HydraConfig) -> None:
+        """Review duration should be recorded when positive."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="OK",
+            duration_seconds=45.5,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_review_seconds"] == pytest.approx(45.5)
+
+    @pytest.mark.asyncio
+    async def test_does_not_record_zero_review_duration(
+        self, config: HydraConfig
+    ) -> None:
+        """Zero duration should not be recorded."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="OK",
+            duration_seconds=0.0,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_review_seconds"] == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_merge_conflict_records_hitl_escalation(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict HITL escalation should increment the hitl counter."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_hitl_escalations"] == 1
+
+    @pytest.mark.asyncio
+    async def test_merge_failure_records_hitl_escalation(
+        self, config: HydraConfig
+    ) -> None:
+        """PR merge failure should increment the hitl counter."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_hitl_escalations"] == 1
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_records_ci_fix_rounds_and_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """CI failure escalation should record ci fix rounds and hitl escalation."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = _make_phase(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_ci_fix_rounds"] == 1
+        assert stats["total_hitl_escalations"] == 1
+
+    @pytest.mark.asyncio
+    async def test_successful_merge_with_ci_fixes_records_rounds(
+        self, config: HydraConfig
+    ) -> None:
+        """When CI eventually passes after fix(es), ci_fix_rounds should be recorded."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = _make_phase(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        ci_results = [
+            (False, "Failed checks: ci"),
+            (True, "All 2 checks passed"),
+        ]
+        ci_call_count = 0
+
+        async def fake_wait_for_ci(_pr_num, _timeout, _interval, _stop):
+            nonlocal ci_call_count
+            result = ci_results[ci_call_count]
+            ci_call_count += 1
+            return result
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = fake_wait_for_ci
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_ci_fix_rounds"] == 1  # 1 fix attempt before success

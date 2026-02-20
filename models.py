@@ -155,6 +155,7 @@ class ReviewResult(BaseModel):
     merged: bool = False
     ci_passed: bool | None = None  # None = not checked, True/False = outcome
     ci_fix_attempts: int = 0
+    duration_seconds: float = 0.0
 
 
 # --- Batch ---
@@ -192,9 +193,22 @@ class Phase(StrEnum):
 class LifetimeStats(BaseModel):
     """All-time counters preserved across resets."""
 
+    # Existing
     issues_completed: int = 0
     prs_merged: int = 0
     issues_created: int = 0
+    # Volume counters
+    total_quality_fix_rounds: int = 0
+    total_ci_fix_rounds: int = 0
+    total_hitl_escalations: int = 0
+    total_review_request_changes: int = 0
+    total_review_approvals: int = 0
+    total_reviewer_fixes: int = 0
+    # Timing
+    total_implementation_seconds: float = 0.0
+    total_review_seconds: float = 0.0
+    # Threshold proposals already filed (avoid re-filing)
+    fired_thresholds: list[str] = Field(default_factory=list)
 
 
 class StateData(BaseModel):

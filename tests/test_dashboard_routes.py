@@ -74,6 +74,7 @@ class TestCreateRouter:
             "/",
             "/api/state",
             "/api/stats",
+            "/api/metrics",
             "/api/events",
             "/api/prs",
             "/api/hitl",
@@ -186,3 +187,111 @@ class TestHITLEndpointCause:
         assert len(items) == 1
         # cause should be the default empty string from model_dump, not overwritten
         assert items[0]["cause"] == ""
+
+
+# ---------------------------------------------------------------------------
+# /api/metrics endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsEndpoint:
+    """Tests for the GET /api/metrics endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint  # type: ignore[union-attr]
+        return None
+
+    @pytest.mark.asyncio
+    async def test_metrics_returns_zero_rates_when_no_data(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        assert get_metrics is not None
+
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["quality_fix_rate"] == pytest.approx(0.0)
+        assert data["first_pass_approval_rate"] == pytest.approx(0.0)
+        assert data["hitl_escalation_rate"] == pytest.approx(0.0)
+        assert data["total_issues"] == 0
+        assert data["total_prs"] == 0
+
+    @pytest.mark.asyncio
+    async def test_metrics_returns_computed_rates(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        # Set up some stats
+        for _ in range(10):
+            state.record_issue_completed()
+        for _ in range(5):
+            state.record_pr_merged()
+        state.record_quality_fix_rounds(4)
+        state.record_review_verdict("approve", fixes_made=False)
+        state.record_review_verdict("approve", fixes_made=False)
+        state.record_review_verdict("request-changes", fixes_made=True)
+        state.record_hitl_escalation()
+        state.record_hitl_escalation()
+        state.record_implementation_duration(100.0)
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["quality_fix_rate"] == pytest.approx(0.4)  # 4/10
+        assert data["first_pass_approval_rate"] == pytest.approx(2.0 / 3.0)  # 2/3
+        assert data["hitl_escalation_rate"] == pytest.approx(0.2)  # 2/10
+        assert data["avg_implementation_seconds"] == pytest.approx(10.0)  # 100/10
+        assert data["reviewer_fix_rate"] == pytest.approx(1.0 / 3.0)  # 1/3
+        assert data["total_issues"] == 10
+        assert data["total_prs"] == 5
+
+    @pytest.mark.asyncio
+    async def test_metrics_no_division_by_zero_on_reviews(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """When no reviews exist, approval rate should be 0 not crash."""
+        import json
+
+        state = make_state(tmp_path)
+        for _ in range(5):
+            state.record_issue_completed()
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["first_pass_approval_rate"] == pytest.approx(0.0)
+        assert data["reviewer_fix_rate"] == pytest.approx(0.0)

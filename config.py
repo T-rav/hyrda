@@ -105,6 +105,26 @@ class HydraConfig(BaseModel):
         default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
     )
 
+    # Metric thresholds for improvement proposals
+    quality_fix_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if quality fix rate exceeds this (0.0-1.0)",
+    )
+    approval_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if first-pass approval rate drops below this (0.0-1.0)",
+    )
+    hitl_rate_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Alert if HITL escalation rate exceeds this (0.0-1.0)",
+    )
+
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
     git_user_name: str = Field(

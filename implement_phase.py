@@ -101,6 +101,15 @@ class ImplementPhase:
                         issue, wt_path, branch, worker_id=idx
                     )
 
+                    if result.duration_seconds > 0:
+                        self._state.record_implementation_duration(
+                            result.duration_seconds
+                        )
+                    if result.quality_fix_attempts > 0:
+                        self._state.record_quality_fix_rounds(
+                            result.quality_fix_attempts
+                        )
+
                     # Push final commits and create PR
                     if result.worktree_path:
                         pushed = await self._prs.push_branch(

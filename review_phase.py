@@ -127,6 +127,7 @@ class ReviewPhase:
                             pr.issue_number,
                             "Merge conflict with main branch",
                         )
+                        self._state.record_hitl_escalation()
                         for lbl in self._config.review_label:
                             await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.remove_pr_label(pr.number, lbl)
@@ -167,6 +168,11 @@ class ReviewPhase:
 
                     self._state.mark_pr(pr.number, result.verdict.value)
                     self._state.mark_issue(pr.issue_number, "reviewed")
+                    self._state.record_review_verdict(
+                        result.verdict.value, result.fixes_made
+                    )
+                    if result.duration_seconds > 0:
+                        self._state.record_review_duration(result.duration_seconds)
 
                     # Merge immediately if approved (with optional CI gate)
                     if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
@@ -182,6 +188,10 @@ class ReviewPhase:
                                 self._state.mark_issue(pr.issue_number, "merged")
                                 self._state.record_pr_merged()
                                 self._state.record_issue_completed()
+                                if result.ci_fix_attempts > 0:
+                                    self._state.record_ci_fix_rounds(
+                                        result.ci_fix_attempts
+                                    )
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                 await self._prs.add_labels(
@@ -205,6 +215,7 @@ class ReviewPhase:
                                     pr.issue_number,
                                     "PR merge failed on GitHub",
                                 )
+                                self._state.record_hitl_escalation()
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                     await self._prs.remove_pr_label(pr.number, lbl)
@@ -303,6 +314,8 @@ class ReviewPhase:
 
         # CI failed after all attempts — escalate to human
         result.ci_passed = False
+        self._state.record_ci_fix_rounds(result.ci_fix_attempts)
+        self._state.record_hitl_escalation()
         await self._prs.post_pr_comment(
             pr.number,
             f"**CI failed** after {result.ci_fix_attempts} fix attempt(s).\n\n"
