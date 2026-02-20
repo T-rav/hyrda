@@ -1744,6 +1744,49 @@ class TestActiveIssuesCrashRecovery:
 
         await orch.run()
 
+    @pytest.mark.asyncio
+    async def test_recovered_issues_released_after_one_poll_cycle(
+        self, config: HydraConfig
+    ) -> None:
+        """Recovered issues should be removed from _active_issues after one poll cycle."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        orch._state.add_active_issue(42)
+        orch._state.add_active_issue(99)
+
+        poll_count = 0
+
+        async def counting_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            nonlocal poll_count
+            poll_count += 1
+            if poll_count == 1:
+                # First cycle: recovered issues should be blocked
+                assert 42 in orch._active_issues
+                assert 99 in orch._active_issues
+            elif poll_count >= 3:
+                # After release task runs: recovered issues should be gone
+                assert 42 not in orch._active_issues
+                assert 99 not in orch._active_issues
+                orch._stop_event.set()
+            return [], []
+
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = counting_implement  # type: ignore[method-assign]
+
+        # Use instant sleep so test doesn't wait for real poll interval
+        async def instant_sleep(seconds: int) -> None:
+            await asyncio.sleep(0)
+
+        orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # Verify the release actually happened
+        assert 42 not in orch._active_issues
+        assert 99 not in orch._active_issues
+
 
 # ---------------------------------------------------------------------------
 # HITL correction resets attempt counter

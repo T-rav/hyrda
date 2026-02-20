@@ -201,7 +201,7 @@ class HydraOrchestrator:
         # Restore active issues from persisted state for crash recovery.
         # These issues were mid-processing when the previous run crashed.
         # They stay in _active_issues for one poll cycle (blocking re-queue),
-        # then the persisted list is cleared so they can be re-processed.
+        # then are released so they can be re-processed.
         recovered = self._state.get_active_issue_numbers()
         if recovered:
             self._active_issues.update(recovered)
@@ -213,6 +213,9 @@ class HydraOrchestrator:
                 len(recovered),
                 recovered,
             )
+            # Release recovered issues after one poll cycle so they can
+            # be re-queued for processing.
+            asyncio.create_task(self._release_recovered_issues(set(recovered)))
 
         await self._publish_status()
         logger.info(
@@ -347,6 +350,21 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _release_recovered_issues(self, recovered: set[int]) -> None:
+        """Release recovered active issues after one poll cycle.
+
+        After a crash, previously-active issues are blocked from immediate
+        re-processing.  This coroutine waits one poll interval, then removes
+        them from ``_active_issues`` so they can be picked up again.
+        """
+        await self._sleep_or_stop(self._config.poll_interval)
+        self._active_issues.difference_update(recovered)
+        logger.info(
+            "Released %d recovered issues for re-processing: %s",
+            len(recovered),
+            sorted(recovered),
+        )
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
