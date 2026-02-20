@@ -1584,10 +1584,14 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        response = client.post(
-            "/api/hitl/42/correct",
-            json={"correction": "Mock the DB connection"},
-        )
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            response = client.post(
+                "/api/hitl/42/correct",
+                json={"correction": "Mock the DB connection"},
+            )
 
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
@@ -1606,10 +1610,14 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        client.post(
-            "/api/hitl/42/correct",
-            json={"correction": "Fix the test"},
-        )
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post(
+                "/api/hitl/42/correct",
+                json={"correction": "Fix the test"},
+            )
 
         orch.submit_hitl_correction.assert_called_once_with(42, "Fix the test")
 
@@ -1648,10 +1656,14 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        client.post(
-            "/api/hitl/42/correct",
-            json={"correction": "Fix it"},
-        )
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post(
+                "/api/hitl/42/correct",
+                json={"correction": "Fix it"},
+            )
 
         history = bus.get_history()
         hitl_events = [e for e in history if e.type.value == "hitl_update"]

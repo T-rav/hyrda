@@ -11,6 +11,7 @@ from typing import Any
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
 from models import (
@@ -58,6 +59,7 @@ class HydraOrchestrator:
         self._planners = PlannerRunner(config, self._bus)
         self._prs = PRManager(config, self._bus)
         self._reviewers = ReviewRunner(config, self._bus)
+        self._hitl_runner = HITLRunner(config, self._bus)
         self._triage = TriageRunner(config, self._bus)
         self._dashboard: object | None = None
         # Pending human-input requests: {issue_number: question}
@@ -169,6 +171,7 @@ class HydraOrchestrator:
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        self._hitl_runner.terminate()
         await self._publish_status()
 
     # Alias for backward compatibility
@@ -233,16 +236,18 @@ class HydraOrchestrator:
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
+            self._hitl_runner.terminate()
             await self._publish_status()
             logger.info("Hydra stopped")
 
     async def _supervise_loops(self) -> None:
-        """Run all four loops, restarting any that crash unexpectedly."""
+        """Run all five loops, restarting any that crash unexpectedly."""
         loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = [
             ("triage", self._triage_loop),
             ("plan", self._plan_loop),
             ("implement", self._implement_loop),
             ("review", self._review_loop),
+            ("hitl", self._hitl_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -348,6 +353,164 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _hitl_loop(self) -> None:
+        """Continuously process HITL corrections submitted via the dashboard."""
+        while not self._stop_event.is_set():
+            try:
+                await self._process_hitl_corrections()
+            except Exception:
+                logger.exception("HITL loop iteration failed — will retry next cycle")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={"message": "HITL loop error", "source": "hitl"},
+                    )
+                )
+            await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _process_hitl_corrections(self) -> None:
+        """Process all pending HITL corrections."""
+        if not self._hitl_corrections:
+            return
+
+        semaphore = asyncio.Semaphore(self._config.max_hitl_workers)
+
+        # Snapshot and clear pending corrections to avoid re-processing
+        pending = dict(self._hitl_corrections)
+        for issue_number in pending:
+            self._hitl_corrections.pop(issue_number, None)
+
+        tasks = [
+            asyncio.create_task(
+                self._process_one_hitl(issue_number, correction, semaphore)
+            )
+            for issue_number, correction in pending.items()
+        ]
+
+        for task in asyncio.as_completed(tasks):
+            await task
+            if self._stop_event.is_set():
+                for t in tasks:
+                    t.cancel()
+                break
+
+    async def _process_one_hitl(
+        self,
+        issue_number: int,
+        correction: str,
+        semaphore: asyncio.Semaphore,
+    ) -> None:
+        """Process a single HITL correction for *issue_number*."""
+        async with semaphore:
+            if self._stop_event.is_set():
+                return
+
+            self._active_issues.add(issue_number)
+            try:
+                issue = await self._fetcher.fetch_issue_by_number(issue_number)
+                if not issue:
+                    logger.warning(
+                        "Could not fetch issue #%d for HITL correction",
+                        issue_number,
+                    )
+                    return
+
+                cause = self._state.get_hitl_cause(issue_number) or "Unknown escalation"
+                origin = self._state.get_hitl_origin(issue_number)
+
+                # Get or create worktree
+                branch = self._config.branch_for_issue(issue_number)
+                wt_path = self._config.worktree_path_for_issue(issue_number)
+                if not wt_path.is_dir():
+                    wt_path = await self._worktrees.create(issue_number, branch)
+                self._state.set_worktree(issue_number, str(wt_path))
+
+                # Swap to active label
+                for lbl in self._config.hitl_label:
+                    await self._prs.remove_label(issue_number, lbl)
+                await self._prs.add_labels(
+                    issue_number, [self._config.hitl_active_label[0]]
+                )
+
+                result = await self._hitl_runner.run(issue, correction, cause, wt_path)
+
+                # Remove active label
+                for lbl in self._config.hitl_active_label:
+                    await self._prs.remove_label(issue_number, lbl)
+
+                if result.success:
+                    await self._prs.push_branch(wt_path, branch)
+
+                    if origin:
+                        await self._prs.add_labels(issue_number, [origin])
+
+                    self._state.remove_hitl_origin(issue_number)
+                    self._state.remove_hitl_cause(issue_number)
+
+                    await self._prs.post_comment(
+                        issue_number,
+                        f"**HITL correction applied successfully.**\n\n"
+                        f"Returning issue to `{origin or 'pipeline'}` stage."
+                        f"\n\n---\n*Applied by Hydra HITL*",
+                    )
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.HITL_UPDATE,
+                            data={
+                                "issue": issue_number,
+                                "action": "resolved",
+                                "status": "resolved",
+                            },
+                        )
+                    )
+                    logger.info(
+                        "HITL correction succeeded for issue #%d — returning to %s",
+                        issue_number,
+                        origin,
+                    )
+                else:
+                    await self._prs.add_labels(
+                        issue_number, [self._config.hitl_label[0]]
+                    )
+                    await self._prs.post_comment(
+                        issue_number,
+                        f"**HITL correction failed.**\n\n"
+                        f"Error: {result.error or 'No details available'}"
+                        f"\n\nPlease retry with different guidance."
+                        f"\n\n---\n*Applied by Hydra HITL*",
+                    )
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.HITL_UPDATE,
+                            data={
+                                "issue": issue_number,
+                                "action": "failed",
+                                "status": "pending",
+                            },
+                        )
+                    )
+                    logger.warning(
+                        "HITL correction failed for issue #%d: %s",
+                        issue_number,
+                        result.error,
+                    )
+
+                # Clean up worktree on success; keep on failure for retry
+                if result.success:
+                    try:
+                        await self._worktrees.destroy(issue_number)
+                        self._state.remove_worktree(issue_number)
+                    except RuntimeError as exc:
+                        logger.warning(
+                            "Could not destroy worktree for issue #%d: %s",
+                            issue_number,
+                            exc,
+                        )
+            except Exception:
+                logger.exception("HITL processing failed for issue #%d", issue_number)
+            finally:
+                self._active_issues.discard(issue_number)
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -492,6 +655,35 @@ class HydraOrchestrator:
 
                     logger.info(
                         "Plan posted and labels swapped for issue #%d",
+                        issue.number,
+                    )
+                elif result.retry_attempted:
+                    # Both plan attempts failed validation — escalate to HITL
+                    error_list = "\n".join(f"- {e}" for e in result.validation_errors)
+                    hitl_comment = (
+                        f"## Plan Validation Failed\n\n"
+                        f"The planner was unable to produce a valid plan "
+                        f"after two attempts for issue #{issue.number}.\n\n"
+                        f"**Validation errors:**\n{error_list}\n\n"
+                        f"---\n"
+                        f"*Generated by Hydra Planner*"
+                    )
+                    await self._prs.post_comment(issue.number, hitl_comment)
+                    for lbl in self._config.planner_label:
+                        await self._prs.remove_label(issue.number, lbl)
+                    self._state.set_hitl_origin(
+                        issue.number, self._config.planner_label[0]
+                    )
+                    self._state.set_hitl_cause(
+                        issue.number,
+                        "Plan validation failed after retry",
+                    )
+                    await self._prs.add_labels(
+                        issue.number, [self._config.hitl_label[0]]
+                    )
+                    logger.warning(
+                        "Planning failed validation for issue #%d after retry — "
+                        "escalated to HITL",
                         issue.number,
                     )
                 else:
