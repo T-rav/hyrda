@@ -1162,9 +1162,11 @@ class TestControlStatusEndpoint:
         assert body["config"]["planner_label"] == config.planner_label
         assert body["config"]["review_label"] == config.review_label
         assert body["config"]["hitl_label"] == config.hitl_label
+        assert body["config"]["hitl_active_label"] == config.hitl_active_label
         assert body["config"]["fixed_label"] == config.fixed_label
         assert body["config"]["max_planners"] == config.max_planners
         assert body["config"]["max_reviewers"] == config.max_reviewers
+        assert body["config"]["max_hitl_workers"] == config.max_hitl_workers
 
 
 # ---------------------------------------------------------------------------

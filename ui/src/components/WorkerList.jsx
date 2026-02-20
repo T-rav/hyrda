@@ -6,8 +6,10 @@ const statusColors = {
   running:    { bg: theme.accentSubtle, fg: theme.accent },
   planning:   { bg: theme.purpleSubtle, fg: theme.purple },
   testing:    { bg: theme.yellowSubtle, fg: theme.yellow },
-  committing: { bg: theme.orangeSubtle, fg: theme.orange },
-  done:       { bg: theme.greenSubtle,  fg: theme.green },
+  committing:  { bg: theme.orangeSubtle, fg: theme.orange },
+  quality_fix: { bg: theme.yellowSubtle, fg: theme.yellow },
+  reviewing:   { bg: theme.orangeSubtle, fg: theme.orange },
+  done:        { bg: theme.greenSubtle,  fg: theme.green },
   failed:     { bg: theme.redSubtle,    fg: theme.red },
 }
 

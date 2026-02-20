@@ -330,6 +330,22 @@ class TestHydraConfigDefaults:
         )
         assert cfg.max_reviewers == 2
 
+    def test_max_hitl_workers_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_hitl_workers == 1
+
+    def test_hitl_active_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_active_label == ["hydra-hitl-active"]
+
     def test_max_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -504,6 +520,24 @@ class TestHydraConfigCustomValues:
             state_file=tmp_path / "s.json",
         )
         assert cfg.dashboard_enabled is False
+
+    def test_custom_max_hitl_workers(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_hitl_workers=3,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_hitl_workers == 3
+
+    def test_custom_hitl_active_label(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            hitl_active_label=["custom-active"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_active_label == ["custom-active"]
 
     def test_custom_dry_run_true(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -799,6 +833,44 @@ class TestHydraConfigValidationConstraints:
         with pytest.raises(ValueError):
             HydraConfig(
                 max_reviewers=11,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_hitl_workers: ge=1, le=5
+
+    def test_max_hitl_workers_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_hitl_workers=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_hitl_workers == 1
+
+    def test_max_hitl_workers_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_hitl_workers=5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_hitl_workers == 5
+
+    def test_max_hitl_workers_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_hitl_workers=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_hitl_workers_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_hitl_workers=6,
                 repo_root=tmp_path,
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
@@ -1121,6 +1193,38 @@ class TestHydraConfigGitIdentity:
             state_file=tmp_path / "s.json",
         )
         assert cfg.git_user_email == "explicit@example.com"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – hitl_active_label env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigHitlActiveLabel:
+    """Tests for hitl_active_label env var override."""
+
+    def test_hitl_active_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_HITL_ACTIVE", "custom-active")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_active_label == ["custom-active"]
+
+    def test_hitl_active_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_HITL_ACTIVE", "env-active")
+        cfg = HydraConfig(
+            hitl_active_label=["explicit-active"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_active_label == ["explicit-active"]
 
 
 # ---------------------------------------------------------------------------
