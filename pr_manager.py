@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewVerdict
+from models import GitHubIssue, HITLItem, PRInfo, PRListItem, ReviewVerdict
 from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.pr_manager")
@@ -404,6 +406,31 @@ class PRManager:
                 exc,
             )
 
+    async def remove_pr_label(self, pr_number: int, label: str) -> None:
+        """Remove *label* from a GitHub pull request."""
+        if self._config.dry_run:
+            return
+        try:
+            await run_subprocess(
+                "gh",
+                "pr",
+                "edit",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--remove-label",
+                label,
+                cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not remove label %r from PR #%d: %s",
+                label,
+                pr_number,
+                exc,
+            )
+
     async def add_pr_labels(self, pr_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub pull request."""
         if self._config.dry_run or not labels:
@@ -635,6 +662,149 @@ class PRManager:
             return False, f"Failed checks: {', '.join(failed)}"
 
         return False, f"Timeout after {timeout}s"
+
+    # --- dashboard query helpers ---
+
+    async def list_open_prs(self, labels: list[str]) -> list[PRListItem]:
+        """Fetch open PRs for the given *labels*, deduplicated by PR number.
+
+        Returns ``[]`` in dry-run mode or when any individual label query
+        fails (the failure is silently skipped so other labels still succeed).
+        """
+        if self._config.dry_run:
+            return []
+
+        seen: set[int] = set()
+        prs: list[PRListItem] = []
+
+        for label in labels:
+            try:
+                raw = await run_subprocess(
+                    "gh",
+                    "pr",
+                    "list",
+                    "--repo",
+                    self._repo,
+                    "--label",
+                    label,
+                    "--state",
+                    "open",
+                    "--json",
+                    "number,url,headRefName,isDraft,title",
+                    "--limit",
+                    "50",
+                    cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
+                )
+                for p in json.loads(raw):
+                    pr_num = p["number"]
+                    if pr_num in seen:
+                        continue
+                    seen.add(pr_num)
+                    branch = p.get("headRefName", "")
+                    issue_num = 0
+                    if branch.startswith("agent/issue-"):
+                        with contextlib.suppress(ValueError):
+                            issue_num = int(branch.split("-")[-1])
+                    prs.append(
+                        PRListItem(
+                            pr=pr_num,
+                            issue=issue_num,
+                            branch=branch,
+                            url=p.get("url", ""),
+                            draft=p.get("isDraft", False),
+                            title=p.get("title", ""),
+                        )
+                    )
+            except Exception:
+                continue
+
+        return prs
+
+    async def list_hitl_items(self, hitl_labels: list[str]) -> list[HITLItem]:
+        """Fetch HITL issues and look up their associated PRs.
+
+        For each HITL label, fetches open issues, deduplicates by issue
+        number, then looks up the associated PR via the ``agent/issue-N``
+        branch convention.  Returns ``[]`` in dry-run mode or on failure.
+        """
+        if self._config.dry_run:
+            return []
+
+        try:
+            seen_issues: set[int] = set()
+            raw_issues: list[dict[str, Any]] = []
+
+            for label in hitl_labels:
+                try:
+                    raw = await run_subprocess(
+                        "gh",
+                        "issue",
+                        "list",
+                        "--repo",
+                        self._repo,
+                        "--label",
+                        label,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number,title,url",
+                        "--limit",
+                        "50",
+                        cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
+                    )
+                    for issue in json.loads(raw):
+                        if issue["number"] not in seen_issues:
+                            seen_issues.add(issue["number"])
+                            raw_issues.append(issue)
+                except Exception:
+                    continue
+
+            items: list[HITLItem] = []
+            for issue in raw_issues:
+                branch = self._config.branch_for_issue(issue["number"])
+                pr_number = 0
+                pr_url = ""
+                try:
+                    pr_raw = await run_subprocess(
+                        "gh",
+                        "pr",
+                        "list",
+                        "--repo",
+                        self._repo,
+                        "--head",
+                        branch,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number,url",
+                        "--limit",
+                        "1",
+                        cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
+                    )
+                    pr_data = json.loads(pr_raw)
+                    if pr_data:
+                        pr_number = pr_data[0]["number"]
+                        pr_url = pr_data[0].get("url", "")
+                except Exception:
+                    pass
+
+                items.append(
+                    HITLItem(
+                        issue=issue["number"],
+                        title=issue.get("title", ""),
+                        issueUrl=issue.get("url", ""),
+                        pr=pr_number,
+                        prUrl=pr_url,
+                        branch=branch,
+                    )
+                )
+
+            return items
+        except Exception:
+            return []
 
     # --- body-file helpers ---
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { theme } from '../theme'
 
 export function HITLTable() {
   const [items, setItems] = useState([])
@@ -77,21 +78,21 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 12,
   },
-  headerText: { color: '#f85149', fontWeight: 600, fontSize: 13 },
+  headerText: { color: theme.red, fontWeight: 600, fontSize: 13 },
   refresh: {
-    background: '#21262d', border: '1px solid #30363d', color: '#c9d1d9',
+    background: theme.surfaceInset, border: `1px solid ${theme.border}`, color: theme.text,
     padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
   },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: 200, color: '#8b949e', fontSize: 13,
+    height: 200, color: theme.textMuted, fontSize: 13,
   },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th: {
-    textAlign: 'left', padding: 8, borderBottom: '1px solid #30363d',
-    color: '#8b949e', fontSize: 11,
+    textAlign: 'left', padding: 8, borderBottom: `1px solid ${theme.border}`,
+    color: theme.textMuted, fontSize: 11,
   },
-  td: { padding: 8, borderBottom: '1px solid #30363d' },
-  link: { color: '#58a6ff', textDecoration: 'none' },
-  noPr: { color: '#8b949e', fontStyle: 'italic' },
+  td: { padding: 8, borderBottom: `1px solid ${theme.border}` },
+  link: { color: theme.accent, textDecoration: 'none' },
+  noPr: { color: theme.textMuted, fontStyle: 'italic' },
 }
