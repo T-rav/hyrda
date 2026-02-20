@@ -133,9 +133,6 @@ class HydraOrchestrator:
             return "stopping"
         if self._running:
             return "running"
-        # Still cleaning up subprocesses after _running turned False
-        if self._stop_event.is_set() and self._has_active_processes():
-            return "stopping"
         # Check if we finished naturally (DONE phase in history)
         for event in reversed(self._bus.get_history()):
             if (
