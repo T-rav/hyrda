@@ -6,6 +6,8 @@ import json
 import logging
 import sys
 from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 
 class JSONFormatter(logging.Formatter):
@@ -32,6 +34,7 @@ def setup_logging(
     *,
     level: int = logging.INFO,
     json_output: bool = True,
+    log_file: str | Path | None = None,
 ) -> logging.Logger:
     """Configure the ``hydra`` logger.
 
@@ -41,6 +44,11 @@ def setup_logging(
         Logging level.
     json_output:
         If *True*, use JSON formatting; otherwise plain text.
+    log_file:
+        Optional path to a log file.  When provided a
+        :class:`~logging.handlers.RotatingFileHandler` is added
+        alongside the console handler (10 MB max, 5 backups,
+        always JSON-formatted for Loki/Grafana ingestion).
 
     Returns
     -------
@@ -64,5 +72,18 @@ def setup_logging(
     console.setLevel(level)
     console.setFormatter(formatter)
     logger.addHandler(console)
+
+    # File handler (always JSON for machine ingestion)
+    if log_file is not None:
+        log_path = Path(log_file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=5,
+        )
+        file_handler.setLevel(level)
+        file_handler.setFormatter(JSONFormatter())
+        logger.addHandler(file_handler)
 
     return logger

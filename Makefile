@@ -23,6 +23,7 @@ PLANNER_BUDGET ?= 0
 REVIEWERS ?= 2
 HITL_WORKERS ?= 1
 PORT ?= 5555
+LOG_DIR ?= $(PROJECT_ROOT)/.hydra/logs
 
 # Colors
 RED := \033[0;31m
@@ -68,12 +69,14 @@ help:
 	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
 	@echo "  HITL_WORKERS     Max concurrent HITL agents (default: 1)"
 	@echo "  PORT             Dashboard port (default: 5555)"
+	@echo "  LOG_DIR          Log directory (default: .hydra/logs)"
 
 run:
+	@mkdir -p $(LOG_DIR)
 	@echo "$(BLUE)Starting Hydra — backend :$(PORT) + frontend :5556$(RESET)"
 	@echo "$(GREEN)Open http://localhost:5556 to use the dashboard$(RESET)"
 	@trap 'kill 0' EXIT; \
-	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev & \
+	cd $(HYDRA_DIR)ui && npm install --silent 2>/dev/null && npm run dev 2>&1 | tee $(LOG_DIR)/vite.log & \
 	cd $(HYDRA_DIR) && $(UV) python cli.py \
 		--ready-label $(READY_LABEL) \
 		--max-workers $(WORKERS) \
