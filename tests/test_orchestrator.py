@@ -56,6 +56,7 @@ def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
     orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
     orch._fetcher.fetch_ready_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
     orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+    orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
 
 
 def make_worker_result(
@@ -1681,3 +1682,517 @@ class TestSupervisorLoops:
         # The implement loop continued after the error (ran at least twice)
         assert implement_calls >= 2
         assert not orch.running
+
+
+# ---------------------------------------------------------------------------
+# HITL loop
+# ---------------------------------------------------------------------------
+
+
+class TestHITLLoop:
+    """Tests for the HITL correction loop in the orchestrator."""
+
+    def test_hitl_runner_is_created_in_init(self, config: HydraConfig) -> None:
+        from hitl_runner import HITLRunner
+
+        orch = HydraOrchestrator(config)
+        assert isinstance(orch._hitl_runner, HITLRunner)
+
+    def test_hitl_loop_in_loop_factories(self, config: HydraConfig) -> None:
+        """The hitl loop should be listed in _supervise_loops."""
+        orch = HydraOrchestrator(config)
+        # Verify the loop method exists
+        assert hasattr(orch, "_hitl_loop")
+        assert asyncio.iscoroutinefunction(orch._hitl_loop)
+
+    @pytest.mark.asyncio
+    async def test_hitl_loop_runs_in_supervise_loops(self, config: HydraConfig) -> None:
+        """The HITL loop should be started by _supervise_loops alongside others."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        hitl_ran = False
+
+        async def tracking_hitl_loop() -> None:
+            nonlocal hitl_ran
+            hitl_ran = True
+            orch._stop_event.set()
+
+        orch._hitl_loop = tracking_hitl_loop  # type: ignore[method-assign]
+        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert hitl_ran
+
+    @pytest.mark.asyncio
+    async def test_process_hitl_corrections_skips_when_empty(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._hitl_corrections = {}
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._process_hitl_corrections()
+
+        mock_prs.remove_label.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_success_restores_origin_label(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, the origin label should be restored."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Test HITL", body="Fix it")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+        orch._state.set_hitl_cause(42, "CI failed")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix the tests", semaphore)
+
+        # Verify origin label was restored
+        add_labels_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-review"]) in add_labels_calls
+
+        # Verify HITL state was cleaned up
+        assert orch._state.get_hitl_origin(42) is None
+        assert orch._state.get_hitl_cause(42) is None
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_failure_keeps_hitl_label(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, the hydra-hitl label should be re-applied."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Test HITL", body="Fix it")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+        orch._state.set_hitl_cause(42, "CI failed")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(
+                issue_number=42, success=False, error="quality failed"
+            )
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix the tests", semaphore)
+
+        # Verify HITL label was re-applied
+        add_labels_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.hitl_label[0]]) in add_labels_calls
+
+        # Verify HITL state is preserved (not cleaned up)
+        assert orch._state.get_hitl_origin(42) == "hydra-review"
+        assert orch._state.get_hitl_cause(42) == "CI failed"
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_posts_success_comment(
+        self, config: HydraConfig
+    ) -> None:
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        mock_prs.post_comment.assert_called_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "HITL correction applied successfully" in comment
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_posts_failure_comment(
+        self, config: HydraConfig
+    ) -> None:
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(
+                issue_number=42, success=False, error="make quality failed"
+            )
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        mock_prs.post_comment.assert_called_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "HITL correction failed" in comment
+        assert "make quality failed" in comment
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_skips_when_issue_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        orch._prs = mock_prs
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        # No label changes or comments when issue not found
+        mock_prs.post_comment.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_publishes_resolved_event_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        events = [
+            e
+            for e in orch._bus.get_history()
+            if e.type == EventType.HITL_UPDATE and e.data.get("action") == "resolved"
+        ]
+        assert len(events) == 1
+        assert events[0].data["status"] == "resolved"
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_publishes_failed_event_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=False, error="fail")
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        events = [
+            e
+            for e in orch._bus.get_history()
+            if e.type == EventType.HITL_UPDATE and e.data.get("action") == "failed"
+        ]
+        assert len(events) == 1
+        assert events[0].data["status"] == "pending"
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_clears_active_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """Issue should be removed from _active_issues after processing."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        assert 42 not in orch._active_issues
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_swaps_to_active_label(
+        self, config: HydraConfig
+    ) -> None:
+        """Processing should swap to hitl-active label before running agent."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        # Check that hitl_active_label was added
+        add_labels_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.hitl_active_label[0]]) in add_labels_calls
+
+    @pytest.mark.asyncio
+    async def test_hitl_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """An exception in _process_hitl_corrections should not crash the loop."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_process() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("hitl boom")
+            orch._stop_event.set()
+
+        orch._process_hitl_corrections = failing_process  # type: ignore[method-assign]
+
+        await orch._hitl_loop()
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_error_event_published_on_hitl_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """HITL loop exception should publish ERROR event with source=hitl."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def failing_process() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("hitl error")
+            orch._stop_event.set()
+
+        orch._process_hitl_corrections = failing_process  # type: ignore[method-assign]
+
+        await orch._hitl_loop()
+
+        error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "hitl"
+        assert "HITL loop error" in error_events[0].data["message"]
+
+    @pytest.mark.asyncio
+    async def test_stop_terminates_hitl_runner(self, config: HydraConfig) -> None:
+        """stop() should call terminate() on the HITL runner."""
+        orch = HydraOrchestrator(config)
+        with patch.object(orch._hitl_runner, "terminate") as mock_term:
+            await orch.stop()
+        mock_term.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_finally_terminates_hitl_runner(
+        self, config: HydraConfig
+    ) -> None:
+        """When run() exits, the HITL runner should be terminated."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        with patch.object(orch._hitl_runner, "terminate") as mock_term:
+            await orch.run()
+
+        mock_term.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_success_destroys_worktree(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, the worktree should be destroyed."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        mock_wt.destroy.assert_awaited_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_failure_does_not_destroy_worktree(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, the worktree should be kept for retry."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=False, error="fail")
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix it", semaphore)
+
+        mock_wt.destroy.assert_not_awaited()
