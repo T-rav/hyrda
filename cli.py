@@ -48,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-reviewers",
         type=int,
         default=None,
-        help="Max concurrent review agents (default: 1)",
+        help="Max concurrent review agents (default: 3)",
     )
     parser.add_argument(
         "--max-hitl-workers",
