@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -64,6 +65,12 @@ class HydraConfig(BaseModel):
         ge=0,
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
+    )
+    max_issue_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=20,
+        description="Max total implementation attempts per issue before HITL escalation",
     )
 
     # Label lifecycle
@@ -217,6 +224,12 @@ class HydraConfig(BaseModel):
             env_email = os.environ.get("HYDRA_GIT_USER_EMAIL", "")
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
+
+        # Integer env var overrides
+        env_max_attempts = os.environ.get("HYDRA_MAX_ISSUE_ATTEMPTS")
+        if env_max_attempts is not None and self.max_issue_attempts == 3:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_issue_attempts", int(env_max_attempts))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

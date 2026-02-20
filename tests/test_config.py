@@ -1047,6 +1047,95 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # max_issue_attempts: ge=1, le=20
+
+    def test_max_issue_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 3
+
+    def test_max_issue_attempts_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_issue_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 1
+
+    def test_max_issue_attempts_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_issue_attempts=20,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 20
+
+    def test_max_issue_attempts_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_issue_attempts=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_issue_attempts_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_issue_attempts=21,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – max_issue_attempts env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxIssueAttemptsEnvVar:
+    """Tests for HYDRA_MAX_ISSUE_ATTEMPTS env var override."""
+
+    def test_max_issue_attempts_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 5
+
+    def test_max_issue_attempts_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_ATTEMPTS", "10")
+        cfg = HydraConfig(
+            max_issue_attempts=7,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 7
+
+    def test_max_issue_attempts_env_var_invalid_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_ATTEMPTS", "not_a_number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 3  # stays at default
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – gh_token resolution

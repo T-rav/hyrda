@@ -551,6 +551,8 @@ class TestReset:
         tracker.mark_pr(10, "open")
         tracker.set_hitl_origin(1, "hydra-review")
         tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
+        tracker.increment_issue_attempts(1)
+        tracker.add_active_issue(1)
         tracker.increment_batch()
 
         tracker.reset()
@@ -562,6 +564,8 @@ class TestReset:
         assert tracker.get_pr_status(10) is None
         assert tracker.get_hitl_origin(1) is None
         assert tracker.get_hitl_cause(1) is None
+        assert tracker.get_issue_attempts(1) == 0
+        assert tracker.get_active_issue_numbers() == []
 
 
 # ---------------------------------------------------------------------------
@@ -633,6 +637,8 @@ class TestToDict:
             "reviewed_prs",
             "hitl_origins",
             "hitl_causes",
+            "issue_attempts",
+            "active_issue_numbers",
             "lifetime_stats",
             "last_updated",
         }
@@ -855,6 +861,8 @@ class TestStateDataModel:
         assert data.reviewed_prs == {}
         assert data.hitl_origins == {}
         assert data.hitl_causes == {}
+        assert data.issue_attempts == {}
+        assert data.active_issue_numbers == []
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
@@ -929,3 +937,149 @@ class TestLifetimeStatsModel:
         copy = stats.model_copy()
         copy.issues_completed = 99
         assert stats.issues_completed == 5
+
+
+# ---------------------------------------------------------------------------
+# Issue attempt tracking
+# ---------------------------------------------------------------------------
+
+
+class TestIssueAttemptTracking:
+    def test_get_issue_attempts_returns_zero_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_issue_attempts(999) == 0
+
+    def test_increment_issue_attempts_starts_at_one(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        result = tracker.increment_issue_attempts(42)
+        assert result == 1
+
+    def test_increment_issue_attempts_accumulates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(42)
+        tracker.increment_issue_attempts(42)
+        result = tracker.increment_issue_attempts(42)
+        assert result == 3
+        assert tracker.get_issue_attempts(42) == 3
+
+    def test_increment_issue_attempts_triggers_save(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.increment_issue_attempts(42)
+        assert state_file.exists()
+
+    def test_reset_issue_attempts_clears_count(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(42)
+        tracker.increment_issue_attempts(42)
+        tracker.reset_issue_attempts(42)
+        assert tracker.get_issue_attempts(42) == 0
+
+    def test_reset_issue_attempts_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        # Should not raise
+        tracker.reset_issue_attempts(999)
+        assert tracker.get_issue_attempts(999) == 0
+
+    def test_issue_attempts_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.increment_issue_attempts(42)
+        tracker.increment_issue_attempts(42)
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_issue_attempts(42) == 2
+
+    def test_reset_clears_issue_attempts(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(42)
+        tracker.reset()
+        assert tracker.get_issue_attempts(42) == 0
+
+    def test_migration_adds_issue_attempts_to_old_file(self, tmp_path: Path) -> None:
+        """Loading a state file without issue_attempts should default to {}."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_issue_attempts(1) == 0
+        # Existing data is preserved
+        assert tracker.get_current_batch() == 5
+        assert tracker.get_issue_status(1) == "success"
+
+    def test_multiple_issues_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(1)
+        tracker.increment_issue_attempts(2)
+        tracker.increment_issue_attempts(2)
+        assert tracker.get_issue_attempts(1) == 1
+        assert tracker.get_issue_attempts(2) == 2
+
+
+# ---------------------------------------------------------------------------
+# Active issue numbers persistence
+# ---------------------------------------------------------------------------
+
+
+class TestActiveIssueNumbersPersistence:
+    def test_add_active_issue_stores_number(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(42)
+        assert 42 in tracker.get_active_issue_numbers()
+
+    def test_add_active_issue_no_duplicates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(42)
+        tracker.add_active_issue(42)
+        assert tracker.get_active_issue_numbers().count(42) == 1
+
+    def test_remove_active_issue_removes_number(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(42)
+        tracker.remove_active_issue(42)
+        assert 42 not in tracker.get_active_issue_numbers()
+
+    def test_remove_active_issue_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        # Should not raise
+        tracker.remove_active_issue(999)
+        assert tracker.get_active_issue_numbers() == []
+
+    def test_get_active_issue_numbers_returns_list(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(1)
+        tracker.add_active_issue(2)
+        result = tracker.get_active_issue_numbers()
+        assert isinstance(result, list)
+        assert set(result) == {1, 2}
+
+    def test_active_issue_numbers_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.add_active_issue(42)
+        tracker.add_active_issue(99)
+
+        tracker2 = StateTracker(state_file)
+        assert set(tracker2.get_active_issue_numbers()) == {42, 99}
+
+    def test_reset_clears_active_issue_numbers(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(42)
+        tracker.reset()
+        assert tracker.get_active_issue_numbers() == []
+
+    def test_get_active_issue_numbers_returns_copy(self, tmp_path: Path) -> None:
+        """Mutating the returned list must not affect the tracker's internal state."""
+        tracker = make_tracker(tmp_path)
+        tracker.add_active_issue(42)
+        result = tracker.get_active_issue_numbers()
+        result.append(99)
+        assert 99 not in tracker.get_active_issue_numbers()

@@ -500,3 +500,149 @@ class TestWorkerExceptionIsolation:
         assert result_map[1].success is False
         assert result_map[1].error is not None
         assert result_map[2].success is True
+
+
+# ---------------------------------------------------------------------------
+# Attempt cap escalation
+# ---------------------------------------------------------------------------
+
+
+class TestAttemptCapEscalation:
+    """Tests for per-issue retry cap and HITL escalation."""
+
+    @pytest.mark.asyncio
+    async def test_attempt_count_increments_on_implementation(
+        self, config: HydraConfig
+    ) -> None:
+        """After run_batch, the attempt count should be incremented."""
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(config, [issue])
+
+        await phase.run_batch()
+
+        assert phase._state.get_issue_attempts(42) == 1
+
+    @pytest.mark.asyncio
+    async def test_exceeding_max_attempts_escalates_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """When count > max, labels swap to HITL and worker returns early."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, mock_prs = _make_phase(cfg, [issue])
+
+        # Pre-set attempts to 2 (at the max)
+        phase._state.increment_issue_attempts(42)
+        phase._state.increment_issue_attempts(42)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert "Exceeded max attempts" in (results[0].error or "")
+        # Should have swapped labels to HITL
+        mock_prs.add_labels.assert_awaited()
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert any("hydra-hitl" in labels for _, labels in add_calls)
+
+    @pytest.mark.asyncio
+    async def test_at_max_attempts_still_runs(self, config: HydraConfig) -> None:
+        """At exactly max_issue_attempts, implementation still runs."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=3,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(cfg, [issue])
+
+        # Pre-set attempts to 2 (one less than max)
+        phase._state.increment_issue_attempts(42)
+        phase._state.increment_issue_attempts(42)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        # The 3rd attempt (== max) should still run normally
+        assert results[0].success is True
+
+    @pytest.mark.asyncio
+    async def test_active_issues_persisted_and_cleaned(
+        self, config: HydraConfig
+    ) -> None:
+        """add_active_issue called at start, remove_active_issue in finally."""
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(config, [issue])
+
+        await phase.run_batch()
+
+        # After completion, active issue should be removed from persisted state
+        assert 42 not in phase._state.get_active_issue_numbers()
+        # Also removed from in-memory set
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_escalation_posts_comment_with_attempt_count(
+        self, config: HydraConfig
+    ) -> None:
+        """HITL escalation comment should include attempt count info."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, mock_prs = _make_phase(cfg, [issue])
+
+        # Pre-set to 1 (already at max)
+        phase._state.increment_issue_attempts(42)
+
+        await phase.run_batch()
+
+        # Check that a comment was posted with attempt info
+        comment_calls = list(mock_prs.post_comment.call_args_list)
+        assert len(comment_calls) >= 1
+        # Find the escalation comment
+        escalation_comments = [c for c in comment_calls if "HITL Escalation" in str(c)]
+        assert len(escalation_comments) == 1
+        comment_body = escalation_comments[0].args[1]
+        assert "1/1" in comment_body
+
+    @pytest.mark.asyncio
+    async def test_escalation_sets_hitl_origin_and_cause(
+        self, config: HydraConfig
+    ) -> None:
+        """HITL escalation should record origin and cause in state."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(cfg, [issue])
+
+        # Pre-set to 1 (at max)
+        phase._state.increment_issue_attempts(42)
+
+        await phase.run_batch()
+
+        assert phase._state.get_hitl_origin(42) == cfg.ready_label[0]
+        cause = phase._state.get_hitl_cause(42)
+        assert cause is not None
+        assert "Exceeded max implementation attempts" in cause

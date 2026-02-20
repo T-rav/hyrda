@@ -150,6 +150,44 @@ class StateTracker:
         self._data.hitl_causes.pop(str(issue_number), None)
         self.save()
 
+    # --- issue attempt tracking ---
+
+    def get_issue_attempts(self, issue_number: int) -> int:
+        """Return the total implementation attempt count for *issue_number* (0 if untracked)."""
+        return self._data.issue_attempts.get(str(issue_number), 0)
+
+    def increment_issue_attempts(self, issue_number: int) -> int:
+        """Increment and persist the attempt count for *issue_number*. Returns the new count."""
+        key = str(issue_number)
+        self._data.issue_attempts[key] = self._data.issue_attempts.get(key, 0) + 1
+        self.save()
+        return self._data.issue_attempts[key]
+
+    def reset_issue_attempts(self, issue_number: int) -> None:
+        """Clear the attempt count for *issue_number* (e.g. after HITL correction)."""
+        self._data.issue_attempts.pop(str(issue_number), None)
+        self.save()
+
+    # --- active issue persistence ---
+
+    def add_active_issue(self, issue_number: int) -> None:
+        """Persist *issue_number* as actively being processed."""
+        if issue_number not in self._data.active_issue_numbers:
+            self._data.active_issue_numbers.append(issue_number)
+            self.save()
+
+    def remove_active_issue(self, issue_number: int) -> None:
+        """Remove *issue_number* from the persisted active list."""
+        try:
+            self._data.active_issue_numbers.remove(issue_number)
+            self.save()
+        except ValueError:
+            pass
+
+    def get_active_issue_numbers(self) -> list[int]:
+        """Return the persisted list of active issue numbers."""
+        return list(self._data.active_issue_numbers)
+
     # --- batch tracking ---
 
     def get_current_batch(self) -> int:

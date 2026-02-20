@@ -316,6 +316,15 @@ class TestBuildConfig:
         assert args.git_user_name is None
         assert args.git_user_email is None
 
+    def test_max_issue_attempts_cli_arg(self) -> None:
+        args = parse_args(["--max-issue-attempts", "5"])
+        cfg = build_config(args)
+        assert cfg.max_issue_attempts == 5
+
+    def test_max_issue_attempts_defaults_to_none_in_parse_args(self) -> None:
+        args = parse_args([])
+        assert args.max_issue_attempts is None
+
 
 # ---------------------------------------------------------------------------
 # _run_main — signal handler registration

@@ -1606,3 +1606,88 @@ class TestSupervisorLoops:
         # The implement loop continued after the error (ran at least twice)
         assert implement_calls >= 2
         assert not orch.running
+
+
+# ---------------------------------------------------------------------------
+# Active issues crash recovery
+# ---------------------------------------------------------------------------
+
+
+class TestActiveIssuesCrashRecovery:
+    """Tests for restoring active issues from persisted state on startup."""
+
+    @pytest.mark.asyncio
+    async def test_active_issues_restored_from_state_on_run(
+        self, config: HydraConfig
+    ) -> None:
+        """On run(), _active_issues should be populated from persisted state."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        # Pre-persist active issues (simulating a crash)
+        orch._state.add_active_issue(42)
+        orch._state.add_active_issue(99)
+
+        observed_active: set[int] = set()
+
+        async def spy_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            observed_active.update(orch._active_issues)
+            orch._stop_event.set()
+            return [], []
+
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = spy_implement  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # Active issues should have been loaded on startup
+        assert 42 in observed_active
+        assert 99 in observed_active
+        # Persisted list should be cleared after loading
+        assert orch._state.get_active_issue_numbers() == []
+
+    @pytest.mark.asyncio
+    async def test_recovered_issues_block_first_poll_cycle(
+        self, config: HydraConfig
+    ) -> None:
+        """Recovered active issues should be in _active_issues during the first cycle."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        orch._state.add_active_issue(42)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            # Issue 42 should be in active set, blocking re-processing
+            assert 42 in orch._active_issues
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        await orch.run()
+
+
+# ---------------------------------------------------------------------------
+# HITL correction resets attempt counter
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCorrectionResetsAttempts:
+    """Tests that submit_hitl_correction resets the attempt counter."""
+
+    def test_submit_hitl_correction_resets_attempt_counter(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        # Simulate 3 failed attempts
+        orch._state.increment_issue_attempts(42)
+        orch._state.increment_issue_attempts(42)
+        orch._state.increment_issue_attempts(42)
+        assert orch._state.get_issue_attempts(42) == 3
+
+        orch.submit_hitl_correction(42, "Fix the test mocking")
+
+        assert orch._state.get_issue_attempts(42) == 0

@@ -97,6 +97,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
     )
     parser.add_argument(
+        "--max-issue-attempts",
+        type=int,
+        default=None,
+        help="Max total implementation attempts per issue before HITL escalation (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -224,6 +230,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ci_check_timeout",
         "ci_poll_interval",
         "max_ci_fix_attempts",
+        "max_issue_attempts",
         "planner_model",
         "planner_budget_usd",
         "repo",

@@ -140,6 +140,7 @@ class HydraOrchestrator:
     def submit_hitl_correction(self, issue_number: int, correction: str) -> None:
         """Store a correction for a HITL issue to guide retry."""
         self._hitl_corrections[issue_number] = correction
+        self._state.reset_issue_attempts(issue_number)
 
     def get_hitl_status(self, issue_number: int) -> str:
         """Return the HITL status for an issue.
@@ -196,6 +197,23 @@ class HydraOrchestrator:
         """
         self._stop_event.clear()
         self._running = True
+
+        # Restore active issues from persisted state for crash recovery.
+        # These issues were mid-processing when the previous run crashed.
+        # They stay in _active_issues for one poll cycle (blocking re-queue),
+        # then the persisted list is cleared so they can be re-processed.
+        recovered = self._state.get_active_issue_numbers()
+        if recovered:
+            self._active_issues.update(recovered)
+            # Clear persisted list — issues are now guarded in-memory
+            for issue_num in recovered:
+                self._state.remove_active_issue(issue_num)
+            logger.info(
+                "Recovered %d active issues from crash state: %s",
+                len(recovered),
+                recovered,
+            )
+
         await self._publish_status()
         logger.info(
             "Hydra starting — repo=%s label=%s workers=%d poll=%ds",
