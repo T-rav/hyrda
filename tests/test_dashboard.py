@@ -189,6 +189,32 @@ class TestIndexRoute:
 
 
 # ---------------------------------------------------------------------------
+# Accessibility
+# ---------------------------------------------------------------------------
+
+
+class TestAccessibility:
+    """Tests for accessibility attributes in the dashboard HTML."""
+
+    def test_human_input_field_has_aria_labelledby(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The human-input field must be linked to its label for screen readers."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/")
+
+        assert 'aria-labelledby="human-input-question"' in response.text
+
+
+# ---------------------------------------------------------------------------
 # GET /api/state
 # ---------------------------------------------------------------------------
 
