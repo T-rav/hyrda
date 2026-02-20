@@ -3,13 +3,14 @@
 import asyncio
 import contextlib
 import logging
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
 from config import HydraConfig
-from events import EventBus, HydraEvent
+from events import EventBus
+from models import ControlStatusConfig, ControlStatusResponse, HITLItem, PRListItem
 from state import StateTracker
+from subprocess_util import run_subprocess
 
 if TYPE_CHECKING:
     from orchestrator import HydraOrchestrator
@@ -111,10 +112,8 @@ class HydraDashboard:
             import json as _json
 
             try:
-                env = {**os.environ}
-                env.pop("CLAUDECODE", None)
                 seen: set[int] = set()
-                prs: list[dict[str, object]] = []
+                prs: list[PRListItem] = []
 
                 all_labels = list(
                     {
@@ -126,29 +125,27 @@ class HydraDashboard:
                     }
                 )
                 for label in all_labels:
-                    proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "pr",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,url,headRefName,isDraft,title",
-                        "--limit",
-                        "50",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    stdout, _ = await proc.communicate()
-                    if proc.returncode != 0:
+                    try:
+                        stdout = await run_subprocess(
+                            "gh",
+                            "pr",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--label",
+                            label,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,url,headRefName,isDraft,title",
+                            "--limit",
+                            "50",
+                            gh_token=self._config.gh_token,
+                        )
+                    except RuntimeError:
                         continue
 
-                    raw = _json.loads(stdout.decode())
+                    raw = _json.loads(stdout)
                     for p in raw:
                         pr_num = p["number"]
                         if pr_num in seen:
@@ -161,16 +158,16 @@ class HydraDashboard:
                             with contextlib.suppress(ValueError):
                                 issue_num = int(branch.split("-")[-1])
                         prs.append(
-                            {
-                                "pr": pr_num,
-                                "issue": issue_num,
-                                "branch": branch,
-                                "url": p.get("url", ""),
-                                "draft": p.get("isDraft", False),
-                                "title": p.get("title", ""),
-                            }
+                            PRListItem(
+                                pr=pr_num,
+                                issue=issue_num,
+                                branch=branch,
+                                url=p.get("url", ""),
+                                draft=p.get("isDraft", False),
+                                title=p.get("title", ""),
+                            )
                         )
-                return JSONResponse(prs)
+                return JSONResponse([item.model_dump() for item in prs])
             except Exception:
                 return JSONResponse([])
 
@@ -180,81 +177,75 @@ class HydraDashboard:
             import json as _json
 
             try:
-                env = {**os.environ}
-                env.pop("CLAUDECODE", None)
-
                 # Fetch issues with any HITL label, deduplicated
                 seen_issues: set[int] = set()
-                raw_issues: list[dict[str, object]] = []
+                raw_issues: list[dict[str, Any]] = []
                 for label in self._config.hitl_label:
-                    proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "issue",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,title,url",
-                        "--limit",
-                        "50",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    stdout, _ = await proc.communicate()
-                    if proc.returncode != 0:
+                    try:
+                        stdout = await run_subprocess(
+                            "gh",
+                            "issue",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--label",
+                            label,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,title,url",
+                            "--limit",
+                            "50",
+                            gh_token=self._config.gh_token,
+                        )
+                    except RuntimeError:
                         continue
-                    for issue in _json.loads(stdout.decode()):
+                    for issue in _json.loads(stdout):
                         if issue["number"] not in seen_issues:
                             seen_issues.add(issue["number"])
                             raw_issues.append(issue)
 
-                items = []
+                items: list[HITLItem] = []
                 for issue in raw_issues:
                     branch = f"agent/issue-{issue['number']}"
                     # Look up the PR for this issue's branch
-                    pr_proc = await asyncio.create_subprocess_exec(
-                        "gh",
-                        "pr",
-                        "list",
-                        "--repo",
-                        self._config.repo,
-                        "--head",
-                        branch,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number,url",
-                        "--limit",
-                        "1",
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                        env=env,
-                    )
-                    pr_stdout, _ = await pr_proc.communicate()
                     pr_number = 0
                     pr_url = ""
-                    if pr_proc.returncode == 0:
-                        pr_data = _json.loads(pr_stdout.decode())
+                    try:
+                        pr_stdout = await run_subprocess(
+                            "gh",
+                            "pr",
+                            "list",
+                            "--repo",
+                            self._config.repo,
+                            "--head",
+                            branch,
+                            "--state",
+                            "open",
+                            "--json",
+                            "number,url",
+                            "--limit",
+                            "1",
+                            gh_token=self._config.gh_token,
+                        )
+                        pr_data = _json.loads(pr_stdout)
                         if pr_data:
                             pr_number = pr_data[0]["number"]
                             pr_url = pr_data[0].get("url", "")
+                    except RuntimeError:
+                        pass
 
                     items.append(
-                        {
-                            "issue": issue["number"],
-                            "title": issue.get("title", ""),
-                            "issueUrl": issue.get("url", ""),
-                            "pr": pr_number,
-                            "prUrl": pr_url,
-                            "branch": branch,
-                        }
+                        HITLItem(
+                            issue=issue["number"],
+                            title=issue.get("title", ""),
+                            issueUrl=issue.get("url", ""),
+                            pr=pr_number,
+                            prUrl=pr_url,
+                            branch=branch,
+                        )
                     )
-                return JSONResponse(items)
+                return JSONResponse([item.model_dump() for item in items])
             except Exception:
                 return JSONResponse([])
 
@@ -300,25 +291,24 @@ class HydraDashboard:
             status = "idle"
             if self._orchestrator:
                 status = self._orchestrator.run_status
-            return JSONResponse(
-                {
-                    "status": status,
-                    "config": {
-                        "repo": self._config.repo,
-                        "ready_label": self._config.ready_label,
-                        "find_label": self._config.find_label,
-                        "planner_label": self._config.planner_label,
-                        "review_label": self._config.review_label,
-                        "hitl_label": self._config.hitl_label,
-                        "fixed_label": self._config.fixed_label,
-                        "max_workers": self._config.max_workers,
-                        "max_planners": self._config.max_planners,
-                        "max_reviewers": self._config.max_reviewers,
-                        "batch_size": self._config.batch_size,
-                        "model": self._config.model,
-                    },
-                }
+            response = ControlStatusResponse(
+                status=status,
+                config=ControlStatusConfig(
+                    repo=self._config.repo,
+                    ready_label=self._config.ready_label,
+                    find_label=self._config.find_label,
+                    planner_label=self._config.planner_label,
+                    review_label=self._config.review_label,
+                    hitl_label=self._config.hitl_label,
+                    fixed_label=self._config.fixed_label,
+                    max_workers=self._config.max_workers,
+                    max_planners=self._config.max_planners,
+                    max_reviewers=self._config.max_reviewers,
+                    batch_size=self._config.batch_size,
+                    model=self._config.model,
+                ),
             )
+            return JSONResponse(response.model_dump())
 
         @app.websocket("/ws")
         async def websocket_endpoint(ws: WebSocket) -> None:
@@ -328,30 +318,29 @@ class HydraDashboard:
             # Events published between snapshot and subscribe are picked
             # up by the live queue, never sent twice.
             history = self._bus.get_history()
-            queue = self._bus.subscribe()
 
-            # Send history on connect
-            for event in history:
+            async with self._bus.subscription() as queue:
+                # Send history on connect
+                for event in history:
+                    try:
+                        await ws.send_text(event.model_dump_json())
+                    except Exception:
+                        logger.warning(
+                            "WebSocket error during history replay", exc_info=True
+                        )
+                        return
+
+                # Stream live events
                 try:
-                    await ws.send_text(event.model_dump_json())
+                    while True:
+                        event = await queue.get()
+                        await ws.send_text(event.model_dump_json())
+                except WebSocketDisconnect:
+                    pass
                 except Exception:
                     logger.warning(
-                        "WebSocket error during history replay", exc_info=True
+                        "WebSocket error during live streaming", exc_info=True
                     )
-                    break
-
-            # Stream live events
-            try:
-                while True:
-                    event: HydraEvent = await queue.get()
-                    await ws.send_text(event.model_dump_json())
-            except WebSocketDisconnect:
-                pass
-            except Exception:
-                logger.warning("WebSocket error during live streaming", exc_info=True)
-                pass
-            finally:
-                self._bus.unsubscribe(queue)
 
         self._app = app
         return app

@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import os
 import time
 from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, WorkerResult, WorkerStatus
-from stream_parser import StreamParser
+from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.agent")
 
@@ -201,9 +199,7 @@ class AgentRunner:
 
     def terminate(self) -> None:
         """Kill all active agent subprocesses."""
-        for proc in list(self._active_procs):
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
+        terminate_processes(self._active_procs)
 
     async def _execute(
         self,
@@ -213,71 +209,15 @@ class AgentRunner:
         issue_number: int,
     ) -> str:
         """Run the claude process and stream its output."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(worktree_path),
-            env=env,
+        return await stream_claude_process(
+            cmd=cmd,
+            prompt=prompt,
+            cwd=worktree_path,
+            active_procs=self._active_procs,
+            event_bus=self._bus,
+            event_data={"issue": issue_number},
+            logger=logger,
         )
-        self._active_procs.add(proc)
-
-        try:
-            # Send the prompt on stdin and close it
-            assert proc.stdin is not None
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-
-            proc.stdin.write(prompt.encode())
-            await proc.stdin.drain()
-            proc.stdin.close()
-
-            # Drain stderr in background to prevent deadlock
-            stderr_task = asyncio.create_task(proc.stderr.read())
-
-            parser = StreamParser()
-            raw_lines: list[str] = []
-            result_text = ""
-            async for raw in proc.stdout:
-                line = raw.decode(errors="replace").rstrip("\n")
-                raw_lines.append(line)
-                if not line.strip():
-                    continue
-
-                display, result = parser.parse(line)
-                if result is not None:
-                    result_text = result
-
-                if display.strip():
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.TRANSCRIPT_LINE,
-                            data={"issue": issue_number, "line": display},
-                        )
-                    )
-
-            stderr_bytes = await stderr_task
-            await proc.wait()
-
-            if proc.returncode != 0:
-                stderr_text = stderr_bytes.decode(errors="replace").strip()
-                logger.warning(
-                    "Agent process exited with code %d for issue #%d: %s",
-                    proc.returncode,
-                    issue_number,
-                    stderr_text[:500],
-                )
-
-            return result_text or "\n".join(raw_lines)
-        except asyncio.CancelledError:
-            proc.kill()
-            raise
-        finally:
-            self._active_procs.discard(proc)
 
     async def _verify_result(
         self, worktree_path: Path, branch: str

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -676,6 +677,90 @@ class TestVerifyResult:
 
 
 # ---------------------------------------------------------------------------
+# AgentRunner._count_commits
+# ---------------------------------------------------------------------------
+
+
+class TestCountCommits:
+    """Tests for AgentRunner._count_commits."""
+
+    @pytest.mark.asyncio
+    async def test_count_commits_returns_parsed_count(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should return the integer from git rev-list output."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = _make_proc(returncode=0, stdout=b"3\n")
+
+        with patch(
+            "asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)
+        ) as mock_exec:
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 3
+        mock_exec.assert_awaited_once_with(
+            "git",
+            "rev-list",
+            "--count",
+            "origin/main..agent/issue-42",
+            cwd=str(tmp_path),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+    @pytest.mark.asyncio
+    async def test_count_commits_parses_multi_digit(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should correctly parse multi-digit counts."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = _make_proc(returncode=0, stdout=b"15\n")
+
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)):
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 15
+
+    @pytest.mark.asyncio
+    async def test_count_commits_returns_zero_on_empty_stdout(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should return 0 when stdout is empty (ValueError)."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = _make_proc(returncode=0, stdout=b"")
+
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)):
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_count_commits_returns_zero_on_nonzero_exit(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should return 0 when git exits with non-zero code."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = _make_proc(returncode=1, stdout=b"")
+
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)):
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_count_commits_returns_zero_on_file_not_found(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should return 0 when git binary is not found."""
+        runner = AgentRunner(config, event_bus)
+
+        with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError):
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 0
+
+
+# ---------------------------------------------------------------------------
 # AgentRunner._build_quality_fix_prompt
 # ---------------------------------------------------------------------------
 
@@ -1293,3 +1378,17 @@ class TestExecuteStreaming:
             await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
 
         mock_logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_large_stream_limit(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should set limit=1MB on subprocess to handle large stream-json lines."""
+        runner = AgentRunner(config, event_bus)
+        mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+        with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+            await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
+
+        kwargs = mock_exec.call_args[1]
+        assert kwargs["limit"] == 1024 * 1024

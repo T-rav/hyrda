@@ -1,9 +1,10 @@
 import React from 'react'
+import { theme } from '../theme'
 
 const STAGES = [
-  { key: 'plan',      label: 'Plan',      color: '#a371f7', role: 'planner' },
-  { key: 'implement', label: 'Implement', color: '#d29922', role: 'implementer' },
-  { key: 'review',    label: 'Review',    color: '#d18616', role: 'reviewer' },
+  { key: 'plan',      label: 'Plan',      color: theme.purple, role: 'planner' },
+  { key: 'implement', label: 'Implement', color: theme.yellow, role: 'implementer' },
+  { key: 'review',    label: 'Review',    color: theme.orange, role: 'reviewer' },
 ]
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
@@ -33,18 +34,10 @@ export function PipelineStatus({ phase, workers }) {
         return (
           <React.Fragment key={stage.key}>
             {i > 0 && (
-              <div style={{
-                ...styles.connector,
-                background: isActive ? stage.color : '#30363d',
-              }} />
+              <div style={connectorStyles[stage.key][isActive ? 'active' : 'inactive']} />
             )}
             <div style={styles.stageWrapper}>
-              <div style={{
-                ...styles.stage,
-                background: isActive ? stage.color : '#21262d',
-                color: isActive ? '#0d1117' : '#484f58',
-                borderColor: isActive ? stage.color : '#30363d',
-              }}>
+              <div style={stageStyles[stage.key][isActive ? 'active' : 'inactive']}>
                 {stage.label}
                 {agentCount > 0 && (
                   <span style={styles.count}>{agentCount}</span>
@@ -65,8 +58,8 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '10px 20px',
-    background: '#0d1117',
-    borderBottom: '1px solid #30363d',
+    background: theme.bg,
+    borderBottom: `1px solid ${theme.border}`,
     gap: 0,
   },
   stageWrapper: {
@@ -93,10 +86,25 @@ const styles = {
     flexShrink: 0,
   },
   count: {
-    background: 'rgba(0,0,0,0.3)',
+    background: theme.overlay,
     borderRadius: 8,
     padding: '1px 6px',
     fontSize: 10,
     fontWeight: 700,
   },
 }
+
+// Pre-computed per-stage active/inactive style variants (avoids object spread in .map())
+export const connectorStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    active: { ...styles.connector, background: s.color },
+    inactive: { ...styles.connector, background: theme.border },
+  }])
+)
+
+export const stageStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    active: { ...styles.stage, background: s.color, color: theme.bg, borderColor: s.color },
+    inactive: { ...styles.stage, background: theme.surfaceInset, color: theme.textInactive, borderColor: theme.border },
+  }])
+)

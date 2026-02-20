@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from events import EventType
+from models import ReviewVerdict
 from pr_manager import PRManager
 
 # ---------------------------------------------------------------------------
@@ -252,7 +253,7 @@ async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_p
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "Looks good")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "Looks good")
 
     assert result is True
     cmd = (
@@ -287,7 +288,9 @@ async def test_submit_review_request_changes_calls_correct_flag(
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "request-changes", "Needs work")
+        result = await mgr.submit_review(
+            101, ReviewVerdict.REQUEST_CHANGES, "Needs work"
+        )
 
     assert result is True
     cmd = (
@@ -314,7 +317,7 @@ async def test_submit_review_comment_calls_correct_flag(config, event_bus, tmp_p
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "comment", "FYI note")
+        result = await mgr.submit_review(101, ReviewVerdict.COMMENT, "FYI note")
 
     assert result is True
     cmd = (
@@ -332,7 +335,7 @@ async def test_submit_review_dry_run(dry_config, event_bus):
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "LGTM")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "LGTM")
 
     mock_create.assert_not_called()
     assert result is True
@@ -354,22 +357,9 @@ async def test_submit_review_failure_returns_false(config, event_bus, tmp_path):
     mock_create = _make_subprocess_mock(returncode=1, stderr="review failed")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "approve", "LGTM")
+        result = await mgr.submit_review(101, ReviewVerdict.APPROVE, "LGTM")
 
     assert result is False
-
-
-@pytest.mark.asyncio
-async def test_submit_review_unknown_verdict_returns_false(config, event_bus):
-    """submit_review with invalid verdict should return False without calling subprocess."""
-    mgr = _make_manager(config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await mgr.submit_review(101, "invalid-verdict", "body")
-
-    assert result is False
-    mock_create.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -893,6 +883,104 @@ async def test_remove_label_dry_run_skips_command(dry_config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# add_pr_labels
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_calls_gh_pr_edit_for_each_label(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, ["bug", "enhancement"])
+
+    assert mock_create.call_count == 2
+
+    first_args = mock_create.call_args_list[0][0]
+    assert first_args[0] == "gh"
+    assert "pr" in first_args
+    assert "edit" in first_args
+    assert "--add-label" in first_args
+
+    second_args = mock_create.call_args_list[1][0]
+    assert "--add-label" in second_args
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, ["bug"])
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_empty_list_skips_command(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, [])
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_subprocess_error_does_not_raise(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="label error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await manager.add_pr_labels(101, ["bug"])
+
+
+# ---------------------------------------------------------------------------
+# remove_pr_label
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_calls_gh_pr_edit(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_pr_label(101, "hydra-review")
+
+    args = mock_create.call_args[0]
+    assert "pr" in args
+    assert "edit" in args
+    assert "--remove-label" in args
+    assert "hydra-review" in args
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_pr_label(101, "hydra-review")
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_subprocess_error_does_not_raise(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="label error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await manager.remove_pr_label(101, "hydra-review")
+
+
+# ---------------------------------------------------------------------------
 # get_pr_diff
 # ---------------------------------------------------------------------------
 
@@ -1000,72 +1088,9 @@ async def test_pull_main_dry_run_skips_command(dry_config, event_bus):
     assert result is True
 
 
-# ---------------------------------------------------------------------------
-# _run instance method
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_run_returns_stdout_on_success(config, event_bus, tmp_path):
-    mgr = _make_manager(config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="hello world\n")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        output = await mgr._run("echo", "hello world", cwd=tmp_path)
-
-    assert output == "hello world"
-
-
-@pytest.mark.asyncio
-async def test_run_raises_runtime_error_on_nonzero_exit(config, event_bus, tmp_path):
-    mgr = _make_manager(config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=1, stderr="command not found")
-
-    with (
-        patch("asyncio.create_subprocess_exec", mock_create),
-        pytest.raises(RuntimeError, match="failed"),
-    ):
-        await mgr._run("false", cwd=tmp_path)
-
-
-# ---------------------------------------------------------------------------
-# _run — gh_token injection
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_run_injects_gh_token_into_env(event_bus, tmp_path):
-    """When gh_token is set, _run should inject GH_TOKEN into the subprocess env."""
-    from tests.helpers import ConfigFactory
-
-    cfg = ConfigFactory.create(
-        gh_token="ghp_secret123",
-        repo_root=tmp_path,
-        worktree_base=tmp_path / "worktrees",
-        state_file=tmp_path / "state.json",
-    )
-    mgr = _make_manager(cfg, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        await mgr._run("gh", "pr", "list", cwd=tmp_path)
-
-    call_kwargs = mock_create.call_args.kwargs
-    assert call_kwargs["env"]["GH_TOKEN"] == "ghp_secret123"
-
-
-@pytest.mark.asyncio
-async def test_run_does_not_inject_gh_token_when_empty(config, event_bus, tmp_path):
-    """When gh_token is empty, _run should not override GH_TOKEN in the env."""
-    mgr = _make_manager(config, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        await mgr._run("gh", "pr", "list", cwd=tmp_path)
-
-    call_kwargs = mock_create.call_args.kwargs
-    # GH_TOKEN should be whatever was in os.environ, not forcibly set
-    assert call_kwargs["env"].get("GH_TOKEN") != ""  # from conftest session fixture
+# NOTE: Tests for the subprocess helper (stdout parsing, error handling,
+# GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
+# since the logic was extracted into subprocess_util.run_subprocess.
 
 
 # ---------------------------------------------------------------------------
@@ -1086,7 +1111,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    checks_json = '[{"name":"ci","state":"COMPLETED","conclusion":"SUCCESS"}]'
+    checks_json = '[{"name":"ci","state":"SUCCESS"}]'
     mock_create = _make_subprocess_mock(returncode=0, stdout=checks_json)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
@@ -1094,7 +1119,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
 
     assert len(checks) == 1
     assert checks[0]["name"] == "ci"
-    assert checks[0]["conclusion"] == "SUCCESS"
+    assert checks[0]["state"] == "SUCCESS"
 
 
 @pytest.mark.asyncio
@@ -1152,8 +1177,8 @@ async def test_wait_for_ci_passes_when_all_succeed(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "SUCCESS"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1183,8 +1208,8 @@ async def test_wait_for_ci_fails_on_failure(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "FAILURE"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "FAILURE"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1284,7 +1309,7 @@ async def test_wait_for_ci_already_complete_returns_immediately(
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     passed, _ = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
@@ -1310,7 +1335,7 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)

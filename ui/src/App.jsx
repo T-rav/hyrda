@@ -7,6 +7,7 @@ import { TranscriptView } from './components/TranscriptView'
 import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
+import { theme } from './theme'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
@@ -44,7 +45,7 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={state.prs.length}
+        prsCount={state.sessionPrsCount}
         mergedCount={state.mergedCount}
         issuesFound={state.lifetimeStats?.issues_created ?? 0}
         connected={state.connected}
@@ -71,10 +72,7 @@ export default function App() {
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                ...styles.tab,
-                ...(activeTab === tab ? styles.tabActive : {}),
-              }}
+              style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
@@ -121,21 +119,21 @@ const styles = {
   },
   tabs: {
     display: 'flex',
-    borderBottom: '1px solid #30363d',
-    background: '#161b22',
+    borderBottom: `1px solid ${theme.border}`,
+    background: theme.surface,
   },
   tab: {
     padding: '10px 20px',
     fontSize: 12,
     fontWeight: 600,
-    color: '#8b949e',
+    color: theme.textMuted,
     cursor: 'pointer',
     borderBottom: '2px solid transparent',
     transition: 'all 0.15s',
   },
   tabActive: {
-    color: '#58a6ff',
-    borderBottomColor: '#58a6ff',
+    color: theme.accent,
+    borderBottomColor: theme.accent,
   },
   tabContent: {
     flex: 1,
@@ -150,9 +148,13 @@ const styles = {
   },
   timelineItem: {
     padding: '6px 8px',
-    borderBottom: '1px solid #30363d',
+    borderBottom: `1px solid ${theme.border}`,
     fontSize: 11,
   },
-  timelineTime: { color: '#8b949e', marginRight: 8 },
-  timelineType: { fontWeight: 600, color: '#58a6ff', marginRight: 6 },
+  timelineTime: { color: theme.textMuted, marginRight: 8 },
+  timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
 }
+
+// Pre-computed tab style variants (avoids object spread in .map())
+export const tabInactiveStyle = styles.tab
+export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }

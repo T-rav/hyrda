@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { theme } from '../theme'
 
 export function HumanInputBanner({ requests, onSubmit }) {
   const [answer, setAnswer] = useState('')
@@ -38,26 +39,26 @@ const styles = {
   banner: {
     display: 'flex',
     padding: '12px 16px',
-    background: 'rgba(210,153,34,0.15)',
-    borderBottom: '2px solid #d29922',
+    background: theme.yellowSubtle,
+    borderBottom: `2px solid ${theme.yellow}`,
     alignItems: 'center',
     gap: 12,
   },
-  question: { flex: 1, color: '#d29922', fontWeight: 600, fontSize: 13 },
+  question: { flex: 1, color: theme.yellow, fontWeight: 600, fontSize: 13 },
   input: {
     flex: 2,
     padding: '6px 12px',
-    background: '#0d1117',
-    border: '1px solid #30363d',
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
     borderRadius: 6,
-    color: '#c9d1d9',
+    color: theme.text,
     fontFamily: 'inherit',
     fontSize: 12,
   },
   button: {
     padding: '6px 16px',
-    background: '#d29922',
-    color: '#0d1117',
+    background: theme.yellow,
+    color: theme.bg,
     border: 'none',
     borderRadius: 6,
     fontWeight: 600,
