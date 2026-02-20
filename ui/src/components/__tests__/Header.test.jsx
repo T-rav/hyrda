@@ -10,10 +10,10 @@ import {
 
 const STAGE_KEYS = ['triage', 'plan', 'implement', 'review']
 const STAGE_COLORS = {
-  triage: '#39d353',
-  plan: '#a371f7',
-  implement: '#58a6ff',
-  review: '#d18616',
+  triage: 'var(--triage-green)',
+  plan: 'var(--purple)',
+  implement: 'var(--accent)',
+  review: 'var(--orange)',
 }
 
 describe('Header pre-computed styles', () => {
@@ -21,14 +21,14 @@ describe('Header pre-computed styles', () => {
     it('dotConnected has green background', () => {
       expect(dotConnected).toMatchObject({
         width: 8, height: 8, borderRadius: '50%',
-        background: '#3fb950',
+        background: 'var(--green)',
       })
     })
 
     it('dotDisconnected has red background', () => {
       expect(dotDisconnected).toMatchObject({
         width: 8, height: 8, borderRadius: '50%',
-        background: '#f85149',
+        background: 'var(--red)',
       })
     })
   })
@@ -45,7 +45,7 @@ describe('Header pre-computed styles', () => {
     it('lit variant uses stage color for background', () => {
       for (const key of STAGE_KEYS) {
         expect(pillStyles[key].lit.background).toBe(STAGE_COLORS[key])
-        expect(pillStyles[key].lit.color).toBe('#0d1117')
+        expect(pillStyles[key].lit.color).toBe('var(--bg)')
         expect(pillStyles[key].lit.borderColor).toBe(STAGE_COLORS[key])
       }
     })
@@ -107,7 +107,7 @@ describe('Header pre-computed styles', () => {
   describe('start button variants', () => {
     it('startBtnEnabled has opacity 1 and pointer cursor', () => {
       expect(startBtnEnabled).toMatchObject({ opacity: 1, cursor: 'pointer' })
-      expect(startBtnEnabled.background).toBe('#238636')
+      expect(startBtnEnabled.background).toBe('var(--btn-green)')
     })
 
     it('startBtnDisabled has opacity 0.4 and not-allowed cursor', () => {
