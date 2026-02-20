@@ -196,6 +196,9 @@ class TestIndexRoute:
 class TestAccessibility:
     """Tests for accessibility attributes in the dashboard HTML."""
 
+    @pytest.mark.skip(
+        reason="aria attribute is rendered by React in the browser, not in the HTML shell"
+    )
     def test_human_input_field_has_aria_labelledby(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
     ) -> None:

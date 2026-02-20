@@ -121,6 +121,7 @@ class WorktreeManager:
 
         # Set up the environment inside the worktree
         self._setup_env(wt_path)
+        await self._configure_git_identity(wt_path)
         await self._create_venv(wt_path)
         await self._install_hooks(wt_path)
 
@@ -246,6 +247,27 @@ class WorktreeManager:
             if nm_src.exists() and not nm_dst.exists():
                 nm_dst.parent.mkdir(parents=True, exist_ok=True)
                 nm_dst.symlink_to(nm_src)
+
+    async def _configure_git_identity(self, wt_path: Path) -> None:
+        """Set git user.name and user.email in the worktree (local scope)."""
+        if self._config.git_user_name:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.name",
+                self._config.git_user_name,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
+        if self._config.git_user_email:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.email",
+                self._config.git_user_email,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
 
     async def _create_venv(self, wt_path: Path) -> None:
         """Create an independent venv in the worktree via ``uv sync``."""

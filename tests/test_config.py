@@ -984,7 +984,10 @@ class TestHydraConfigValidationConstraints:
 class TestHydraConfigGhToken:
     """Tests for the gh_token field and HYDRA_GH_TOKEN env var resolution."""
 
-    def test_gh_token_default_is_empty(self, tmp_path: Path) -> None:
+    def test_gh_token_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GH_TOKEN", raising=False)
         cfg = HydraConfig(
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -1023,3 +1026,98 @@ class TestHydraConfigGhToken:
             state_file=tmp_path / "s.json",
         )
         assert cfg.gh_token == "ghp_explicit"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – git identity resolution
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigGitIdentity:
+    """Tests for git_user_name/git_user_email fields and env var resolution."""
+
+    def test_git_user_name_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == ""
+
+    def test_git_user_email_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == ""
+
+    def test_git_user_name_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            git_user_name="Bot",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "Bot"
+
+    def test_git_user_email_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "bot@example.com"
+
+    def test_git_user_name_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_NAME", "EnvBot")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "EnvBot"
+
+    def test_git_user_email_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_EMAIL", "env@example.com")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "env@example.com"
+
+    def test_git_user_name_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_NAME", "EnvBot")
+        cfg = HydraConfig(
+            git_user_name="ExplicitBot",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "ExplicitBot"
+
+    def test_git_user_email_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_EMAIL", "env@example.com")
+        cfg = HydraConfig(
+            git_user_email="explicit@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "explicit@example.com"

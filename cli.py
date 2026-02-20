@@ -157,6 +157,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="GitHub token for gh CLI auth (overrides HYDRA_GH_TOKEN and shell GH_TOKEN)",
     )
     parser.add_argument(
+        "--git-user-name",
+        default=None,
+        help="Git user.name for worktree commits; uses global git config if unset",
+    )
+    parser.add_argument(
+        "--git-user-email",
+        default=None,
+        help="Git user.email for worktree commits; uses global git config if unset",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -202,6 +212,8 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "main_branch",
         "dashboard_port",
         "gh_token",
+        "git_user_name",
+        "git_user_email",
     ):
         val = getattr(args, field)
         if val is not None:
