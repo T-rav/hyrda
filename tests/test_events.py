@@ -28,6 +28,7 @@ class TestEventTypeEnum:
             "CI_CHECK",
             "ISSUE_CREATED",
             "BATCH_COMPLETE",
+            "HITL_UPDATE",
             "ORCHESTRATOR_STATUS",
             "ERROR",
         }
@@ -46,6 +47,7 @@ class TestEventTypeEnum:
         assert EventType.MERGE_UPDATE == "merge_update"
         assert EventType.ISSUE_CREATED == "issue_created"
         assert EventType.BATCH_COMPLETE == "batch_complete"
+        assert EventType.HITL_UPDATE == "hitl_update"
         assert EventType.ORCHESTRATOR_STATUS == "orchestrator_status"
         assert EventType.ERROR == "error"
 
