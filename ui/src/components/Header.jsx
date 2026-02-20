@@ -1,18 +1,11 @@
 import React from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
-const STAGES = [
-  { key: 'triage',    label: 'TRIAGE',    color: theme.triageGreen, role: 'triage',      configKey: null },
-  { key: 'plan',      label: 'PLAN',      color: theme.purple,      role: 'planner',     configKey: 'max_planners' },
-  { key: 'implement', label: 'IMPLEMENT', color: theme.accent,      role: 'implementer', configKey: 'max_workers' },
-  { key: 'review',    label: 'REVIEW',    color: theme.orange,      role: 'reviewer',    configKey: 'max_reviewers' },
-]
+const toUpper = s => ({ ...s, label: s.label.toUpperCase() })
 
-const SESSION_STAGES = [
-  ...STAGES,
-  { key: 'merged', label: 'MERGED', color: theme.green },
-]
+const STAGES = PIPELINE_STAGES.filter(s => s.role != null).map(toUpper)
+const SESSION_STAGES = PIPELINE_STAGES.map(toUpper)
 
 export function Header({
   sessionCounts, connected, orchestratorStatus,
