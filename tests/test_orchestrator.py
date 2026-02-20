@@ -1842,13 +1842,15 @@ class TestConstructorInjection:
 class TestStopMechanism:
     """Tests for request_stop(), reset(), run_status, and stop-at-batch-boundary."""
 
-    def test_request_stop_sets_stop_event(self, config: HydraConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_request_stop_sets_stop_event(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
         assert not orch._stop_event.is_set()
-        orch.request_stop()
+        await orch.request_stop()
         assert orch._stop_event.is_set()
 
-    def test_stop_terminates_all_runners(self, config: HydraConfig) -> None:
+    @pytest.mark.asyncio
+    async def test_stop_terminates_all_runners(self, config: HydraConfig) -> None:
         """stop() should call terminate() on planners, agents, and reviewers."""
         orch = HydraOrchestrator(config)
         with (
@@ -1856,11 +1858,23 @@ class TestStopMechanism:
             patch.object(orch._agents, "terminate") as mock_a,
             patch.object(orch._reviewers, "terminate") as mock_r,
         ):
-            orch.stop()
+            await orch.stop()
 
         mock_p.assert_called_once()
         mock_a.assert_called_once()
         mock_r.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stop_publishes_status(self, config: HydraConfig) -> None:
+        """stop() should publish ORCHESTRATOR_STATUS event."""
+        orch = HydraOrchestrator(config)
+        orch._running = True  # simulate running state
+        await orch.stop()
+
+        history = orch._bus.get_history()
+        status_events = [e for e in history if e.type == EventType.ORCHESTRATOR_STATUS]
+        assert len(status_events) == 1
+        assert status_events[0].data["status"] == "stopping"
 
     def test_reset_clears_stop_event_and_running(self, config: HydraConfig) -> None:
         orch = HydraOrchestrator(config)
@@ -1937,7 +1951,7 @@ class TestStopMechanism:
         async def counting_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             nonlocal call_count
             call_count += 1
-            orch.request_stop()
+            await orch.request_stop()
             return [make_worker_result(42)], [make_issue(42)]
 
         orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
@@ -1953,7 +1967,7 @@ class TestStopMechanism:
         """Calling run() again after stop should reset the stop event."""
         orch = HydraOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
-        orch.request_stop()
+        await orch.request_stop()
         assert orch._stop_event.is_set()
 
         # run() clears the stop event at start, then loops exit immediately
@@ -1978,7 +1992,7 @@ class TestStopMechanism:
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def stop_on_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
-            orch.request_stop()
+            await orch.request_stop()
             return [make_worker_result(42)], [make_issue(42)]
 
         orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]

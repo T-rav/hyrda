@@ -283,8 +283,7 @@ class HydraDashboard:
         async def stop_orchestrator() -> JSONResponse:
             if not self._orchestrator or not self._orchestrator.running:
                 return JSONResponse({"error": "not running"}, status_code=400)
-            self._orchestrator.request_stop()
-            await self._orchestrator._publish_status()
+            await self._orchestrator.request_stop()
             return JSONResponse({"status": "stopping"})
 
         @app.get("/api/control/status")

@@ -48,9 +48,8 @@ def make_orchestrator_mock(
     orch.provide_human_input = MagicMock()
     orch.running = running
     orch.run_status = run_status
-    orch.stop = MagicMock()
-    orch.request_stop = MagicMock()
-    orch._publish_status = AsyncMock()
+    orch.stop = AsyncMock()
+    orch.request_stop = AsyncMock()
     return orch
 
 
