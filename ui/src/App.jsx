@@ -18,6 +18,11 @@ export default function App() {
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
 
+  const handleWorkerSelect = useCallback((worker) => {
+    setSelectedWorker(worker)
+    setActiveTab('transcript')
+  }, [])
+
   // Auto-select the first active worker when none is selected
   useEffect(() => {
     if (selectedWorker !== null && state.workers[selectedWorker]) return
@@ -60,7 +65,7 @@ export default function App() {
       <WorkerList
         workers={state.workers}
         selectedWorker={selectedWorker}
-        onSelect={setSelectedWorker}
+        onSelect={handleWorkerSelect}
         humanInputRequests={requests}
       />
 
