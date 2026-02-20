@@ -77,57 +77,68 @@ class ImplementPhase:
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
 
-                # Resume: reuse existing worktree if present
-                wt_path = self._config.worktree_base / f"issue-{issue.number}"
-                if wt_path.is_dir():
-                    logger.info(
-                        "Resuming existing worktree for issue #%d", issue.number
-                    )
-                else:
-                    wt_path = await self._worktrees.create(issue.number, branch)
-                self._state.set_worktree(issue.number, str(wt_path))
-
-                # Push branch immediately so it appears on the GitHub issue
-                await self._prs.push_branch(wt_path, branch)
-                await self._prs.post_comment(
-                    issue.number,
-                    f"**Branch:** [`{branch}`](https://github.com/"
-                    f"{self._config.repo}/tree/{branch})\n\n"
-                    f"Implementation in progress.",
-                )
-
-                result = await self._agents.run(issue, wt_path, branch, worker_id=idx)
-
-                # Push final commits and create PR
-                if result.worktree_path:
-                    pushed = await self._prs.push_branch(
-                        Path(result.worktree_path), result.branch
-                    )
-                    if pushed:
-                        draft = not result.success
-                        pr = await self._prs.create_pr(
-                            issue, result.branch, draft=draft
+                try:
+                    # Resume: reuse existing worktree if present
+                    wt_path = self._config.worktree_base / f"issue-{issue.number}"
+                    if wt_path.is_dir():
+                        logger.info(
+                            "Resuming existing worktree for issue #%d", issue.number
                         )
-                        result.pr_info = pr
+                    else:
+                        wt_path = await self._worktrees.create(issue.number, branch)
+                    self._state.set_worktree(issue.number, str(wt_path))
 
-                        if result.success:
-                            # Success: move to review pipeline
-                            for lbl in self._config.ready_label:
-                                await self._prs.remove_label(issue.number, lbl)
-                            await self._prs.add_labels(
-                                issue.number, [self._config.review_label[0]]
+                    # Push branch immediately so it appears on the GitHub issue
+                    await self._prs.push_branch(wt_path, branch)
+                    await self._prs.post_comment(
+                        issue.number,
+                        f"**Branch:** [`{branch}`](https://github.com/"
+                        f"{self._config.repo}/tree/{branch})\n\n"
+                        f"Implementation in progress.",
+                    )
+
+                    result = await self._agents.run(
+                        issue, wt_path, branch, worker_id=idx
+                    )
+
+                    # Push final commits and create PR
+                    if result.worktree_path:
+                        pushed = await self._prs.push_branch(
+                            Path(result.worktree_path), result.branch
+                        )
+                        if pushed:
+                            draft = not result.success
+                            pr = await self._prs.create_pr(
+                                issue, result.branch, draft=draft
                             )
-                            if pr and pr.number > 0:
-                                await self._prs.add_pr_labels(
-                                    pr.number, [self._config.review_label[0]]
-                                )
-                        # Failure: keep implementation label so issue can be retried
+                            result.pr_info = pr
 
-                status = "success" if result.success else "failed"
-                self._state.mark_issue(issue.number, status)
-                # Release so the review loop can pick it up
-                self._active_issues.discard(issue.number)
-                return result
+                            if result.success:
+                                # Success: move to review pipeline
+                                for lbl in self._config.ready_label:
+                                    await self._prs.remove_label(issue.number, lbl)
+                                await self._prs.add_labels(
+                                    issue.number, [self._config.review_label[0]]
+                                )
+                                if pr and pr.number > 0:
+                                    await self._prs.add_pr_labels(
+                                        pr.number, [self._config.review_label[0]]
+                                    )
+                            # Failure: keep implementation label so issue can be retried
+
+                    status = "success" if result.success else "failed"
+                    self._state.mark_issue(issue.number, status)
+                    return result
+                except Exception:
+                    logger.exception("Worker failed for issue #%d", issue.number)
+                    self._state.mark_issue(issue.number, "failed")
+                    return WorkerResult(
+                        issue_number=issue.number,
+                        branch=branch,
+                        error=f"Worker exception for issue #{issue.number}",
+                    )
+                finally:
+                    self._active_issues.discard(issue.number)
 
         all_tasks = [
             asyncio.create_task(_worker(i, issue)) for i, issue in enumerate(issues)
