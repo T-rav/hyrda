@@ -3197,6 +3197,189 @@ class TestWaitAndFixCIDirect:
         assert (42, ["hydra-hitl"]) in add_calls
 
 
+# ---------------------------------------------------------------------------
+# HITL_UPDATE event emission tests
+# ---------------------------------------------------------------------------
+
+
+class TestHitlUpdateEvents:
+    """Verify that HITL escalation points emit HITL_UPDATE events."""
+
+    @pytest.mark.asyncio
+    async def test_triage_escalation_emits_hitl_update(
+        self, config: HydraConfig
+    ) -> None:
+        """Triage escalation to HITL should emit HITL_UPDATE event."""
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        bus = orch.event_bus
+        queue = bus.subscribe()
+
+        issue = make_issue(2, title="Fix the bug", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(
+                issue_number=2,
+                ready=False,
+                reasons=["Body is too short or empty (minimum 50 characters)"],
+            )
+        )
+        orch._triage = mock_triage
+
+        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
+            await orch._triage_find_issues()
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        hitl_events = [e for e in events if e.type == EventType.HITL_UPDATE]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 2
+        assert hitl_events[0].data["action"] == "escalated"
+
+    @pytest.mark.asyncio
+    async def test_merge_conflict_escalation_emits_hitl_update(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict escalation should emit HITL_UPDATE event."""
+        orch = HydraOrchestrator(config)
+        bus = orch.event_bus
+        queue = bus.subscribe()
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.add_pr_labels = AsyncMock()
+        mock_prs.remove_pr_label = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.merge_main = AsyncMock(return_value=False)
+        mock_wt.start_merge_main = AsyncMock(return_value=False)
+        mock_wt.abort_merge = AsyncMock()
+        orch._worktrees = mock_wt
+
+        mock_agents = AsyncMock()
+        mock_agents._build_command = lambda wt: ["claude", "-p"]
+        mock_agents._execute = AsyncMock(return_value="failed")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        orch._agents = mock_agents
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await orch._review_prs([pr], [issue])
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        hitl_events = [e for e in events if e.type == EventType.HITL_UPDATE]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["action"] == "escalated"
+
+    @pytest.mark.asyncio
+    async def test_merge_failure_escalation_emits_hitl_update(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge failure should emit HITL_UPDATE event."""
+        orch = HydraOrchestrator(config)
+        bus = orch.event_bus
+        queue = bus.subscribe()
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        _, mock_prs, _ = (
+            ReviewMockBuilder(orch, config).with_merge_return(False).build()
+        )
+
+        await orch._review_prs([pr], [issue])
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        hitl_events = [e for e in events if e.type == EventType.HITL_UPDATE]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["action"] == "escalated"
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_escalation_emits_hitl_update(
+        self, config: HydraConfig
+    ) -> None:
+        """CI failure after max fix attempts should emit HITL_UPDATE event."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+            max_ci_fix_attempts=0,
+        )
+        orch = HydraOrchestrator(cfg)
+        bus = orch.event_bus
+        queue = bus.subscribe()
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_prs = AsyncMock()
+        mock_prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.remove_pr_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.add_pr_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_reviewers = AsyncMock()
+        orch._reviewers = mock_reviewers
+
+        wt_path = cfg.worktree_base / "issue-42"
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        from models import ReviewResult as RR
+
+        result = RR(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="Looks good.",
+            fixes_made=False,
+        )
+
+        await orch._wait_and_fix_ci(pr, issue, wt_path, result, worker_id=0)
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        hitl_events = [e for e in events if e.type == EventType.HITL_UPDATE]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["action"] == "escalated"
+
+
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,
 # GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
 # since the logic was extracted into subprocess_util.run_subprocess.
