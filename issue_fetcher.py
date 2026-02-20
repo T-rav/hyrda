@@ -1,0 +1,188 @@
+"""GitHub issue fetching for the Hydra orchestrator."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+
+from config import HydraConfig
+from models import GitHubIssue, PRInfo
+from subprocess_util import run_subprocess
+
+logger = logging.getLogger("hydra.issue_fetcher")
+
+
+class IssueFetcher:
+    """Fetches GitHub issues and PRs via the ``gh`` CLI."""
+
+    def __init__(self, config: HydraConfig) -> None:
+        self._config = config
+
+    async def fetch_issues_by_labels(
+        self,
+        labels: list[str],
+        limit: int,
+        exclude_labels: list[str] | None = None,
+    ) -> list[GitHubIssue]:
+        """Fetch open issues matching *any* of *labels*, deduplicated.
+
+        If *labels* is empty but *exclude_labels* is provided, fetch all
+        open issues and filter out those carrying any of the exclude labels.
+        """
+        if self._config.dry_run:
+            logger.info(
+                "[dry-run] Would fetch issues with labels=%r exclude=%r",
+                labels,
+                exclude_labels,
+            )
+            return []
+
+        seen: dict[int, dict] = {}
+
+        async def _query_label(label: str | None) -> None:
+            cmd = [
+                "gh",
+                "issue",
+                "list",
+                "--repo",
+                self._config.repo,
+                "--limit",
+                str(limit),
+                "--json",
+                "number,title,body,labels,comments,url",
+            ]
+            if label is not None:
+                cmd += ["--label", label]
+            try:
+                raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
+                for item in json.loads(raw):
+                    seen.setdefault(item["number"], item)
+            except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
+                logger.error("gh issue list failed for label=%r: %s", label, exc)
+
+        if labels:
+            await asyncio.gather(*[_query_label(lbl) for lbl in labels])
+        elif exclude_labels:
+            await _query_label(None)
+            # Remove issues that carry any of the exclude labels
+            exclude_set = set(exclude_labels)
+            to_remove = []
+            for num, raw in seen.items():
+                raw_labels = {
+                    (rl["name"] if isinstance(rl, dict) else str(rl))
+                    for rl in raw.get("labels", [])
+                }
+                if raw_labels & exclude_set:
+                    to_remove.append(num)
+            for num in to_remove:
+                del seen[num]
+        else:
+            return []
+
+        issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
+        return issues[:limit]
+
+    async def fetch_plan_issues(self) -> list[GitHubIssue]:
+        """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
+        if not self._config.planner_label:
+            # No planner labels configured — fetch all open issues that are
+            # not already in a downstream pipeline stage.
+            exclude = list(
+                {
+                    *self._config.ready_label,
+                    *self._config.review_label,
+                    *self._config.hitl_label,
+                    *self._config.fixed_label,
+                }
+            )
+            issues = await self.fetch_issues_by_labels(
+                [],
+                self._config.batch_size,
+                exclude_labels=exclude,
+            )
+        else:
+            issues = await self.fetch_issues_by_labels(
+                self._config.planner_label,
+                self._config.batch_size,
+            )
+        logger.info("Fetched %d issues for planning", len(issues))
+        return issues[: self._config.batch_size]
+
+    async def fetch_ready_issues(self, active_issues: set[int]) -> list[GitHubIssue]:
+        """Fetch issues labeled ``hydra-ready`` for the implement phase.
+
+        Returns up to ``2 * max_workers`` issues so the worker pool
+        stays saturated.
+        """
+        queue_size = 2 * self._config.max_workers
+
+        all_issues = await self.fetch_issues_by_labels(
+            self._config.ready_label,
+            queue_size,
+        )
+        # Only skip issues already active in this run (GitHub labels are
+        # the source of truth — if it still has hydra-ready, it needs work)
+        issues = [i for i in all_issues if i.number not in active_issues]
+        for skipped in all_issues:
+            if skipped.number in active_issues:
+                logger.info("Skipping in-progress issue #%d", skipped.number)
+
+        logger.info("Fetched %d issues to implement", len(issues))
+        return issues[:queue_size]
+
+    async def fetch_reviewable_prs(
+        self, active_issues: set[int]
+    ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+        """Fetch issues labeled ``hydra-review`` and resolve their open PRs.
+
+        Returns ``(pr_infos, issues)`` so the reviewer has both.
+        """
+        all_issues = await self.fetch_issues_by_labels(
+            self._config.review_label,
+            self._config.batch_size,
+        )
+        # Only skip issues already active in this run
+        issues = [i for i in all_issues if i.number not in active_issues]
+        if not issues:
+            return [], []
+
+        # For each issue, look up the open PR on its branch
+        pr_infos: list[PRInfo] = []
+        for issue in issues:
+            branch = f"agent/issue-{issue.number}"
+            try:
+                raw = await run_subprocess(
+                    "gh",
+                    "pr",
+                    "list",
+                    "--repo",
+                    self._config.repo,
+                    "--head",
+                    branch,
+                    "--state",
+                    "open",
+                    "--json",
+                    "number,url,isDraft",
+                    "--limit",
+                    "1",
+                    gh_token=self._config.gh_token,
+                )
+                prs_json = json.loads(raw)
+                if prs_json:
+                    pr_data = prs_json[0]
+                    pr_infos.append(
+                        PRInfo(
+                            number=pr_data["number"],
+                            issue_number=issue.number,
+                            branch=branch,
+                            url=pr_data.get("url", ""),
+                            draft=pr_data.get("isDraft", False),
+                        )
+                    )
+            except (RuntimeError, json.JSONDecodeError, KeyError) as exc:
+                logger.warning("Could not find PR for issue #%d: %s", issue.number, exc)
+
+        non_draft = [p for p in pr_infos if not p.draft and p.number > 0]
+        logger.info("Fetched %d reviewable PRs", len(non_draft))
+        return non_draft, issues

@@ -13,9 +13,11 @@ const initialState = {
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
+  hitlItems: [],  // HITLItem[]
+  humanInputRequests: {},  // Record<string, string>
 }
 
-function reducer(state, action) {
+export function reducer(state, action) {
   switch (action.type) {
     case 'CONNECTED':
       return { ...state, connected: true }
@@ -39,6 +41,7 @@ function reducer(state, action) {
           reviews: [],
           mergedCount: 0,
           sessionPrsCount: 0,
+          hitlItems: [],
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -198,6 +201,18 @@ function reducer(state, action) {
     case 'EXISTING_PRS':
       return { ...state, prs: [...action.data, ...state.prs] }
 
+    case 'HITL_ITEMS':
+      return { ...state, hitlItems: action.data }
+
+    case 'HUMAN_INPUT_REQUESTS':
+      return { ...state, humanInputRequests: action.data }
+
+    case 'HUMAN_INPUT_SUBMITTED': {
+      const next = { ...state.humanInputRequests }
+      delete next[action.data.issueNumber]
+      return { ...state, humanInputRequests: next }
+    }
+
     case 'batch_complete':
       return {
         ...addEvent(state, action),
@@ -229,6 +244,24 @@ export function useHydraSocket() {
       .catch(() => {})
   }, [])
 
+  const fetchHitlItems = useCallback(() => {
+    fetch('/api/hitl')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'HITL_ITEMS', data }))
+      .catch(() => {})
+  }, [])
+
+  const submitHumanInput = useCallback(async (issueNumber, answer) => {
+    try {
+      await fetch(`/api/human-input/${issueNumber}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      })
+      dispatch({ type: 'HUMAN_INPUT_SUBMITTED', data: { issueNumber } })
+    } catch { /* ignore */ }
+  }, [])
+
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
@@ -256,6 +289,8 @@ export function useHydraSocket() {
         .then(r => r.json())
         .then(data => dispatch({ type: 'EXISTING_PRS', data }))
         .catch(() => {})
+      // Fetch HITL items on connect
+      fetchHitlItems()
     }
 
     ws.onmessage = (e) => {
@@ -263,6 +298,7 @@ export function useHydraSocket() {
         const event = JSON.parse(e.data)
         dispatch({ type: event.type, data: event.data, timestamp: event.timestamp })
         if (event.type === 'batch_complete') fetchLifetimeStats()
+        if (event.type === 'hitl_update') fetchHitlItems()
       } catch { /* ignore parse errors */ }
     }
 
@@ -273,7 +309,20 @@ export function useHydraSocket() {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats])
+  }, [fetchLifetimeStats, fetchHitlItems])
+
+  // Poll for human input requests every 3 seconds
+  useEffect(() => {
+    const poll = () => {
+      fetch('/api/human-input')
+        .then(r => r.ok ? r.json() : {})
+        .then(data => dispatch({ type: 'HUMAN_INPUT_REQUESTS', data }))
+        .catch(() => {})
+    }
+    poll()
+    const interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     connect()
@@ -283,5 +332,5 @@ export function useHydraSocket() {
     }
   }, [connect])
 
-  return state
+  return { ...state, submitHumanInput, refreshHitl: fetchHitlItems }
 }

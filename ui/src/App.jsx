@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { useHydraSocket } from './hooks/useHydraSocket'
-import { useHumanInput } from './hooks/useHumanInput'
 import { Header } from './components/Header'
 import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
@@ -13,23 +12,29 @@ const TABS = ['transcript', 'prs', 'hitl', 'timeline']
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
-  const state = useHydraSocket()
-  const { requests, submit } = useHumanInput()
+  const {
+    connected, batchNum, phase, orchestratorStatus, workers, reviews,
+    mergedCount, sessionPrsCount, lifetimeStats, config, events,
+    hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
+  } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
-  const [hitlCount, setHitlCount] = useState(0)
+  const handleWorkerSelect = useCallback((worker) => {
+    setSelectedWorker(worker)
+    setActiveTab('transcript')
+  }, [])
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
-    if (selectedWorker !== null && state.workers[selectedWorker]) return
-    const active = Object.entries(state.workers).find(
+    if (selectedWorker !== null && workers[selectedWorker]) return
+    const active = Object.entries(workers).find(
       ([, w]) => ACTIVE_STATUSES.includes(w.status)
     )
     if (active) {
       const key = active[0]
       setSelectedWorker(isNaN(Number(key)) ? key : Number(key))
     }
-  }, [state.workers, selectedWorker])
+  }, [workers, selectedWorker])
 
   const handleStart = useCallback(async () => {
     try {
@@ -46,27 +51,27 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={state.sessionPrsCount}
-        mergedCount={state.mergedCount}
-        issuesFound={state.lifetimeStats?.issues_created ?? 0}
-        connected={state.connected}
-        orchestratorStatus={state.orchestratorStatus}
+        prsCount={sessionPrsCount}
+        mergedCount={mergedCount}
+        issuesFound={lifetimeStats?.issues_created ?? 0}
+        connected={connected}
+        orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        phase={state.phase}
-        workers={state.workers}
-        config={state.config}
+        phase={phase}
+        workers={workers}
+        config={config}
       />
 
       <WorkerList
-        workers={state.workers}
+        workers={workers}
         selectedWorker={selectedWorker}
-        onSelect={setSelectedWorker}
-        humanInputRequests={requests}
+        onSelect={handleWorkerSelect}
+        humanInputRequests={humanInputRequests}
       />
 
       <div style={styles.main}>
-        <HumanInputBanner requests={requests} onSubmit={submit} />
+        <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
 
         <div style={styles.tabs}>
           {TABS.map((tab) => (
@@ -76,7 +81,7 @@ export default function App() {
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? (
-                <>HITL{hitlCount > 0 && <span style={hitlBadgeStyle}>{hitlCount}</span>}</>
+                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
               ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
@@ -84,13 +89,13 @@ export default function App() {
 
         <div style={styles.tabContent}>
           {activeTab === 'transcript' && (
-            <TranscriptView workers={state.workers} selectedWorker={selectedWorker} />
+            <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable prs={state.prs} />}
-          {activeTab === 'hitl' && <HITLTable onCountChange={setHitlCount} />}
+          {activeTab === 'prs' && <PRTable />}
+          {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'timeline' && (
             <div style={styles.timeline}>
-              {state.events.map((e, i) => (
+              {events.map((e, i) => (
                 <div key={i} style={styles.timelineItem}>
                   <span style={styles.timelineTime}>
                     {new Date(e.timestamp).toLocaleTimeString()}

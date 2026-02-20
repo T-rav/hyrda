@@ -1,35 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React from 'react'
 import { theme } from '../theme'
 
-export function HITLTable({ onCountChange }) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  const fetchHITL = useCallback(() => {
-    setLoading(true)
-    fetch('/api/hitl')
-      .then(r => r.json())
-      .then(data => {
-        setItems(data)
-        onCountChange?.(data.length)
-      })
-      .catch(() => {
-        setItems([])
-        onCountChange?.(0)
-      })
-      .finally(() => setLoading(false))
-  }, [onCountChange])
-
-  useEffect(() => {
-    fetchHITL()
-    const interval = setInterval(fetchHITL, 30000)
-    return () => clearInterval(interval)
-  }, [fetchHITL])
-
-  if (loading && items.length === 0) {
-    return <div style={styles.empty}>Loading...</div>
-  }
-
+export function HITLTable({ items, onRefresh }) {
   if (items.length === 0) {
     return <div style={styles.empty}>No stuck PRs</div>
   }
@@ -40,7 +12,7 @@ export function HITLTable({ onCountChange }) {
         <span style={styles.headerText}>
           {items.length} issue{items.length !== 1 ? 's' : ''} stuck on CI
         </span>
-        <button onClick={fetchHITL} style={styles.refresh}>Refresh</button>
+        <button onClick={onRefresh} style={styles.refresh}>Refresh</button>
       </div>
       <table style={styles.table}>
         <thead>

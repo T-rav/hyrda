@@ -447,6 +447,27 @@ def test_extract_new_issues_single_issue(config, event_bus):
     assert issues[0].title == "Add logging"
 
 
+def test_extract_new_issues_multiline_body(config, event_bus):
+    """Multi-line body continuation lines are concatenated."""
+    runner = _make_runner(config, event_bus)
+    transcript = (
+        "NEW_ISSUES_START\n"
+        "- title: Fix the widget\n"
+        "  body: The widget is broken in production. Users are seeing\n"
+        "    errors when they click the submit button because the form\n"
+        "    validation skips required fields.\n"
+        "  labels: bug\n"
+        "NEW_ISSUES_END"
+    )
+    issues = runner._extract_new_issues(transcript)
+    assert len(issues) == 1
+    assert issues[0].title == "Fix the widget"
+    assert "widget is broken" in issues[0].body
+    assert "form" in issues[0].body
+    assert "validation" in issues[0].body
+    assert len(issues[0].body) > 50
+
+
 # ---------------------------------------------------------------------------
 # plan - success path
 # ---------------------------------------------------------------------------
@@ -644,20 +665,23 @@ async def test_plan_emits_planning_and_failed_events_on_error(
 def test_terminate_kills_active_processes(config, event_bus):
     runner = _make_runner(config, event_bus)
     mock_proc = MagicMock()
+    mock_proc.pid = 12345
     runner._active_procs.add(mock_proc)
 
-    runner.terminate()
+    with patch("runner_utils.os.killpg") as mock_killpg:
+        runner.terminate()
 
-    mock_proc.kill.assert_called_once()
+    mock_killpg.assert_called_once()
 
 
 def test_terminate_handles_process_lookup_error(config, event_bus):
     runner = _make_runner(config, event_bus)
     mock_proc = MagicMock()
-    mock_proc.kill.side_effect = ProcessLookupError
+    mock_proc.pid = 12345
     runner._active_procs.add(mock_proc)
 
-    runner.terminate()  # Should not raise
+    with patch("runner_utils.os.killpg", side_effect=ProcessLookupError):
+        runner.terminate()  # Should not raise
 
 
 def test_terminate_with_no_active_processes(config, event_bus):

@@ -1,65 +1,58 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { HITLTable } from '../HITLTable'
 
-const MOCK_ITEMS = [
-  { issue: 1, title: 'Bug A', pr: 10, branch: 'fix-a', issueUrl: '#', prUrl: '#' },
-  { issue: 2, title: 'Bug B', pr: 0, branch: 'fix-b', issueUrl: '#', prUrl: '' },
-  { issue: 3, title: 'Bug C', pr: 12, branch: 'fix-c', issueUrl: '#', prUrl: '#' },
-]
-
-beforeEach(() => {
-  vi.restoreAllMocks()
-})
-
-describe('HITLTable onCountChange callback', () => {
-  it('calls onCountChange with item count after successful fetch', async () => {
-    const onCountChange = vi.fn()
-    global.fetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve(MOCK_ITEMS),
-    })
-
-    render(<HITLTable onCountChange={onCountChange} />)
-
-    await waitFor(() => {
-      expect(onCountChange).toHaveBeenCalledWith(3)
-    })
+describe('HITLTable', () => {
+  it('renders "No stuck PRs" when items is empty array', () => {
+    render(<HITLTable items={[]} onRefresh={() => {}} />)
+    expect(screen.getByText('No stuck PRs')).toBeInTheDocument()
   })
 
-  it('calls onCountChange with 0 on fetch error', async () => {
-    const onCountChange = vi.fn()
-    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
-
-    render(<HITLTable onCountChange={onCountChange} />)
-
-    await waitFor(() => {
-      expect(onCountChange).toHaveBeenCalledWith(0)
-    })
+  it('renders items passed via props', () => {
+    const items = [
+      { issue: 10, title: 'Bug fix', issueUrl: 'https://github.com/r/issues/10', pr: 20, prUrl: 'https://github.com/r/pull/20', branch: 'agent/issue-10' },
+      { issue: 11, title: 'Feature', issueUrl: 'https://github.com/r/issues/11', pr: 0, prUrl: '', branch: 'agent/issue-11' },
+    ]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('#10')).toBeInTheDocument()
+    expect(screen.getByText('Bug fix')).toBeInTheDocument()
+    expect(screen.getByText('#20')).toBeInTheDocument()
+    expect(screen.getByText('#11')).toBeInTheDocument()
+    expect(screen.getByText('Feature')).toBeInTheDocument()
+    expect(screen.getByText('No PR')).toBeInTheDocument()
   })
 
-  it('renders without errors when onCountChange is not provided', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve(MOCK_ITEMS),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('3 issues stuck on CI')).toBeInTheDocument()
-    })
+  it('shows correct count in header', () => {
+    const items = [
+      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
+      { issue: 11, title: 'Feat', issueUrl: '', pr: 21, prUrl: '', branch: 'b2' },
+    ]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('2 issues stuck on CI')).toBeInTheDocument()
   })
 
-  it('renders fetched items in the table', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve(MOCK_ITEMS),
-    })
+  it('shows singular when one item', () => {
+    const items = [
+      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
+    ]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    expect(screen.getByText('1 issue stuck on CI')).toBeInTheDocument()
+  })
 
-    render(<HITLTable onCountChange={vi.fn()} />)
+  it('refresh button calls onRefresh prop', () => {
+    const onRefresh = vi.fn()
+    const items = [
+      { issue: 10, title: 'Bug', issueUrl: '', pr: 20, prUrl: '', branch: 'b1' },
+    ]
+    render(<HITLTable items={items} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByText('Refresh'))
+    expect(onRefresh).toHaveBeenCalledOnce()
+  })
 
-    await waitFor(() => {
-      expect(screen.getByText('Bug A')).toBeInTheDocument()
-      expect(screen.getByText('Bug B')).toBeInTheDocument()
-      expect(screen.getByText('Bug C')).toBeInTheDocument()
-    })
+  it('does not fetch data on mount (no side effects)', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    render(<HITLTable items={[]} onRefresh={() => {}} />)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
   })
 })
