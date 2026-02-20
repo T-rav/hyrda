@@ -169,6 +169,29 @@ class Phase(StrEnum):
     DONE = "done"
 
 
+# --- State Persistence ---
+
+
+class LifetimeStats(BaseModel):
+    """All-time counters preserved across resets."""
+
+    issues_completed: int = 0
+    prs_merged: int = 0
+    issues_created: int = 0
+
+
+class StateData(BaseModel):
+    """Typed schema for the JSON-backed crash-recovery state."""
+
+    current_batch: int = 0
+    processed_issues: dict[str, str] = Field(default_factory=dict)
+    active_worktrees: dict[str, str] = Field(default_factory=dict)
+    active_branches: dict[str, str] = Field(default_factory=dict)
+    reviewed_prs: dict[str, str] = Field(default_factory=dict)
+    lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    last_updated: str | None = None
+
+
 # --- Dashboard API Responses ---
 
 
