@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 from agent import AgentRunner
@@ -11,6 +12,14 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager, SelfReviewError
+from review_insights import (
+    CATEGORY_DESCRIPTIONS,
+    ReviewInsightStore,
+    ReviewRecord,
+    analyze_patterns,
+    build_insight_issue_body,
+    extract_categories,
+)
 from reviewer import ReviewRunner
 from state import StateTracker
 from worktree import WorktreeManager
@@ -42,6 +51,7 @@ class ReviewPhase:
         self._active_issues = active_issues
         self._agents = agents
         self._bus = event_bus or EventBus()
+        self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
 
     async def review_prs(
         self,
@@ -175,6 +185,9 @@ class ReviewPhase:
 
                     self._state.mark_pr(pr.number, result.verdict.value)
                     self._state.mark_issue(pr.issue_number, "reviewed")
+
+                    # Record review insight (non-blocking)
+                    await self._record_review_insight(result)
 
                     # Merge immediately if approved (with optional CI gate)
                     if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
@@ -329,6 +342,43 @@ class ReviewPhase:
         await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
         await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
         return False
+
+    async def _record_review_insight(self, result: ReviewResult) -> None:
+        """Record a review result and file improvement proposals if patterns emerge.
+
+        Wrapped in try/except so insight failures never interrupt the review flow.
+        """
+        try:
+            record = ReviewRecord(
+                pr_number=result.pr_number,
+                issue_number=result.issue_number,
+                timestamp=datetime.now(UTC).isoformat(),
+                verdict=result.verdict.value,
+                summary=result.summary,
+                fixes_made=result.fixes_made,
+                categories=extract_categories(result.summary),
+            )
+            self._insights.append_review(record)
+
+            recent = self._insights.load_recent(self._config.review_insight_window)
+            patterns = analyze_patterns(recent, self._config.review_pattern_threshold)
+            proposed = self._insights.get_proposed_categories()
+
+            for category, count, evidence in patterns:
+                if category in proposed:
+                    continue
+                body = build_insight_issue_body(category, count, len(recent), evidence)
+                desc = CATEGORY_DESCRIPTIONS.get(category, category)
+                title = f"[Review Insight] Recurring feedback: {desc}"
+                labels = self._config.improve_label[:1] + self._config.hitl_label[:1]
+                await self._prs.create_issue(title, body, labels)
+                self._insights.mark_category_proposed(category)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Review insight recording failed for PR #%d",
+                result.pr_number,
+                exc_info=True,
+            )
 
     async def _resolve_merge_conflicts(
         self,

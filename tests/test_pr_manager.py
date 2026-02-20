@@ -1487,6 +1487,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         hitl_label=["custom-hitl"],
         hitl_active_label=["custom-hitl-active"],
         fixed_label=["custom-fixed"],
+        improve_label=["custom-improve"],
         repo=config.repo,
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1514,6 +1515,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-hitl",
         "custom-hitl-active",
         "custom-fixed",
+        "custom-improve",
     }
 
 
