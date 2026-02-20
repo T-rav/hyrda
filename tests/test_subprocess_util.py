@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from subprocess_util import make_clean_env, run_subprocess
+from subprocess_util import (
+    _is_retryable_error,
+    make_clean_env,
+    run_subprocess,
+    run_subprocess_with_retry,
+)
 
 
 def _make_proc(
@@ -171,3 +176,213 @@ def test_make_clean_env_does_not_mutate_os_environ() -> None:
         import os
 
         assert os.environ.get("CLAUDECODE") == "1"
+
+
+# --- _is_retryable_error ---
+
+
+class TestIsRetryableError:
+    """Tests for the _is_retryable_error helper."""
+
+    def test_retryable_on_rate_limit(self) -> None:
+        assert _is_retryable_error("API rate limit exceeded") is True
+
+    def test_retryable_on_timeout(self) -> None:
+        assert _is_retryable_error("connection timeout") is True
+
+    def test_retryable_on_connection_error(self) -> None:
+        assert _is_retryable_error("connection refused") is True
+
+    def test_retryable_on_502(self) -> None:
+        assert _is_retryable_error("502 Bad Gateway") is True
+
+    def test_retryable_on_503(self) -> None:
+        assert _is_retryable_error("503 Service Unavailable") is True
+
+    def test_retryable_on_504(self) -> None:
+        assert _is_retryable_error("504 Gateway Timeout") is True
+
+    def test_not_retryable_on_401(self) -> None:
+        assert _is_retryable_error("401 Unauthorized") is False
+
+    def test_not_retryable_on_403_without_rate_limit(self) -> None:
+        assert _is_retryable_error("403 Forbidden") is False
+
+    def test_retryable_on_403_with_rate_limit(self) -> None:
+        assert _is_retryable_error("403 rate limit exceeded") is True
+
+    def test_not_retryable_on_404(self) -> None:
+        assert _is_retryable_error("404 Not Found") is False
+
+    def test_not_retryable_on_generic_error(self) -> None:
+        assert _is_retryable_error("something else went wrong") is False
+
+
+# --- run_subprocess_with_retry ---
+
+
+class TestRunSubprocessWithRetry:
+    """Tests for run_subprocess_with_retry."""
+
+    @pytest.mark.asyncio
+    async def test_succeeds_on_first_try(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.return_value = "ok"
+            result = await run_subprocess_with_retry("gh", "pr", "list")
+        assert result == "ok"
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_succeeds_after_transient_failure(self) -> None:
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+        ):
+            mock_run.side_effect = [
+                RuntimeError("Command failed (rc=1): 503 Service Unavailable"),
+                "ok",
+            ]
+            result = await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
+        assert result == "ok"
+        assert mock_run.await_count == 2
+        mock_sleep.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_exhausts_all_attempts(self) -> None:
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_run.side_effect = RuntimeError("Command failed (rc=1): timeout")
+            with pytest.raises(RuntimeError, match="timeout"):
+                await run_subprocess_with_retry("gh", "pr", "list", max_retries=2)
+        # 1 initial + 2 retries = 3 total calls
+        assert mock_run.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_auth_error(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = RuntimeError(
+                "Command failed (rc=1): 401 Unauthorized"
+            )
+            with pytest.raises(RuntimeError, match="401"):
+                await run_subprocess_with_retry("gh", "pr", "list")
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_404(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = RuntimeError("Command failed (rc=1): 404 Not Found")
+            with pytest.raises(RuntimeError, match="404"):
+                await run_subprocess_with_retry("gh", "pr", "list")
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_403_without_rate_limit(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = RuntimeError("Command failed (rc=1): 403 Forbidden")
+            with pytest.raises(RuntimeError, match="403"):
+                await run_subprocess_with_retry("gh", "pr", "list")
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_retry_on_403_rate_limit(self) -> None:
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_run.side_effect = [
+                RuntimeError("Command failed (rc=1): 403 rate limit exceeded"),
+                "ok",
+            ]
+            result = await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
+        assert result == "ok"
+        assert mock_run.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_backoff_increases_exponentially(self) -> None:
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("random.uniform", return_value=0.0),
+        ):
+            mock_run.side_effect = [
+                RuntimeError("Command failed (rc=1): 503"),
+                RuntimeError("Command failed (rc=1): 503"),
+                RuntimeError("Command failed (rc=1): 503"),
+                "ok",
+            ]
+            await run_subprocess_with_retry(
+                "gh",
+                "pr",
+                "list",
+                max_retries=3,
+                base_delay_seconds=1.0,
+            )
+        # With jitter=0: delays should be 1.0, 2.0, 4.0
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        assert delays == [1.0, 2.0, 4.0]
+
+    @pytest.mark.asyncio
+    async def test_max_delay_cap(self) -> None:
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("random.uniform", return_value=0.0),
+        ):
+            mock_run.side_effect = [
+                RuntimeError("Command failed (rc=1): 503"),
+                RuntimeError("Command failed (rc=1): 503"),
+                "ok",
+            ]
+            await run_subprocess_with_retry(
+                "gh",
+                "pr",
+                "list",
+                max_retries=2,
+                base_delay_seconds=10.0,
+                max_delay_seconds=15.0,
+            )
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        # Attempt 0: min(10*2^0, 15) = 10, attempt 1: min(10*2^1, 15) = 15
+        assert delays == [10.0, 15.0]
+
+    @pytest.mark.asyncio
+    async def test_zero_max_retries_no_retry(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = RuntimeError("Command failed (rc=1): 503")
+            with pytest.raises(RuntimeError, match="503"):
+                await run_subprocess_with_retry("gh", "pr", "list", max_retries=0)
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_passes_through_cmd_and_kwargs(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.return_value = "ok"
+            await run_subprocess_with_retry(
+                "gh",
+                "pr",
+                "list",
+                cwd=Path("/tmp/test"),
+                gh_token="ghp_test",
+                max_retries=1,
+            )
+        mock_run.assert_awaited_once_with(
+            "gh",
+            "pr",
+            "list",
+            cwd=Path("/tmp/test"),
+            gh_token="ghp_test",
+        )
