@@ -1160,10 +1160,10 @@ class TestReviewPRs:
         mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
 
     @pytest.mark.asyncio
-    async def test_review_submits_formal_github_review(
+    async def test_review_skips_submit_review_for_approve(
         self, config: HydraConfig
     ) -> None:
-        """submit_review should be called with verdict and summary."""
+        """submit_review should NOT be called for approve to avoid self-approval errors."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -1193,17 +1193,17 @@ class TestReviewPRs:
 
         await orch._review_prs([pr], [issue])
 
-        mock_prs.submit_review.assert_awaited_once_with(101, "approve", "Looks good.")
+        mock_prs.submit_review.assert_not_awaited()
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "verdict",
-        [ReviewVerdict.APPROVE, ReviewVerdict.REQUEST_CHANGES, ReviewVerdict.COMMENT],
+        [ReviewVerdict.REQUEST_CHANGES, ReviewVerdict.COMMENT],
     )
-    async def test_review_submits_review_for_all_verdicts(
+    async def test_review_submits_review_for_non_approve_verdicts(
         self, config: HydraConfig, verdict: ReviewVerdict
     ) -> None:
-        """submit_review should be called for all verdict types."""
+        """submit_review should be called for request-changes and comment verdicts."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -1278,14 +1278,12 @@ class TestReviewPRs:
         await orch._review_prs([pr], [issue])
 
         mock_prs.post_pr_comment.assert_not_awaited()
-        # submit_review should still be called
-        mock_prs.submit_review.assert_awaited_once()
+        # submit_review should NOT be called for approve verdict
+        mock_prs.submit_review.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_review_comment_and_review_before_merge(
-        self, config: HydraConfig
-    ) -> None:
-        """post_pr_comment and submit_review should be called before merge."""
+    async def test_review_comment_before_merge(self, config: HydraConfig) -> None:
+        """post_pr_comment should be called before merge; submit_review skipped for approve."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -1301,10 +1299,6 @@ class TestReviewPRs:
         async def fake_post_pr_comment(pr_number: int, body: str) -> None:
             call_order.append("post_pr_comment")
 
-        async def fake_submit_review(pr_number: int, verdict: str, body: str) -> bool:
-            call_order.append("submit_review")
-            return True
-
         async def fake_merge(pr_number: int) -> bool:
             call_order.append("merge")
             return True
@@ -1313,7 +1307,7 @@ class TestReviewPRs:
         mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
         mock_prs.push_branch = AsyncMock(return_value=True)
         mock_prs.post_pr_comment = fake_post_pr_comment
-        mock_prs.submit_review = fake_submit_review
+        mock_prs.submit_review = AsyncMock(return_value=True)
         mock_prs.merge_pr = fake_merge
         mock_prs.remove_label = AsyncMock()
         mock_prs.add_labels = AsyncMock()
@@ -1329,13 +1323,13 @@ class TestReviewPRs:
         await orch._review_prs([pr], [issue])
 
         assert call_order.index("post_pr_comment") < call_order.index("merge")
-        assert call_order.index("submit_review") < call_order.index("merge")
+        mock_prs.submit_review.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_review_posts_comment_even_when_merge_fails(
         self, config: HydraConfig
     ) -> None:
-        """post_pr_comment and submit_review should be called regardless of merge outcome."""
+        """post_pr_comment should be called regardless of merge outcome."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -1366,7 +1360,7 @@ class TestReviewPRs:
         await orch._review_prs([pr], [issue])
 
         mock_prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
-        mock_prs.submit_review.assert_awaited_once_with(101, "approve", "Looks good.")
+        mock_prs.submit_review.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

@@ -701,8 +701,10 @@ class HydraOrchestrator:
                 if result.summary and pr.number > 0:
                     await self._prs.post_pr_comment(pr.number, result.summary)
 
-                # Submit formal GitHub PR review
-                if pr.number > 0:
+                # Submit formal GitHub PR review for non-approve verdicts.
+                # Approve is skipped to avoid "cannot approve your own PR"
+                # errors — Hydra merges directly once CI passes.
+                if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
                     await self._prs.submit_review(
                         pr.number, result.verdict.value, result.summary
                     )

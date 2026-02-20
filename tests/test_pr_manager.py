@@ -1086,7 +1086,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    checks_json = '[{"name":"ci","state":"COMPLETED","conclusion":"SUCCESS"}]'
+    checks_json = '[{"name":"ci","state":"SUCCESS"}]'
     mock_create = _make_subprocess_mock(returncode=0, stdout=checks_json)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
@@ -1094,7 +1094,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
 
     assert len(checks) == 1
     assert checks[0]["name"] == "ci"
-    assert checks[0]["conclusion"] == "SUCCESS"
+    assert checks[0]["state"] == "SUCCESS"
 
 
 @pytest.mark.asyncio
@@ -1152,8 +1152,8 @@ async def test_wait_for_ci_passes_when_all_succeed(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "SUCCESS"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1183,8 +1183,8 @@ async def test_wait_for_ci_fails_on_failure(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "FAILURE"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "FAILURE"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1284,7 +1284,7 @@ async def test_wait_for_ci_already_complete_returns_immediately(
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     passed, _ = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
@@ -1310,7 +1310,7 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
