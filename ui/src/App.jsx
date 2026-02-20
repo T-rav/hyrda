@@ -6,10 +6,11 @@ import { TranscriptView } from './components/TranscriptView'
 import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
+import { Livestream } from './components/Livestream'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'prs', 'hitl', 'timeline']
+const TABS = ['transcript', 'prs', 'hitl', 'livestream', 'timeline']
 
 export default function App() {
   const {
@@ -87,7 +88,7 @@ export default function App() {
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? (
                 <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              ) : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -98,6 +99,7 @@ export default function App() {
           )}
           {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
+          {activeTab === 'livestream' && <Livestream events={events} />}
           {activeTab === 'timeline' && (
             <div style={styles.timeline}>
               {events.map((e, i) => (
