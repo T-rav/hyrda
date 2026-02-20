@@ -67,6 +67,7 @@ export function HITLTable({ items, onRefresh }) {
           <tr>
             <th style={styles.th}>Issue</th>
             <th style={styles.th}>Title</th>
+            <th style={styles.th}>Cause</th>
             <th style={styles.th}>PR</th>
             <th style={styles.th}>Branch</th>
             <th style={styles.th}>Status</th>
@@ -91,6 +92,11 @@ export function HITLTable({ items, onRefresh }) {
                   </td>
                   <td style={styles.td}>{item.title}</td>
                   <td style={styles.td}>
+                    {item.cause
+                      ? <span style={styles.causeText}>{item.cause}</span>
+                      : <span style={styles.causePlaceholder}>—</span>}
+                  </td>
+                  <td style={styles.td}>
                     {item.pr > 0 ? (
                       <a href={item.prUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}
                          onClick={e => e.stopPropagation()}>
@@ -107,7 +113,7 @@ export function HITLTable({ items, onRefresh }) {
                 </tr>
                 {isExpanded && (
                   <tr data-testid={`hitl-detail-${item.issue}`}>
-                    <td colSpan={5} style={styles.detailCell}>
+                    <td colSpan={6} style={styles.detailCell}>
                       <div style={styles.detailPanel}>
                         {item.cause && (
                           <div style={styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
@@ -211,6 +217,8 @@ const styles = {
   rowExpanded: { background: theme.surfaceInset },
   link: { color: theme.accent, textDecoration: 'none' },
   noPr: { color: theme.textMuted, fontStyle: 'italic' },
+  causeText: { fontSize: 11, color: theme.orange, fontWeight: 500 },
+  causePlaceholder: { color: theme.textMuted, fontStyle: 'italic' },
   detailCell: { padding: 0, borderBottom: `1px solid ${theme.border}` },
   detailPanel: {
     padding: '12px 16px', background: theme.surface,
