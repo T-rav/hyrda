@@ -43,7 +43,7 @@ export function EventLog({ events }) {
             <span style={styles.time}>
               {new Date(e.timestamp).toLocaleTimeString()}
             </span>
-            <span style={{ ...styles.type, color: typeColors[e.type] || '#8b949e' }}>
+            <span style={typeSpanStyles[e.type] || defaultTypeStyle}>
               {e.type.replace(/_/g, ' ')}
             </span>
             <span>{eventSummary(e.type, e.data)}</span>
@@ -83,3 +83,9 @@ const styles = {
   time: { color: '#8b949e', marginRight: 8 },
   type: { fontWeight: 600, marginRight: 6 },
 }
+
+// Pre-computed style for each event type (avoids object spread in .map())
+export const typeSpanStyles = Object.fromEntries(
+  Object.entries(typeColors).map(([k, v]) => [k, { ...styles.type, color: v }])
+)
+export const defaultTypeStyle = { ...styles.type, color: '#8b949e' }

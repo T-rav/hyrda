@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from stream_parser import StreamParser, parse_stream_event
+from stream_parser import StreamParser, _summarize_input, parse_stream_event
 
 # ===========================================================================
 # Stateless parse_stream_event
@@ -192,6 +192,250 @@ def test_unknown_event_skipped():
     assert result is None
 
 
+def test_assistant_tool_use_edit():
+    """Edit tool displays file_path only, not old/new text."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_edit",
+                    "name": "Edit",
+                    "input": {
+                        "file_path": "/src/models.py",
+                        "old_text": "old code here",
+                        "new_text": "new code here",
+                    },
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "Edit" in display
+    assert "/src/models.py" in display
+    assert "old code here" not in display
+    assert "new code here" not in display
+
+
+def test_assistant_tool_use_write():
+    """Write tool displays file_path only, not content."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_write",
+                    "name": "Write",
+                    "input": {
+                        "file_path": "/src/new_file.py",
+                        "content": "print('hello world')",
+                    },
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "Write" in display
+    assert "/src/new_file.py" in display
+    assert "print" not in display
+
+
+def test_assistant_tool_use_glob():
+    """Glob tool displays the pattern."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_glob",
+                    "name": "Glob",
+                    "input": {"pattern": "**/*.py"},
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "Glob" in display
+    assert "**/*.py" in display
+
+
+def test_assistant_tool_use_notebookedit_fallback():
+    """NotebookEdit has no special handler; falls through to generic fallback."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_nb",
+                    "name": "NotebookEdit",
+                    "input": {"notebook_path": "/nb.ipynb", "cell_index": 3},
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "NotebookEdit" in display
+
+
+def test_assistant_tool_use_unknown_tool_fallback():
+    """Unknown tool names use the generic str(input)[:120] fallback."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_unk",
+                    "name": "SomeUnknownTool",
+                    "input": {"foo": "bar"},
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "SomeUnknownTool" in display
+    assert "foo" in display
+
+
+def test_assistant_task_tool_without_subagent_type():
+    """Task tool with only description and no subagent_type."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "toolu_task2",
+                    "name": "Task",
+                    "input": {"description": "Search for patterns"},
+                },
+            ],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert "Task" in display
+    assert "Search for patterns" in display
+    # Should NOT have a leading ": " from empty agent type
+    assert "→ Task: Search for patterns" in display
+
+
+def test_assistant_empty_content_list():
+    """Assistant event with empty content list produces empty display."""
+    event = {
+        "type": "assistant",
+        "message": {"id": "msg_1", "content": []},
+    }
+    display, result = parse_stream_event(json.dumps(event))
+    assert display == ""
+    assert result is None
+
+
+def test_assistant_content_non_dict_blocks_skipped():
+    """Non-dict items in content are skipped; only valid blocks are processed."""
+    event = {
+        "type": "assistant",
+        "message": {
+            "id": "msg_1",
+            "content": [42, "string", None, {"type": "text", "text": "real"}],
+        },
+    }
+    display, _ = parse_stream_event(json.dumps(event))
+    assert display == "real"
+
+
+def test_result_event_non_string_result():
+    """Result event with non-string result returns the value as-is."""
+    event = {"type": "result", "result": {"key": "value"}}
+    display, result = parse_stream_event(json.dumps(event))
+    assert display == ""
+    assert result == {"key": "value"}
+
+
+# ===========================================================================
+# _summarize_input — direct unit tests
+# ===========================================================================
+
+
+def test_summarize_input_bash_truncation():
+    """Bash command longer than 120 chars is truncated to 120."""
+    long_cmd = "x" * 200
+    result = _summarize_input("Bash", {"command": long_cmd})
+    assert len(result) == 120
+    assert result == long_cmd[:120]
+
+
+def test_summarize_input_generic_fallback_truncation():
+    """Generic fallback with input > 120 chars adds '...' suffix."""
+    long_val = "a" * 200
+    result = _summarize_input("UnknownTool", {"data": long_val})
+    assert result.endswith("...")
+    assert len(result) == 123  # 120 + "..."
+
+
+def test_summarize_input_generic_fallback_no_truncation():
+    """Generic fallback with short input does not add '...' suffix."""
+    result = _summarize_input("UnknownTool", {"x": 1})
+    assert not result.endswith("...")
+
+
+def test_summarize_input_task_truncation():
+    """Task description longer than 120 chars is truncated."""
+    long_desc = "d" * 200
+    result = _summarize_input("Task", {"description": long_desc})
+    assert len(result) == 120
+
+
+def test_summarize_input_task_with_agent_truncation():
+    """Task with agent and long description is truncated to 120 total."""
+    long_desc = "d" * 200
+    result = _summarize_input(
+        "Task", {"description": long_desc, "subagent_type": "Explore"}
+    )
+    assert len(result) == 120
+    assert result.startswith("Explore: ")
+
+
+def test_summarize_input_edit_shows_only_file_path():
+    """Edit summary shows only file_path, not old/new text."""
+    result = _summarize_input(
+        "Edit",
+        {
+            "file_path": "/src/foo.py",
+            "old_text": "old stuff",
+            "new_text": "new stuff",
+        },
+    )
+    assert result == "/src/foo.py"
+
+
+def test_summarize_input_write_shows_only_file_path():
+    """Write summary shows only file_path, not content."""
+    result = _summarize_input(
+        "Write",
+        {
+            "file_path": "/src/bar.py",
+            "content": "lots of code",
+        },
+    )
+    assert result == "/src/bar.py"
+
+
+def test_summarize_input_glob_shows_pattern():
+    """Glob summary shows the pattern."""
+    result = _summarize_input("Glob", {"pattern": "**/*.ts"})
+    assert result == "**/*.ts"
+
+
 # ===========================================================================
 # StreamParser (stateful) — delta tracking
 # ===========================================================================
@@ -345,3 +589,73 @@ class TestStreamParserDelta:
         }
         display, _ = parser.parse(json.dumps(event))
         assert "File contents here" in display
+
+    def test_user_message_multiple_tool_results(self):
+        """Only the first tool_result's preview appears (early return)."""
+        parser = StreamParser()
+        event = {
+            "type": "user",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_1",
+                        "content": "First result",
+                    },
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_2",
+                        "content": "Second result",
+                    },
+                ],
+            },
+        }
+        display, _ = parser.parse(json.dumps(event))
+        assert "First result" in display
+        assert "Second result" not in display
+
+    def test_user_message_non_tool_result_content(self):
+        """User event with only text content (no tool_result) returns empty."""
+        parser = StreamParser()
+        event = {
+            "type": "user",
+            "message": {
+                "content": [
+                    {"type": "text", "text": "Some user text"},
+                ],
+            },
+        }
+        display, _ = parser.parse(json.dumps(event))
+        assert display == ""
+
+    def test_user_message_empty_content(self):
+        """User event with empty content list returns empty."""
+        parser = StreamParser()
+        event = {
+            "type": "user",
+            "message": {"content": []},
+        }
+        display, _ = parser.parse(json.dumps(event))
+        assert display == ""
+
+    def test_user_tool_result_long_content_truncated(self):
+        """User tool_result content > 80 chars is truncated with ellipsis."""
+        parser = StreamParser()
+        long_content = "x" * 100
+        event = {
+            "type": "user",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_1",
+                        "content": long_content,
+                    },
+                ],
+            },
+        }
+        display, _ = parser.parse(json.dumps(event))
+        assert "…" in display
+        # The preview part (after "    ← ") should be 80 chars + ellipsis
+        preview = display.replace("    ← ", "")
+        assert len(preview) == 81  # 80 chars + "…"

@@ -148,6 +148,75 @@ def test_build_prompt_omits_comments_section_when_empty(config, event_bus, issue
     assert "Discussion" not in prompt
 
 
+def test_build_prompt_truncates_long_body(config, event_bus):
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=1, title="Big issue", body="X" * 20_000, labels=[], comments=[], url=""
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "…(truncated)" in prompt
+    assert len(prompt) < 10_000  # well under original 20k body
+
+
+def test_build_prompt_truncates_long_comments(config, event_bus):
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=1,
+        title="Big comments",
+        body="Normal body with enough content",
+        labels=[],
+        comments=["C" * 5000, "Short"],
+        url="",
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    # First comment should be truncated, second should be intact
+    assert "…" in prompt
+    assert "Short" in prompt
+
+
+def test_build_prompt_truncates_long_lines(config, event_bus):
+    """Lines exceeding _MAX_LINE_CHARS are hard-truncated to prevent
+    Claude CLI text-splitter failures."""
+    from models import GitHubIssue
+
+    long_line = "A" * 2000
+    body = f"Short line\n{long_line}\nAnother short line"
+    issue = GitHubIssue(
+        number=1, title="Long lines", body=body, labels=[], comments=[], url=""
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    # No line in the prompt should exceed _MAX_LINE_CHARS + ellipsis
+    for line in prompt.splitlines():
+        assert len(line) <= runner._MAX_LINE_CHARS + 10  # small margin for marker text
+
+
+def test_truncate_text_respects_line_boundaries():
+    """_truncate_text cuts at line boundaries, not mid-line."""
+    text = "line1\nline2\nline3\nline4\nline5"
+    result = PlannerRunner._truncate_text(text, char_limit=18, line_limit=500)
+    # Should include line1 (5) + \n + line2 (5) + \n + line3 (5) = 17 chars
+    assert "line1" in result
+    assert "line2" in result
+    assert "line3" in result
+    assert "line4" not in result or "…(truncated)" in result
+
+
+def test_truncate_text_no_truncation_when_under_limit():
+    """_truncate_text returns text unchanged when under limits."""
+    text = "short text"
+    result = PlannerRunner._truncate_text(text, char_limit=500, line_limit=500)
+    assert result == text
+    assert "…(truncated)" not in result
+
+
 # ---------------------------------------------------------------------------
 # _extract_plan
 # ---------------------------------------------------------------------------
@@ -623,3 +692,16 @@ async def test_execute_publishes_transcript_lines(config, event_bus, issue, tmp_
     for ev in transcript_events:
         assert ev.data["source"] == "planner"
         assert ev.data["issue"] == issue.number
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_large_stream_limit(config, event_bus, issue, tmp_path):
+    """_execute should set limit=1MB to handle large stream-json lines."""
+    runner = _make_runner(config, event_bus)
+    mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+    with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+        await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
+
+    kwargs = mock_exec.call_args[1]
+    assert kwargs["limit"] == 1024 * 1024

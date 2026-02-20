@@ -6,7 +6,6 @@ import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
 import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
-import { PipelineStatus } from './components/PipelineStatus'
 import { HITLTable } from './components/HITLTable'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
@@ -45,17 +44,17 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        batchNum={state.batchNum}
         prsCount={state.prs.length}
         mergedCount={state.mergedCount}
+        issuesFound={state.lifetimeStats?.issues_created ?? 0}
         connected={state.connected}
         orchestratorStatus={state.orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        lifetimeStats={state.lifetimeStats}
+        phase={state.phase}
+        workers={state.workers}
+        config={state.config}
       />
-
-      <PipelineStatus phase={state.phase} workers={state.workers} />
 
       <WorkerList
         workers={state.workers}
@@ -72,10 +71,7 @@ export default function App() {
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                ...styles.tab,
-                ...(activeTab === tab ? styles.tabActive : {}),
-              }}
+              style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
@@ -111,7 +107,7 @@ export default function App() {
 const styles = {
   layout: {
     display: 'grid',
-    gridTemplateRows: 'auto auto 1fr',
+    gridTemplateRows: 'auto 1fr',
     gridTemplateColumns: '280px 1fr',
     height: '100vh',
   },
@@ -157,3 +153,7 @@ const styles = {
   timelineTime: { color: '#8b949e', marginRight: 8 },
   timelineType: { fontWeight: 600, color: '#58a6ff', marginRight: 6 },
 }
+
+// Pre-computed tab style variants (avoids object spread in .map())
+export const tabInactiveStyle = styles.tab
+export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }

@@ -26,7 +26,11 @@ export function PRTable({ prs }) {
               </td>
               <td style={styles.td}>#{p.issue}</td>
               <td style={styles.td}>{p.branch}</td>
-              <td style={styles.td}>{p.draft ? 'Draft' : 'Ready'}</td>
+              <td style={styles.td}>
+                {p.merged
+                  ? <span style={styles.merged}>Merged</span>
+                  : p.draft ? 'Draft' : 'Ready'}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -36,7 +40,7 @@ export function PRTable({ prs }) {
 }
 
 const styles = {
-  container: { padding: 12 },
+  container: { padding: 12, flex: 1, overflowY: 'auto' },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     height: 200, color: '#8b949e', fontSize: 13,
@@ -48,4 +52,5 @@ const styles = {
   },
   td: { padding: 8, borderBottom: '1px solid #30363d' },
   link: { color: '#58a6ff', textDecoration: 'none' },
+  merged: { color: '#3fb950', fontWeight: 600 },
 }

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -42,10 +45,28 @@ class StateTracker:
         return self._data
 
     def save(self) -> None:
-        """Flush current state to disk."""
+        """Flush current state to disk atomically."""
         self._data["last_updated"] = datetime.now(UTC).isoformat()
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(self._data, indent=2))
+        data = json.dumps(self._data, indent=2)
+        # Write to a temp file in the same directory, fsync, then atomically
+        # rename.  os.replace() is atomic on POSIX, so the state file is
+        # always either the old version or the new version — never partial.
+        fd, tmp = tempfile.mkstemp(
+            dir=self._path.parent,
+            prefix=".state-",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(data)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, self._path)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                os.unlink(tmp)
+            raise
 
     # --- issue tracking ---
 

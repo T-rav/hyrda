@@ -10,6 +10,7 @@ const initialState = {
   reviews: [],    // ReviewData[]
   mergedCount: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
+  config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
 }
 
@@ -69,7 +70,9 @@ function reducer(state, action) {
 
     case 'transcript_line': {
       let key = action.data.issue || action.data.pr
-      if (action.data.source === 'planner') {
+      if (action.data.source === 'triage') {
+        key = `triage-${action.data.issue}`
+      } else if (action.data.source === 'planner') {
         key = `plan-${action.data.issue}`
       } else if (action.data.source === 'reviewer') {
         key = `review-${action.data.pr}`
@@ -90,6 +93,30 @@ function reducer(state, action) {
         ...addEvent(state, action),
         prs: [...state.prs, action.data],
       }
+
+    case 'triage_update': {
+      const triageKey = `triage-${action.data.issue}`
+      const triageStatus = action.data.status === 'done' ? 'done' : 'running'
+      const triageWorker = {
+        status: triageStatus,
+        worker: action.data.worker,
+        role: 'triage',
+        title: `Triage Issue #${action.data.issue}`,
+        branch: '',
+        transcript: [],
+        pr: null,
+      }
+      const existingTriage = state.workers[triageKey]
+      return {
+        ...addEvent(state, action),
+        workers: {
+          ...state.workers,
+          [triageKey]: existingTriage
+            ? { ...existingTriage, status: triageStatus }
+            : triageWorker,
+        },
+      }
+    }
 
     case 'planner_update': {
       const planKey = `plan-${action.data.issue}`
@@ -145,16 +172,25 @@ function reducer(state, action) {
       return { ...addEvent(state, action), workers: updatedWorkers }
     }
 
-    case 'merge_update':
+    case 'merge_update': {
+      const isMerged = action.data.status === 'merged'
+      const updatedPrs = isMerged && action.data.pr
+        ? state.prs.map(p => p.pr === action.data.pr ? { ...p, merged: true } : p)
+        : state.prs
       return {
         ...addEvent(state, action),
-        mergedCount: action.data.status === 'merge_requested'
+        prs: updatedPrs,
+        mergedCount: isMerged
           ? state.mergedCount + 1
           : state.mergedCount,
       }
+    }
 
     case 'LIFETIME_STATS':
       return { ...state, lifetimeStats: action.data }
+
+    case 'CONFIG':
+      return { ...state, config: action.data }
 
     case 'EXISTING_PRS':
       return { ...state, prs: [...action.data, ...state.prs] }
@@ -205,6 +241,9 @@ export function useHydraSocket() {
             data: { status: data.status },
             timestamp: new Date().toISOString(),
           })
+          if (data.config) {
+            dispatch({ type: 'CONFIG', data: data.config })
+          }
         })
         .catch(() => {})
       // Fetch lifetime stats on connect

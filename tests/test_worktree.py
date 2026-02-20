@@ -78,9 +78,10 @@ class TestCreate:
             ) as mock_exec,
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
-            # _setup_env and _install_hooks must not fail; patch them out
+            # _setup_env, _create_venv, and _install_hooks must not fail; patch them out
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
@@ -107,6 +108,7 @@ class TestCreate:
                 manager, "_remote_branch_exists", return_value=True
             ) as mock_remote,
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             await manager.create(issue_number=7, branch="agent/issue-7")
@@ -138,6 +140,7 @@ class TestCreate:
             ) as mock_exec,
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             await manager.create(issue_number=7, branch="agent/issue-7")
@@ -147,27 +150,30 @@ class TestCreate:
         assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
 
     @pytest.mark.asyncio
-    async def test_create_calls_setup_env_and_install_hooks(
+    async def test_create_calls_setup_env_create_venv_and_install_hooks(
         self, config, tmp_path: Path
     ) -> None:
-        """create should invoke _setup_env and _install_hooks after adding the worktree."""
+        """create should invoke _setup_env, _create_venv, and _install_hooks."""
         manager = WorktreeManager(config)
         config.worktree_base.mkdir(parents=True, exist_ok=True)
 
         success_proc = _make_proc()
 
         setup_env = MagicMock()
+        create_venv = AsyncMock()
         install_hooks = AsyncMock()
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env", setup_env),
+            patch.object(manager, "_create_venv", create_venv),
             patch.object(manager, "_install_hooks", install_hooks),
         ):
             result = await manager.create(issue_number=7, branch="agent/issue-7")
 
         setup_env.assert_called_once()
+        create_venv.assert_awaited_once()
         install_hooks.assert_awaited_once()
         assert result == config.worktree_base / "issue-7"
 
@@ -183,6 +189,7 @@ class TestCreate:
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
             patch.object(manager, "_install_hooks", new_callable=AsyncMock),
         ):
             result = await manager.create(issue_number=99, branch="agent/issue-99")
@@ -320,9 +327,9 @@ class TestDestroyAll:
 
         with (
             patch.object(manager, "destroy", side_effect=fake_destroy),
-            patch.object(manager, "_run", new_callable=AsyncMock),
+            patch("worktree.run_subprocess", new_callable=AsyncMock),
         ):
-            # Also patch _run for the final prune
+            # Also patch run_subprocess for the final prune
             await manager.destroy_all()
 
         assert sorted(destroyed) == [1, 2]
@@ -355,7 +362,7 @@ class TestDestroyAll:
 
         with (
             patch.object(manager, "destroy", side_effect=fake_destroy),
-            patch.object(manager, "_run", new_callable=AsyncMock),
+            patch("worktree.run_subprocess", new_callable=AsyncMock),
         ):
             await manager.destroy_all()
 
@@ -491,8 +498,8 @@ class TestRemoteBranchExists:
 class TestSetupEnv:
     """Tests for WorktreeManager._setup_env."""
 
-    def test_setup_env_symlinks_venv(self, config, tmp_path: Path) -> None:
-        """_setup_env should create a symlink for venv/ if source exists."""
+    def test_setup_env_does_not_symlink_venv(self, config, tmp_path: Path) -> None:
+        """_setup_env should NOT create a symlink for venv/ (independent venvs via uv sync)."""
         manager = WorktreeManager(config)
 
         repo_root = config.repo_root
@@ -507,8 +514,7 @@ class TestSetupEnv:
         manager._setup_env(wt_path)
 
         venv_dst = wt_path / "venv"
-        assert venv_dst.is_symlink()
-        assert venv_dst.resolve() == venv_src.resolve()
+        assert not venv_dst.exists()
 
     def test_setup_env_symlinks_dotenv(self, config, tmp_path: Path) -> None:
         """_setup_env should create a symlink for .env if source exists."""
@@ -595,15 +601,192 @@ class TestSetupEnv:
         wt_path.mkdir()
         repo_root.mkdir(parents=True, exist_ok=True)
 
-        venv_src = repo_root / "venv"
-        venv_src.mkdir()
+        env_src = repo_root / ".env"
+        env_src.write_text("EXISTING=true")
 
-        venv_dst = wt_path / "venv"
-        venv_dst.symlink_to(venv_src)
+        env_dst = wt_path / ".env"
+        env_dst.symlink_to(env_src)
 
         # Should not raise
         manager._setup_env(wt_path)
-        assert venv_dst.is_symlink()
+        assert env_dst.is_symlink()
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._configure_git_identity
+# ---------------------------------------------------------------------------
+
+
+class TestConfigureGitIdentity:
+    """Tests for WorktreeManager._configure_git_identity."""
+
+    @pytest.mark.asyncio
+    async def test_sets_user_name_and_email(self, tmp_path: Path) -> None:
+        """Should run git config for both user.name and user.email."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 2
+        assert calls[0].args == ("git", "config", "user.name", "Bot")
+        assert calls[1].args == ("git", "config", "user.email", "bot@example.com")
+
+    @pytest.mark.asyncio
+    async def test_skips_when_both_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should not run any git config commands when identity is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sets_only_name_when_email_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should only set user.name when email is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 1
+        assert calls[0].args == ("git", "config", "user.name", "Bot")
+
+    @pytest.mark.asyncio
+    async def test_sets_only_email_when_name_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should only set user.email when name is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 1
+        assert calls[0].args == ("git", "config", "user.email", "bot@example.com")
+
+    @pytest.mark.asyncio
+    async def test_called_during_create(self, tmp_path: Path) -> None:
+        """_configure_git_identity should be called during create()."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        cfg.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc()
+        configure_identity = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
+            patch.object(manager, "_setup_env"),
+            patch.object(manager, "_configure_git_identity", configure_identity),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
+            patch.object(manager, "_install_hooks", new_callable=AsyncMock),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+        configure_identity.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._create_venv
+# ---------------------------------------------------------------------------
+
+
+class TestCreateVenv:
+    """Tests for WorktreeManager._create_venv."""
+
+    @pytest.mark.asyncio
+    async def test_create_venv_runs_uv_sync(self, config, tmp_path: Path) -> None:
+        """_create_venv should run 'uv sync' in the worktree."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc()
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._create_venv(tmp_path)
+
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.args[:2] == ("uv", "sync")
+
+    @pytest.mark.asyncio
+    async def test_create_venv_swallows_errors(self, config, tmp_path: Path) -> None:
+        """_create_venv should not propagate errors if uv sync fails."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"uv not found")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager._create_venv(tmp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -641,59 +824,6 @@ class TestInstallHooks:
             await manager._install_hooks(tmp_path)
 
 
-# ---------------------------------------------------------------------------
-# WorktreeManager._run
-# ---------------------------------------------------------------------------
-
-
-class TestRun:
-    """Tests for WorktreeManager._run static method."""
-
-    @pytest.mark.asyncio
-    async def test_run_returns_stdout_on_success(self, tmp_path: Path) -> None:
-        """_run should return the decoded stdout string on zero exit code."""
-        success_proc = _make_proc(returncode=0, stdout=b"hello world")
-
-        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await WorktreeManager._run("echo", "hello world", cwd=tmp_path)
-
-        assert result == "hello world"
-
-    @pytest.mark.asyncio
-    async def test_run_raises_runtime_error_on_non_zero_exit(
-        self, tmp_path: Path
-    ) -> None:
-        """_run should raise RuntimeError when the subprocess exits non-zero."""
-        fail_proc = _make_proc(returncode=1, stderr=b"fatal error")
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
-            pytest.raises(RuntimeError, match="fatal error"),
-        ):
-            await WorktreeManager._run("false", cwd=tmp_path)
-
-    @pytest.mark.asyncio
-    async def test_run_error_message_includes_command_and_returncode(
-        self, tmp_path: Path
-    ) -> None:
-        """RuntimeError message should include the command tuple and return code."""
-        fail_proc = _make_proc(returncode=2, stderr=b"bad argument")
-
-        with (
-            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
-            pytest.raises(RuntimeError) as exc_info,
-        ):
-            await WorktreeManager._run("git", "push", cwd=tmp_path)
-
-        msg = str(exc_info.value)
-        assert "rc=2" in msg
-
-    @pytest.mark.asyncio
-    async def test_run_strips_whitespace_from_stdout(self, tmp_path: Path) -> None:
-        """_run should strip leading/trailing whitespace from the returned stdout."""
-        success_proc = _make_proc(returncode=0, stdout=b"  trimmed output  \n")
-
-        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await WorktreeManager._run("cmd", cwd=tmp_path)
-
-        assert result == "trimmed output"
+# NOTE: Tests for the subprocess helper (stdout parsing, error handling,
+# GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
+# since the logic was extracted into subprocess_util.run_subprocess.

@@ -6,11 +6,13 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo
+from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.pr_manager")
 
@@ -18,10 +20,56 @@ logger = logging.getLogger("hydra.pr_manager")
 class PRManager:
     """Pushes branches, creates PRs, merges, and manages labels."""
 
+    _GITHUB_COMMENT_LIMIT = 65_536
+    _HEADER_RESERVE = 50  # room for "*Part X/Y*\n\n" prefix
+
+    # All Hydra lifecycle labels: (config_field, color, description)
+    _HYDRA_LABELS: tuple[tuple[str, str, str], ...] = (
+        ("find_label", "e4e669", "New issue for Hydra to discover and triage"),
+        ("planner_label", "c5def5", "Issue needs planning before implementation"),
+        ("ready_label", "0e8a16", "Issue ready for implementation"),
+        ("review_label", "fbca04", "Issue/PR under review"),
+        ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
+        ("fixed_label", "0075ca", "PR merged — issue completed"),
+    )
+
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
         self._config = config
         self._bus = event_bus
         self._repo = config.repo
+
+    async def ensure_labels_exist(self) -> None:
+        """Create all Hydra lifecycle labels in the repo if they don't exist.
+
+        Uses ``gh label create --force`` which creates or updates each label.
+        Skipped in dry-run mode.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would ensure Hydra labels exist")
+            return
+
+        for field, color, description in self._HYDRA_LABELS:
+            label_names = getattr(self._config, field)
+            for label_name in label_names:
+                try:
+                    await run_subprocess(
+                        "gh",
+                        "label",
+                        "create",
+                        label_name,
+                        "--repo",
+                        self._repo,
+                        "--color",
+                        color,
+                        "--description",
+                        description,
+                        "--force",
+                        cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
+                    )
+                    logger.debug("Ensured label %r exists", label_name)
+                except RuntimeError as exc:
+                    logger.warning("Could not ensure label %r: %s", label_name, exc)
 
     async def push_branch(self, worktree_path: Path, branch: str) -> bool:
         """Push *branch* to origin from *worktree_path*.
@@ -33,13 +81,15 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "push",
+                "--no-verify",
                 "-u",
                 "origin",
                 branch,
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -51,13 +101,14 @@ class PRManager:
         if self._config.dry_run:
             return False
         try:
-            output = await self._run(
+            output = await run_subprocess(
                 "git",
                 "ls-remote",
                 "--heads",
                 "origin",
                 branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return bool(output.strip())
         except RuntimeError:
@@ -83,7 +134,7 @@ class PRManager:
             f"Closes #{issue.number}.\n\n"
             f"## Issue\n\n{issue.title}\n\n"
             f"## Test plan\n\n"
-            f"- [ ] Unit tests pass (`make test-fast`)\n"
+            f"- [ ] Unit tests pass (`make test`)\n"
             f"- [ ] Linting passes (`make lint`)\n"
             f"- [ ] Manual review of changes\n\n"
             f"---\n"
@@ -116,14 +167,14 @@ class PRManager:
             self._config.main_branch,
             "--title",
             title,
-            "--body",
-            body,
         ]
         if draft:
             cmd.append("--draft")
 
         try:
-            output = await self._run(*cmd, cwd=self._config.repo_root)
+            output = await self._run_with_body_file(
+                *cmd, body=body, cwd=self._config.repo_root
+            )
             # gh pr create --json would be better, but the URL is in stdout
             pr_url = output.strip()
 
@@ -172,7 +223,7 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "pr",
                 "merge",
@@ -182,6 +233,7 @@ class PRManager:
                 "--squash",
                 "--delete-branch",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
 
             await self._bus.publish(
@@ -200,48 +252,60 @@ class PRManager:
         if self._config.dry_run:
             logger.info("[dry-run] Would post comment on issue #%d", issue_number)
             return
-        try:
-            await self._run(
-                "gh",
-                "issue",
-                "comment",
-                str(issue_number),
-                "--repo",
-                self._repo,
-                "--body",
-                body,
-                cwd=self._config.repo_root,
-            )
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not post comment on issue #%d: %s",
-                issue_number,
-                exc,
-            )
+        chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
+        chunks = self._chunk_body(body, chunk_limit)
+        for idx, chunk in enumerate(chunks):
+            part = chunk
+            if len(chunks) > 1:
+                part = f"*Part {idx + 1}/{len(chunks)}*\n\n{chunk}"
+            part = self._cap_body(part, self._GITHUB_COMMENT_LIMIT)
+            try:
+                await self._run_with_body_file(
+                    "gh",
+                    "issue",
+                    "comment",
+                    str(issue_number),
+                    "--repo",
+                    self._repo,
+                    body=part,
+                    cwd=self._config.repo_root,
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Could not post comment on issue #%d: %s",
+                    issue_number,
+                    exc,
+                )
 
     async def post_pr_comment(self, pr_number: int, body: str) -> None:
         """Post a comment on a GitHub pull request."""
         if self._config.dry_run:
             logger.info("[dry-run] Would post comment on PR #%d", pr_number)
             return
-        try:
-            await self._run(
-                "gh",
-                "pr",
-                "comment",
-                str(pr_number),
-                "--repo",
-                self._repo,
-                "--body",
-                body,
-                cwd=self._config.repo_root,
-            )
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not post comment on PR #%d: %s",
-                pr_number,
-                exc,
-            )
+        chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
+        chunks = self._chunk_body(body, chunk_limit)
+        for idx, chunk in enumerate(chunks):
+            part = chunk
+            if len(chunks) > 1:
+                part = f"*Part {idx + 1}/{len(chunks)}*\n\n{chunk}"
+            part = self._cap_body(part, self._GITHUB_COMMENT_LIMIT)
+            try:
+                await self._run_with_body_file(
+                    "gh",
+                    "pr",
+                    "comment",
+                    str(pr_number),
+                    "--repo",
+                    self._repo,
+                    body=part,
+                    cwd=self._config.repo_root,
+                )
+            except RuntimeError as exc:
+                logger.warning(
+                    "Could not post comment on PR #%d: %s",
+                    pr_number,
+                    exc,
+                )
 
     async def submit_review(self, pr_number: int, verdict: str, body: str) -> bool:
         """Submit a formal GitHub PR review.
@@ -265,8 +329,9 @@ class PRManager:
             )
             return True
 
+        body = self._cap_body(body, self._GITHUB_COMMENT_LIMIT)
         try:
-            await self._run(
+            await self._run_with_body_file(
                 "gh",
                 "pr",
                 "review",
@@ -274,8 +339,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 flag,
-                "--body",
-                body,
+                body=body,
                 cwd=self._config.repo_root,
             )
             return True
@@ -294,7 +358,7 @@ class PRManager:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "issue",
                     "edit",
@@ -304,6 +368,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -318,7 +383,7 @@ class PRManager:
         if self._config.dry_run:
             return
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "issue",
                 "edit",
@@ -328,6 +393,7 @@ class PRManager:
                 "--remove-label",
                 label,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.warning(
@@ -343,7 +409,7 @@ class PRManager:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "pr",
                     "edit",
@@ -353,6 +419,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -381,14 +448,14 @@ class PRManager:
             self._repo,
             "--title",
             title,
-            "--body",
-            body,
         ]
         for label in labels or []:
             cmd.extend(["--label", label])
 
         try:
-            output = await self._run(*cmd, cwd=self._config.repo_root)
+            output = await self._run_with_body_file(
+                *cmd, body=body, cwd=self._config.repo_root
+            )
             # gh issue create prints the issue URL
             issue_number = int(output.strip().rstrip("/").split("/")[-1])
 
@@ -410,7 +477,7 @@ class PRManager:
     async def get_pr_diff(self, pr_number: int) -> str:
         """Fetch the diff for *pr_number*."""
         try:
-            return await self._run(
+            return await run_subprocess(
                 "gh",
                 "pr",
                 "diff",
@@ -418,6 +485,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.error("Could not get diff for PR #%d: %s", pr_number, exc)
@@ -426,7 +494,7 @@ class PRManager:
     async def get_pr_status(self, pr_number: int) -> dict[str, object]:
         """Fetch PR status as JSON."""
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "view",
@@ -436,6 +504,7 @@ class PRManager:
                 "--json",
                 "number,state,mergeable,title,isDraft",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
@@ -448,12 +517,13 @@ class PRManager:
             logger.info("[dry-run] Would pull main")
             return True
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "pull",
                 "origin",
                 self._config.main_branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -465,15 +535,15 @@ class PRManager:
     async def get_pr_checks(self, pr_number: int) -> list[dict[str, str]]:
         """Fetch CI check results for *pr_number*.
 
-        Returns a list of dicts with ``name``, ``state``, and ``conclusion``
-        keys.  Returns an empty list on failure or in dry-run mode.
+        Returns a list of dicts with ``name`` and ``state`` keys.
+        Returns an empty list on failure or in dry-run mode.
         """
         if self._config.dry_run:
             logger.info("[dry-run] Would fetch CI checks for PR #%d", pr_number)
             return []
 
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "checks",
@@ -481,15 +551,19 @@ class PRManager:
                 "--repo",
                 self._repo,
                 "--json",
-                "name,state,conclusion",
+                "name,state",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
             logger.warning("Could not fetch CI checks for PR #%d: %s", pr_number, exc)
             return []
 
-    _PASSING_CONCLUSIONS = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PASSING_STATES = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PENDING_STATES = frozenset(
+        {"PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING"}
+    )
 
     async def wait_for_ci(  # noqa: PLR0911
         self,
@@ -516,7 +590,9 @@ class PRManager:
             if not checks:
                 return True, "No CI checks found"
 
-            pending = [c for c in checks if c.get("state", "").upper() != "COMPLETED"]
+            pending = [
+                c for c in checks if c.get("state", "").upper() in self._PENDING_STATES
+            ]
             if pending:
                 await self._bus.publish(
                     HydraEvent(
@@ -537,11 +613,11 @@ class PRManager:
                     elapsed += poll_interval
                     continue
 
-            # All checks completed — check conclusions
+            # All checks completed — check states
             failed = [
                 c["name"]
                 for c in checks
-                if c.get("conclusion", "").upper() not in self._PASSING_CONCLUSIONS
+                if c.get("state", "").upper() not in self._PASSING_STATES
             ]
             passed = not failed
             status = "passed" if passed else "failed"
@@ -559,24 +635,55 @@ class PRManager:
 
         return False, f"Timeout after {timeout}s"
 
-    # --- subprocess helper ---
+    # --- body-file helpers ---
+
+    _TRUNCATION_MARKER = "\n\n*...truncated to fit GitHub comment limit*"
 
     @staticmethod
-    async def _run(*cmd: str, cwd: Path) -> str:
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
+    def _chunk_body(body: str, limit: int = 65_536) -> list[str]:
+        """Split *body* into chunks that fit within GitHub's comment limit."""
+        if len(body) <= limit:
+            return [body]
+        chunks: list[str] = []
+        while body:
+            if len(body) <= limit:
+                chunks.append(body)
+                break
+            split_at = body.rfind("\n", 0, limit)
+            if split_at <= 0:
+                split_at = limit
+            chunks.append(body[:split_at])
+            body = body[split_at:].lstrip("\n")
+        return chunks
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
+    @classmethod
+    def _cap_body(cls, body: str, limit: int = 65_536) -> str:
+        """Hard-truncate *body* to *limit* characters.
+
+        Acts as a safety net after chunking / header prepending to guarantee
+        no single payload exceeds GitHub's comment size limit.
+        """
+        if len(body) <= limit:
+            return body
+        marker = cls._TRUNCATION_MARKER
+        return body[: limit - len(marker)] + marker
+
+    async def _run_with_body_file(self, *cmd: str, body: str, cwd: Path) -> str:
+        """Run a ``gh`` command using ``--body-file`` instead of ``--body``.
+
+        Writes *body* to a temporary ``.md`` file, passes ``--body-file``
+        to the command, and cleans up the file afterwards.
+        """
+        fd, tmp_path = tempfile.mkstemp(suffix=".md", prefix="hydra-body-")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(body)
+            return await run_subprocess(
+                *cmd,
+                "--body-file",
+                tmp_path,
+                cwd=cwd,
+                gh_token=self._config.gh_token,
             )
-        return stdout.decode().strip()
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)

@@ -7,12 +7,16 @@ import pytest
 # conftest.py already inserts the hydra package directory into sys.path
 from models import (
     BatchResult,
+    ControlStatusConfig,
+    ControlStatusResponse,
     GitHubIssue,
+    HITLItem,
     NewIssueSpec,
     Phase,
     PlannerStatus,
     PlanResult,
     PRInfo,
+    PRListItem,
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
@@ -262,6 +266,7 @@ class TestWorkerStatus:
             (WorkerStatus.RUNNING, "running"),
             (WorkerStatus.TESTING, "testing"),
             (WorkerStatus.COMMITTING, "committing"),
+            (WorkerStatus.QUALITY_FIX, "quality_fix"),
             (WorkerStatus.DONE, "done"),
             (WorkerStatus.FAILED, "failed"),
         ],
@@ -274,9 +279,9 @@ class TestWorkerStatus:
         # Assert
         assert isinstance(WorkerStatus.DONE, str)
 
-    def test_all_six_members_present(self) -> None:
+    def test_all_seven_members_present(self) -> None:
         # Assert
-        assert len(WorkerStatus) == 6
+        assert len(WorkerStatus) == 7
 
     def test_lookup_by_value(self) -> None:
         # Act
@@ -775,3 +780,201 @@ class TestPhase:
     def test_idle_lookup_by_value(self) -> None:
         phase = Phase("idle")
         assert phase is Phase.IDLE
+
+
+# ---------------------------------------------------------------------------
+# PRListItem
+# ---------------------------------------------------------------------------
+
+
+class TestPRListItem:
+    """Tests for the PRListItem response model."""
+
+    def test_minimal_instantiation(self) -> None:
+        """Only pr is required."""
+        item = PRListItem(pr=42)
+        assert item.pr == 42
+
+    def test_defaults(self) -> None:
+        item = PRListItem(pr=1)
+        assert item.issue == 0
+        assert item.branch == ""
+        assert item.url == ""
+        assert item.draft is False
+        assert item.title == ""
+
+    def test_all_fields_set(self) -> None:
+        item = PRListItem(
+            pr=10,
+            issue=5,
+            branch="agent/issue-5",
+            url="https://github.com/org/repo/pull/10",
+            draft=True,
+            title="Fix widget",
+        )
+        assert item.pr == 10
+        assert item.issue == 5
+        assert item.branch == "agent/issue-5"
+        assert item.url == "https://github.com/org/repo/pull/10"
+        assert item.draft is True
+        assert item.title == "Fix widget"
+
+    def test_serialization_with_model_dump(self) -> None:
+        item = PRListItem(pr=7, issue=3, branch="agent/issue-3", title="Add tests")
+        data = item.model_dump()
+        assert data == {
+            "pr": 7,
+            "issue": 3,
+            "branch": "agent/issue-3",
+            "url": "",
+            "draft": False,
+            "title": "Add tests",
+        }
+
+
+# ---------------------------------------------------------------------------
+# HITLItem
+# ---------------------------------------------------------------------------
+
+
+class TestHITLItem:
+    """Tests for the HITLItem response model."""
+
+    def test_minimal_instantiation(self) -> None:
+        """Only issue is required."""
+        item = HITLItem(issue=42)
+        assert item.issue == 42
+
+    def test_defaults(self) -> None:
+        item = HITLItem(issue=1)
+        assert item.title == ""
+        assert item.issueUrl == ""
+        assert item.pr == 0
+        assert item.prUrl == ""
+        assert item.branch == ""
+
+    def test_all_fields_set(self) -> None:
+        item = HITLItem(
+            issue=42,
+            title="Fix widget",
+            issueUrl="https://github.com/org/repo/issues/42",
+            pr=99,
+            prUrl="https://github.com/org/repo/pull/99",
+            branch="agent/issue-42",
+        )
+        assert item.issue == 42
+        assert item.title == "Fix widget"
+        assert item.issueUrl == "https://github.com/org/repo/issues/42"
+        assert item.pr == 99
+        assert item.prUrl == "https://github.com/org/repo/pull/99"
+        assert item.branch == "agent/issue-42"
+
+    def test_serialization_with_model_dump(self) -> None:
+        """Confirm camelCase keys (issueUrl, prUrl) serialize correctly."""
+        item = HITLItem(
+            issue=10,
+            title="Broken thing",
+            issueUrl="https://example.com/issues/10",
+            pr=20,
+            prUrl="https://example.com/pull/20",
+            branch="agent/issue-10",
+        )
+        data = item.model_dump()
+        assert data == {
+            "issue": 10,
+            "title": "Broken thing",
+            "issueUrl": "https://example.com/issues/10",
+            "pr": 20,
+            "prUrl": "https://example.com/pull/20",
+            "branch": "agent/issue-10",
+        }
+
+
+# ---------------------------------------------------------------------------
+# ControlStatusConfig
+# ---------------------------------------------------------------------------
+
+
+class TestControlStatusConfig:
+    """Tests for the ControlStatusConfig response model."""
+
+    def test_minimal_instantiation(self) -> None:
+        """No required fields."""
+        cfg = ControlStatusConfig()
+        assert cfg.repo == ""
+        assert cfg.ready_label == []
+        assert cfg.find_label == []
+        assert cfg.planner_label == []
+        assert cfg.review_label == []
+        assert cfg.hitl_label == []
+        assert cfg.fixed_label == []
+        assert cfg.max_workers == 0
+        assert cfg.max_planners == 0
+        assert cfg.max_reviewers == 0
+        assert cfg.batch_size == 0
+        assert cfg.model == ""
+
+    def test_all_fields_set(self) -> None:
+        cfg = ControlStatusConfig(
+            repo="org/repo",
+            ready_label=["hydra-ready"],
+            find_label=["hydra-find"],
+            planner_label=["hydra-plan"],
+            review_label=["hydra-review"],
+            hitl_label=["hydra-hitl"],
+            fixed_label=["hydra-fixed"],
+            max_workers=4,
+            max_planners=2,
+            max_reviewers=1,
+            batch_size=10,
+            model="opus",
+        )
+        assert cfg.repo == "org/repo"
+        assert cfg.ready_label == ["hydra-ready"]
+        assert cfg.max_workers == 4
+        assert cfg.model == "opus"
+
+    def test_lists_are_independent_between_instances(self) -> None:
+        a = ControlStatusConfig()
+        b = ControlStatusConfig()
+        a.ready_label.append("test")
+        assert b.ready_label == []
+
+
+# ---------------------------------------------------------------------------
+# ControlStatusResponse
+# ---------------------------------------------------------------------------
+
+
+class TestControlStatusResponse:
+    """Tests for the ControlStatusResponse response model."""
+
+    def test_minimal_instantiation(self) -> None:
+        resp = ControlStatusResponse()
+        assert resp.status == "idle"
+        assert resp.config.repo == ""
+
+    def test_all_fields_set(self) -> None:
+        cfg = ControlStatusConfig(repo="org/repo", max_workers=3, model="sonnet")
+        resp = ControlStatusResponse(status="running", config=cfg)
+        assert resp.status == "running"
+        assert resp.config.repo == "org/repo"
+        assert resp.config.max_workers == 3
+
+    def test_serialization_with_model_dump(self) -> None:
+        """Verify nested config serializes correctly."""
+        cfg = ControlStatusConfig(
+            repo="org/repo",
+            ready_label=["hydra-ready"],
+            max_workers=2,
+            batch_size=15,
+            model="sonnet",
+        )
+        resp = ControlStatusResponse(status="running", config=cfg)
+        data = resp.model_dump()
+        assert data["status"] == "running"
+        assert data["config"]["repo"] == "org/repo"
+        assert data["config"]["ready_label"] == ["hydra-ready"]
+        assert data["config"]["max_workers"] == 2
+        assert data["config"]["batch_size"] == 15
+        assert data["config"]["model"] == "sonnet"

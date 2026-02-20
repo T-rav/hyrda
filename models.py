@@ -20,6 +20,25 @@ class GitHubIssue(BaseModel):
     url: str = ""
 
 
+# --- Triage ---
+
+
+class TriageStatus(StrEnum):
+    """Lifecycle status of a triage evaluation."""
+
+    EVALUATING = "evaluating"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class TriageResult(BaseModel):
+    """Outcome of evaluating a single issue for readiness."""
+
+    issue_number: int
+    ready: bool = False
+    reasons: list[str] = Field(default_factory=list)
+
+
 # --- Planner ---
 
 
@@ -63,6 +82,7 @@ class WorkerStatus(StrEnum):
     RUNNING = "running"
     TESTING = "testing"
     COMMITTING = "committing"
+    QUALITY_FIX = "quality_fix"
     DONE = "done"
     FAILED = "failed"
 
@@ -78,6 +98,7 @@ class WorkerResult(BaseModel):
     transcript: str = ""
     commits: int = 0
     duration_seconds: float = 0.0
+    quality_fix_attempts: int = 0
     pr_info: PRInfo | None = None
 
 
@@ -146,3 +167,52 @@ class Phase(StrEnum):
     REVIEW = "review"
     CLEANUP = "cleanup"
     DONE = "done"
+
+
+# --- Dashboard API Responses ---
+
+
+class PRListItem(BaseModel):
+    """A PR entry returned by GET /api/prs."""
+
+    pr: int
+    issue: int = 0
+    branch: str = ""
+    url: str = ""
+    draft: bool = False
+    title: str = ""
+
+
+class HITLItem(BaseModel):
+    """A HITL issue entry returned by GET /api/hitl."""
+
+    issue: int
+    title: str = ""
+    issueUrl: str = ""  # camelCase to match existing frontend contract
+    pr: int = 0
+    prUrl: str = ""  # camelCase to match existing frontend contract
+    branch: str = ""
+
+
+class ControlStatusConfig(BaseModel):
+    """Config subset returned by GET /api/control/status."""
+
+    repo: str = ""
+    ready_label: list[str] = Field(default_factory=list)
+    find_label: list[str] = Field(default_factory=list)
+    planner_label: list[str] = Field(default_factory=list)
+    review_label: list[str] = Field(default_factory=list)
+    hitl_label: list[str] = Field(default_factory=list)
+    fixed_label: list[str] = Field(default_factory=list)
+    max_workers: int = 0
+    max_planners: int = 0
+    max_reviewers: int = 0
+    batch_size: int = 0
+    model: str = ""
+
+
+class ControlStatusResponse(BaseModel):
+    """Response for GET /api/control/status."""
+
+    status: str = "idle"
+    config: ControlStatusConfig = Field(default_factory=ControlStatusConfig)

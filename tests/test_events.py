@@ -20,6 +20,7 @@ class TestEventTypeEnum:
             "TRANSCRIPT_LINE",
             "PR_CREATED",
             "REVIEW_UPDATE",
+            "TRIAGE_UPDATE",
             "PLANNER_UPDATE",
             "MERGE_UPDATE",
             "CI_CHECK",
@@ -38,6 +39,7 @@ class TestEventTypeEnum:
         assert EventType.TRANSCRIPT_LINE == "transcript_line"
         assert EventType.PR_CREATED == "pr_created"
         assert EventType.REVIEW_UPDATE == "review_update"
+        assert EventType.TRIAGE_UPDATE == "triage_update"
         assert EventType.PLANNER_UPDATE == "planner_update"
         assert EventType.MERGE_UPDATE == "merge_update"
         assert EventType.ISSUE_CREATED == "issue_created"

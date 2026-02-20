@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 from pathlib import Path
 
 from agent import AgentRunner
@@ -25,6 +24,8 @@ from planner import PlannerRunner
 from pr_manager import PRManager
 from reviewer import ReviewRunner
 from state import StateTracker
+from subprocess_util import run_subprocess
+from triage import TriageRunner
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
@@ -37,9 +38,6 @@ class HydraOrchestrator:
     up continuously — planner, implementer, and reviewer all run
     concurrently without waiting on each other.
     """
-
-    DEFAULT_MAX_REVIEWERS = 1
-    DEFAULT_MAX_PLANNERS = 1
 
     def __init__(
         self,
@@ -55,6 +53,7 @@ class HydraOrchestrator:
         self._planners = PlannerRunner(config, self._bus)
         self._prs = PRManager(config, self._bus)
         self._reviewers = ReviewRunner(config, self._bus)
+        self._triage = TriageRunner(config, self._bus)
         self._dashboard: object | None = None
         # Pending human-input requests: {issue_number: question}
         self._human_input_requests: dict[int, str] = {}
@@ -107,13 +106,14 @@ class HydraOrchestrator:
         self._human_input_responses[issue_number] = answer
         self._human_input_requests.pop(issue_number, None)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
         self._stop_event.set()
         logger.info("Stop requested — terminating active processes")
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        await self._publish_status()
 
     # Alias for backward compatibility
     request_stop = stop
@@ -151,8 +151,11 @@ class HydraOrchestrator:
             self._config.poll_interval,
         )
 
+        await self._prs.ensure_labels_exist()
+
         try:
             await asyncio.gather(
+                self._triage_loop(),
                 self._plan_loop(),
                 self._implement_loop(),
                 self._review_loop(),
@@ -162,9 +165,16 @@ class HydraOrchestrator:
             await self._publish_status()
             logger.info("Hydra stopped")
 
-    async def _plan_loop(self) -> None:
-        """Continuously poll for planner-labeled issues and plan them."""
+    async def _triage_loop(self) -> None:
+        """Continuously poll for find-labeled issues and triage them."""
         while not self._stop_event.is_set():
+            await self._triage_find_issues()
+            await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _plan_loop(self) -> None:
+        """Continuously poll for planner-labeled issues."""
+        while not self._stop_event.is_set():
+            await self._triage_find_issues()
             await self._plan_issues()
             await self._sleep_or_stop(self._config.poll_interval)
 
@@ -256,7 +266,7 @@ class HydraOrchestrator:
             if label is not None:
                 cmd += ["--label", label]
             try:
-                raw = await self._gh_run(*cmd)
+                raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
                 for item in json.loads(raw):
                     seen.setdefault(item["number"], item)
             except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
@@ -310,13 +320,75 @@ class HydraOrchestrator:
         logger.info("Fetched %d issues for planning", len(issues))
         return issues[: self._config.batch_size]
 
+    async def _triage_find_issues(self) -> None:
+        """Evaluate ``find_label`` issues and route them.
+
+        Issues with enough context go to ``planner_label`` (planning).
+        Issues lacking detail are escalated to ``hitl_label`` with a
+        comment explaining what is missing so the dashboard surfaces
+        them as "needs attention".
+        """
+        if not self._config.find_label:
+            return
+
+        issues = await self._fetch_issues_by_labels(
+            self._config.find_label, self._config.batch_size
+        )
+        if not issues:
+            return
+
+        logger.info("Triaging %d found issues", len(issues))
+        for issue in issues:
+            if self._stop_event.is_set():
+                logger.info("Stop requested — aborting triage loop")
+                return
+
+            result = await self._triage.evaluate(issue)
+
+            if self._config.dry_run:
+                continue
+
+            # Remove find label regardless of outcome
+            for lbl in self._config.find_label:
+                await self._prs.remove_label(issue.number, lbl)
+
+            if result.ready:
+                await self._prs.add_labels(
+                    issue.number, [self._config.planner_label[0]]
+                )
+                logger.info(
+                    "Issue #%d triaged → %s (ready for planning)",
+                    issue.number,
+                    self._config.planner_label[0],
+                )
+            else:
+                await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+                note = (
+                    "## Needs More Information\n\n"
+                    "This issue was picked up by Hydra but doesn't have "
+                    "enough detail to begin planning.\n\n"
+                    "**Missing:**\n"
+                    + "\n".join(f"- {r}" for r in result.reasons)
+                    + "\n\n"
+                    "Please update the issue with more context and re-apply "
+                    f"the `{self._config.find_label[0]}` label when ready.\n\n"
+                    "---\n*Generated by Hydra Triage*"
+                )
+                await self._prs.post_comment(issue.number, note)
+                logger.info(
+                    "Issue #%d triaged → %s (needs attention: %s)",
+                    issue.number,
+                    self._config.hitl_label[0],
+                    "; ".join(result.reasons),
+                )
+
     async def _plan_issues(self) -> list[PlanResult]:
         """Run planning agents on issues labeled with the planner label."""
         issues = await self._fetch_plan_issues()
         if not issues:
             return []
 
-        semaphore = asyncio.Semaphore(self.DEFAULT_MAX_PLANNERS)
+        semaphore = asyncio.Semaphore(self._config.max_planners)
         results: list[PlanResult] = []
 
         async def _plan_one(idx: int, issue: GitHubIssue) -> PlanResult:
@@ -428,7 +500,7 @@ class HydraOrchestrator:
         for issue in issues:
             branch = f"agent/issue-{issue.number}"
             try:
-                raw = await self._gh_run(
+                raw = await run_subprocess(
                     "gh",
                     "pr",
                     "list",
@@ -442,6 +514,7 @@ class HydraOrchestrator:
                     "number,url,isDraft",
                     "--limit",
                     "1",
+                    gh_token=self._config.gh_token,
                 )
                 prs_json = json.loads(raw)
                 if prs_json:
@@ -461,25 +534,6 @@ class HydraOrchestrator:
         non_draft = [p for p in pr_infos if not p.draft and p.number > 0]
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
-
-    @staticmethod
-    async def _gh_run(*cmd: str) -> str:
-        """Run a gh CLI command and return stdout."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()
 
     async def _implement_batch(
         self,
@@ -566,6 +620,8 @@ class HydraOrchestrator:
 
                 status = "success" if result.success else "failed"
                 self._state.mark_issue(issue.number, status)
+                # Release so the review loop can pick it up
+                self._active_issues.discard(issue.number)
                 return result
 
         all_tasks = [
@@ -591,7 +647,7 @@ class HydraOrchestrator:
             return []
 
         issue_map = {i.number: i for i in issues}
-        semaphore = asyncio.Semaphore(self.DEFAULT_MAX_REVIEWERS)
+        semaphore = asyncio.Semaphore(self._config.max_reviewers)
         results: list[ReviewResult] = []
 
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
@@ -626,8 +682,10 @@ class HydraOrchestrator:
                 if result.summary and pr.number > 0:
                     await self._prs.post_pr_comment(pr.number, result.summary)
 
-                # Submit formal GitHub PR review
-                if pr.number > 0:
+                # Submit formal GitHub PR review for non-approve verdicts.
+                # Approve is skipped to avoid "cannot approve your own PR"
+                # errors — Hydra merges directly once CI passes.
+                if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
                     await self._prs.submit_review(
                         pr.number, result.verdict.value, result.summary
                     )
@@ -666,6 +724,8 @@ class HydraOrchestrator:
                         exc,
                     )
 
+                # Release so issue can be re-reviewed if needed
+                self._active_issues.discard(pr.issue_number)
                 return result
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]

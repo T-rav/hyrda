@@ -10,7 +10,7 @@ Audit all Claude Code hooks (`.claude/settings.json` and `.claude/hooks/*.sh`) f
 ## Agent Prompt
 
 ```
-You are a hooks and workflow auditor for the InsightMesh project at /Users/travisf/Documents/projects/hyrda.
+You are a hooks and workflow auditor for this project.
 
 ## Steps
 

@@ -42,12 +42,10 @@ if echo "$NEW_CONTENT" | grep -qiE '(CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|A
   echo "  File: $FILE_PATH" >&2
   echo "" >&2
   echo "Database schema changes MUST go through Alembic migrations:" >&2
-  echo "  - bot/migrations/versions/" >&2
-  echo "  - tasks/migrations/versions/" >&2
-  echo "  - control_plane/migrations/versions/" >&2
+  echo "  - <module>/migrations/versions/" >&2
   echo "" >&2
   echo "Create a new migration:" >&2
-  echo "  cd <service> && alembic revision -m 'description_of_change'" >&2
+  echo "  cd <module> && alembic revision -m 'description_of_change'" >&2
   exit 2
 fi
 
@@ -58,8 +56,6 @@ if echo "$NEW_CONTENT" | grep -qE 'op\.(create_table|drop_table|add_column|drop_
   echo "  File: $FILE_PATH" >&2
   echo "" >&2
   echo "Alembic operations belong in migration files only:" >&2
-  echo "  - bot/migrations/versions/" >&2
-  echo "  - tasks/migrations/versions/" >&2
-  echo "  - control_plane/migrations/versions/" >&2
+  echo "  - <module>/migrations/versions/" >&2
   exit 2
 fi

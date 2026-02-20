@@ -14,7 +14,7 @@ import pytest
 from agent import AgentRunner
 from events import EventBus, EventType
 from models import WorkerStatus
-from tests.helpers import make_streaming_proc
+from tests.helpers import ConfigFactory, make_streaming_proc
 
 # ---------------------------------------------------------------------------
 # Helpers (agent-specific)
@@ -153,6 +153,25 @@ class TestBuildPrompt:
         runner = AgentRunner(config, event_bus)
         prompt = runner._build_prompt(issue)
         assert "Rules" in prompt or "rules" in prompt.lower()
+
+    def test_prompt_references_make_quality(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should instruct the agent to run make quality."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "make quality" in prompt
+
+    def test_prompt_does_not_reference_make_test_fast_in_rules(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Rules section should not tell the agent to run make test-fast as the gate."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        # make test-fast may appear in the development loop instructions
+        # but the Rules section should reference make quality
+        rules_section = prompt.split("## Rules")[1] if "## Rules" in prompt else ""
+        assert "make test-fast" not in rules_section
 
     def test_prompt_includes_comments_section_when_comments_exist(
         self, config, event_bus: EventBus
@@ -324,10 +343,10 @@ class TestRunFailure:
     """Tests for failure paths of AgentRunner.run."""
 
     @pytest.mark.asyncio
-    async def test_run_failure_when_verify_returns_false(
+    async def test_run_failure_when_verify_returns_false_and_fix_loop_fails(
         self, config, event_bus: EventBus, issue, tmp_path: Path
     ) -> None:
-        """run should return success=False when _verify_result returns (False, msg)."""
+        """run should return success=False when quality fix loop also fails."""
         runner = AgentRunner(config, event_bus)
 
         with (
@@ -338,7 +357,13 @@ class TestRunFailure:
                 runner,
                 "_verify_result",
                 new_callable=AsyncMock,
-                return_value=(False, "Tests failed"),
+                return_value=(False, "Quality failed"),
+            ),
+            patch.object(
+                runner,
+                "_run_quality_fix_loop",
+                new_callable=AsyncMock,
+                return_value=(False, "Still failing", 2),
             ),
             patch.object(
                 runner, "_count_commits", new_callable=AsyncMock, return_value=1
@@ -348,7 +373,73 @@ class TestRunFailure:
             result = await runner.run(issue, tmp_path, "agent/issue-42")
 
         assert result.success is False
-        assert result.error == "Tests failed"
+        assert result.error == "Still failing"
+        assert result.quality_fix_attempts == 2
+
+    @pytest.mark.asyncio
+    async def test_run_skips_fix_loop_when_no_commits(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """run should not invoke the fix loop when there are no commits."""
+        runner = AgentRunner(config, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(False, "No commits found on branch"),
+            ),
+            patch.object(
+                runner,
+                "_run_quality_fix_loop",
+                new_callable=AsyncMock,
+            ) as fix_mock,
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=0
+            ),
+            patch.object(runner, "_save_transcript"),
+        ):
+            result = await runner.run(issue, tmp_path, "agent/issue-42")
+
+        assert result.success is False
+        fix_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_run_success_when_fix_loop_succeeds(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """run should return success=True when the fix loop recovers."""
+        runner = AgentRunner(config, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(False, "Quality failed"),
+            ),
+            patch.object(
+                runner,
+                "_run_quality_fix_loop",
+                new_callable=AsyncMock,
+                return_value=(True, "OK", 1),
+            ),
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=2
+            ),
+            patch.object(runner, "_save_transcript"),
+        ):
+            result = await runner.run(issue, tmp_path, "agent/issue-42")
+
+        assert result.success is True
+        assert result.quality_fix_attempts == 1
 
     @pytest.mark.asyncio
     async def test_run_handles_exception_and_returns_failure(
@@ -391,6 +482,44 @@ class TestRunFailure:
 
         assert result.error is not None
         assert "unexpected value" in result.error
+
+    @pytest.mark.asyncio
+    async def test_run_skips_fix_loop_when_max_attempts_zero(
+        self, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """run should skip the fix loop when max_quality_fix_attempts is 0."""
+        cfg = ConfigFactory.create(
+            max_quality_fix_attempts=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        runner = AgentRunner(cfg, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(False, "Quality failed"),
+            ),
+            patch.object(
+                runner,
+                "_run_quality_fix_loop",
+                new_callable=AsyncMock,
+            ) as fix_mock,
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch.object(runner, "_save_transcript"),
+        ):
+            result = await runner.run(issue, tmp_path, "agent/issue-42")
+
+        assert result.success is False
+        fix_mock.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -453,96 +582,79 @@ class TestVerifyResult:
         assert "commit" in msg.lower()
 
     @pytest.mark.asyncio
-    async def test_verify_runs_best_available_target(
+    async def test_verify_runs_make_quality(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        """_verify_result should probe for test-fast, then run it if available."""
+        """_verify_result should run make quality and return OK on success."""
         runner = AgentRunner(config, event_bus)
 
-        # --question returns 0 (target exists and is up-to-date) for test-fast
-        probe_proc = _make_proc(returncode=0, stdout=b"")
-        run_proc = _make_proc(returncode=0, stdout=b"All tests passed")
-
-        call_count = 0
-
-        async def _mock_exec(*args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            if "--question" in args:
-                return probe_proc
-            return run_proc
+        quality_proc = _make_proc(returncode=0, stdout=b"All checks passed")
 
         with (
             patch.object(
                 runner, "_count_commits", new_callable=AsyncMock, return_value=1
             ),
             patch(
-                "asyncio.create_subprocess_exec", side_effect=_mock_exec
+                "asyncio.create_subprocess_exec",
+                return_value=quality_proc,
             ) as mock_exec,
         ):
             success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
 
         assert success is True
         assert msg == "OK"
-        # Probe + run = at least 2 calls
-        assert mock_exec.call_count >= 2
+        # Should call make quality exactly once
+        mock_exec.assert_called_once()
+        call_args = mock_exec.call_args[0]
+        assert "make" in call_args
+        assert "quality" in call_args
 
     @pytest.mark.asyncio
-    async def test_verify_falls_back_to_lint_when_test_fast_missing(
+    async def test_verify_returns_false_when_quality_fails(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        """_verify_result should fall back to make lint if test-fast doesn't exist."""
+        """_verify_result should return (False, ...) when make quality exits non-zero."""
         runner = AgentRunner(config, event_bus)
 
-        target_missing_proc = _make_proc(returncode=2, stdout=b"")
-        target_exists_proc = _make_proc(returncode=0, stdout=b"")
-        run_proc = _make_proc(returncode=0, stdout=b"OK")
-
-        async def _mock_exec(*args, **kwargs):
-            if "--question" in args:
-                if "test-fast" in args:
-                    return target_missing_proc
-                return target_exists_proc
-            return run_proc
-
-        with (
-            patch.object(
-                runner, "_count_commits", new_callable=AsyncMock, return_value=1
-            ),
-            patch("asyncio.create_subprocess_exec", side_effect=_mock_exec),
-        ):
-            success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
-
-        assert success is True
-        assert msg == "OK"
-
-    @pytest.mark.asyncio
-    async def test_verify_returns_false_when_tests_fail(
-        self, config, event_bus: EventBus, tmp_path: Path
-    ) -> None:
-        """_verify_result should return (False, ...) when tests exit non-zero."""
-        runner = AgentRunner(config, event_bus)
-
-        probe_proc = _make_proc(returncode=0, stdout=b"")
         fail_proc = _make_proc(
             returncode=1, stdout=b"FAILED test_foo.py::test_bar", stderr=b""
         )
 
-        async def _mock_exec(*args, **kwargs):
-            if "--question" in args:
-                return probe_proc
-            return fail_proc
+        with (
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
+        ):
+            success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
+
+        assert success is False
+        assert "make quality" in msg.lower()
+
+    @pytest.mark.asyncio
+    async def test_verify_includes_output_on_failure(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_verify_result should include the last 3000 chars of output on failure."""
+        runner = AgentRunner(config, event_bus)
+
+        fail_proc = _make_proc(
+            returncode=1,
+            stdout=b"error: type mismatch on line 42",
+            stderr=b"pyright found 1 error",
+        )
 
         with (
             patch.object(
                 runner, "_count_commits", new_callable=AsyncMock, return_value=1
             ),
-            patch("asyncio.create_subprocess_exec", side_effect=_mock_exec),
+            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
         ):
             success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
 
         assert success is False
-        assert "failed" in msg.lower()
+        assert "type mismatch" in msg
+        assert "pyright" in msg
 
     @pytest.mark.asyncio
     async def test_verify_returns_false_when_make_not_found(
@@ -561,6 +673,208 @@ class TestVerifyResult:
 
         assert success is False
         assert "make" in msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._build_quality_fix_prompt
+# ---------------------------------------------------------------------------
+
+
+class TestBuildQualityFixPrompt:
+    """Tests for AgentRunner._build_quality_fix_prompt."""
+
+    def test_prompt_includes_error_output(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Fix prompt should include the quality error output."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_quality_fix_prompt(issue, "ruff: error E501", 1)
+        assert "ruff: error E501" in prompt
+
+    def test_prompt_includes_attempt_number(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Fix prompt should include the attempt number."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_quality_fix_prompt(issue, "error", 3)
+        assert "3" in prompt
+
+    def test_prompt_includes_issue_number(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Fix prompt should reference the issue number."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_quality_fix_prompt(issue, "error", 1)
+        assert str(issue.number) in prompt
+
+    def test_prompt_instructs_make_quality(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Fix prompt should instruct running make quality."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_quality_fix_prompt(issue, "error", 1)
+        assert "make quality" in prompt
+
+    def test_prompt_truncates_long_error_output(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Fix prompt should truncate error output to last 3000 chars."""
+        runner = AgentRunner(config, event_bus)
+        long_error = "x" * 5000
+        prompt = runner._build_quality_fix_prompt(issue, long_error, 1)
+        # The prompt should contain at most 3000 chars of the error
+        assert "x" * 3000 in prompt
+        assert "x" * 5000 not in prompt
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._run_quality_fix_loop
+# ---------------------------------------------------------------------------
+
+
+class TestQualityFixLoop:
+    """Tests for AgentRunner._run_quality_fix_loop."""
+
+    @pytest.mark.asyncio
+    async def test_succeeds_on_first_attempt(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """Fix loop should succeed on first attempt when quality passes."""
+        runner = AgentRunner(config, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="fix output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(True, "OK"),
+            ),
+        ):
+            success, msg, attempts = await runner._run_quality_fix_loop(
+                issue, tmp_path, "agent/issue-42", "initial error", worker_id=0
+            )
+
+        assert success is True
+        assert msg == "OK"
+        assert attempts == 1
+
+    @pytest.mark.asyncio
+    async def test_succeeds_on_second_attempt(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """Fix loop should succeed when second attempt passes quality."""
+        runner = AgentRunner(config, event_bus)
+
+        verify_results = iter([(False, "still failing"), (True, "OK")])
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="fix output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                side_effect=lambda *a: next(verify_results),
+            ),
+        ):
+            success, msg, attempts = await runner._run_quality_fix_loop(
+                issue, tmp_path, "agent/issue-42", "initial error", worker_id=0
+            )
+
+        assert success is True
+        assert msg == "OK"
+        assert attempts == 2
+
+    @pytest.mark.asyncio
+    async def test_fails_after_max_attempts(
+        self, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """Fix loop should fail after exhausting max_quality_fix_attempts."""
+        cfg = ConfigFactory.create(
+            max_quality_fix_attempts=3,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        runner = AgentRunner(cfg, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="fix output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(False, "still broken"),
+            ),
+        ):
+            success, msg, attempts = await runner._run_quality_fix_loop(
+                issue, tmp_path, "agent/issue-42", "initial error", worker_id=0
+            )
+
+        assert success is False
+        assert "still broken" in msg
+        assert attempts == 3
+
+    @pytest.mark.asyncio
+    async def test_emits_quality_fix_status_events(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """Fix loop should emit QUALITY_FIX status events."""
+        runner = AgentRunner(config, event_bus)
+        queue = event_bus.subscribe()
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="fix output"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(True, "OK"),
+            ),
+        ):
+            await runner._run_quality_fix_loop(
+                issue, tmp_path, "agent/issue-42", "error", worker_id=0
+            )
+
+        events = []
+        while not queue.empty():
+            events.append(queue.get_nowait())
+
+        worker_updates = [e for e in events if e.type == EventType.WORKER_UPDATE]
+        statuses = [e.data.get("status") for e in worker_updates]
+        assert WorkerStatus.QUALITY_FIX.value in statuses
+
+    @pytest.mark.asyncio
+    async def test_zero_max_attempts_returns_immediately(
+        self, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """Fix loop with 0 max attempts should return failure without executing."""
+        cfg = ConfigFactory.create(
+            max_quality_fix_attempts=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        runner = AgentRunner(cfg, event_bus)
+
+        with (
+            patch.object(runner, "_execute", new_callable=AsyncMock) as exec_mock,
+        ):
+            success, msg, attempts = await runner._run_quality_fix_loop(
+                issue, tmp_path, "agent/issue-42", "error", worker_id=0
+            )
+
+        assert success is False
+        assert attempts == 0
+        exec_mock.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -979,3 +1293,17 @@ class TestExecuteStreaming:
             await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
 
         mock_logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_large_stream_limit(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should set limit=1MB on subprocess to handle large stream-json lines."""
+        runner = AgentRunner(config, event_bus)
+        mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+        with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+            await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
+
+        kwargs = mock_exec.call_args[1]
+        assert kwargs["limit"] == 1024 * 1024

@@ -37,12 +37,16 @@ fi
 SHARED_MODULE=$(echo "$FILE_PATH" | sed -n 's|.*/shared/\(.*\)\.py$|\1|p' | tr '/' '.')
 SERVICES=""
 
-for svc in bot agent-service control_plane tasks rag-service dashboard-service; do
-  SVC_DIR="$PROJECT_DIR/$svc"
-  if [ -d "$SVC_DIR" ]; then
-    if grep -rql "from shared\." "$SVC_DIR" --include="*.py" 2>/dev/null | head -1 > /dev/null 2>&1; then
-      SERVICES="${SERVICES}  - ${svc}\n"
-    fi
+# Auto-discover directories that import from shared/
+for svc_dir in "$PROJECT_DIR"/*/; do
+  [ -d "$svc_dir" ] || continue
+  svc=$(basename "$svc_dir")
+  # Skip shared itself, hidden dirs, and non-service directories
+  case "$svc" in
+    shared|venv|node_modules|__pycache__|.git|.claude|.hydra|.github|ui|docs) continue ;;
+  esac
+  if grep -rql "from shared\." "$svc_dir" --include="*.py" 2>/dev/null | head -1 > /dev/null 2>&1; then
+    SERVICES="${SERVICES}  - ${svc}\n"
   fi
 done
 

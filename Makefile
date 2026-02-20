@@ -2,6 +2,10 @@
 
 HYDRA_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(HYDRA_DIR))
+
+# Load .env if present (export all variables)
+-include $(PROJECT_ROOT)/.env
+export
 VENV := $(PROJECT_ROOT)/venv
 UV := VIRTUAL_ENV=$(VENV) uv run --active
 
@@ -25,7 +29,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean
+.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels
 
 help:
 	@echo "$(BLUE)Hydra — Parallel Claude Code Issue Processor$(RESET)"
@@ -42,6 +46,7 @@ help:
 	@echo "  make typecheck      Run Pyright type checks"
 	@echo "  make security       Run Bandit security scan"
 	@echo "  make quality        Lint + typecheck + security + test"
+	@echo "  make ensure-labels  Create Hydra labels in GitHub repo"
 	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
@@ -56,7 +61,7 @@ help:
 	@echo "  BATCH_SIZE       Issues per batch (default: 15)"
 	@echo "  BUDGET           USD per impl agent (default: 0 = unlimited)"
 	@echo "  REVIEW_BUDGET    USD per review agent (default: 0 = unlimited)"
-	@echo "  PLANNER_LABEL    Planner issue label (default: claude-find)"
+	@echo "  PLANNER_LABEL    Planner issue label (default: hydra-plan)"
 	@echo "  PLANNER_MODEL    Planner model (default: opus)"
 	@echo "  PLANNER_BUDGET   USD per planner agent (default: 0 = unlimited)"
 	@echo "  PORT             Dashboard port (default: 5555)"
@@ -109,6 +114,9 @@ test:
 	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v
 	@echo "$(GREEN)All tests passed$(RESET)"
 
+test-fast:
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x -q --tb=short
+
 lint:
 	@echo "$(BLUE)Linting Hydra (auto-fix)...$(RESET)"
 	@cd $(HYDRA_DIR) && $(UV) ruff check . --fix && $(UV) ruff format .
@@ -138,11 +146,41 @@ install:
 	@echo "$(GREEN)Dashboard dependencies installed$(RESET)"
 
 setup:
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "$(BLUE)Installing gh CLI...$(RESET)"; \
+		if command -v brew >/dev/null 2>&1; then \
+			brew install gh; \
+		elif command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y gh; \
+		elif command -v dnf >/dev/null 2>&1; then \
+			sudo dnf install -y gh; \
+		else \
+			echo "$(RED)Error: Could not install gh CLI automatically. Install it manually: https://cli.github.com$(RESET)"; \
+			exit 1; \
+		fi; \
+	fi
+	@echo "  gh CLI: $$(gh --version | head -1)"
+	@if ! gh auth status >/dev/null 2>&1; then \
+		echo "$(YELLOW)gh CLI is not authenticated. Starting login...$(RESET)"; \
+		gh auth login; \
+	fi
+	@echo "  gh user: $$(gh api user --jq .login)"
 	@echo "$(BLUE)Setting up git hooks...$(RESET)"
 	@git config core.hooksPath .githooks
-	@echo "$(GREEN)Git hooks installed (.githooks/)$(RESET)"
+	@echo "$(GREEN)Setup complete$(RESET)"
 	@echo "  pre-commit: lint check on staged Python files"
 	@echo "  pre-push:   full quality gate (lint + typecheck + security + tests)"
+
+REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.com[:/]||;s|\.git$$||')
+
+ensure-labels:
+	@echo "$(BLUE)Ensuring Hydra labels exist in $(REPO_SLUG)...$(RESET)"
+	@gh label create "$(PLANNER_LABEL)" --repo "$(REPO_SLUG)" --color c5def5 --description "Issue needs planning before implementation" --force 2>/dev/null || true
+	@gh label create "$(READY_LABEL)" --repo "$(REPO_SLUG)" --color 0e8a16 --description "Issue ready for implementation" --force 2>/dev/null || true
+	@gh label create "hydra-review" --repo "$(REPO_SLUG)" --color fbca04 --description "Issue/PR under review" --force 2>/dev/null || true
+	@gh label create "hydra-hitl" --repo "$(REPO_SLUG)" --color d93f0b --description "Escalated to human-in-the-loop" --force 2>/dev/null || true
+	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
+	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
 
 ui:
 	@echo "$(BLUE)Building Hydra React dashboard...$(RESET)"

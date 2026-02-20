@@ -79,9 +79,15 @@ fi
 # Determine which services are affected and run their tests
 SERVICES_TO_TEST=""
 
-for service in bot tasks agent-service rag-service control_plane shared dashboard-service; do
-  if echo "$STAGED_FILES" | grep -q "^${service}/"; then
-    SERVICES_TO_TEST="$SERVICES_TO_TEST $service"
+# Auto-discover affected top-level directories from staged files
+TOP_DIRS=$(echo "$STAGED_FILES" | sed -n 's|^\([^/]*\)/.*|\1|p' | sort -u)
+for dir in $TOP_DIRS; do
+  # Skip non-testable directories
+  case "$dir" in
+    .github|.claude|.hydra|docs|ui|venv|node_modules) continue ;;
+  esac
+  if [ -d "$PROJECT_ROOT/$dir/tests" ]; then
+    SERVICES_TO_TEST="$SERVICES_TO_TEST $dir"
   fi
 done
 

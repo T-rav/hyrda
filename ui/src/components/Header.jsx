@@ -1,43 +1,87 @@
 import React from 'react'
 
+const STAGES = [
+  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage',      configKey: null },
+  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner',     configKey: 'max_planners' },
+  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer', configKey: 'max_workers' },
+  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer',    configKey: 'max_reviewers' },
+]
+
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+
+function countByRole(workers, activeOnly) {
+  const list = Object.values(workers)
+  const f = activeOnly
+    ? (role) => list.filter(w => w.role === role && ACTIVE_STATUSES.includes(w.status)).length
+    : (role) => list.filter(w => w.role === role).length
+  const implFilter = activeOnly
+    ? list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage' && ACTIVE_STATUSES.includes(w.status)).length
+    : list.filter(w => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage').length
+  return {
+    triage: f('triage'),
+    planner: f('planner'),
+    implementer: implFilter,
+    reviewer: f('reviewer'),
+  }
+}
+
 export function Header({
-  batchNum, prsCount, mergedCount,
+  prsCount, mergedCount, issuesFound,
   connected, orchestratorStatus,
-  onStart, onStop, lifetimeStats,
+  onStart, onStop,
+  phase, workers, config,
 }) {
   const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
   const isStopping = orchestratorStatus === 'stopping'
   const isRunning = orchestratorStatus === 'running'
+  const activeCounts = countByRole(workers || {}, true)
+  const totalCounts = countByRole(workers || {}, false)
 
   return (
     <header style={styles.header}>
       <div style={styles.left}>
+        <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
         <span style={styles.logo}>
           HYDRA
           <span style={styles.subtitle}>Parallel Issue Processor</span>
         </span>
-        <span style={{
-          ...styles.dot,
-          background: connected ? '#3fb950' : '#f85149',
-        }} />
+        <span style={connected ? dotConnected : dotDisconnected} />
       </div>
-      <div style={styles.stats}>
-        <Stat label="Batch" value={batchNum} />
-        <Stat label="PRs" value={prsCount} />
-        <Stat label="Merged" value={mergedCount} />
-        {lifetimeStats && (<>
-          <Stat label="Fixed" value={lifetimeStats.issues_completed} />
-          <Stat label="Filed" value={lifetimeStats.issues_created} />
-        </>)}
+      <div style={styles.center}>
+        <div style={styles.sessionBox}>
+          <span style={styles.sessionLabel}>Session</span>
+          <div style={styles.stats}>
+            <Stat label="Triage" value={Object.values(workers || {}).filter(w => w.role === 'triage').length} />
+            <Stat label="New Issues" value={issuesFound} />
+            <Stat label="PRs" value={prsCount} />
+            <Stat label="Merged" value={mergedCount} />
+          </div>
+        </div>
+        <div style={styles.pills}>
+          {STAGES.map((stage, i) => {
+            const activeCount = activeCounts[stage.role] || 0
+            const totalCount = totalCounts[stage.role] || 0
+            const maxCount = stage.configKey && config ? config[stage.configKey] : 1
+            const lit = isRunning
+            const dimmed = !isRunning
+            return (
+              <React.Fragment key={stage.key}>
+                {i > 0 && (
+                  <div style={headerConnectorStyles[stage.key][lit ? 'lit' : 'dim']} />
+                )}
+                <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
+                  {stage.label}
+                  <span style={lit ? countLit : countDim}>{maxCount}</span>
+                </div>
+              </React.Fragment>
+            )
+          })}
+        </div>
       </div>
       <div style={styles.controls}>
         {canStart && (
           <button
-            style={{
-              ...styles.startBtn,
-              opacity: connected ? 1 : 0.4,
-              cursor: connected ? 'pointer' : 'not-allowed',
-            }}
+            style={connected ? startBtnEnabled : startBtnDisabled}
             onClick={onStart}
             disabled={!connected}
           >
@@ -77,13 +121,60 @@ const styles = {
     background: '#161b22',
     borderBottom: '1px solid #30363d',
   },
-  left: { display: 'flex', alignItems: 'center', gap: 10 },
+  left: { display: 'flex', alignItems: 'center', gap: 8 },
+  logoImg: { width: 56, height: 56 },
   logo: { fontSize: 18, fontWeight: 700, color: '#58a6ff' },
   subtitle: { color: '#8b949e', fontWeight: 400, fontSize: 12, marginLeft: 8 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
-  stats: { display: 'flex', gap: 20, fontSize: 12 },
+  center: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+  },
+  sessionBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    border: '1px solid #30363d',
+    borderRadius: 8,
+    padding: '6px 14px',
+    background: '#0d1117',
+  },
+  sessionLabel: {
+    color: '#8b949e',
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  stats: { display: 'flex', gap: 16, fontSize: 12 },
   stat: { color: '#8b949e' },
   statVal: { color: '#c9d1d9' },
+  pills: { display: 'flex', alignItems: 'center', gap: 0 },
+  pill: {
+    padding: '4px 14px',
+    borderRadius: 12,
+    fontSize: 11,
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    border: '1px solid',
+    whiteSpace: 'nowrap',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  connector: {
+    width: 24,
+    height: 2,
+    flexShrink: 0,
+  },
+  count: {
+    background: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: '1px 6px',
+    fontSize: 10,
+    fontWeight: 700,
+  },
   controls: { display: 'flex', alignItems: 'center', gap: 10 },
   startBtn: {
     padding: '4px 14px',
@@ -114,3 +205,30 @@ const styles = {
     fontWeight: 600,
   },
 }
+
+// Pre-computed connection dot variants
+export const dotConnected = { ...styles.dot, background: '#3fb950' }
+export const dotDisconnected = { ...styles.dot, background: '#f85149' }
+
+// Pre-computed per-stage pill/connector variants (avoids object spread in .map())
+export const pillStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.pill, background: s.color, color: '#0d1117', borderColor: s.color },
+    dim: { ...styles.pill, background: s.color + '20', color: s.color + '99', borderColor: s.color + '55' },
+  }])
+)
+
+export const headerConnectorStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.connector, background: s.color },
+    dim: { ...styles.connector, background: s.color + '55' },
+  }])
+)
+
+// Pre-computed count style variants
+export const countLit = { ...styles.count, opacity: 1 }
+export const countDim = { ...styles.count, opacity: 0.6 }
+
+// Pre-computed start button variants
+export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
+export const startBtnDisabled = { ...styles.startBtn, opacity: 0.4, cursor: 'not-allowed' }

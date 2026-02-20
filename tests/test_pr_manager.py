@@ -15,6 +15,72 @@ from events import EventType
 from pr_manager import PRManager
 
 # ---------------------------------------------------------------------------
+# _chunk_body (static method)
+# ---------------------------------------------------------------------------
+
+
+class TestChunkBody:
+    """Tests for PRManager._chunk_body."""
+
+    def test_short_body_returns_single_chunk(self):
+        result = PRManager._chunk_body("hello world", limit=100)
+        assert result == ["hello world"]
+
+    def test_body_at_limit_returns_single_chunk(self):
+        body = "x" * 100
+        result = PRManager._chunk_body(body, limit=100)
+        assert result == [body]
+
+    def test_body_splits_at_newline(self):
+        body = "line1\nline2\nline3"
+        result = PRManager._chunk_body(body, limit=12)
+        assert len(result) == 2
+        assert result[0] == "line1\nline2"
+        assert result[1] == "line3"
+
+    def test_body_splits_without_newline(self):
+        body = "a" * 200
+        result = PRManager._chunk_body(body, limit=100)
+        assert len(result) == 2
+        assert result[0] == "a" * 100
+        assert result[1] == "a" * 100
+
+    def test_empty_body_returns_single_chunk(self):
+        result = PRManager._chunk_body("", limit=100)
+        assert result == [""]
+
+
+# ---------------------------------------------------------------------------
+# _cap_body (class method)
+# ---------------------------------------------------------------------------
+
+
+class TestCapBody:
+    """Tests for PRManager._cap_body."""
+
+    def test_short_body_unchanged(self):
+        result = PRManager._cap_body("hello", limit=100)
+        assert result == "hello"
+
+    def test_body_at_limit_unchanged(self):
+        body = "x" * 100
+        result = PRManager._cap_body(body, limit=100)
+        assert result == body
+
+    def test_body_over_limit_truncated_with_marker(self):
+        body = "x" * 200
+        result = PRManager._cap_body(body, limit=100)
+        assert len(result) == 100
+        assert result.endswith(PRManager._TRUNCATION_MARKER)
+
+    def test_truncated_body_contains_original_prefix(self):
+        body = "ABCDEF" * 20_000
+        result = PRManager._cap_body(body, limit=1000)
+        marker_len = len(PRManager._TRUNCATION_MARKER)
+        assert result[: 1000 - marker_len] == body[: 1000 - marker_len]
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -39,7 +105,7 @@ def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = "
 
 @pytest.mark.asyncio
 async def test_post_comment_calls_gh_issue_comment(config, event_bus, tmp_path):
-    """post_comment should call gh issue comment with correct args."""
+    """post_comment should call gh issue comment with --body-file."""
     from config import HydraConfig
 
     cfg = HydraConfig(
@@ -62,8 +128,9 @@ async def test_post_comment_calls_gh_issue_comment(config, event_bus, tmp_path):
     assert "issue" in cmd
     assert "comment" in cmd
     assert "42" in cmd
-    assert "--body" in cmd
-    assert "This is a plan comment" in cmd
+    assert "--body-file" in cmd
+    # Body should NOT be passed inline
+    assert "This is a plan comment" not in cmd
 
 
 @pytest.mark.asyncio
@@ -105,7 +172,7 @@ async def test_post_comment_handles_error(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_post_pr_comment_calls_gh_pr_comment(config, event_bus, tmp_path):
-    """post_pr_comment should call gh pr comment with correct args."""
+    """post_pr_comment should call gh pr comment with --body-file."""
     from config import HydraConfig
 
     cfg = HydraConfig(
@@ -128,8 +195,8 @@ async def test_post_pr_comment_calls_gh_pr_comment(config, event_bus, tmp_path):
     assert "pr" in cmd
     assert "comment" in cmd
     assert "101" in cmd
-    assert "--body" in cmd
-    assert "Review summary here" in cmd
+    assert "--body-file" in cmd
+    assert "Review summary here" not in cmd
 
 
 @pytest.mark.asyncio
@@ -171,7 +238,7 @@ async def test_post_pr_comment_handles_error(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_path):
-    """submit_review with 'approve' should pass --approve flag."""
+    """submit_review with 'approve' should pass --approve flag and --body-file."""
     from config import HydraConfig
 
     cfg = HydraConfig(
@@ -198,8 +265,8 @@ async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_p
     assert "review" in cmd
     assert "101" in cmd
     assert "--approve" in cmd
-    assert "--body" in cmd
-    assert "Looks good" in cmd
+    assert "--body-file" in cmd
+    assert "Looks good" not in cmd
 
 
 @pytest.mark.asyncio
@@ -438,6 +505,7 @@ async def test_push_branch_calls_git_push(config, event_bus, tmp_path):
     args = mock_create.call_args[0]
     assert args[0] == "git"
     assert args[1] == "push"
+    assert "--no-verify" in args
     assert "-u" in args
     assert "origin" in args
     assert "agent/issue-42" in args
@@ -564,7 +632,7 @@ async def test_create_pr_constructs_correct_gh_command(config, event_bus, issue)
     assert "--head" in args
     assert "agent/issue-42" in args
     assert "--title" in args
-    assert "--body" in args
+    assert "--body-file" in args
 
 
 @pytest.mark.asyncio
@@ -932,30 +1000,9 @@ async def test_pull_main_dry_run_skips_command(dry_config, event_bus):
     assert result is True
 
 
-# ---------------------------------------------------------------------------
-# _run static method
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_run_returns_stdout_on_success(tmp_path):
-    mock_create = _make_subprocess_mock(returncode=0, stdout="hello world\n")
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        output = await PRManager._run("echo", "hello world", cwd=tmp_path)
-
-    assert output == "hello world"
-
-
-@pytest.mark.asyncio
-async def test_run_raises_runtime_error_on_nonzero_exit(tmp_path):
-    mock_create = _make_subprocess_mock(returncode=1, stderr="command not found")
-
-    with (
-        patch("asyncio.create_subprocess_exec", mock_create),
-        pytest.raises(RuntimeError, match="failed"),
-    ):
-        await PRManager._run("false", cwd=tmp_path)
+# NOTE: Tests for the subprocess helper (stdout parsing, error handling,
+# GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
+# since the logic was extracted into subprocess_util.run_subprocess.
 
 
 # ---------------------------------------------------------------------------
@@ -976,7 +1023,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    checks_json = '[{"name":"ci","state":"COMPLETED","conclusion":"SUCCESS"}]'
+    checks_json = '[{"name":"ci","state":"SUCCESS"}]'
     mock_create = _make_subprocess_mock(returncode=0, stdout=checks_json)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
@@ -984,7 +1031,7 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
 
     assert len(checks) == 1
     assert checks[0]["name"] == "ci"
-    assert checks[0]["conclusion"] == "SUCCESS"
+    assert checks[0]["state"] == "SUCCESS"
 
 
 @pytest.mark.asyncio
@@ -1042,8 +1089,8 @@ async def test_wait_for_ci_passes_when_all_succeed(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "SUCCESS"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1073,8 +1120,8 @@ async def test_wait_for_ci_fails_on_failure(config, event_bus, tmp_path):
     stop = asyncio.Event()
 
     checks = [
-        {"name": "ci", "state": "COMPLETED", "conclusion": "FAILURE"},
-        {"name": "lint", "state": "COMPLETED", "conclusion": "SUCCESS"},
+        {"name": "ci", "state": "FAILURE"},
+        {"name": "lint", "state": "SUCCESS"},
     ]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
@@ -1174,7 +1221,7 @@ async def test_wait_for_ci_already_complete_returns_immediately(
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     passed, _ = await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
@@ -1200,7 +1247,7 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     mgr = _make_manager(cfg, event_bus)
     stop = asyncio.Event()
 
-    checks = [{"name": "ci", "state": "COMPLETED", "conclusion": "SUCCESS"}]
+    checks = [{"name": "ci", "state": "SUCCESS"}]
     mgr.get_pr_checks = AsyncMock(return_value=checks)
 
     await mgr.wait_for_ci(101, timeout=60, poll_interval=5, stop_event=stop)
@@ -1210,3 +1257,280 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     assert len(ci_events) >= 1
     assert ci_events[0].data["pr"] == 101
     assert ci_events[0].data["status"] == "passed"
+
+
+# ---------------------------------------------------------------------------
+# ensure_labels_exist
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_creates_all_hydra_labels(
+    config, event_bus, tmp_path
+):
+    """ensure_labels_exist should call gh label create --force for each label."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    # Should be called once per label (5 lifecycle labels)
+    assert mock_create.call_count == len(PRManager._HYDRA_LABELS)
+
+    # Verify each call uses gh label create --force
+    for call in mock_create.call_args_list:
+        args = call[0]
+        assert args[0] == "gh"
+        assert "label" in args
+        assert "create" in args
+        assert "--force" in args
+        assert "--color" in args
+        assert "--description" in args
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tmp_path):
+    """ensure_labels_exist should use label names from config (not hardcoded defaults)."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        find_label=["custom-find"],
+        ready_label=["custom-ready"],
+        planner_label=["custom-plan"],
+        review_label=["custom-review"],
+        hitl_label=["custom-hitl"],
+        fixed_label=["custom-fixed"],
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    # Collect all label names passed to gh label create
+    created_labels = set()
+    for call in mock_create.call_args_list:
+        args = call[0]
+        # Label name is the arg after "create"
+        create_idx = list(args).index("create")
+        created_labels.add(args[create_idx + 1])
+
+    assert created_labels == {
+        "custom-find",
+        "custom-plan",
+        "custom-ready",
+        "custom-review",
+        "custom-hitl",
+        "custom-fixed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_dry_run_skips(dry_config, event_bus):
+    """In dry-run mode, ensure_labels_exist should not call subprocess."""
+    mgr = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.ensure_labels_exist()
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ensure_labels_exist_handles_individual_failures(
+    config, event_bus, tmp_path
+):
+    """If one label creation fails, others should still be attempted."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+
+    # First call fails, rest succeed
+    call_count = 0
+
+    async def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        mock_proc = AsyncMock()
+        if call_count == 1:
+            mock_proc.returncode = 1
+            mock_proc.communicate = AsyncMock(return_value=(b"", b"permission denied"))
+        else:
+            mock_proc.returncode = 0
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        mock_proc.wait = AsyncMock(return_value=mock_proc.returncode)
+        return mock_proc
+
+    with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+        # Should not raise
+        await mgr.ensure_labels_exist()
+
+    # All labels should be attempted even though first one failed
+    assert call_count == len(PRManager._HYDRA_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# _run_with_body_file
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_with_body_file_writes_temp_file(config, event_bus, tmp_path):
+    """_run_with_body_file should write body to a temp .md file and pass --body-file."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
+    body_content = None
+
+    original_mock = mock_create
+
+    async def capture_body_file(*args, **kwargs):
+        nonlocal body_content
+        cmd = args
+        for i, arg in enumerate(cmd):
+            if arg == "--body-file" and i + 1 < len(cmd):
+                body_content = Path(cmd[i + 1]).read_text()
+                break
+        return await original_mock(*args, **kwargs)
+
+    with patch("asyncio.create_subprocess_exec", side_effect=capture_body_file):
+        await mgr._run_with_body_file(
+            "gh", "issue", "comment", "1", body="Large plan content", cwd=tmp_path
+        )
+
+    assert body_content == "Large plan content"
+
+
+@pytest.mark.asyncio
+async def test_run_with_body_file_cleans_up_temp_file(config, event_bus, tmp_path):
+    """_run_with_body_file should delete the temp file after completion."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="ok")
+    temp_file_path = None
+
+    original_mock = mock_create
+
+    async def capture_path(*args, **kwargs):
+        nonlocal temp_file_path
+        cmd = args
+        for i, arg in enumerate(cmd):
+            if arg == "--body-file" and i + 1 < len(cmd):
+                temp_file_path = cmd[i + 1]
+                break
+        return await original_mock(*args, **kwargs)
+
+    with patch("asyncio.create_subprocess_exec", side_effect=capture_path):
+        await mgr._run_with_body_file(
+            "gh", "issue", "comment", "1", body="content", cwd=tmp_path
+        )
+
+    assert temp_file_path is not None
+    assert not Path(temp_file_path).exists(), "Temp file should be cleaned up"
+
+
+@pytest.mark.asyncio
+async def test_run_with_body_file_cleans_up_on_error(config, event_bus, tmp_path):
+    """_run_with_body_file should delete the temp file even on failure."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="fail")
+    temp_file_path = None
+
+    original_mock = mock_create
+
+    async def capture_path(*args, **kwargs):
+        nonlocal temp_file_path
+        cmd = args
+        for i, arg in enumerate(cmd):
+            if arg == "--body-file" and i + 1 < len(cmd):
+                temp_file_path = cmd[i + 1]
+                break
+        return await original_mock(*args, **kwargs)
+
+    with (
+        patch("asyncio.create_subprocess_exec", side_effect=capture_path),
+        pytest.raises(RuntimeError),
+    ):
+        await mgr._run_with_body_file(
+            "gh", "issue", "comment", "1", body="content", cwd=tmp_path
+        )
+
+    assert temp_file_path is not None
+    assert not Path(temp_file_path).exists(), "Temp file should be cleaned up on error"
+
+
+# ---------------------------------------------------------------------------
+# post_comment chunking
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_comment_chunks_large_body(config, event_bus, tmp_path):
+    """post_comment should split oversized bodies into multiple comments."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    # Body larger than the GitHub comment limit
+    large_body = "x" * (PRManager._GITHUB_COMMENT_LIMIT + 1000)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.post_comment(42, large_body)
+
+    # Should have been split into 2 comments
+    assert mock_create.call_count == 2

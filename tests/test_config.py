@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 # conftest.py already inserts the hydra package directory into sys.path
-from config import HydraConfig, _find_repo_root
+from config import HydraConfig, _detect_repo_slug, _find_repo_root
 
 # ---------------------------------------------------------------------------
 # _find_repo_root
@@ -106,6 +106,163 @@ class TestFindRepoRoot:
 
 
 # ---------------------------------------------------------------------------
+# _detect_repo_slug
+# ---------------------------------------------------------------------------
+
+
+class TestDetectRepoSlug:
+    """Tests for the _detect_repo_slug() helper."""
+
+    def test_ssh_remote_url(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse SSH remote URL and strip .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="git@github.com:owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_https_remote_url(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse HTTPS remote URL and strip .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://github.com/owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_ssh_url_without_git_suffix(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse SSH remote URL without .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="git@github.com:owner/repo\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_https_url_without_git_suffix(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse HTTPS remote URL without .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://github.com/owner/repo\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_empty_remote_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string when git remote output is empty."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=""
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_subprocess_file_not_found_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string when git is not installed."""
+
+        # Arrange
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise FileNotFoundError("git not found")
+
+        monkeypatch.setattr(subprocess, "run", _raise)
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_subprocess_os_error_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string on OSError."""
+
+        # Arrange
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise OSError("subprocess failed")
+
+        monkeypatch.setattr(subprocess, "run", _raise)
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_non_github_remote_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string for non-GitHub hosts."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://gitlab.com/owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – defaults
 # ---------------------------------------------------------------------------
 
@@ -148,6 +305,30 @@ class TestHydraConfigDefaults:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_workers == 2
+
+    def test_find_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.find_label == ["hydra-find"]
+
+    def test_max_planners_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 1
+
+    def test_max_reviewers_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 1
 
     def test_max_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -547,6 +728,82 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # max_planners: ge=1, le=10
+
+    def test_max_planners_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_planners=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 1
+
+    def test_max_planners_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_planners=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_planners == 10
+
+    def test_max_planners_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_planners=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_planners_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_planners=11,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_reviewers: ge=1, le=10
+
+    def test_max_reviewers_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_reviewers=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 1
+
+    def test_max_reviewers_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_reviewers=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_reviewers == 10
+
+    def test_max_reviewers_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_reviewers=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_reviewers_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_reviewers=11,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     # max_budget_usd: gt=0
 
     def test_max_budget_usd_positive_value_accepted(self, tmp_path: Path) -> None:
@@ -717,3 +974,150 @@ class TestHydraConfigValidationConstraints:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – gh_token resolution
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigGhToken:
+    """Tests for the gh_token field and HYDRA_GH_TOKEN env var resolution."""
+
+    def test_gh_token_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GH_TOKEN", raising=False)
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == ""
+
+    def test_gh_token_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            gh_token="ghp_explicit123",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_explicit123"
+
+    def test_gh_token_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GH_TOKEN", "ghp_from_env")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_from_env"
+
+    def test_gh_token_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GH_TOKEN", "ghp_from_env")
+        cfg = HydraConfig(
+            gh_token="ghp_explicit",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.gh_token == "ghp_explicit"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – git identity resolution
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigGitIdentity:
+    """Tests for git_user_name/git_user_email fields and env var resolution."""
+
+    def test_git_user_name_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == ""
+
+    def test_git_user_email_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == ""
+
+    def test_git_user_name_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            git_user_name="Bot",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "Bot"
+
+    def test_git_user_email_explicit_value_preserved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "bot@example.com"
+
+    def test_git_user_name_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_NAME", "EnvBot")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "EnvBot"
+
+    def test_git_user_email_picks_up_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_EMAIL", "env@example.com")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "env@example.com"
+
+    def test_git_user_name_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_NAME", "EnvBot")
+        cfg = HydraConfig(
+            git_user_name="ExplicitBot",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_name == "ExplicitBot"
+
+    def test_git_user_email_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GIT_USER_EMAIL", "env@example.com")
+        cfg = HydraConfig(
+            git_user_email="explicit@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_user_email == "explicit@example.com"

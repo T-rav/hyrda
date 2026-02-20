@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
-import os
 from pathlib import Path
 
 from config import HydraConfig
+from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.worktree")
 
@@ -18,7 +17,8 @@ class WorktreeManager:
 
     Each worktree gets:
     - A fresh branch from ``main``
-    - Symlinked ``venv/``, ``.env``, and ``node_modules/`` dirs
+    - An independent venv via ``uv sync``
+    - Symlinked ``.env`` and ``node_modules/`` dirs
     - Copied ``.claude/settings.local.json``
     - Pre-commit hooks installed
     """
@@ -44,13 +44,14 @@ class WorktreeManager:
     async def _remote_branch_exists(self, branch: str) -> bool:
         """Check whether *branch* exists on the remote."""
         try:
-            output = await self._run(
+            output = await run_subprocess(
                 "git",
                 "ls-remote",
                 "--heads",
                 "origin",
                 branch,
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
             return bool(output.strip())
         except RuntimeError:
@@ -87,36 +88,41 @@ class WorktreeManager:
                 branch,
                 extra={"issue": issue_number},
             )
-            await self._run(
+            await run_subprocess(
                 "git",
                 "fetch",
                 "origin",
                 f"{branch}:{branch}",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
         else:
             # Create a fresh branch from main
-            await self._run(
+            await run_subprocess(
                 "git",
                 "branch",
                 "-f",
                 branch,
                 f"origin/{self._config.main_branch}",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
 
         # Create the worktree
-        await self._run(
+        await run_subprocess(
             "git",
             "worktree",
             "add",
             str(wt_path),
             branch,
             cwd=self._repo_root,
+            gh_token=self._config.gh_token,
         )
 
         # Set up the environment inside the worktree
         self._setup_env(wt_path)
+        await self._configure_git_identity(wt_path)
+        await self._create_venv(wt_path)
         await self._install_hooks(wt_path)
 
         logger.info(
@@ -134,13 +140,14 @@ class WorktreeManager:
             return
 
         if wt_path.exists():
-            await self._run(
+            await run_subprocess(
                 "git",
                 "worktree",
                 "remove",
                 str(wt_path),
                 "--force",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
             logger.info(
                 "Destroyed worktree %s",
@@ -151,12 +158,13 @@ class WorktreeManager:
         # Also clean up the branch
         branch = f"agent/issue-{issue_number}"
         with contextlib.suppress(RuntimeError):
-            await self._run(
+            await run_subprocess(
                 "git",
                 "branch",
                 "-D",
                 branch,
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
 
     async def destroy_all(self) -> None:
@@ -173,7 +181,13 @@ class WorktreeManager:
 
         # Final prune
         with contextlib.suppress(RuntimeError):
-            await self._run("git", "worktree", "prune", cwd=self._repo_root)
+            await run_subprocess(
+                "git",
+                "worktree",
+                "prune",
+                cwd=self._repo_root,
+                gh_token=self._config.gh_token,
+            )
 
     async def rebase(self, worktree_path: Path, branch: str) -> bool:
         """Rebase *branch* onto latest main inside *worktree_path*.
@@ -181,36 +195,38 @@ class WorktreeManager:
         Returns *True* on success, *False* if conflicts arise.
         """
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "fetch",
                 "origin",
                 self._config.main_branch,
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
-            await self._run(
+            await run_subprocess(
                 "git",
                 "rebase",
                 f"origin/{self._config.main_branch}",
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError:
             # Abort rebase on conflict
             with contextlib.suppress(RuntimeError):
-                await self._run("git", "rebase", "--abort", cwd=worktree_path)
+                await run_subprocess(
+                    "git",
+                    "rebase",
+                    "--abort",
+                    cwd=worktree_path,
+                    gh_token=self._config.gh_token,
+                )
             return False
 
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
-        """Symlink venv, .env, and node_modules into the worktree."""
-        # Symlink venv/
-        venv_src = self._repo_root / "venv"
-        venv_dst = wt_path / "venv"
-        if venv_src.exists() and not venv_dst.exists():
-            venv_dst.symlink_to(venv_src)
-
+        """Symlink .env and node_modules into the worktree."""
         # Symlink .env
         env_src = self._repo_root / ".env"
         env_dst = wt_path / ".env"
@@ -232,36 +248,44 @@ class WorktreeManager:
                 nm_dst.parent.mkdir(parents=True, exist_ok=True)
                 nm_dst.symlink_to(nm_src)
 
+    async def _configure_git_identity(self, wt_path: Path) -> None:
+        """Set git user.name and user.email in the worktree (local scope)."""
+        if self._config.git_user_name:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.name",
+                self._config.git_user_name,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
+        if self._config.git_user_email:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.email",
+                self._config.git_user_email,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
+
+    async def _create_venv(self, wt_path: Path) -> None:
+        """Create an independent venv in the worktree via ``uv sync``."""
+        try:
+            await run_subprocess(
+                "uv", "sync", cwd=wt_path, gh_token=self._config.gh_token
+            )
+        except RuntimeError as exc:
+            logger.warning("uv sync failed in %s: %s", wt_path, exc)
+
     async def _install_hooks(self, wt_path: Path) -> None:
         """Run ``pre-commit install`` in the worktree."""
         try:
-            await self._run("pre-commit", "install", cwd=wt_path)
+            await run_subprocess(
+                "pre-commit",
+                "install",
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
         except RuntimeError as exc:
             logger.warning("pre-commit install failed: %s", exc)
-
-    # --- subprocess helper ---
-
-    @staticmethod
-    async def _run(*cmd: str, cwd: Path) -> str:
-        """Run a subprocess and return stdout.
-
-        Raises :class:`RuntimeError` on non-zero exit.
-        """
-        env = {**os.environ}
-        # Prevent CLAUDECODE nesting detection
-        env.pop("CLAUDECODE", None)
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()
