@@ -75,6 +75,7 @@ class ConfigFactory:
         repo_root: Path | None = None,
         worktree_base: Path | None = None,
         state_file: Path | None = None,
+        event_log_path: Path | None = None,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -113,4 +114,5 @@ class ConfigFactory:
             repo_root=root,
             worktree_base=worktree_base or root.parent / "test-worktrees",
             state_file=state_file or root / ".hydra-state.json",
+            event_log_path=event_log_path or root / ".hydra-events.jsonl",
         )
