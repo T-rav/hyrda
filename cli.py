@@ -184,6 +184,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Enable debug-level logging",
     )
     parser.add_argument(
+        "--log-file",
+        default=".hydra/logs/hydra.log",
+        help="Path to log file for structured JSON logging (default: .hydra/logs/hydra.log)",
+    )
+    parser.add_argument(
         "--clean",
         action="store_true",
         help="Remove all worktrees and state, then exit",
@@ -341,7 +346,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     level = logging.DEBUG if args.verbose else logging.INFO
-    setup_logging(level=level, json_output=not args.verbose)
+    setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
 
