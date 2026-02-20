@@ -447,6 +447,27 @@ def test_extract_new_issues_single_issue(config, event_bus):
     assert issues[0].title == "Add logging"
 
 
+def test_extract_new_issues_multiline_body(config, event_bus):
+    """Multi-line body continuation lines are concatenated."""
+    runner = _make_runner(config, event_bus)
+    transcript = (
+        "NEW_ISSUES_START\n"
+        "- title: Fix the widget\n"
+        "  body: The widget is broken in production. Users are seeing\n"
+        "    errors when they click the submit button because the form\n"
+        "    validation skips required fields.\n"
+        "  labels: bug\n"
+        "NEW_ISSUES_END"
+    )
+    issues = runner._extract_new_issues(transcript)
+    assert len(issues) == 1
+    assert issues[0].title == "Fix the widget"
+    assert "widget is broken" in issues[0].body
+    assert "form" in issues[0].body
+    assert "validation" in issues[0].body
+    assert len(issues[0].body) > 50
+
+
 # ---------------------------------------------------------------------------
 # plan - success path
 # ---------------------------------------------------------------------------

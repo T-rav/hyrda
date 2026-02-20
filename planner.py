@@ -225,14 +225,18 @@ you can file them as new GitHub issues using these markers:
 
 NEW_ISSUES_START
 - title: Short issue title
-  body: Description of the issue
+  body: Detailed description of the issue (at least 2-3 sentences). Include what the
+    problem is, where in the codebase it occurs, and what the expected behavior should be.
   labels: {find_label}
 - title: Another issue
-  body: Another description
+  body: Another detailed description with enough context for someone to understand
+    and act on it without additional research.
   labels: {find_label}
 NEW_ISSUES_END
 
 Only include this section if you actually discover issues worth filing.
+**IMPORTANT:** Each issue body MUST be detailed (at least 50 characters). One-word
+or one-line bodies will be rejected. Include file paths, function names, and context.
 
 **IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
 Do NOT invent labels. All discovered issues enter the pipeline via the find label.
@@ -332,6 +336,7 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
         issues: list[NewIssueSpec] = []
         current: dict[str, str] = {}
 
+        last_key = ""
         for line in block.splitlines():
             stripped = line.strip()
             if stripped.startswith("- title:"):
@@ -348,10 +353,16 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
                         )
                     )
                 current = {"title": stripped[len("- title:") :].strip()}
+                last_key = "title"
             elif stripped.startswith("body:"):
                 current["body"] = stripped[len("body:") :].strip()
+                last_key = "body"
             elif stripped.startswith("labels:"):
                 current["labels"] = stripped[len("labels:") :].strip()
+                last_key = "labels"
+            elif stripped and last_key == "body":
+                # Continuation line for multi-line body
+                current["body"] = current.get("body", "") + " " + stripped
 
         # Don't forget the last entry
         if current.get("title"):
