@@ -269,3 +269,18 @@ class TestBuildConfig:
         assert cfg.max_budget_usd == pytest.approx(10.5)
         assert cfg.review_budget_usd == pytest.approx(5.0)
         assert cfg.planner_budget_usd == pytest.approx(3.0)
+
+    def test_git_user_name_passed_through(self) -> None:
+        args = parse_args(["--git-user-name", "T-rav-Hydra-Ops"])
+        cfg = build_config(args)
+        assert cfg.git_user_name == "T-rav-Hydra-Ops"
+
+    def test_git_user_email_passed_through(self) -> None:
+        args = parse_args(["--git-user-email", "bot@example.com"])
+        cfg = build_config(args)
+        assert cfg.git_user_email == "bot@example.com"
+
+    def test_git_identity_defaults_to_none_in_parse_args(self) -> None:
+        args = parse_args([])
+        assert args.git_user_name is None
+        assert args.git_user_email is None

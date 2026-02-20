@@ -7,7 +7,7 @@ describe('App pre-computed tab styles', () => {
       padding: '10px 20px',
       fontSize: 12,
       fontWeight: 600,
-      color: '#8b949e',
+      color: 'var(--text-muted)',
       cursor: 'pointer',
       borderBottom: '2px solid transparent',
     })
@@ -18,15 +18,15 @@ describe('App pre-computed tab styles', () => {
       padding: '10px 20px',
       fontSize: 12,
       fontWeight: 600,
-      color: '#58a6ff',
+      color: 'var(--accent)',
       cursor: 'pointer',
-      borderBottomColor: '#58a6ff',
+      borderBottomColor: 'var(--accent)',
     })
   })
 
   it('tabActiveStyle overrides color from tabActive', () => {
-    // tabActive color (#58a6ff) should override base tab color (#8b949e)
-    expect(tabActiveStyle.color).toBe('#58a6ff')
+    // tabActive color (var(--accent)) should override base tab color (var(--text-muted))
+    expect(tabActiveStyle.color).toBe('var(--accent)')
   })
 
   it('style objects are referentially stable', () => {

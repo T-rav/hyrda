@@ -4,9 +4,9 @@ import { PipelineStatus, connectorStyles, stageStyles } from '../PipelineStatus'
 
 const STAGE_KEYS = ['plan', 'implement', 'review']
 const STAGE_COLORS = {
-  plan: '#a371f7',
-  implement: '#d29922',
-  review: '#d18616',
+  plan: 'var(--purple)',
+  implement: 'var(--yellow)',
+  review: 'var(--orange)',
 }
 
 describe('PipelineStatus pre-computed styles', () => {
@@ -18,10 +18,10 @@ describe('PipelineStatus pre-computed styles', () => {
     }
   })
 
-  it('connector active variant uses stage color, inactive uses #30363d', () => {
+  it('connector active variant uses stage color, inactive uses border variable', () => {
     for (const key of STAGE_KEYS) {
       expect(connectorStyles[key].active.background).toBe(STAGE_COLORS[key])
-      expect(connectorStyles[key].inactive.background).toBe('#30363d')
+      expect(connectorStyles[key].inactive.background).toBe('var(--border)')
     }
   })
 
@@ -44,7 +44,7 @@ describe('PipelineStatus pre-computed styles', () => {
     for (const key of STAGE_KEYS) {
       expect(stageStyles[key].active).toMatchObject({
         background: STAGE_COLORS[key],
-        color: '#0d1117',
+        color: 'var(--bg)',
         borderColor: STAGE_COLORS[key],
       })
     }
@@ -53,9 +53,9 @@ describe('PipelineStatus pre-computed styles', () => {
   it('stage inactive variant uses dim colors', () => {
     for (const key of STAGE_KEYS) {
       expect(stageStyles[key].inactive).toMatchObject({
-        background: '#21262d',
-        color: '#484f58',
-        borderColor: '#30363d',
+        background: 'var(--surface-inset)',
+        color: 'var(--text-inactive)',
+        borderColor: 'var(--border)',
       })
     }
   })
