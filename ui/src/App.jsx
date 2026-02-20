@@ -19,7 +19,6 @@ export default function App() {
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
-
   const handleWorkerSelect = useCallback((worker) => {
     setSelectedWorker(worker)
     setActiveTab('transcript')
@@ -81,7 +80,9 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? (
+                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
+              ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -160,8 +161,18 @@ const styles = {
   },
   timelineTime: { color: theme.textMuted, marginRight: 8 },
   timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
+  hitlBadge: {
+    background: theme.red,
+    color: theme.white,
+    fontSize: 10,
+    fontWeight: 700,
+    borderRadius: 10,
+    padding: '1px 6px',
+    marginLeft: 6,
+  },
 }
 
 // Pre-computed tab style variants (avoids object spread in .map())
 export const tabInactiveStyle = styles.tab
 export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
+export const hitlBadgeStyle = styles.hitlBadge
