@@ -16,8 +16,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from tests.helpers import ConfigFactory  # noqa: E402
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from config import HydraConfig
-    from models import GitHubIssue, PlanResult, PRInfo, WorkerResult
+    from models import (
+        GitHubIssue,
+        PlanResult,
+        PRInfo,
+        ReviewResult,
+        ReviewVerdict,
+        WorkerResult,
+    )
+    from orchestrator import HydraOrchestrator
 
 
 # --- Session-scoped environment setup ---
@@ -239,3 +249,92 @@ class SubprocessMockBuilder:
 def subprocess_mock() -> SubprocessMockBuilder:
     """Return a builder for subprocess mocks."""
     return SubprocessMockBuilder()
+
+
+# --- Review Mock Builder ---
+
+
+class ReviewMockBuilder:
+    """Fluent builder for _review_prs test mocks."""
+
+    def __init__(self, orch: HydraOrchestrator, config: HydraConfig) -> None:
+        self._orch = orch
+        self._config = config
+        self._verdict: ReviewVerdict | None = None
+        self._review_result: ReviewResult | None = None
+        self._review_side_effect: Any = None
+        self._merge_return: bool = True
+        self._diff_text: str = "diff text"
+        self._issue_number: int = 42
+        self._pr_methods: dict[str, Any] = {}
+
+    def with_verdict(self, verdict: ReviewVerdict) -> ReviewMockBuilder:
+        self._verdict = verdict
+        return self
+
+    def with_review_result(self, result: ReviewResult) -> ReviewMockBuilder:
+        self._review_result = result
+        return self
+
+    def with_review_side_effect(self, side_effect: Any) -> ReviewMockBuilder:
+        self._review_side_effect = side_effect
+        return self
+
+    def with_merge_return(self, value: bool) -> ReviewMockBuilder:
+        self._merge_return = value
+        return self
+
+    def with_issue_number(self, number: int) -> ReviewMockBuilder:
+        self._issue_number = number
+        return self
+
+    def with_pr_method(self, name: str, mock: Any) -> ReviewMockBuilder:
+        """Override a specific mock_prs method."""
+        self._pr_methods[name] = mock
+        return self
+
+    def build(self) -> tuple[AsyncMock, AsyncMock, AsyncMock]:
+        """Wire mocks into orch and return (mock_reviewers, mock_prs, mock_wt)."""
+        from models import ReviewResult as RR
+        from models import ReviewVerdict as RV
+
+        # Reviewer mock
+        mock_reviewers = AsyncMock()
+        if self._review_side_effect:
+            mock_reviewers.review = self._review_side_effect
+        else:
+            verdict = self._verdict if self._verdict is not None else RV.APPROVE
+            result = self._review_result or RR(
+                pr_number=101,
+                issue_number=self._issue_number,
+                verdict=verdict,
+                summary="Looks good.",
+                fixes_made=False,
+            )
+            mock_reviewers.review = AsyncMock(return_value=result)
+        self._orch._reviewers = mock_reviewers
+
+        # PR manager mock
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value=self._diff_text)
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=self._merge_return)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_pr_comment = AsyncMock()
+        mock_prs.submit_review = AsyncMock(return_value=True)
+        mock_prs.pull_main = AsyncMock()
+        for name, mock in self._pr_methods.items():
+            setattr(mock_prs, name, mock)
+        self._orch._prs = mock_prs
+
+        # Worktree mock
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        self._orch._worktrees = mock_wt
+
+        # Create worktree directory
+        wt = self._config.worktree_base / f"issue-{self._issue_number}"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        return mock_reviewers, mock_prs, mock_wt

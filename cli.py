@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import signal
 import sys
 from typing import Any
 
@@ -284,13 +285,26 @@ async def _run_main(config: HydraConfig) -> None:
             )
         )
 
-        # Block until Ctrl+C — the dashboard handles start/stop via API
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, stop_event.set)
+
         try:
-            await asyncio.Event().wait()
+            await stop_event.wait()
         finally:
+            if dashboard._orchestrator and dashboard._orchestrator.running:
+                await dashboard._orchestrator.stop()
             await dashboard.stop()
     else:
         orchestrator = HydraOrchestrator(config)
+
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(
+                sig, lambda: asyncio.create_task(orchestrator.stop())
+            )
+
         await orchestrator.run()
 
 

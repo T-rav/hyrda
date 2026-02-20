@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -352,25 +353,81 @@ class TestTerminateProcesses:
     """Tests for the terminate_processes utility."""
 
     def test_kills_all_active_processes(self) -> None:
-        """terminate_processes should call kill() on all tracked processes."""
+        """terminate_processes should use os.killpg() on all tracked processes."""
         proc1 = MagicMock()
+        proc1.pid = 111
         proc2 = MagicMock()
+        proc2.pid = 222
         active: set[asyncio.subprocess.Process] = {proc1, proc2}
 
-        terminate_processes(active)
+        with patch("runner_utils.os.killpg") as mock_killpg:
+            terminate_processes(active)
 
-        proc1.kill.assert_called_once()
-        proc2.kill.assert_called_once()
+        assert mock_killpg.call_count == 2
 
     def test_handles_process_lookup_error(self) -> None:
         """terminate_processes should not raise when a process has already exited."""
         proc = MagicMock()
-        proc.kill.side_effect = ProcessLookupError
+        proc.pid = 12345
         active: set[asyncio.subprocess.Process] = {proc}
 
-        terminate_processes(active)  # Should not raise
+        with patch("runner_utils.os.killpg", side_effect=ProcessLookupError):
+            terminate_processes(active)  # Should not raise
 
     def test_empty_set_is_noop(self) -> None:
         """terminate_processes with empty set should be a no-op."""
         active: set[asyncio.subprocess.Process] = set()
         terminate_processes(active)  # Should not raise
+
+    def test_uses_killpg_with_sigkill(self) -> None:
+        """terminate_processes should use os.killpg() with SIGKILL."""
+        proc = MagicMock()
+        proc.pid = 12345
+        active: set[asyncio.subprocess.Process] = {proc}
+
+        with patch("runner_utils.os.killpg") as mock_killpg:
+            terminate_processes(active)
+
+        mock_killpg.assert_called_once_with(12345, signal.SIGKILL)
+
+    def test_falls_back_to_kill_on_oserror(self) -> None:
+        """When os.killpg() raises OSError, should fall back to proc.kill()."""
+        proc = MagicMock()
+        proc.pid = 12345
+        active: set[asyncio.subprocess.Process] = {proc}
+
+        with patch("runner_utils.os.killpg", side_effect=OSError("no such group")):
+            terminate_processes(active)
+
+        # OSError suppressed, no crash
+        proc.kill.assert_not_called()  # OSError is suppressed entirely
+
+    def test_handles_none_pid(self) -> None:
+        """When proc.pid is None, should fall back to proc.kill()."""
+        proc = MagicMock()
+        proc.pid = None
+        active: set[asyncio.subprocess.Process] = {proc}
+
+        terminate_processes(active)
+
+        proc.kill.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# stream_claude_process — start_new_session
+# ---------------------------------------------------------------------------
+
+
+class TestStreamClaudeProcessSessionGroup:
+    """Tests for process group (start_new_session) behavior."""
+
+    @pytest.mark.asyncio
+    async def test_subprocess_spawned_with_start_new_session(self) -> None:
+        """create_subprocess_exec should be called with start_new_session=True."""
+        mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+        with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+            await stream_claude_process(**_default_kwargs())
+
+        kwargs = mock_exec.call_args[1]
+        assert kwargs["start_new_session"] is True

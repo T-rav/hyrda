@@ -6,12 +6,14 @@ import asyncio
 import contextlib
 import logging
 import os
+import signal
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from events import EventBus, EventType, HydraEvent
 from stream_parser import StreamParser
+from subprocess_util import make_clean_env
 
 
 async def stream_claude_process(
@@ -54,8 +56,7 @@ async def stream_claude_process(
         The transcript string, using the fallback chain:
         result_text → accumulated_text → raw_lines.
     """
-    env = {**os.environ}
-    env.pop("CLAUDECODE", None)
+    env = make_clean_env()
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -65,6 +66,7 @@ async def stream_claude_process(
         cwd=str(cwd),
         env=env,
         limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
+        start_new_session=True,  # Own process group for reliable cleanup
     )
     active_procs.add(proc)
 
@@ -134,7 +136,10 @@ async def stream_claude_process(
 
 
 def terminate_processes(active_procs: set[asyncio.subprocess.Process]) -> None:
-    """Kill all processes in *active_procs*, ignoring already-exited ones."""
+    """Kill all processes in *active_procs* and their process groups."""
     for proc in list(active_procs):
-        with contextlib.suppress(ProcessLookupError):
-            proc.kill()
+        with contextlib.suppress(ProcessLookupError, OSError):
+            if proc.pid is not None:
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:
+                proc.kill()
