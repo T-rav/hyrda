@@ -141,8 +141,7 @@ export function reducer(state, action) {
 
     case 'planner_update': {
       const planKey = `plan-${action.data.issue}`
-      const planStatus = action.data.status === 'done' ? 'done'
-        : action.data.status === 'failed' ? 'failed' : 'running'
+      const planStatus = action.data.status
       const planWorker = {
         status: planStatus,
         worker: action.data.worker,
@@ -169,7 +168,7 @@ export function reducer(state, action) {
 
     case 'review_update': {
       const reviewKey = `review-${action.data.pr}`
-      const reviewStatus = action.data.status === 'done' ? 'done' : 'running'
+      const reviewStatus = action.data.status
       const reviewWorker = {
         status: reviewStatus,
         worker: action.data.worker,

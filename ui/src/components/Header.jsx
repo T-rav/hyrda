@@ -54,7 +54,7 @@ export function Header({
           <div style={styles.sessionPills}>
             {SESSION_STAGES.map((stage, i) => (
               <React.Fragment key={stage.key}>
-                {i > 0 && <span style={styles.sessionArrow}>{'\u2192'}</span>}
+                {i > 0 && <div data-testid="session-connector" style={sessionConnectorStyles[stage.key]} />}
                 <span style={sessionPillStyles[stage.key]}>
                   {stage.label}
                   <span style={styles.sessionCount}>{sessionCounts[stage.key] || 0}</span>
@@ -181,10 +181,10 @@ const styles = {
     fontSize: 9,
     fontWeight: 700,
   },
-  sessionArrow: {
-    color: theme.textInactive,
-    fontSize: 10,
-    margin: '0 1px',
+  sessionConnector: {
+    width: 12,
+    height: 1,
+    flexShrink: 0,
   },
   workload: {
     display: 'flex',
@@ -199,16 +199,16 @@ const styles = {
   workloadFailed: { color: theme.red },
   pills: { display: 'flex', alignItems: 'center', gap: 0 },
   pill: {
-    padding: '4px 14px',
-    borderRadius: 12,
-    fontSize: 11,
+    padding: '2px 8px',
+    borderRadius: 10,
+    fontSize: 10,
     fontWeight: 600,
     textTransform: 'uppercase',
     border: '1px solid',
     whiteSpace: 'nowrap',
-    display: 'flex',
+    display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   connector: {
     width: 24,
@@ -217,9 +217,9 @@ const styles = {
   },
   count: {
     background: theme.overlay,
-    borderRadius: 8,
-    padding: '1px 6px',
-    fontSize: 10,
+    borderRadius: 6,
+    padding: '0px 5px',
+    fontSize: 9,
     fontWeight: 700,
   },
   controls: { display: 'flex', alignItems: 'center', gap: 10 },
@@ -279,6 +279,14 @@ export const sessionPillStyles = Object.fromEntries(
     background: s.color + '20',
     color: s.color,
     borderColor: s.color + '44',
+  }])
+)
+
+// Pre-computed session connector styles per stage (thinner than process connectors)
+export const sessionConnectorStyles = Object.fromEntries(
+  SESSION_STAGES.map(s => [s.key, {
+    ...styles.sessionConnector,
+    background: s.color + '55',
   }])
 )
 

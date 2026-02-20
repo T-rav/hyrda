@@ -4,7 +4,7 @@ import {
   Header,
   dotConnected, dotDisconnected,
   pillStyles, headerConnectorStyles,
-  sessionPillStyles,
+  sessionPillStyles, sessionConnectorStyles,
   countLit, countDim,
   startBtnEnabled, startBtnDisabled,
 } from '../Header'
@@ -64,11 +64,20 @@ describe('Header pre-computed styles', () => {
     it('pill variants include base pill properties', () => {
       for (const key of STAGE_KEYS) {
         expect(pillStyles[key].lit).toMatchObject({
-          padding: '4px 14px',
-          borderRadius: 12,
-          fontSize: 11,
+          padding: '2px 8px',
+          borderRadius: 10,
+          fontSize: 10,
           fontWeight: 600,
         })
+      }
+    })
+
+    it('pill and session pill styles share the same dimensions', () => {
+      // Both pill types should use identical padding, fontSize, borderRadius
+      for (const key of STAGE_KEYS) {
+        expect(pillStyles[key].dim.padding).toBe(sessionPillStyles[key].padding)
+        expect(pillStyles[key].dim.borderRadius).toBe(sessionPillStyles[key].borderRadius)
+        expect(pillStyles[key].dim.fontSize).toBe(sessionPillStyles[key].fontSize)
       }
     })
   })
@@ -123,10 +132,37 @@ describe('Header pre-computed styles', () => {
     })
   })
 
+  describe('session connector styles', () => {
+    it('has entries for all 5 session stages', () => {
+      for (const key of SESSION_STAGE_KEYS) {
+        expect(sessionConnectorStyles).toHaveProperty(key)
+      }
+    })
+
+    it('uses stage color with opacity suffix for background', () => {
+      for (const key of SESSION_STAGE_KEYS) {
+        expect(sessionConnectorStyles[key].background).toBe(STAGE_COLORS[key] + '55')
+      }
+    })
+
+    it('connector has compact dimensions (thinner than process connectors)', () => {
+      for (const key of SESSION_STAGE_KEYS) {
+        expect(sessionConnectorStyles[key]).toMatchObject({ width: 12, height: 1, flexShrink: 0 })
+      }
+    })
+
+    it('session connectors are thinner than process connectors', () => {
+      const sessionConn = sessionConnectorStyles.plan
+      const processConn = headerConnectorStyles.plan.lit
+      expect(sessionConn.width).toBeLessThan(processConn.width)
+      expect(sessionConn.height).toBeLessThan(processConn.height)
+    })
+  })
+
   describe('count styles', () => {
     it('countLit has opacity 1', () => {
       expect(countLit.opacity).toBe(1)
-      expect(countLit).toMatchObject({ borderRadius: 8, fontSize: 10, fontWeight: 700 })
+      expect(countLit).toMatchObject({ borderRadius: 6, fontSize: 9, fontWeight: 700 })
     })
 
     it('countDim has opacity 0.6', () => {
@@ -239,11 +275,23 @@ describe('Header component', () => {
     expect(screen.getByText('1 failed')).toBeInTheDocument()
   })
 
-  it('renders arrows between session pills', () => {
+  it('counts quality_fix workers as active in workload summary', () => {
+    const workers = {
+      1: { status: 'quality_fix', worker: 1, role: 'implementer', title: 'Fix #1', branch: '', transcript: [], pr: null },
+      2: { status: 'queued', worker: 2, role: 'implementer', title: 'Issue #2', branch: '', transcript: [], pr: null },
+    }
+    render(<Header {...defaultProps} workers={workers} />)
+    expect(screen.getByText('2 total')).toBeInTheDocument()
+    expect(screen.getByText('1 active')).toBeInTheDocument()
+  })
+
+  it('renders connector lines between session pills instead of arrows', () => {
     render(<Header {...defaultProps} />)
-    // 5 session stages means 4 arrows
-    const arrows = screen.getAllByText('\u2192')
-    expect(arrows.length).toBe(4)
+    // No arrow characters should be rendered
+    expect(screen.queryByText('\u2192')).toBeNull()
+    // 5 session stages means 4 connectors rendered as divs with testid
+    const connectors = screen.getAllByTestId('session-connector')
+    expect(connectors.length).toBe(4)
   })
 
   it('renders Session label', () => {
