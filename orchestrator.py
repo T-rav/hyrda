@@ -111,6 +111,14 @@ class HydraOrchestrator:
         """Whether the orchestrator is currently executing."""
         return self._running
 
+    def _has_active_processes(self) -> bool:
+        """Return True if any runner still has live subprocesses."""
+        return bool(
+            self._planners._active_procs
+            or self._agents._active_procs
+            or self._reviewers._active_procs
+        )
+
     @property
     def run_status(self) -> str:
         """Return the current lifecycle status: idle, running, stopping, or done."""
@@ -118,6 +126,9 @@ class HydraOrchestrator:
             return "stopping"
         if self._running:
             return "running"
+        # Still cleaning up subprocesses after _running turned False
+        if self._stop_event.is_set() and self._has_active_processes():
+            return "stopping"
         # Check if we finished naturally (DONE phase in history)
         for event in reversed(self._bus.get_history()):
             if (
