@@ -1971,6 +1971,168 @@ class TestTriageFindIssues:
         mock_prs.remove_label.assert_not_called()
 
 
+# ---------------------------------------------------------------------------
+# _fetch_plan_issues
+# ---------------------------------------------------------------------------
+
+
+RAW_PLAN_ISSUE_JSON = json.dumps(
+    [
+        {
+            "number": 42,
+            "title": "Fix bug",
+            "body": "Details",
+            "labels": [{"name": "hydra-plan"}],
+            "comments": [],
+            "url": "https://github.com/test-org/test-repo/issues/42",
+        }
+    ]
+)
+
+
+class TestFetchPlanIssues:
+    """Tests for the _fetch_plan_issues coroutine."""
+
+    @pytest.mark.asyncio
+    async def test_returns_parsed_issues_from_gh_output(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(RAW_PLAN_ISSUE_JSON.encode(), b"")
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_plan_issues()
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+        assert issues[0].title == "Fix bug"
+        assert issues[0].labels == ["hydra-plan"]
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_on_json_decode_error(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("gh not found"),
+        ):
+            issues = await orch._fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_respects_batch_size_limit(self, config: HydraConfig) -> None:
+        """Result list is truncated to batch_size."""
+        raw = json.dumps(
+            [
+                {
+                    "number": i,
+                    "title": f"Issue {i}",
+                    "body": "",
+                    "labels": [{"name": "hydra-plan"}],
+                    "comments": [],
+                    "url": "",
+                }
+                for i in range(1, 10)
+            ]
+        )
+        orch = HydraOrchestrator(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_plan_issues()
+
+        assert len(issues) <= config.batch_size
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
+        from config import HydraConfig as HC
+
+        dry_config = HC(**{**config.model_dump(), "dry_run": True})
+        orch = HydraOrchestrator(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issues = await orch._fetch_plan_issues()
+
+        assert issues == []
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_planner_label_fetches_all_excluding_downstream(
+        self, config: HydraConfig
+    ) -> None:
+        """When planner_label is empty, fetch all open issues excluding downstream labels."""
+        from config import HydraConfig as HC
+
+        no_plan_config = HC(**{**config.model_dump(), "planner_label": []})
+        orch = HydraOrchestrator(no_plan_config)
+
+        raw = json.dumps(
+            [
+                {
+                    "number": 1,
+                    "title": "Unlabeled issue",
+                    "body": "Body",
+                    "labels": [],
+                    "comments": [],
+                    "url": "",
+                },
+                {
+                    "number": 2,
+                    "title": "Ready issue",
+                    "body": "Body",
+                    "labels": [{"name": "test-label"}],
+                    "comments": [],
+                    "url": "",
+                },
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await orch._fetch_plan_issues()
+
+        # Issue #2 has ready_label ("test-label") so it should be filtered out
+        assert len(issues) == 1
+        assert issues[0].number == 1
+
+
 class TestPlanPhase:
     """Tests for the PLAN phase in the orchestrator loop."""
 
@@ -2182,6 +2344,139 @@ class TestPlanPhase:
         mock_prs.create_issue.assert_awaited_once_with(
             "Tech debt", "Cleanup needed", ["tech-debt"]
         )
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_semaphore_limits_concurrency(
+        self, config: HydraConfig
+    ) -> None:
+        """max_planners=1 means at most 1 planner runs concurrently."""
+        concurrency_counter = {"current": 0, "peak": 0}
+
+        async def fake_plan(issue: GitHubIssue, worker_id: int = 0) -> PlanResult:
+            concurrency_counter["current"] += 1
+            concurrency_counter["peak"] = max(
+                concurrency_counter["peak"], concurrency_counter["current"]
+            )
+            await asyncio.sleep(0)  # yield to allow other tasks to start
+            concurrency_counter["current"] -= 1
+            return PlanResult(
+                issue_number=issue.number,
+                success=True,
+                plan="The plan",
+                summary="Done",
+            )
+
+        issues = [make_issue(i) for i in range(1, 6)]
+
+        orch = HydraOrchestrator(config)  # max_planners=1 from conftest
+        orch._planners.plan = fake_plan  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        assert concurrency_counter["peak"] <= config.max_planners
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_failure_returns_result_with_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Plan failure (success=False) should still return the result."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        results = await orch._plan_issues()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert results[0].error == "Agent crashed"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_new_issues_use_default_planner_label_when_no_labels(
+        self, config: HydraConfig
+    ) -> None:
+        """New issues with empty labels should fall back to planner_label."""
+        from models import NewIssueSpec
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(title="Discovered issue", body="Body"),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.create_issue.assert_awaited_once_with(
+            "Discovered issue", "Body", [config.planner_label[0]]
+        )
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_stop_event_cancels_remaining(
+        self, config: HydraConfig
+    ) -> None:
+        """Setting stop_event after first plan should cancel remaining."""
+        orch = HydraOrchestrator(config)
+        issues = [make_issue(1), make_issue(2), make_issue(3)]
+        call_count = {"n": 0}
+
+        async def fake_plan(issue: GitHubIssue, worker_id: int = 0) -> PlanResult:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                orch._stop_event.set()
+            return PlanResult(
+                issue_number=issue.number,
+                success=False,
+                error="stopped",
+            )
+
+        orch._planners.plan = fake_plan  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        results = await orch._plan_issues()
+
+        # Not all 3 should have completed — stop event triggers cancellation
+        assert len(results) < len(issues)
 
 
 # ---------------------------------------------------------------------------
