@@ -107,6 +107,7 @@ HYDRA_LABEL_PLAN=hydra-plan
 HYDRA_LABEL_READY=hydra-ready
 HYDRA_LABEL_REVIEW=hydra-review
 HYDRA_LABEL_HITL=hydra-hitl
+HYDRA_LABEL_HITL_ACTIVE=hydra-hitl-active
 HYDRA_LABEL_FIXED=hydra-fixed
 ```
 
@@ -237,6 +238,7 @@ gh issue create --label hydra-plan --title "Add retry logic to API client" --bod
 | `hydra-ready` | Ready for implementation | Impl agent creates worktree, writes code + tests, opens PR, swaps to `hydra-review` |
 | `hydra-review` | PR under review | Review agent checks quality, waits for CI, auto-merges, swaps to `hydra-fixed` |
 | `hydra-hitl` | Needs human help | CI failed after retries -- human intervention required |
+| `hydra-hitl-active` | HITL in progress | Being processed by HITL correction agent |
 | `hydra-fixed` | Done | PR merged successfully |
 
 Labels can be overridden via CLI flags or environment variables:
@@ -251,6 +253,7 @@ export HYDRA_LABEL_PLAN=custom-plan
 export HYDRA_LABEL_READY=custom-ready
 export HYDRA_LABEL_REVIEW=custom-review
 export HYDRA_LABEL_HITL=custom-hitl
+export HYDRA_LABEL_HITL_ACTIVE=custom-hitl-active
 export HYDRA_LABEL_FIXED=custom-fixed
 ```
 
@@ -265,6 +268,7 @@ All configuration is via CLI flags or environment variables. Defaults are sensib
 | `--ready-label` | `HYDRA_LABEL_READY` | `hydra-ready` | Label for implementation queue |
 | `--review-label` | `HYDRA_LABEL_REVIEW` | `hydra-review` | Label for review queue |
 | `--hitl-label` | `HYDRA_LABEL_HITL` | `hydra-hitl` | Label for human escalation |
+| `--hitl-active-label` | `HYDRA_LABEL_HITL_ACTIVE` | `hydra-hitl-active` | Label for HITL items being actively processed |
 | `--fixed-label` | `HYDRA_LABEL_FIXED` | `hydra-fixed` | Label for completed issues |
 | `--max-workers` | -- | `2` | Concurrent implementation agents |
 | `--max-planners` | -- | `1` | Concurrent planning agents |
