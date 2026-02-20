@@ -324,6 +324,14 @@ class HydraOrchestrator:
 
                     # File new issues discovered during planning
                     for new_issue in result.new_issues:
+                        if len(new_issue.body) < 50:
+                            logger.warning(
+                                "Skipping discovered issue %r — body too short "
+                                "(%d chars, need ≥50)",
+                                new_issue.title,
+                                len(new_issue.body),
+                            )
+                            continue
                         labels = new_issue.labels or (
                             [self._config.planner_label[0]]
                             if self._config.planner_label
