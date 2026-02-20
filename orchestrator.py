@@ -393,6 +393,7 @@ class HydraOrchestrator:
                     self._config.planner_label[0],
                 )
             else:
+                self._state.set_hitl_origin(issue.number, self._config.find_label[0])
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"

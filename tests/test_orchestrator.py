@@ -706,6 +706,37 @@ class TestTriageFindIssues:
         assert "Body is too short" in comment
 
     @pytest.mark.asyncio
+    async def test_triage_escalation_records_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Escalating an unready issue should record find_label as HITL origin."""
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(2, title="Fix the bug please", body="")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(
+            return_value=TriageResult(
+                issue_number=2,
+                ready=False,
+                reasons=["Body is too short or empty (minimum 50 characters)"],
+            )
+        )
+        orch._triage = mock_triage
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        await orch._triage_find_issues()
+
+        assert orch._state.get_hitl_origin(2) == "hydra-find"
+
+    @pytest.mark.asyncio
     async def test_triage_skips_when_no_find_label_configured(self) -> None:
         from tests.helpers import ConfigFactory
 

@@ -297,6 +297,86 @@ class TestPRTracking:
 
 
 # ---------------------------------------------------------------------------
+# HITL origin tracking
+# ---------------------------------------------------------------------------
+
+
+class TestHITLOriginTracking:
+    def test_set_hitl_origin_stores_label(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_origin(42, "hydra-review")
+        assert tracker.get_hitl_origin(42) == "hydra-review"
+
+    def test_get_hitl_origin_returns_none_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_hitl_origin(999) is None
+
+    def test_set_hitl_origin_triggers_save(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_hitl_origin(42, "hydra-review")
+        assert state_file.exists()
+
+    def test_set_hitl_origin_overwrites(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_origin(42, "hydra-find")
+        tracker.set_hitl_origin(42, "hydra-review")
+        assert tracker.get_hitl_origin(42) == "hydra-review"
+
+    def test_remove_hitl_origin_deletes_entry(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.remove_hitl_origin(42)
+        assert tracker.get_hitl_origin(42) is None
+
+    def test_remove_hitl_origin_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        # Should not raise
+        tracker.remove_hitl_origin(999)
+        assert tracker.get_hitl_origin(999) is None
+
+    def test_multiple_origins_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_origin(1, "hydra-find")
+        tracker.set_hitl_origin(2, "hydra-review")
+        assert tracker.get_hitl_origin(1) == "hydra-find"
+        assert tracker.get_hitl_origin(2) == "hydra-review"
+
+    def test_hitl_origin_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_hitl_origin(42, "hydra-review")
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_hitl_origin(42) == "hydra-review"
+
+    def test_reset_clears_hitl_origins(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.reset()
+        assert tracker.get_hitl_origin(42) is None
+
+    def test_migration_adds_hitl_origins_to_old_file(self, tmp_path: Path) -> None:
+        """Loading a state file without hitl_origins should default to {}."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_hitl_origin(1) is None
+        # Existing data is preserved
+        assert tracker.get_current_batch() == 5
+        assert tracker.get_issue_status(1) == "success"
+
+
+# ---------------------------------------------------------------------------
 # Batch tracking
 # ---------------------------------------------------------------------------
 
@@ -388,6 +468,7 @@ class TestReset:
         tracker.set_worktree(1, "/wt/1")
         tracker.set_branch(1, "agent/issue-1")
         tracker.mark_pr(10, "open")
+        tracker.set_hitl_origin(1, "hydra-review")
         tracker.increment_batch()
 
         tracker.reset()
@@ -397,6 +478,7 @@ class TestReset:
         assert tracker.get_issue_status(1) is None
         assert tracker.get_branch(1) is None
         assert tracker.get_pr_status(10) is None
+        assert tracker.get_hitl_origin(1) is None
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +548,7 @@ class TestToDict:
             "active_worktrees",
             "active_branches",
             "reviewed_prs",
+            "hitl_origins",
             "lifetime_stats",
             "last_updated",
         }
@@ -686,6 +769,7 @@ class TestStateDataModel:
         assert data.active_worktrees == {}
         assert data.active_branches == {}
         assert data.reviewed_prs == {}
+        assert data.hitl_origins == {}
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
@@ -697,6 +781,7 @@ class TestStateDataModel:
             "active_worktrees": {"2": "/wt/2"},
             "active_branches": {"2": "agent/issue-2"},
             "reviewed_prs": {"10": "merged"},
+            "hitl_origins": {"42": "hydra-review"},
             "lifetime_stats": {
                 "issues_completed": 3,
                 "prs_merged": 1,

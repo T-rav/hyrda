@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import { tabActiveStyle, tabInactiveStyle } from '../../App'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
 
-vi.mock('../../hooks/useHydraSocket', () => ({
-  useHydraSocket: () => ({
+const { mockSocketState } = vi.hoisted(() => ({
+  mockSocketState: {
     workers: {
       1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
     },
@@ -16,12 +16,21 @@ vi.mock('../../hooks/useHydraSocket', () => ({
     config: {},
     phase: 'implement',
     lifetimeStats: null,
-  }),
+    hitlItems: [],
+    humanInputRequests: {},
+    submitHumanInput: () => {},
+    refreshHitl: () => {},
+  },
 }))
 
-vi.mock('../../hooks/useHumanInput', () => ({
-  useHumanInput: () => ({ requests: {}, submit: vi.fn() }),
+vi.mock('../../hooks/useHydraSocket', () => ({
+  useHydraSocket: () => mockSocketState,
 }))
+
+beforeEach(() => {
+  mockSocketState.hitlItems = []
+  cleanup()
+})
 
 describe('App worker select tab switching', () => {
   it('clicking a worker switches to transcript tab', async () => {
@@ -48,6 +57,28 @@ describe('App worker select tab switching', () => {
 
     // Should still be on transcript tab with content visible
     expect(screen.getByText('line 1')).toBeInTheDocument()
+  })
+})
+
+describe('HITL badge rendering', () => {
+  it('shows no badge when hitlItems is empty', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    const hitlTab = screen.getByText('HITL')
+    expect(hitlTab.querySelector('span')).toBeNull()
+  })
+
+  it('shows badge with count when hitlItems has entries', async () => {
+    mockSocketState.hitlItems = [
+      { issue: 1, title: 'Bug A', pr: 10, branch: 'fix-a', issueUrl: '#', prUrl: '#' },
+      { issue: 2, title: 'Bug B', pr: 11, branch: 'fix-b', issueUrl: '#', prUrl: '#' },
+      { issue: 3, title: 'Bug C', pr: 12, branch: 'fix-c', issueUrl: '#', prUrl: '#' },
+    ]
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 })
 
@@ -82,5 +113,25 @@ describe('App pre-computed tab styles', () => {
   it('style objects are referentially stable', () => {
     expect(tabActiveStyle).toBe(tabActiveStyle)
     expect(tabInactiveStyle).toBe(tabInactiveStyle)
+    expect(hitlBadgeStyle).toBe(hitlBadgeStyle)
+  })
+
+  describe('hitlBadgeStyle', () => {
+    it('has red background and white text', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        background: 'var(--red)',
+        color: 'var(--white)',
+      })
+    })
+
+    it('has pill-shaped badge properties', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        fontSize: 10,
+        fontWeight: 700,
+        borderRadius: 10,
+        padding: '1px 6px',
+        marginLeft: 6,
+      })
+    })
   })
 })

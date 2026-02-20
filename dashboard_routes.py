@@ -69,6 +69,7 @@ def create_router(
                 *config.review_label,
                 *config.fixed_label,
                 *config.hitl_label,
+                *config.hitl_active_label,
                 *config.planner_label,
             }
         )
@@ -153,10 +154,12 @@ def create_router(
                 planner_label=config.planner_label,
                 review_label=config.review_label,
                 hitl_label=config.hitl_label,
+                hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,
+                max_hitl_workers=config.max_hitl_workers,
                 batch_size=config.batch_size,
                 model=config.model,
             ),

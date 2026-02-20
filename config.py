@@ -77,7 +77,7 @@ class HydraConfig(BaseModel):
     )
     hitl_active_label: list[str] = Field(
         default=["hydra-hitl-active"],
-        description="Labels for HITL issues actively being corrected",
+        description="Labels for HITL items being actively processed (OR logic)",
     )
     fixed_label: list[str] = Field(
         default=["hydra-fixed"],
@@ -165,6 +165,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_READY       → ready_label  (implement stage)
             HYDRA_LABEL_REVIEW      → review_label
             HYDRA_LABEL_HITL        → hitl_label
+            HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
         """
         # Paths
