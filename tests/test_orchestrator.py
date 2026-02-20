@@ -927,8 +927,18 @@ class TestPlanPhase:
             plan="The plan",
             summary="Done",
             new_issues=[
-                NewIssueSpec(title="Issue A", body="Body A", labels=["bug"]),
-                NewIssueSpec(title="Issue B", body="Body B", labels=["bug"]),
+                NewIssueSpec(
+                    title="Issue A",
+                    body="Issue A has a bug in the authentication flow "
+                    "that causes login failures on retry.",
+                    labels=["bug"],
+                ),
+                NewIssueSpec(
+                    title="Issue B",
+                    body="Issue B has a race condition in the websocket "
+                    "handler that drops messages under load.",
+                    labels=["bug"],
+                ),
             ],
         )
 
@@ -961,7 +971,10 @@ class TestPlanPhase:
             summary="Done",
             new_issues=[
                 NewIssueSpec(
-                    title="Tech debt", body="Cleanup needed", labels=["tech-debt"]
+                    title="Tech debt",
+                    body="The auth module has accumulated significant tech debt "
+                    "that needs cleanup and refactoring.",
+                    labels=["tech-debt"],
                 ),
             ],
         )
@@ -979,7 +992,10 @@ class TestPlanPhase:
         await orch._plan_issues()
 
         mock_prs.create_issue.assert_awaited_once_with(
-            "Tech debt", "Cleanup needed", ["tech-debt"]
+            "Tech debt",
+            "The auth module has accumulated significant tech debt "
+            "that needs cleanup and refactoring.",
+            ["tech-debt"],
         )
 
     @pytest.mark.asyncio
@@ -1062,7 +1078,11 @@ class TestPlanPhase:
             plan="The plan",
             summary="Done",
             new_issues=[
-                NewIssueSpec(title="Discovered issue", body="Body"),
+                NewIssueSpec(
+                    title="Discovered issue",
+                    body="This issue was discovered during planning — the config "
+                    "parser does not handle nested environment variables.",
+                ),
             ],
         )
 
@@ -1079,8 +1099,45 @@ class TestPlanPhase:
         await orch._plan_issues()
 
         mock_prs.create_issue.assert_awaited_once_with(
-            "Discovered issue", "Body", [config.planner_label[0]]
+            "Discovered issue",
+            "This issue was discovered during planning — the config "
+            "parser does not handle nested environment variables.",
+            [config.planner_label[0]],
         )
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_skips_new_issues_with_short_body(
+        self, config: HydraConfig
+    ) -> None:
+        """New issues with body < 50 chars should be skipped, not filed."""
+        from models import NewIssueSpec
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(title="Short body issue", body="Too short"),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        mock_prs.create_issue.assert_not_awaited()
+        assert orch._state.get_lifetime_stats()["issues_created"] == 0
 
     @pytest.mark.asyncio
     async def test_plan_issues_stop_event_cancels_remaining(

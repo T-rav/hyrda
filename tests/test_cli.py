@@ -114,7 +114,7 @@ class TestBuildConfig:
         assert cfg.batch_size == 15
         assert cfg.max_workers == 2
         assert cfg.max_planners == 1
-        assert cfg.max_reviewers == 1
+        assert cfg.max_reviewers == 2
         assert cfg.max_budget_usd == pytest.approx(0)
         assert cfg.model == "sonnet"
         assert cfg.review_model == "opus"
