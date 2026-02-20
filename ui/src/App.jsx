@@ -90,7 +90,7 @@ export default function App() {
                 ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
                 : tab === 'hitl' ? (
                 <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              ) : tab === 'livestream' ? 'Timeline' : tab === 'timeline' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
