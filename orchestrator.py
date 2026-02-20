@@ -57,6 +57,8 @@ class HydraOrchestrator:
         self._human_input_responses: dict[int, str] = {}
         # In-memory tracking of issues active in this run (avoids double-processing)
         self._active_issues: set[int] = set()
+        # HITL corrections: {issue_number: correction_text}
+        self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
@@ -124,6 +126,20 @@ class HydraOrchestrator:
         """Provide an answer to a paused agent's question."""
         self._human_input_responses[issue_number] = answer
         self._human_input_requests.pop(issue_number, None)
+
+    def submit_hitl_correction(self, issue_number: int, correction: str) -> None:
+        """Store a correction for a HITL issue to guide retry."""
+        self._hitl_corrections[issue_number] = correction
+
+    def get_hitl_status(self, issue_number: int) -> str:
+        """Return the HITL status for an issue: processing if active, else pending."""
+        if issue_number in self._active_issues:
+            return "processing"
+        return "pending"
+
+    def skip_hitl_issue(self, issue_number: int) -> None:
+        """Remove an issue from HITL tracking."""
+        self._hitl_corrections.pop(issue_number, None)
 
     async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
@@ -267,6 +283,7 @@ class HydraOrchestrator:
                     self._config.planner_label[0],
                 )
             else:
+                self._state.set_hitl_origin(issue.number, self._config.find_label[0])
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"

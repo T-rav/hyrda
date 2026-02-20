@@ -32,6 +32,7 @@ class PRManager:
         ("ready_label", "0e8a16", "Issue ready for implementation"),
         ("review_label", "fbca04", "Issue/PR under review"),
         ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
+        ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
         ("fixed_label", "0075ca", "PR merged — issue completed"),
     )
 
@@ -402,6 +403,28 @@ class PRManager:
             logger.warning(
                 "Could not remove label %r from issue #%d: %s",
                 label,
+                issue_number,
+                exc,
+            )
+
+    async def close_issue(self, issue_number: int) -> None:
+        """Close a GitHub issue."""
+        if self._config.dry_run:
+            return
+        try:
+            await run_subprocess(
+                "gh",
+                "issue",
+                "close",
+                str(issue_number),
+                "--repo",
+                self._repo,
+                cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not close issue #%d: %s",
                 issue_number,
                 exc,
             )

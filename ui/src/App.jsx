@@ -7,19 +7,19 @@ import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { theme } from './theme'
+import { ACTIVE_STATUSES } from './constants'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
 export default function App() {
   const {
     connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
-    mergedCount, sessionPrsCount, lifetimeStats, config, events,
+    mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
+    sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
-
   const handleWorkerSelect = useCallback((worker) => {
     setSelectedWorker(worker)
     setActiveTab('transcript')
@@ -52,9 +52,13 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={sessionPrsCount}
-        mergedCount={mergedCount}
-        issuesFound={lifetimeStats?.issues_created ?? 0}
+        sessionCounts={{
+          triage: sessionTriaged,
+          plan: sessionPlanned,
+          implement: sessionImplemented,
+          review: sessionReviewed,
+          merged: mergedCount,
+        }}
         connected={connected}
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
@@ -83,7 +87,9 @@ export default function App() {
             >
               {tab === 'prs'
                 ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
-                : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                : tab === 'hitl' ? (
+                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
+              ) : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -92,7 +98,7 @@ export default function App() {
           {activeTab === 'transcript' && (
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable prs={prs} />}
+          {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'timeline' && (
             <div style={styles.timeline}>
@@ -171,9 +177,19 @@ const styles = {
     background: theme.border,
     color: theme.textMuted,
   },
+  hitlBadge: {
+    background: theme.red,
+    color: theme.white,
+    fontSize: 10,
+    fontWeight: 700,
+    borderRadius: 10,
+    padding: '1px 6px',
+    marginLeft: 6,
+  },
 }
 
 // Pre-computed tab style variants (avoids object spread in .map())
 export const tabInactiveStyle = styles.tab
 export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
 export const tabBadgeStyle = styles.tabBadge
+export const hitlBadgeStyle = styles.hitlBadge

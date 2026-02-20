@@ -1,54 +1,41 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, within } from '@testing-library/react'
-import { tabActiveStyle, tabInactiveStyle, tabBadgeStyle } from '../../App'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { tabActiveStyle, tabInactiveStyle, tabBadgeStyle, hitlBadgeStyle } from '../../App'
 
-vi.mock('../../hooks/useHydraSocket', () => ({
-  useHydraSocket: vi.fn(),
-}))
-
-vi.mock('../../hooks/useHumanInput', () => ({
-  useHumanInput: () => ({ requests: {}, submit: vi.fn() }),
-}))
-
-import { useHydraSocket } from '../../hooks/useHydraSocket'
-import App from '../../App'
-
-function makeState(overrides = {}) {
-  return {
-    connected: false,
-    batchNum: 0,
-    phase: 'idle',
-    orchestratorStatus: 'idle',
-    workers: {},
+const { mockSocketState } = vi.hoisted(() => ({
+  mockSocketState: {
+    workers: {
+      1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
+    },
     prs: [],
-    reviews: [],
-    mergedCount: 0,
-    sessionPrsCount: 0,
-    lifetimeStats: null,
-    config: null,
     events: [],
+    connected: true,
+    orchestratorStatus: 'running',
+    sessionPrsCount: 0,
+    mergedCount: 0,
+    config: {},
+    phase: 'implement',
+    lifetimeStats: null,
     hitlItems: [],
     humanInputRequests: {},
-    submitHumanInput: vi.fn(),
-    refreshHitl: vi.fn(),
-    ...overrides,
-  }
-}
+    submitHumanInput: () => {},
+    refreshHitl: () => {},
+  },
+}))
+
+vi.mock('../../hooks/useHydraSocket', () => ({
+  useHydraSocket: () => mockSocketState,
+}))
+
+beforeEach(() => {
+  mockSocketState.hitlItems = []
+  mockSocketState.prs = []
+  cleanup()
+})
 
 describe('App worker select tab switching', () => {
-  beforeEach(() => {
-    useHydraSocket.mockReturnValue(makeState({
-      connected: true,
-      orchestratorStatus: 'running',
-      phase: 'implement',
-      workers: {
-        1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
-      },
-      config: {},
-    }))
-  })
-
-  it('clicking a worker switches to transcript tab', () => {
+  it('clicking a worker switches to transcript tab', async () => {
+    const { default: App } = await import('../../App')
     render(<App />)
 
     // Switch to Pull Requests tab first
@@ -61,7 +48,8 @@ describe('App worker select tab switching', () => {
     expect(screen.getByText('line 1')).toBeInTheDocument()
   })
 
-  it('clicking a worker when already on transcript tab keeps transcript active', () => {
+  it('clicking a worker when already on transcript tab keeps transcript active', async () => {
+    const { default: App } = await import('../../App')
     render(<App />)
 
     // We start on transcript tab by default, click the worker via its card
@@ -70,6 +58,28 @@ describe('App worker select tab switching', () => {
 
     // Should still be on transcript tab with content visible
     expect(screen.getByText('line 1')).toBeInTheDocument()
+  })
+})
+
+describe('HITL badge rendering', () => {
+  it('shows no badge when hitlItems is empty', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    const hitlTab = screen.getByText('HITL')
+    expect(hitlTab.querySelector('span')).toBeNull()
+  })
+
+  it('shows badge with count when hitlItems has entries', async () => {
+    mockSocketState.hitlItems = [
+      { issue: 1, title: 'Bug A', pr: 10, branch: 'fix-a', issueUrl: '#', prUrl: '#' },
+      { issue: 2, title: 'Bug B', pr: 11, branch: 'fix-b', issueUrl: '#', prUrl: '#' },
+      { issue: 3, title: 'Bug C', pr: 12, branch: 'fix-c', issueUrl: '#', prUrl: '#' },
+    ]
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    expect(screen.getByText('3')).toBeInTheDocument()
   })
 })
 
@@ -104,6 +114,26 @@ describe('App pre-computed tab styles', () => {
   it('style objects are referentially stable', () => {
     expect(tabActiveStyle).toBe(tabActiveStyle)
     expect(tabInactiveStyle).toBe(tabInactiveStyle)
+    expect(hitlBadgeStyle).toBe(hitlBadgeStyle)
+  })
+
+  describe('hitlBadgeStyle', () => {
+    it('has red background and white text', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        background: 'var(--red)',
+        color: 'var(--white)',
+      })
+    })
+
+    it('has pill-shaped badge properties', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        fontSize: 10,
+        fontWeight: 700,
+        borderRadius: 10,
+        padding: '1px 6px',
+        marginLeft: 6,
+      })
+    })
   })
 })
 
@@ -125,41 +155,40 @@ describe('tabBadgeStyle', () => {
   })
 })
 
-function getPrTab() {
-  return screen.getByText('Pull Requests').closest('div')
-}
-
 describe('PR tab badge rendering', () => {
-  it('shows Pull Requests label without badge when no PRs exist', () => {
-    useHydraSocket.mockReturnValue(makeState({ prs: [] }))
+  it('shows Pull Requests label without badge when no PRs exist', async () => {
+    mockSocketState.prs = []
+    const { default: App } = await import('../../App')
     render(<App />)
-    const tab = getPrTab()
+    const tab = screen.getByText('Pull Requests').closest('div')
     expect(tab).toBeInTheDocument()
-    expect(within(tab).queryByText(/\d+/)).not.toBeInTheDocument()
+    expect(tab.querySelector('span')).toBeNull()
   })
 
-  it('shows badge with count when PRs exist', () => {
-    const prs = [
+  it('shows badge with count when PRs exist', async () => {
+    mockSocketState.prs = [
       { pr: 1, title: 'PR 1' },
       { pr: 2, title: 'PR 2' },
       { pr: 3, title: 'PR 3' },
     ]
-    useHydraSocket.mockReturnValue(makeState({ prs }))
+    const { default: App } = await import('../../App')
     render(<App />)
-    const tab = getPrTab()
-    expect(within(tab).getByText('3')).toBeInTheDocument()
+    const tab = screen.getByText('Pull Requests').closest('div')
+    expect(tab.querySelector('span')).not.toBeNull()
+    expect(tab.querySelector('span').textContent).toBe('3')
   })
 
-  it('updates badge count when PR list changes', () => {
-    const prs = [{ pr: 1, title: 'PR 1' }]
-    useHydraSocket.mockReturnValue(makeState({ prs }))
-    const { rerender } = render(<App />)
-    const tab = getPrTab()
-    expect(within(tab).getByText('1')).toBeInTheDocument()
+  it('shows no badge when prs is empty after having items', async () => {
+    mockSocketState.prs = [{ pr: 1, title: 'PR 1' }]
+    const { default: App } = await import('../../App')
+    const { unmount } = render(<App />)
+    const tab = screen.getByText('Pull Requests').closest('div')
+    expect(tab.querySelector('span')).not.toBeNull()
 
-    const morePrs = [...prs, { pr: 2, title: 'PR 2' }, { pr: 3, title: 'PR 3' }, { pr: 4, title: 'PR 4' }, { pr: 5, title: 'PR 5' }]
-    useHydraSocket.mockReturnValue(makeState({ prs: morePrs }))
-    rerender(<App />)
-    expect(within(getPrTab()).getByText('5')).toBeInTheDocument()
+    unmount()
+    mockSocketState.prs = []
+    render(<App />)
+    const tab2 = screen.getByText('Pull Requests').closest('div')
+    expect(tab2.querySelector('span')).toBeNull()
   })
 })

@@ -1,13 +1,41 @@
-import React from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { theme } from '../theme'
 
-export function PRTable({ prs }) {
+export function PRTable() {
+  const [prs, setPrs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchPRs = useCallback(() => {
+    setLoading(true)
+    fetch('/api/prs')
+      .then(r => r.json())
+      .then(data => setPrs(data))
+      .catch(() => setPrs([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    fetchPRs()
+    const interval = setInterval(fetchPRs, 30000)
+    return () => clearInterval(interval)
+  }, [fetchPRs])
+
+  if (loading && prs.length === 0) {
+    return <div style={styles.empty}>Loading...</div>
+  }
+
   if (prs.length === 0) {
     return <div style={styles.empty}>No pull requests yet</div>
   }
 
   return (
     <div style={styles.container}>
+      <div style={styles.header}>
+        <span style={styles.headerText}>
+          {prs.length} pull request{prs.length !== 1 ? 's' : ''}
+        </span>
+        <button onClick={fetchPRs} style={styles.refresh}>Refresh</button>
+      </div>
       <table style={styles.table}>
         <thead>
           <tr>
@@ -42,6 +70,15 @@ export function PRTable({ prs }) {
 
 const styles = {
   container: { padding: 12, flex: 1, overflowY: 'auto' },
+  header: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  headerText: { color: theme.text, fontWeight: 600, fontSize: 13 },
+  refresh: {
+    background: theme.surfaceInset, border: `1px solid ${theme.border}`, color: theme.text,
+    padding: '4px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11,
+  },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     height: 200, color: theme.textMuted, fontSize: 13,
