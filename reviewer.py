@@ -63,6 +63,7 @@ class ReviewRunner:
             logger.info("[dry-run] Would review PR #%d", pr.number)
             result.verdict = ReviewVerdict.APPROVE
             result.summary = "Dry-run: auto-approved"
+            result.duration_seconds = time.monotonic() - start
             return result
 
         try:
@@ -102,6 +103,7 @@ class ReviewRunner:
             )
         )
 
+        result.duration_seconds = time.monotonic() - start
         return result
 
     async def fix_ci(
@@ -119,6 +121,7 @@ class ReviewRunner:
         parse verdict, check commits.  Returns a :class:`ReviewResult`
         with verdict APPROVE (fixed) or REQUEST_CHANGES (could not fix).
         """
+        start = time.monotonic()
         result = ReviewResult(
             pr_number=pr.number,
             issue_number=issue.number,
@@ -141,6 +144,7 @@ class ReviewRunner:
             logger.info("[dry-run] Would fix CI for PR #%d", pr.number)
             result.verdict = ReviewVerdict.APPROVE
             result.summary = "Dry-run: CI fix skipped"
+            result.duration_seconds = time.monotonic() - start
             return result
 
         try:
@@ -172,6 +176,7 @@ class ReviewRunner:
             )
         )
 
+        result.duration_seconds = time.monotonic() - start
         return result
 
     def _build_ci_fix_prompt(
@@ -227,6 +232,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
     def _build_review_prompt(self, pr: PRInfo, issue: GitHubIssue, diff: str) -> str:
         """Build the review prompt for the agent."""
+        ci_enabled = self._config.max_ci_fix_attempts > 0
         ui_criteria = ""
         if "ui/" in diff:
             ui_criteria = """
@@ -237,6 +243,18 @@ Then a brief summary on the next line starting with "SUMMARY: ".
    - Component reuse: No new component that duplicates an existing one in `ui/src/components/`.
    - Shared code: New constants/types belong in centralized files, not inline.
 """
+
+        if ci_enabled:
+            verify_step = (
+                "5. Do NOT run `make lint`, `make test`, or `make quality` — "
+                "CI will verify these automatically after review."
+            )
+            fix_verify = "2. Do NOT run tests locally — CI will verify after push."
+        else:
+            verify_step = (
+                "5. Run `make lint` and `make test` to verify everything passes."
+            )
+            fix_verify = "2. Run `make lint` and `make test-fast`."
 
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
@@ -256,7 +274,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 2. Verify comprehensive test coverage (tests are MANDATORY per CLAUDE.md).
 3. Check code quality: type annotations, proper error handling, no security issues.
 4. Check CLAUDE.md compliance: linting, formatting, no secrets committed.
-5. Run `make lint` and `make test` to verify everything passes.
+{verify_step}
 6. Run the project's audit commands on the changed code:
    - Review code quality patterns (SRP, type hints, naming, complexity)
    - Review test quality (3As structure, factories, edge cases)
@@ -266,7 +284,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
 If you find issues that you can fix:
 1. Make the fixes directly.
-2. Run `make lint` and `make test-fast`.
+{fix_verify}
 3. Commit with message: "review: fix <description> (PR #{pr.number})"
 
 ## Required Output
