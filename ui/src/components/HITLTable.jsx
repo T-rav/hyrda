@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { theme } from '../theme'
+import { useHITLCorrection } from '../hooks/useHITLCorrection'
 
 export function HITLTable() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [expandedIssue, setExpandedIssue] = useState(null)
+  const [corrections, setCorrections] = useState({})
+  const [actionLoading, setActionLoading] = useState(null)
+  const { submitCorrection, skipIssue, closeIssue } = useHITLCorrection()
 
   const fetchHITL = useCallback(() => {
     setLoading(true)
@@ -19,6 +24,47 @@ export function HITLTable() {
     const interval = setInterval(fetchHITL, 30000)
     return () => clearInterval(interval)
   }, [fetchHITL])
+
+  const toggleExpand = (issueNum) => {
+    setExpandedIssue(prev => prev === issueNum ? null : issueNum)
+  }
+
+  const handleCorrectionChange = (issueNum, value) => {
+    setCorrections(prev => ({ ...prev, [issueNum]: value }))
+  }
+
+  const handleRetry = async (issueNum) => {
+    const text = (corrections[issueNum] || '').trim()
+    if (!text) return
+    setActionLoading({ issue: issueNum, action: 'retry' })
+    await submitCorrection(issueNum, text)
+    setCorrections(prev => ({ ...prev, [issueNum]: '' }))
+    setActionLoading(null)
+    fetchHITL()
+  }
+
+  const handleSkip = async (issueNum) => {
+    setActionLoading({ issue: issueNum, action: 'skip' })
+    await skipIssue(issueNum)
+    setActionLoading(null)
+    setExpandedIssue(null)
+    fetchHITL()
+  }
+
+  const handleClose = async (issueNum) => {
+    if (!window.confirm(`Close issue #${issueNum}? This cannot be undone from the dashboard.`)) return
+    setActionLoading({ issue: issueNum, action: 'close' })
+    await closeIssue(issueNum)
+    setActionLoading(null)
+    setExpandedIssue(null)
+    fetchHITL()
+  }
+
+  const isActionLoading = (issueNum, action) =>
+    actionLoading && actionLoading.issue === issueNum && actionLoading.action === action
+
+  const isAnyActionLoading = (issueNum) =>
+    actionLoading && actionLoading.issue === issueNum
 
   if (loading && items.length === 0) {
     return <div style={styles.empty}>Loading...</div>
@@ -43,33 +89,114 @@ export function HITLTable() {
             <th style={styles.th}>Title</th>
             <th style={styles.th}>PR</th>
             <th style={styles.th}>Branch</th>
+            <th style={styles.th}>Status</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item, i) => (
-            <tr key={i}>
-              <td style={styles.td}>
-                <a href={item.issueUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}>
-                  #{item.issue}
-                </a>
-              </td>
-              <td style={styles.td}>{item.title}</td>
-              <td style={styles.td}>
-                {item.pr > 0 ? (
-                  <a href={item.prUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}>
-                    #{item.pr}
-                  </a>
-                ) : (
-                  <span style={styles.noPr}>No PR</span>
+          {items.map((item) => {
+            const isExpanded = expandedIssue === item.issue
+            const status = item.status || 'pending'
+            return (
+              <React.Fragment key={item.issue}>
+                <tr
+                  onClick={() => toggleExpand(item.issue)}
+                  style={{ ...styles.row, ...(isExpanded ? styles.rowExpanded : {}) }}
+                  data-testid={`hitl-row-${item.issue}`}
+                >
+                  <td style={styles.td}>
+                    <a href={item.issueUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}
+                       onClick={e => e.stopPropagation()}>
+                      #{item.issue}
+                    </a>
+                  </td>
+                  <td style={styles.td}>{item.title}</td>
+                  <td style={styles.td}>
+                    {item.pr > 0 ? (
+                      <a href={item.prUrl || '#'} target="_blank" rel="noreferrer" style={styles.link}
+                         onClick={e => e.stopPropagation()}>
+                        #{item.pr}
+                      </a>
+                    ) : (
+                      <span style={styles.noPr}>No PR</span>
+                    )}
+                  </td>
+                  <td style={styles.td}>{item.branch}</td>
+                  <td style={styles.td}>
+                    <span style={statusBadgeStyle(status)}>{status}</span>
+                  </td>
+                </tr>
+                {isExpanded && (
+                  <tr data-testid={`hitl-detail-${item.issue}`}>
+                    <td colSpan={5} style={styles.detailCell}>
+                      <div style={styles.detailPanel}>
+                        {item.cause && (
+                          <div style={styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
+                            Cause: {item.cause}
+                          </div>
+                        )}
+                        <textarea
+                          style={styles.textarea}
+                          placeholder="Provide correction guidance..."
+                          value={corrections[item.issue] || ''}
+                          onChange={e => handleCorrectionChange(item.issue, e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          data-testid={`hitl-textarea-${item.issue}`}
+                        />
+                        <div style={styles.actions}>
+                          <button
+                            style={styles.retryBtn}
+                            disabled={!(corrections[item.issue] || '').trim() || isAnyActionLoading(item.issue)}
+                            onClick={e => { e.stopPropagation(); handleRetry(item.issue) }}
+                            data-testid={`hitl-retry-${item.issue}`}
+                          >
+                            {isActionLoading(item.issue, 'retry') ? 'Processing...' : 'Retry with guidance'}
+                          </button>
+                          <button
+                            style={styles.skipBtn}
+                            disabled={isAnyActionLoading(item.issue)}
+                            onClick={e => { e.stopPropagation(); handleSkip(item.issue) }}
+                            data-testid={`hitl-skip-${item.issue}`}
+                          >
+                            {isActionLoading(item.issue, 'skip') ? 'Skipping...' : 'Skip'}
+                          </button>
+                          <button
+                            style={styles.closeBtn}
+                            disabled={isAnyActionLoading(item.issue)}
+                            onClick={e => { e.stopPropagation(); handleClose(item.issue) }}
+                            data-testid={`hitl-close-${item.issue}`}
+                          >
+                            {isActionLoading(item.issue, 'close') ? 'Closing...' : 'Close issue'}
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
                 )}
-              </td>
-              <td style={styles.td}>{item.branch}</td>
-            </tr>
-          ))}
+              </React.Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
+}
+
+function statusBadgeStyle(status) {
+  const colors = {
+    pending: { bg: theme.yellowSubtle, fg: theme.yellow },
+    processing: { bg: theme.accentSubtle, fg: theme.accent },
+    resolved: { bg: theme.greenSubtle, fg: theme.green },
+  }
+  const { bg, fg } = colors[status] || colors.pending
+  return {
+    fontSize: 11, padding: '2px 8px', borderRadius: 8, fontWeight: 600,
+    background: bg, color: fg,
+  }
+}
+
+const btnBase = {
+  padding: '6px 14px', border: 'none', borderRadius: 6,
+  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
 }
 
 const styles = {
@@ -93,6 +220,28 @@ const styles = {
     color: theme.textMuted, fontSize: 11,
   },
   td: { padding: 8, borderBottom: `1px solid ${theme.border}` },
+  row: { cursor: 'pointer' },
+  rowExpanded: { background: theme.surfaceInset },
   link: { color: theme.accent, textDecoration: 'none' },
   noPr: { color: theme.textMuted, fontStyle: 'italic' },
+  detailCell: { padding: 0, borderBottom: `1px solid ${theme.border}` },
+  detailPanel: {
+    padding: '12px 16px', background: theme.surface,
+    borderTop: `1px solid ${theme.border}`,
+  },
+  causeBadge: {
+    display: 'inline-block', marginBottom: 8,
+    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: theme.orangeSubtle, color: theme.orange,
+  },
+  textarea: {
+    width: '100%', minHeight: 60, padding: 8,
+    background: theme.bg, border: `1px solid ${theme.border}`,
+    borderRadius: 6, color: theme.text, fontFamily: 'inherit', fontSize: 12,
+    resize: 'vertical', boxSizing: 'border-box',
+  },
+  actions: { display: 'flex', gap: 8, marginTop: 8 },
+  retryBtn: { ...btnBase, background: theme.btnGreen, color: theme.white },
+  skipBtn: { ...btnBase, background: theme.surfaceInset, color: theme.text, border: `1px solid ${theme.border}` },
+  closeBtn: { ...btnBase, background: theme.btnRed, color: theme.white },
 }

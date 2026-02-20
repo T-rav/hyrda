@@ -204,6 +204,12 @@ function reducer(state, action) {
         mergedCount: action.data.merged || state.mergedCount,
       }
 
+    case 'hitl_update':
+      return {
+        ...addEvent(state, action),
+        hitlUpdate: action.data,
+      }
+
     case 'error':
       return addEvent(state, action)
 

@@ -1561,6 +1561,373 @@ class TestHITLRoute:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/hitl/{issue}/correct
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCorrectEndpoint:
+    """Tests for the POST /api/hitl/{issue}/correct route."""
+
+    def test_correct_returns_ok_with_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.submit_hitl_correction = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/hitl/42/correct",
+            json={"correction": "Mock the DB connection"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_correct_calls_orchestrator_submit(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.submit_hitl_correction = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        client.post(
+            "/api/hitl/42/correct",
+            json={"correction": "Fix the test"},
+        )
+
+        orch.submit_hitl_correction.assert_called_once_with(42, "Fix the test")
+
+    def test_correct_returns_400_without_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/hitl/42/correct",
+            json={"correction": "Something"},
+        )
+
+        assert response.status_code == 400
+        assert response.json() == {"status": "no orchestrator"}
+
+    def test_correct_publishes_hitl_update_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.submit_hitl_correction = MagicMock()
+        dashboard = HydraDashboard(config, bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        client.post(
+            "/api/hitl/42/correct",
+            json={"correction": "Fix it"},
+        )
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type.value == "hitl_update"]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["status"] == "processing"
+        assert hitl_events[0].data["action"] == "correct"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/hitl/{issue}/skip
+# ---------------------------------------------------------------------------
+
+
+class TestHITLSkipEndpoint:
+    """Tests for the POST /api/hitl/{issue}/skip route."""
+
+    def test_skip_returns_ok_with_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock):
+            response = client.post("/api/hitl/42/skip")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_skip_calls_orchestrator_skip(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock):
+            client.post("/api/hitl/42/skip")
+
+        orch.skip_hitl_issue.assert_called_once_with(42)
+
+    def test_skip_returns_400_without_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/hitl/42/skip")
+
+        assert response.status_code == 400
+        assert response.json() == {"status": "no orchestrator"}
+
+    def test_skip_publishes_hitl_update_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock):
+            client.post("/api/hitl/42/skip")
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type.value == "hitl_update"]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["status"] == "resolved"
+        assert hitl_events[0].data["action"] == "skip"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/hitl/{issue}/close
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCloseEndpoint:
+    """Tests for the POST /api/hitl/{issue}/close route."""
+
+    def test_close_returns_ok_with_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.close_issue", new_callable=AsyncMock):
+            response = client.post("/api/hitl/42/close")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_close_calls_orchestrator_skip(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.close_issue", new_callable=AsyncMock):
+            client.post("/api/hitl/42/close")
+
+        orch.skip_hitl_issue.assert_called_once_with(42)
+
+    def test_close_returns_400_without_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/hitl/42/close")
+
+        assert response.status_code == 400
+        assert response.json() == {"status": "no orchestrator"}
+
+    def test_close_publishes_hitl_update_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.close_issue", new_callable=AsyncMock):
+            client.post("/api/hitl/42/close")
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type.value == "hitl_update"]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["status"] == "resolved"
+        assert hitl_events[0].data["action"] == "close"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/hitl enriched with status
+# ---------------------------------------------------------------------------
+
+
+class TestHITLEnrichedRoute:
+    """Tests for the enriched GET /api/hitl response with status."""
+
+    def test_hitl_includes_status_from_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.get_hitl_status = MagicMock(return_value="processing")
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        mock_items = [
+            HITLItem(issue=42, title="Fix widget", branch="agent/issue-42"),
+        ]
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.list_hitl_items", return_value=mock_items):
+            response = client.get("/api/hitl")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["status"] == "processing"
+        orch.get_hitl_status.assert_called_once_with(42)
+
+    def test_hitl_defaults_status_when_no_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        mock_items = [
+            HITLItem(issue=42, title="Fix widget", branch="agent/issue-42"),
+        ]
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.list_hitl_items", return_value=mock_items):
+            response = client.get("/api/hitl")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["status"] == "pending"
+
+    def test_hitl_includes_cause_and_status_fields(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        mock_items = [
+            HITLItem(
+                issue=42,
+                title="Fix widget",
+                branch="agent/issue-42",
+                cause="CI failure",
+                status="pending",
+            ),
+        ]
+
+        client = TestClient(app)
+        with patch("pr_manager.PRManager.list_hitl_items", return_value=mock_items):
+            response = client.get("/api/hitl")
+
+        body = response.json()
+        assert "cause" in body[0]
+        assert "status" in body[0]
+        assert body[0]["cause"] == "CI failure"
+
+
+# ---------------------------------------------------------------------------
 # WebSocket error logging
 # ---------------------------------------------------------------------------
 

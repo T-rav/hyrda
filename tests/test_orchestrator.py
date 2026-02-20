@@ -1112,3 +1112,62 @@ class TestPlanPhase:
 
         # Not all 3 should have completed — stop event triggers cancellation
         assert len(results) < len(issues)
+
+
+# ---------------------------------------------------------------------------
+# HITL correction tracking
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCorrection:
+    """Tests for HITL correction methods on HydraOrchestrator."""
+
+    def test_hitl_corrections_starts_empty(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch._hitl_corrections == {}
+
+    def test_submit_hitl_correction_stores_correction(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch.submit_hitl_correction(42, "Mock the database connection")
+        assert orch._hitl_corrections[42] == "Mock the database connection"
+
+    def test_submit_hitl_correction_overwrites_previous(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch.submit_hitl_correction(42, "First attempt")
+        orch.submit_hitl_correction(42, "Second attempt")
+        assert orch._hitl_corrections[42] == "Second attempt"
+
+    def test_get_hitl_status_returns_pending_by_default(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_get_hitl_status_returns_processing_when_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_issues.add(42)
+        assert orch.get_hitl_status(42) == "processing"
+
+    def test_get_hitl_status_returns_pending_when_not_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_issues.add(99)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_skip_hitl_issue_removes_correction(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch._hitl_corrections[42] = "Some correction"
+        orch.skip_hitl_issue(42)
+        assert 42 not in orch._hitl_corrections
+
+    def test_skip_hitl_issue_safe_when_no_correction(self, config: HydraConfig) -> None:
+        orch = HydraOrchestrator(config)
+        orch.skip_hitl_issue(99)  # Should not raise
+        assert 99 not in orch._hitl_corrections

@@ -406,6 +406,28 @@ class PRManager:
                 exc,
             )
 
+    async def close_issue(self, issue_number: int) -> None:
+        """Close a GitHub issue."""
+        if self._config.dry_run:
+            return
+        try:
+            await run_subprocess(
+                "gh",
+                "issue",
+                "close",
+                str(issue_number),
+                "--repo",
+                self._repo,
+                cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not close issue #%d: %s",
+                issue_number,
+                exc,
+            )
+
     async def remove_pr_label(self, pr_number: int, label: str) -> None:
         """Remove *label* from a GitHub pull request."""
         if self._config.dry_run:
