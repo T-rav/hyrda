@@ -160,6 +160,22 @@ class ReviewVerdict(StrEnum):
     COMMENT = "comment"
 
 
+class CriterionResult(BaseModel):
+    """Result of validating a single acceptance criterion."""
+
+    criterion: str
+    passed: bool
+    details: str = ""
+
+
+class JudgeResult(BaseModel):
+    """Outcome of the LLM judge validation (#268)."""
+
+    criteria_results: list[CriterionResult] = Field(default_factory=list)
+    verification_instructions: str = ""
+    all_passed: bool = False
+
+
 class ReviewResult(BaseModel):
     """Outcome of a reviewer agent run."""
 
@@ -172,6 +188,7 @@ class ReviewResult(BaseModel):
     merged: bool = False
     ci_passed: bool | None = None  # None = not checked, True/False = outcome
     ci_fix_attempts: int = 0
+    judge_result: JudgeResult | None = None
 
 
 # --- Batch ---

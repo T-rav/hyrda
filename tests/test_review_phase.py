@@ -18,7 +18,9 @@ if TYPE_CHECKING:
 
 from events import EventBus, EventType
 from models import (
+    CriterionResult,
     GitHubIssue,
+    JudgeResult,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
@@ -1831,3 +1833,236 @@ class TestReviewInsightIntegration:
         # Review should still succeed
         assert len(results) == 1
         assert results[0].merged is True
+
+
+# ---------------------------------------------------------------------------
+# Verification issue creation
+# ---------------------------------------------------------------------------
+
+
+def _make_judge_result(
+    *,
+    all_passed: bool = True,
+    criteria: list[tuple[str, bool, str]] | None = None,
+    instructions: str = "1. Run the app\n2. Check the feature works",
+) -> JudgeResult:
+    """Build a JudgeResult for tests.
+
+    *criteria* is a list of (criterion, passed, details) tuples.
+    """
+    if criteria is None:
+        criteria = [
+            ("Feature implemented correctly", True, "Code looks good"),
+            ("Tests pass", True, "All tests green"),
+        ]
+    return JudgeResult(
+        criteria_results=[
+            CriterionResult(criterion=c, passed=p, details=d) for c, p, d in criteria
+        ],
+        verification_instructions=instructions,
+        all_passed=all_passed,
+    )
+
+
+def _setup_merge_phase(
+    config: HydraConfig,
+    *,
+    judge_result: JudgeResult | None = None,
+) -> ReviewPhase:
+    """Build a ReviewPhase wired for a successful merge with optional judge result."""
+    phase = _make_phase(config)
+
+    review = ReviewResult(
+        pr_number=101,
+        issue_number=42,
+        verdict=ReviewVerdict.APPROVE,
+        summary="Looks good.",
+        fixes_made=False,
+        judge_result=judge_result,
+    )
+
+    phase._reviewers.review = AsyncMock(return_value=review)
+    phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+    phase._prs.push_branch = AsyncMock(return_value=True)
+    phase._prs.merge_pr = AsyncMock(return_value=True)
+    phase._prs.remove_label = AsyncMock()
+    phase._prs.add_labels = AsyncMock()
+    phase._prs.create_issue = AsyncMock(return_value=200)
+
+    wt = config.worktree_base / "issue-42"
+    wt.mkdir(parents=True, exist_ok=True)
+
+    return phase
+
+
+class TestCreateVerificationIssue:
+    """Tests for verification issue creation after judge completes."""
+
+    @pytest.mark.asyncio
+    async def test_creates_verification_issue_after_judge_completes(
+        self, config: HydraConfig
+    ) -> None:
+        """When judge results are present and PR merges, create_issue is called."""
+        judge = _make_judge_result()
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        phase._prs.create_issue.assert_awaited_once()
+        call_args = phase._prs.create_issue.call_args
+        assert call_args.args[0] == "Verify: Fix bug"
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_body_includes_links(
+        self, config: HydraConfig
+    ) -> None:
+        """Body contains references to original issue and PR."""
+        judge = _make_judge_result()
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "#42" in body
+        assert "#101" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_body_includes_criteria_results(
+        self, config: HydraConfig
+    ) -> None:
+        """Body contains each criterion with its pass/fail status."""
+        judge = _make_judge_result(
+            criteria=[
+                ("Feature implemented correctly", True, "Code looks good"),
+                ("Tests pass", False, "Missing edge case"),
+            ],
+            all_passed=False,
+        )
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "Feature implemented correctly" in body
+        assert "Tests pass" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_highlights_failed_criteria(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed criteria are marked with FAIL in the body."""
+        judge = _make_judge_result(
+            criteria=[
+                ("Feature works", True, "OK"),
+                ("Tests pass", False, "Missing edge case"),
+            ],
+            all_passed=False,
+        )
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "\u274c FAIL" in body
+        assert "\u2705 PASS" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_all_passed_note(
+        self, config: HydraConfig
+    ) -> None:
+        """When all criteria pass, body contains the 'All criteria passed' note."""
+        judge = _make_judge_result(all_passed=True)
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "All criteria passed code-level validation" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_some_failed_note(
+        self, config: HydraConfig
+    ) -> None:
+        """When some criteria fail, body contains the 'extra attention' note."""
+        judge = _make_judge_result(
+            criteria=[
+                ("A", True, "ok"),
+                ("B", False, "nope"),
+            ],
+            all_passed=False,
+        )
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "1 criteria failed code-level validation" in body
+        assert "extra human attention" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_includes_verification_instructions(
+        self, config: HydraConfig
+    ) -> None:
+        """Body contains the verification instructions text."""
+        judge = _make_judge_result(instructions="1. Run make test\n2. Check output")
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        body = phase._prs.create_issue.call_args.args[1]
+        assert "1. Run make test" in body
+        assert "2. Check output" in body
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_labeled_hydra_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """The issue is created with hydra-hitl label."""
+        judge = _make_judge_result()
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        labels = phase._prs.create_issue.call_args.args[2]
+        assert "hydra-hitl" in labels
+
+    @pytest.mark.asyncio
+    async def test_no_verification_issue_when_judge_result_is_none(
+        self, config: HydraConfig
+    ) -> None:
+        """When result.judge_result is None, create_issue is NOT called."""
+        phase = _setup_merge_phase(config, judge_result=None)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        phase._prs.create_issue.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_records_issue_created_stat(
+        self, config: HydraConfig
+    ) -> None:
+        """Creating the issue increments the lifetime issues_created counter."""
+        judge = _make_judge_result()
+        phase = _setup_merge_phase(config, judge_result=judge)
+
+        await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["issues_created"] == 1
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_creation_failure_does_not_crash_review(
+        self, config: HydraConfig
+    ) -> None:
+        """If create_issue returns 0 (failure), the review still completes."""
+        judge = _make_judge_result()
+        phase = _setup_merge_phase(config, judge_result=judge)
+        phase._prs.create_issue = AsyncMock(return_value=0)
+
+        results = await phase.review_prs([make_pr_info(101, 42)], [make_issue(42)])
+
+        assert len(results) == 1
+        assert results[0].merged is True
+        # issues_created should NOT be incremented when create_issue returns 0
+        stats = phase._state.get_lifetime_stats()
+        assert stats["issues_created"] == 0
