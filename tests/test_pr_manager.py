@@ -2001,3 +2001,136 @@ class TestListHitlItems:
 
         mock_create.assert_not_called()
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Retry wrapper usage verification
+# ---------------------------------------------------------------------------
+
+
+class TestRetryWrapperUsage:
+    """Verify correct methods use retry vs plain run_subprocess."""
+
+    @pytest.mark.asyncio
+    async def test_push_branch_does_not_use_retry(self, config, event_bus, tmp_path):
+        """push_branch must use run_subprocess (not retry) to avoid duplicate commits."""
+        mgr = _make_manager(config, event_bus)
+        with (
+            patch("pr_manager.run_subprocess", new_callable=AsyncMock) as mock_plain,
+            patch(
+                "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+            ) as mock_retry,
+        ):
+            mock_plain.return_value = ""
+            await mgr.push_branch(tmp_path, "agent/issue-42")
+
+        mock_plain.assert_awaited_once()
+        mock_retry.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_merge_pr_does_not_use_retry(self, config, event_bus):
+        """merge_pr must use run_subprocess (not retry) to avoid race conditions."""
+        mgr = _make_manager(config, event_bus)
+        with (
+            patch("pr_manager.run_subprocess", new_callable=AsyncMock) as mock_plain,
+            patch(
+                "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+            ) as mock_retry,
+        ):
+            mock_plain.return_value = ""
+            await mgr.merge_pr(101)
+
+        mock_plain.assert_awaited_once()
+        mock_retry.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_add_labels_uses_retry(self, config, event_bus):
+        """add_labels should use run_subprocess_with_retry."""
+        mgr = _make_manager(config, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = ""
+            await mgr.add_labels(42, ["bug"])
+
+        mock_retry.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_pr_status_uses_retry(self, config, event_bus):
+        """get_pr_status (read operation) should use run_subprocess_with_retry."""
+        mgr = _make_manager(config, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = '{"number": 101}'
+            await mgr.get_pr_status(101)
+
+        mock_retry.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_pr_diff_uses_retry(self, config, event_bus):
+        """get_pr_diff (read operation) should use run_subprocess_with_retry."""
+        mgr = _make_manager(config, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = "diff content"
+            await mgr.get_pr_diff(101)
+
+        mock_retry.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_ensure_labels_uses_retry(self, config, event_bus, tmp_path):
+        """ensure_labels_exist should use run_subprocess_with_retry."""
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=["test-label"],
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = ""
+            await mgr.ensure_labels_exist()
+
+        assert mock_retry.await_count == len(PRManager._HYDRA_LABELS)
+
+    @pytest.mark.asyncio
+    async def test_pull_main_uses_retry(self, config, event_bus):
+        """pull_main should use run_subprocess_with_retry."""
+        mgr = _make_manager(config, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = ""
+            await mgr.pull_main()
+
+        mock_retry.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_max_retries_from_config(self, event_bus, tmp_path):
+        """PRManager should pass gh_max_retries from config to retry wrapper."""
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=["test-label"],
+            repo="test-org/test-repo",
+            gh_max_retries=5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        with patch(
+            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+        ) as mock_retry:
+            mock_retry.return_value = '{"number": 101}'
+            await mgr.get_pr_status(101)
+
+        _, kwargs = mock_retry.call_args
+        assert kwargs["max_retries"] == 5
