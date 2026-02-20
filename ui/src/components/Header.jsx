@@ -30,6 +30,14 @@ export function Header({
     failed: workerList.filter(w => w.status === 'failed').length,
   }
 
+  // Count active workers per role for the stage pills
+  const activeByRole = {}
+  for (const w of workerList) {
+    if (ACTIVE_STATUSES.includes(w.status) && w.role) {
+      activeByRole[w.role] = (activeByRole[w.role] || 0) + 1
+    }
+  }
+
   return (
     <header style={styles.header}>
       <div style={styles.left}>
@@ -67,6 +75,7 @@ export function Header({
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
             const maxCount = stage.configKey && config ? config[stage.configKey] : 1
+            const activeCount = stage.role ? (activeByRole[stage.role] || 0) : 0
             const lit = isRunning
             return (
               <React.Fragment key={stage.key}>
@@ -75,7 +84,9 @@ export function Header({
                 )}
                 <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
                   {stage.label}
-                  <span style={lit ? countLit : countDim}>{maxCount}</span>
+                  <span style={lit ? countLit : countDim}>
+                    {isRunning ? `${activeCount}/${maxCount}` : maxCount}
+                  </span>
                 </div>
               </React.Fragment>
             )
