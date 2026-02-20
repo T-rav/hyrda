@@ -3,7 +3,7 @@
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
  *
- * @typedef {'queued'|'running'|'testing'|'committing'|'done'|'failed'} WorkerStatus
+ * @typedef {'queued'|'running'|'testing'|'committing'|'quality_fix'|'merge_fix'|'done'|'failed'} WorkerStatus
  *
  * @typedef {{ status: WorkerStatus, worker: number, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *

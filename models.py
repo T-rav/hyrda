@@ -100,6 +100,7 @@ class WorkerStatus(StrEnum):
     TESTING = "testing"
     COMMITTING = "committing"
     QUALITY_FIX = "quality_fix"
+    MERGE_FIX = "merge_fix"
     DONE = "done"
     FAILED = "failed"
 

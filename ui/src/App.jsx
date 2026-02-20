@@ -9,7 +9,7 @@ import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
 
 export default function App() {
   const state = useHydraSocket()

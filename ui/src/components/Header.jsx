@@ -7,7 +7,7 @@ const STAGES = [
   { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer',    configKey: 'max_reviewers' },
 ]
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
 
 function countByRole(workers, activeOnly) {
   const list = Object.values(workers)

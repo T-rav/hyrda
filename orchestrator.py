@@ -799,7 +799,7 @@ class HydraOrchestrator:
                     data={
                         "issue": issue.number,
                         "worker": worker_id,
-                        "status": WorkerStatus.RUNNING.value,
+                        "status": WorkerStatus.MERGE_FIX.value,
                         "role": "conflict-resolver",
                     },
                 )

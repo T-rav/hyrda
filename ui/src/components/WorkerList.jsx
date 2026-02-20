@@ -5,12 +5,14 @@ const statusColors = {
   running:    { bg: 'rgba(88,166,255,0.15)',  fg: '#58a6ff' },
   planning:   { bg: 'rgba(163,113,247,0.15)', fg: '#a371f7' },
   testing:    { bg: 'rgba(210,153,34,0.15)',  fg: '#d29922' },
-  committing: { bg: 'rgba(210,134,22,0.15)',  fg: '#d18616' },
-  done:       { bg: 'rgba(63,185,80,0.15)',   fg: '#3fb950' },
+  committing:  { bg: 'rgba(210,134,22,0.15)',  fg: '#d18616' },
+  quality_fix: { bg: 'rgba(210,153,34,0.15)',  fg: '#d29922' },
+  merge_fix:   { bg: 'rgba(227,134,38,0.15)',  fg: '#e3862a' },
+  done:        { bg: 'rgba(63,185,80,0.15)',   fg: '#3fb950' },
   failed:     { bg: 'rgba(248,81,73,0.15)',   fg: '#f85149' },
 }
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'merge_fix']
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)
