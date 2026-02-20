@@ -9,6 +9,7 @@ const initialState = {
   prs: [],        // PRData[]
   reviews: [],    // ReviewData[]
   mergedCount: 0,
+  sessionPrsCount: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
@@ -37,6 +38,7 @@ function reducer(state, action) {
           prs: [],
           reviews: [],
           mergedCount: 0,
+          sessionPrsCount: 0,
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -92,6 +94,7 @@ function reducer(state, action) {
       return {
         ...addEvent(state, action),
         prs: [...state.prs, action.data],
+        sessionPrsCount: state.sessionPrsCount + 1,
       }
 
     case 'triage_update': {

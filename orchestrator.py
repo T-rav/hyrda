@@ -702,6 +702,20 @@ class HydraOrchestrator:
                         )
                     if should_merge:
                         success = await self._prs.merge_pr(pr.number)
+
+                        # If merge failed, rebase onto main and retry once
+                        if not success and wt_path:
+                            logger.info(
+                                "Merge failed for PR #%d — rebasing onto %s and retrying",
+                                pr.number,
+                                self._config.main_branch,
+                            )
+                            rebased = await self._worktrees.rebase(wt_path, pr.branch)
+                            if rebased:
+                                pushed = await self._prs.push_branch(wt_path, pr.branch)
+                                if pushed:
+                                    success = await self._prs.merge_pr(pr.number)
+
                         if success:
                             result.merged = True
                             self._state.mark_issue(pr.issue_number, "merged")
@@ -711,6 +725,22 @@ class HydraOrchestrator:
                                 await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.add_labels(
                                 pr.issue_number, [self._config.fixed_label[0]]
+                            )
+                        else:
+                            logger.warning(
+                                "PR #%d not mergeable after rebase — escalating to HITL",
+                                pr.number,
+                            )
+                            await self._prs.post_pr_comment(
+                                pr.number,
+                                "**Merge failed** — PR is not mergeable even after "
+                                "rebasing onto main. Escalating to human review.",
+                            )
+                            for lbl in self._config.review_label:
+                                await self._prs.remove_label(pr.issue_number, lbl)
+                            await self._prs.add_labels(
+                                pr.issue_number,
+                                [self._config.hitl_label[0]],
                             )
 
                 # Cleanup worktree after review

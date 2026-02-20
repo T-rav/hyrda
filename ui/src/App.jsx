@@ -44,7 +44,7 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={state.prs.length}
+        prsCount={state.sessionPrsCount}
         mergedCount={state.mergedCount}
         issuesFound={state.lifetimeStats?.issues_created ?? 0}
         connected={state.connected}
