@@ -64,6 +64,8 @@ class PlannerStatus(StrEnum):
 
     QUEUED = "queued"
     PLANNING = "planning"
+    VALIDATING = "validating"
+    RETRYING = "retrying"
     DONE = "done"
     FAILED = "failed"
 
@@ -87,6 +89,8 @@ class PlanResult(BaseModel):
     transcript: str = ""
     duration_seconds: float = 0.0
     new_issues: list[NewIssueSpec] = Field(default_factory=list)
+    validation_errors: list[str] = Field(default_factory=list)
+    retry_attempted: bool = False
 
 
 # --- Worker ---
