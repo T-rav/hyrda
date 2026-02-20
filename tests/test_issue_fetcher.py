@@ -1,0 +1,588 @@
+"""Tests for issue_fetcher.py - IssueFetcher class."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from config import HydraConfig
+
+from issue_fetcher import IssueFetcher
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+RAW_ISSUE_JSON = json.dumps(
+    [
+        {
+            "number": 42,
+            "title": "Fix bug",
+            "body": "Details",
+            "labels": [{"name": "ready"}],
+            "comments": [],
+            "url": "https://github.com/test-org/test-repo/issues/42",
+        }
+    ]
+)
+
+
+# ---------------------------------------------------------------------------
+# fetch_ready_issues
+# ---------------------------------------------------------------------------
+
+
+class TestFetchReadyIssues:
+    """Tests for the fetch_ready_issues method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_parsed_issues_from_gh_output(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+        assert issues[0].title == "Fix bug"
+        assert issues[0].body == "Details"
+        assert issues[0].labels == ["ready"]
+
+    @pytest.mark.asyncio
+    async def test_parses_label_dict_and_string(self, config: HydraConfig) -> None:
+        raw = json.dumps(
+            [
+                {
+                    "number": 10,
+                    "title": "Test",
+                    "body": "",
+                    "labels": [{"name": "alpha"}, "beta"],
+                    "comments": [],
+                    "url": "",
+                }
+            ]
+        )
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert "alpha" in issues[0].labels
+        assert "beta" in issues[0].labels
+
+    @pytest.mark.asyncio
+    async def test_parses_comment_dict_and_string(self, config: HydraConfig) -> None:
+        raw = json.dumps(
+            [
+                {
+                    "number": 11,
+                    "title": "T",
+                    "body": "",
+                    "labels": [],
+                    "comments": [{"body": "hello"}, "world"],
+                    "url": "",
+                }
+            ]
+        )
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert "hello" in issues[0].comments
+        assert "world" in issues[0].comments
+
+    @pytest.mark.asyncio
+    async def test_skips_active_issues(self, config: HydraConfig) -> None:
+        """Issues already active in this run should be skipped."""
+        fetcher = IssueFetcher(config)
+        active_issues: set[int] = {42}
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(active_issues)
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_does_not_skip_failed_issues_on_restart(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed issues with hydra-ready label should be retried (no state filter)."""
+        fetcher = IssueFetcher(config)
+        # NOT in active_issues → should be picked up
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_on_json_decode_error(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("gh not found"),
+        ):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_respects_queue_size_limit(self, config: HydraConfig) -> None:
+        """Result list is truncated to 2 * max_workers."""
+        raw = json.dumps(
+            [
+                {
+                    "number": i,
+                    "title": f"Issue {i}",
+                    "body": "",
+                    "labels": [],
+                    "comments": [],
+                    "url": "",
+                }
+                for i in range(1, 10)
+            ]
+        )
+        fetcher = IssueFetcher(config)
+        # config has max_workers=2 from conftest → queue_size = 4
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert len(issues) <= 2 * config.max_workers
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
+        from config import HydraConfig
+
+        dry_config = HydraConfig(**{**config.model_dump(), "dry_run": True})
+        fetcher = IssueFetcher(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issues = await fetcher.fetch_ready_issues(set())
+
+        assert issues == []
+        mock_exec.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_reviewable_prs
+# ---------------------------------------------------------------------------
+
+
+class TestFetchReviewablePrs:
+    """Tests for fetch_reviewable_prs: skip logic, parsing, and error handling."""
+
+    @pytest.mark.asyncio
+    async def test_skips_active_issues(self, config: HydraConfig) -> None:
+        """Issues already active in this run should be skipped."""
+        fetcher = IssueFetcher(config)
+        active_issues: set[int] = {42}
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            prs, issues = await fetcher.fetch_reviewable_prs(active_issues)
+
+        assert prs == []
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_picks_up_previously_reviewed_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """Issues reviewed in a prior run should be picked up again."""
+        fetcher = IssueFetcher(config)
+        # NOT in active_issues → should be picked up
+
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 200,
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": False,
+                }
+            ]
+        )
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_parses_pr_json_into_pr_info(self, config: HydraConfig) -> None:
+        """Successfully parses PR JSON and maps to PRInfo objects."""
+        fetcher = IssueFetcher(config)
+
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 200,
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": False,
+                }
+            ]
+        )
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert len(prs) == 1
+        assert prs[0].number == 200
+        assert prs[0].issue_number == 42
+        assert prs[0].branch == "agent/issue-42"
+        assert prs[0].url == "https://github.com/o/r/pull/200"
+        assert prs[0].draft is False
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_gh_cli_failure_skips_pr_for_that_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """gh CLI failure (RuntimeError) skips that issue's PR but preserves issues."""
+        fetcher = IssueFetcher(config)
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            raise RuntimeError("Command failed (rc=1): some error")
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_json_decode_error_skips_pr_for_that_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """Invalid JSON from gh CLI skips that issue's PR but preserves issues."""
+        fetcher = IssueFetcher(config)
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return "not-valid-json"
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_draft_prs_excluded_from_results(self, config: HydraConfig) -> None:
+        """Draft PRs are filtered out of the returned PR list."""
+        fetcher = IssueFetcher(config)
+
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 200,
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": True,
+                }
+            ]
+        )
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_no_matching_pr_returns_empty_pr_list(
+        self, config: HydraConfig
+    ) -> None:
+        """Empty JSON array from PR lookup means no PRInfo is created."""
+        fetcher = IssueFetcher(config)
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return "[]"
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_file_not_found_error_when_gh_missing(
+        self, config: HydraConfig
+    ) -> None:
+        """FileNotFoundError during issue fetch returns ([], []) early."""
+        fetcher = IssueFetcher(config)
+
+        mock_create = AsyncMock(side_effect=FileNotFoundError("No such file: 'gh'"))
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_tuple(self, dry_config: HydraConfig) -> None:
+        """Dry-run mode returns ([], []) without making subprocess calls."""
+        fetcher = IssueFetcher(dry_config)
+
+        mock_create = AsyncMock()
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert prs == []
+        assert issues == []
+        mock_create.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_plan_issues
+# ---------------------------------------------------------------------------
+
+
+RAW_PLAN_ISSUE_JSON = json.dumps(
+    [
+        {
+            "number": 42,
+            "title": "Fix bug",
+            "body": "Details",
+            "labels": [{"name": "hydra-plan"}],
+            "comments": [],
+            "url": "https://github.com/test-org/test-repo/issues/42",
+        }
+    ]
+)
+
+
+class TestFetchPlanIssues:
+    """Tests for the fetch_plan_issues method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_parsed_issues_from_gh_output(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(RAW_PLAN_ISSUE_JSON.encode(), b"")
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_plan_issues()
+
+        assert len(issues) == 1
+        assert issues[0].number == 42
+        assert issues[0].title == "Fix bug"
+        assert issues[0].labels == ["hydra-plan"]
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_on_json_decode_error(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_gh_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("gh not found"),
+        ):
+            issues = await fetcher.fetch_plan_issues()
+
+        assert issues == []
+
+    @pytest.mark.asyncio
+    async def test_respects_batch_size_limit(self, config: HydraConfig) -> None:
+        """Result list is truncated to batch_size."""
+        raw = json.dumps(
+            [
+                {
+                    "number": i,
+                    "title": f"Issue {i}",
+                    "body": "",
+                    "labels": [{"name": "hydra-plan"}],
+                    "comments": [],
+                    "url": "",
+                }
+                for i in range(1, 10)
+            ]
+        )
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_plan_issues()
+
+        assert len(issues) <= config.batch_size
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
+        from config import HydraConfig as HC
+
+        dry_config = HC(**{**config.model_dump(), "dry_run": True})
+        fetcher = IssueFetcher(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issues = await fetcher.fetch_plan_issues()
+
+        assert issues == []
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_empty_planner_label_fetches_all_excluding_downstream(
+        self, config: HydraConfig
+    ) -> None:
+        """When planner_label is empty, fetch all open issues excluding downstream labels."""
+        from config import HydraConfig as HC
+
+        no_plan_config = HC(**{**config.model_dump(), "planner_label": []})
+        fetcher = IssueFetcher(no_plan_config)
+
+        raw = json.dumps(
+            [
+                {
+                    "number": 1,
+                    "title": "Unlabeled issue",
+                    "body": "Body",
+                    "labels": [],
+                    "comments": [],
+                    "url": "",
+                },
+                {
+                    "number": 2,
+                    "title": "Ready issue",
+                    "body": "Body",
+                    "labels": [{"name": "test-label"}],
+                    "comments": [],
+                    "url": "",
+                },
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_plan_issues()
+
+        # Issue #2 has ready_label ("test-label") so it should be filtered out
+        assert len(issues) == 1
+        assert issues[0].number == 1

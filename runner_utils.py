@@ -13,6 +13,7 @@ from typing import Any
 
 from events import EventBus, EventType, HydraEvent
 from stream_parser import StreamParser
+from subprocess_util import make_clean_env
 
 
 async def stream_claude_process(
@@ -55,8 +56,7 @@ async def stream_claude_process(
         The transcript string, using the fallback chain:
         result_text → accumulated_text → raw_lines.
     """
-    env = {**os.environ}
-    env.pop("CLAUDECODE", None)
+    env = make_clean_env()
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
