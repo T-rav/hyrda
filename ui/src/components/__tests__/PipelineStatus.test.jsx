@@ -83,6 +83,16 @@ describe('PipelineStatus component', () => {
     expect(container.firstChild).toBeNull()
   })
 
+  it('counts quality_fix workers as active in implement stage', () => {
+    const workers = {
+      1: { status: 'quality_fix', role: 'implementer' },
+    }
+    render(<PipelineStatus phase="running" workers={workers} />)
+    // The implement stage should show a count of 1
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText('Implement')).toBeInTheDocument()
+  })
+
   it('renders stages when workers exist', () => {
     const workers = {
       1: { status: 'running', role: 'planner' },

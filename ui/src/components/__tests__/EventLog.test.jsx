@@ -1,18 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { EventLog, typeSpanStyles, defaultTypeStyle } from '../EventLog'
-
-const typeColors = {
-  worker_update: 'var(--accent)',
-  phase_change: 'var(--yellow)',
-  pr_created: 'var(--green)',
-  review_update: 'var(--orange)',
-  merge_update: 'var(--green)',
-  error: 'var(--red)',
-  batch_start: 'var(--accent)',
-  batch_complete: 'var(--green)',
-  transcript_line: 'var(--text-muted)',
-}
+import { EventLog, typeSpanStyles, defaultTypeStyle, eventSummary, typeColors } from '../EventLog'
 
 describe('EventLog pre-computed styles', () => {
   it('has an entry for every typeColors key', () => {
@@ -72,5 +60,64 @@ describe('EventLog component', () => {
     render(<EventLog events={events} />)
     expect(screen.queryByText('transcript line')).not.toBeInTheDocument()
     expect(screen.getByText('error')).toBeInTheDocument()
+  })
+})
+
+describe('eventSummary', () => {
+  it('formats batch_start', () => {
+    expect(eventSummary('batch_start', { batch: 5 })).toBe('Batch 5 started')
+  })
+
+  it('formats phase_change', () => {
+    expect(eventSummary('phase_change', { phase: 'implement' })).toBe('implement')
+  })
+
+  it('formats worker_update', () => {
+    expect(eventSummary('worker_update', { issue: 10, status: 'running' })).toBe('#10 → running')
+  })
+
+  it('formats transcript_line', () => {
+    expect(eventSummary('transcript_line', { issue: 3 })).toBe('#3')
+    expect(eventSummary('transcript_line', { pr: 7 })).toBe('#7')
+  })
+
+  it('formats pr_created', () => {
+    expect(eventSummary('pr_created', { pr: 42, issue: 10, draft: false })).toBe('PR #42 for #10')
+    expect(eventSummary('pr_created', { pr: 42, issue: 10, draft: true })).toBe('PR #42 for #10 (draft)')
+  })
+
+  it('formats review_update', () => {
+    expect(eventSummary('review_update', { pr: 20, verdict: 'approved' })).toBe('PR #20 → approved')
+    expect(eventSummary('review_update', { pr: 20, status: 'running' })).toBe('PR #20 → running')
+  })
+
+  it('formats merge_update', () => {
+    expect(eventSummary('merge_update', { pr: 20, status: 'merged' })).toBe('PR #20 merged')
+  })
+
+  it('formats batch_complete', () => {
+    expect(eventSummary('batch_complete', { merged: 2, implemented: 3 })).toBe('2 merged, 3 implemented')
+  })
+
+  it('formats error', () => {
+    expect(eventSummary('error', { message: 'something broke' })).toBe('something broke')
+    expect(eventSummary('error', {})).toBe('Error')
+  })
+
+  it('falls back to truncated JSON for unknown types', () => {
+    const result = eventSummary('unknown_type', { foo: 'bar' })
+    expect(result).toBe('{"foo":"bar"}')
+  })
+})
+
+describe('typeColors', () => {
+  it('has entries for all known event types', () => {
+    const expectedTypes = [
+      'worker_update', 'phase_change', 'pr_created', 'review_update',
+      'merge_update', 'error', 'batch_start', 'batch_complete', 'transcript_line',
+    ]
+    for (const type of expectedTypes) {
+      expect(typeColors).toHaveProperty(type)
+    }
   })
 })
