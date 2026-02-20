@@ -1047,6 +1047,80 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # min_plan_words: ge=50, le=2000
+
+    def test_min_plan_words_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 200
+
+    def test_min_plan_words_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            min_plan_words=100,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_plan_words == 100
+
+    def test_min_plan_words_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                min_plan_words=49,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_min_plan_words_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                min_plan_words=2001,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_new_files_warning: ge=1, le=20
+
+    def test_max_new_files_warning_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_new_files_warning == 5
+
+    def test_max_new_files_warning_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_new_files_warning=10,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_new_files_warning == 10
+
+    def test_max_new_files_warning_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_new_files_warning=0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_new_files_warning_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_new_files_warning=21,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – gh_token resolution

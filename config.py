@@ -97,6 +97,18 @@ class HydraConfig(BaseModel):
     planner_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
     )
+    min_plan_words: int = Field(
+        default=200,
+        ge=50,
+        le=2000,
+        description="Minimum word count for a valid plan",
+    )
+    max_new_files_warning: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Warn if plan creates more than this many new files",
+    )
 
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
