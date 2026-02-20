@@ -90,6 +90,10 @@ class HydraConfig(BaseModel):
         default=["hydra-fixed"],
         description="Labels applied after PR is merged (OR logic)",
     )
+    improve_label: list[str] = Field(
+        default=["hydra-improve"],
+        description="Labels for review insight improvement proposals (OR logic)",
+    )
 
     # Discovery / planner configuration
     find_label: list[str] = Field(
@@ -103,6 +107,20 @@ class HydraConfig(BaseModel):
     planner_model: str = Field(default="opus", description="Model for planning agents")
     planner_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
+    )
+
+    # Review insight aggregation
+    review_insight_window: int = Field(
+        default=10,
+        ge=3,
+        le=50,
+        description="Number of recent reviews to analyze for patterns",
+    )
+    review_pattern_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Minimum category frequency to trigger improvement proposal",
     )
 
     # Git configuration

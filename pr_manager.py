@@ -34,6 +34,7 @@ class PRManager:
         ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
         ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
         ("fixed_label", "0075ca", "PR merged — issue completed"),
+        ("improve_label", "7057ff", "Review insight improvement proposal"),
     )
 
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:

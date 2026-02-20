@@ -61,6 +61,7 @@ class ConfigFactory:
         review_label: list[str] | None = None,
         hitl_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
+        improve_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
         planner_model: str = "opus",
@@ -72,6 +73,8 @@ class ConfigFactory:
         git_user_email: str = "",
         dashboard_enabled: bool = False,
         dashboard_port: int = 15555,
+        review_insight_window: int = 10,
+        review_pattern_threshold: int = 3,
         gh_max_retries: int = 3,
         repo_root: Path | None = None,
         worktree_base: Path | None = None,
@@ -99,6 +102,9 @@ class ConfigFactory:
             review_label=review_label if review_label is not None else ["hydra-review"],
             hitl_label=hitl_label if hitl_label is not None else ["hydra-hitl"],
             fixed_label=fixed_label if fixed_label is not None else ["hydra-fixed"],
+            improve_label=improve_label
+            if improve_label is not None
+            else ["hydra-improve"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
@@ -112,6 +118,8 @@ class ConfigFactory:
             git_user_email=git_user_email,
             dashboard_enabled=dashboard_enabled,
             dashboard_port=dashboard_port,
+            review_insight_window=review_insight_window,
+            review_pattern_threshold=review_pattern_threshold,
             gh_max_retries=gh_max_retries,
             repo_root=root,
             worktree_base=worktree_base or root.parent / "test-worktrees",
