@@ -165,6 +165,10 @@ function statusBadgeStyle(status) {
     pending: { bg: theme.yellowSubtle, fg: theme.yellow },
     processing: { bg: theme.accentSubtle, fg: theme.accent },
     resolved: { bg: theme.greenSubtle, fg: theme.green },
+    'from triage': { bg: theme.greenSubtle, fg: theme.triageGreen },
+    'from plan': { bg: theme.purpleSubtle, fg: theme.purple },
+    'from implement': { bg: theme.accentSubtle, fg: theme.accent },
+    'from review': { bg: theme.orangeSubtle, fg: theme.orange },
   }
   const { bg, fg } = colors[status] || colors.pending
   return {
