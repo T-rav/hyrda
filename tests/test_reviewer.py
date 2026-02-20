@@ -145,6 +145,46 @@ def test_build_review_prompt_excludes_ui_criteria_when_no_ui_files(
     assert "theme.js" not in prompt
 
 
+def test_build_review_prompt_skips_local_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=2)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run `make lint`, `make test`, or `make quality`" in prompt
+    assert "CI will verify" in prompt
+
+
+def test_build_review_prompt_runs_local_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Run `make lint` and `make test`" in prompt
+    assert "Do NOT run" not in prompt
+
+
+def test_build_review_prompt_fix_section_skips_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=1)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run tests locally" in prompt
+
+
+def test_build_review_prompt_fix_section_runs_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "make test-fast" in prompt
+
+
 # ---------------------------------------------------------------------------
 # _parse_verdict
 # ---------------------------------------------------------------------------

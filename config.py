@@ -29,7 +29,7 @@ class HydraConfig(BaseModel):
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )
     max_reviewers: int = Field(
-        default=3, ge=1, le=10, description="Concurrent review agents"
+        default=5, ge=1, le=10, description="Concurrent review agents"
     )
     max_hitl_workers: int = Field(
         default=1, ge=1, le=5, description="Concurrent HITL correction agents"
@@ -90,6 +90,10 @@ class HydraConfig(BaseModel):
         default=["hydra-fixed"],
         description="Labels applied after PR is merged (OR logic)",
     )
+    improve_label: list[str] = Field(
+        default=["hydra-improve"],
+        description="Labels for review insight improvement proposals (OR logic)",
+    )
 
     # Discovery / planner configuration
     find_label: list[str] = Field(
@@ -119,6 +123,20 @@ class HydraConfig(BaseModel):
     lite_plan_labels: list[str] = Field(
         default=["bug", "typo", "docs"],
         description="Issue labels that trigger a lite plan (fewer required sections)",
+    )
+
+    # Review insight aggregation
+    review_insight_window: int = Field(
+        default=10,
+        ge=3,
+        le=50,
+        description="Number of recent reviews to analyze for patterns",
+    )
+    review_pattern_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Minimum category frequency to trigger improvement proposal",
     )
 
     # Git configuration

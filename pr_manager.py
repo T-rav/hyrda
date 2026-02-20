@@ -19,6 +19,10 @@ from subprocess_util import run_subprocess, run_subprocess_with_retry
 logger = logging.getLogger("hydra.pr_manager")
 
 
+class SelfReviewError(RuntimeError):
+    """Raised when a formal review fails due to the 'own pull request' restriction."""
+
+
 class PRManager:
     """Pushes branches, creates PRs, merges, and manages labels."""
 
@@ -34,6 +38,7 @@ class PRManager:
         ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
         ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
         ("fixed_label", "0075ca", "PR merged — issue completed"),
+        ("improve_label", "7057ff", "Review insight improvement proposal"),
     )
 
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
@@ -354,6 +359,18 @@ class PRManager:
             )
             return True
         except RuntimeError as exc:
+            err_msg = str(exc)
+            err_lower = err_msg.lower()
+            if (
+                "can not request changes on your own pull request" in err_lower
+                or "cannot approve your own pull request" in err_lower
+            ):
+                logger.info(
+                    "Cannot submit %s review on own PR #%d — falling back to comment",
+                    verdict.value,
+                    pr_number,
+                )
+                raise SelfReviewError(err_msg) from exc
             logger.error(
                 "Could not submit %s review on PR #%d: %s",
                 verdict.value,
