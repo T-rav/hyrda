@@ -807,11 +807,7 @@ class TestReviewPRs:
                 pr.number, issue.number, verdict=ReviewVerdict.REQUEST_CHANGES
             )
 
-        call_count = 0
-
         async def fake_submit_review(pr_number, verdict, summary):
-            nonlocal call_count
-            call_count += 1
             if pr_number == 101:
                 raise SelfReviewError(
                     "Can not request changes on your own pull request"
@@ -835,6 +831,9 @@ class TestReviewPRs:
         # Both PRs marked in state
         assert phase._state.get_pr_status(101) == "request-changes"
         assert phase._state.get_pr_status(102) == "request-changes"
+        # Both issues marked as reviewed
+        assert phase._state.get_issue_status(1) == "reviewed"
+        assert phase._state.get_issue_status(2) == "reviewed"
 
     @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(

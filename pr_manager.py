@@ -360,9 +360,10 @@ class PRManager:
             return True
         except RuntimeError as exc:
             err_msg = str(exc)
+            err_lower = err_msg.lower()
             if (
-                "Can not request changes on your own pull request" in err_msg
-                or "cannot approve your own pull request" in err_msg.lower()
+                "can not request changes on your own pull request" in err_lower
+                or "cannot approve your own pull request" in err_lower
             ):
                 logger.info(
                     "Cannot submit %s review on own PR #%d — falling back to comment",
