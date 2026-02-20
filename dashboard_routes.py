@@ -116,6 +116,12 @@ def create_router(
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         correction = body.get("correction", "")
         orch.submit_hitl_correction(issue_number, correction)
+
+        # Swap labels for immediate dashboard feedback
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.hitl_active_label)
+
         await event_bus.publish(
             HydraEvent(
                 type=EventType.HITL_UPDATE,
