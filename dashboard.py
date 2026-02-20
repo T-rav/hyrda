@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from config import HydraConfig
 from events import EventBus, HydraEvent
+from models import ControlStatusConfig, ControlStatusResponse, HITLItem, PRListItem
 from state import StateTracker
 
 if TYPE_CHECKING:
@@ -105,7 +106,7 @@ class HydraDashboard:
                 env = {**os.environ}
                 env.pop("CLAUDECODE", None)
                 seen: set[int] = set()
-                prs: list[dict[str, object]] = []
+                prs: list[PRListItem] = []
 
                 all_labels = list(
                     {
@@ -152,16 +153,16 @@ class HydraDashboard:
                             with contextlib.suppress(ValueError):
                                 issue_num = int(branch.split("-")[-1])
                         prs.append(
-                            {
-                                "pr": pr_num,
-                                "issue": issue_num,
-                                "branch": branch,
-                                "url": p.get("url", ""),
-                                "draft": p.get("isDraft", False),
-                                "title": p.get("title", ""),
-                            }
+                            PRListItem(
+                                pr=pr_num,
+                                issue=issue_num,
+                                branch=branch,
+                                url=p.get("url", ""),
+                                draft=p.get("isDraft", False),
+                                title=p.get("title", ""),
+                            )
                         )
-                return JSONResponse(prs)
+                return JSONResponse([item.model_dump() for item in prs])
             except Exception:
                 return JSONResponse([])
 
@@ -176,7 +177,7 @@ class HydraDashboard:
 
                 # Fetch issues with any HITL label, deduplicated
                 seen_issues: set[int] = set()
-                raw_issues: list[dict[str, object]] = []
+                raw_issues: list[dict[str, Any]] = []
                 for label in self._config.hitl_label:
                     proc = await asyncio.create_subprocess_exec(
                         "gh",
@@ -204,7 +205,7 @@ class HydraDashboard:
                             seen_issues.add(issue["number"])
                             raw_issues.append(issue)
 
-                items = []
+                items: list[HITLItem] = []
                 for issue in raw_issues:
                     branch = f"agent/issue-{issue['number']}"
                     # Look up the PR for this issue's branch
@@ -236,16 +237,16 @@ class HydraDashboard:
                             pr_url = pr_data[0].get("url", "")
 
                     items.append(
-                        {
-                            "issue": issue["number"],
-                            "title": issue.get("title", ""),
-                            "issueUrl": issue.get("url", ""),
-                            "pr": pr_number,
-                            "prUrl": pr_url,
-                            "branch": branch,
-                        }
+                        HITLItem(
+                            issue=issue["number"],
+                            title=issue.get("title", ""),
+                            issueUrl=issue.get("url", ""),
+                            pr=pr_number,
+                            prUrl=pr_url,
+                            branch=branch,
+                        )
                     )
-                return JSONResponse(items)
+                return JSONResponse([item.model_dump() for item in items])
             except Exception:
                 return JSONResponse([])
 
@@ -292,25 +293,24 @@ class HydraDashboard:
             status = "idle"
             if self._orchestrator:
                 status = self._orchestrator.run_status
-            return JSONResponse(
-                {
-                    "status": status,
-                    "config": {
-                        "repo": self._config.repo,
-                        "ready_label": self._config.ready_label,
-                        "find_label": self._config.find_label,
-                        "planner_label": self._config.planner_label,
-                        "review_label": self._config.review_label,
-                        "hitl_label": self._config.hitl_label,
-                        "fixed_label": self._config.fixed_label,
-                        "max_workers": self._config.max_workers,
-                        "max_planners": self._config.max_planners,
-                        "max_reviewers": self._config.max_reviewers,
-                        "batch_size": self._config.batch_size,
-                        "model": self._config.model,
-                    },
-                }
+            response = ControlStatusResponse(
+                status=status,
+                config=ControlStatusConfig(
+                    repo=self._config.repo,
+                    ready_label=self._config.ready_label,
+                    find_label=self._config.find_label,
+                    planner_label=self._config.planner_label,
+                    review_label=self._config.review_label,
+                    hitl_label=self._config.hitl_label,
+                    fixed_label=self._config.fixed_label,
+                    max_workers=self._config.max_workers,
+                    max_planners=self._config.max_planners,
+                    max_reviewers=self._config.max_reviewers,
+                    batch_size=self._config.batch_size,
+                    model=self._config.model,
+                ),
             )
+            return JSONResponse(response.model_dump())
 
         @app.websocket("/ws")
         async def websocket_endpoint(ws: WebSocket) -> None:
