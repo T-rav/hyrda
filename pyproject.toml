@@ -24,7 +24,7 @@ test = [
 ]
 dev = [
     "ruff==0.15.0",
-    "pyright==1.1.390",
+    "pyright==1.1.408",
     "bandit[toml]==1.8.0",
 ]
 dashboard = [

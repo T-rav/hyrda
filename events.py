@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -74,6 +75,17 @@ class EventBus:
         """Remove *queue* from the subscriber list."""
         with contextlib.suppress(ValueError):
             self._subscribers.remove(queue)
+
+    @contextlib.asynccontextmanager
+    async def subscription(
+        self, max_queue: int = 500
+    ) -> AsyncIterator[asyncio.Queue[HydraEvent]]:
+        """Async context manager that auto-unsubscribes on exit."""
+        queue = self.subscribe(max_queue)
+        try:
+            yield queue
+        finally:
+            self.unsubscribe(queue)
 
     def get_history(self) -> list[HydraEvent]:
         """Return a copy of all recorded events."""

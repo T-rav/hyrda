@@ -152,28 +152,29 @@ def create_router(
         await ws.accept()
 
         # Snapshot history BEFORE subscribing to avoid duplicates.
+        # Events published between snapshot and subscribe are picked
+        # up by the live queue, never sent twice.
         history = event_bus.get_history()
-        queue = event_bus.subscribe()
 
-        # Send history on connect
-        for event in history:
+        async with event_bus.subscription() as queue:
+            # Send history on connect
+            for event in history:
+                try:
+                    await ws.send_text(event.model_dump_json())
+                except Exception:
+                    logger.warning(
+                        "WebSocket error during history replay", exc_info=True
+                    )
+                    return
+
+            # Stream live events
             try:
-                await ws.send_text(event.model_dump_json())
+                while True:
+                    event: HydraEvent = await queue.get()
+                    await ws.send_text(event.model_dump_json())
+            except WebSocketDisconnect:
+                pass
             except Exception:
-                logger.warning("WebSocket error during history replay", exc_info=True)
-                break
-
-        # Stream live events
-        try:
-            while True:
-                event: HydraEvent = await queue.get()
-                await ws.send_text(event.model_dump_json())
-        except WebSocketDisconnect:
-            pass
-        except Exception:
-            logger.warning("WebSocket error during live streaming", exc_info=True)
-            pass
-        finally:
-            event_bus.unsubscribe(queue)
+                logger.warning("WebSocket error during live streaming", exc_info=True)
 
     return router

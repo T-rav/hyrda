@@ -13,7 +13,8 @@ from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, HITLItem, PRInfo, PRListItem
+from models import GitHubIssue, HITLItem, PRInfo, PRListItem, ReviewVerdict
+from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.pr_manager")
 
@@ -53,7 +54,7 @@ class PRManager:
             label_names = getattr(self._config, field)
             for label_name in label_names:
                 try:
-                    await self._run(
+                    await run_subprocess(
                         "gh",
                         "label",
                         "create",
@@ -66,6 +67,7 @@ class PRManager:
                         description,
                         "--force",
                         cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
                     )
                     logger.debug("Ensured label %r exists", label_name)
                 except RuntimeError as exc:
@@ -81,7 +83,7 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "push",
                 "--no-verify",
@@ -89,6 +91,7 @@ class PRManager:
                 "origin",
                 branch,
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -100,13 +103,14 @@ class PRManager:
         if self._config.dry_run:
             return False
         try:
-            output = await self._run(
+            output = await run_subprocess(
                 "git",
                 "ls-remote",
                 "--heads",
                 "origin",
                 branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return bool(output.strip())
         except RuntimeError:
@@ -221,7 +225,7 @@ class PRManager:
             return True
 
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "pr",
                 "merge",
@@ -231,6 +235,7 @@ class PRManager:
                 "--squash",
                 "--delete-branch",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
 
             await self._bus.publish(
@@ -304,25 +309,26 @@ class PRManager:
                     exc,
                 )
 
-    async def submit_review(self, pr_number: int, verdict: str, body: str) -> bool:
+    async def submit_review(
+        self, pr_number: int, verdict: ReviewVerdict, body: str
+    ) -> bool:
         """Submit a formal GitHub PR review.
 
-        *verdict* should be ``"approve"``, ``"request-changes"``, or
-        ``"comment"``.  Returns *True* on success.
+        *verdict* is a :class:`ReviewVerdict` enum member.
+        Returns *True* on success.
         """
         flag_map = {
-            "approve": "--approve",
-            "request-changes": "--request-changes",
-            "comment": "--comment",
+            ReviewVerdict.APPROVE: "--approve",
+            ReviewVerdict.REQUEST_CHANGES: "--request-changes",
+            ReviewVerdict.COMMENT: "--comment",
         }
-        flag = flag_map.get(verdict)
-        if flag is None:
-            logger.error("Unknown review verdict %r for PR #%d", verdict, pr_number)
-            return False
+        flag = flag_map[verdict]
 
         if self._config.dry_run:
             logger.info(
-                "[dry-run] Would submit %s review on PR #%d", verdict, pr_number
+                "[dry-run] Would submit %s review on PR #%d",
+                verdict.value,
+                pr_number,
             )
             return True
 
@@ -343,7 +349,7 @@ class PRManager:
         except RuntimeError as exc:
             logger.error(
                 "Could not submit %s review on PR #%d: %s",
-                verdict,
+                verdict.value,
                 pr_number,
                 exc,
             )
@@ -355,7 +361,7 @@ class PRManager:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "issue",
                     "edit",
@@ -365,6 +371,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -379,7 +386,7 @@ class PRManager:
         if self._config.dry_run:
             return
         try:
-            await self._run(
+            await run_subprocess(
                 "gh",
                 "issue",
                 "edit",
@@ -389,6 +396,7 @@ class PRManager:
                 "--remove-label",
                 label,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.warning(
@@ -398,13 +406,38 @@ class PRManager:
                 exc,
             )
 
+    async def remove_pr_label(self, pr_number: int, label: str) -> None:
+        """Remove *label* from a GitHub pull request."""
+        if self._config.dry_run:
+            return
+        try:
+            await run_subprocess(
+                "gh",
+                "pr",
+                "edit",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--remove-label",
+                label,
+                cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not remove label %r from PR #%d: %s",
+                label,
+                pr_number,
+                exc,
+            )
+
     async def add_pr_labels(self, pr_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub pull request."""
         if self._config.dry_run or not labels:
             return
         for label in labels:
             try:
-                await self._run(
+                await run_subprocess(
                     "gh",
                     "pr",
                     "edit",
@@ -414,6 +447,7 @@ class PRManager:
                     "--add-label",
                     label,
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -471,7 +505,7 @@ class PRManager:
     async def get_pr_diff(self, pr_number: int) -> str:
         """Fetch the diff for *pr_number*."""
         try:
-            return await self._run(
+            return await run_subprocess(
                 "gh",
                 "pr",
                 "diff",
@@ -479,6 +513,7 @@ class PRManager:
                 "--repo",
                 self._repo,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
         except RuntimeError as exc:
             logger.error("Could not get diff for PR #%d: %s", pr_number, exc)
@@ -487,7 +522,7 @@ class PRManager:
     async def get_pr_status(self, pr_number: int) -> dict[str, object]:
         """Fetch PR status as JSON."""
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "view",
@@ -497,6 +532,7 @@ class PRManager:
                 "--json",
                 "number,state,mergeable,title,isDraft",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
@@ -509,12 +545,13 @@ class PRManager:
             logger.info("[dry-run] Would pull main")
             return True
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "pull",
                 "origin",
                 self._config.main_branch,
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError as exc:
@@ -526,15 +563,15 @@ class PRManager:
     async def get_pr_checks(self, pr_number: int) -> list[dict[str, str]]:
         """Fetch CI check results for *pr_number*.
 
-        Returns a list of dicts with ``name``, ``state``, and ``conclusion``
-        keys.  Returns an empty list on failure or in dry-run mode.
+        Returns a list of dicts with ``name`` and ``state`` keys.
+        Returns an empty list on failure or in dry-run mode.
         """
         if self._config.dry_run:
             logger.info("[dry-run] Would fetch CI checks for PR #%d", pr_number)
             return []
 
         try:
-            raw = await self._run(
+            raw = await run_subprocess(
                 "gh",
                 "pr",
                 "checks",
@@ -542,15 +579,19 @@ class PRManager:
                 "--repo",
                 self._repo,
                 "--json",
-                "name,state,conclusion",
+                "name,state",
                 cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
             )
             return json.loads(raw)  # type: ignore[no-any-return]
         except (RuntimeError, json.JSONDecodeError) as exc:
             logger.warning("Could not fetch CI checks for PR #%d: %s", pr_number, exc)
             return []
 
-    _PASSING_CONCLUSIONS = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PASSING_STATES = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
+    _PENDING_STATES = frozenset(
+        {"PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING"}
+    )
 
     async def wait_for_ci(  # noqa: PLR0911
         self,
@@ -577,7 +618,9 @@ class PRManager:
             if not checks:
                 return True, "No CI checks found"
 
-            pending = [c for c in checks if c.get("state", "").upper() != "COMPLETED"]
+            pending = [
+                c for c in checks if c.get("state", "").upper() in self._PENDING_STATES
+            ]
             if pending:
                 await self._bus.publish(
                     HydraEvent(
@@ -598,11 +641,11 @@ class PRManager:
                     elapsed += poll_interval
                     continue
 
-            # All checks completed — check conclusions
+            # All checks completed — check states
             failed = [
                 c["name"]
                 for c in checks
-                if c.get("conclusion", "").upper() not in self._PASSING_CONCLUSIONS
+                if c.get("state", "").upper() not in self._PASSING_STATES
             ]
             passed = not failed
             status = "passed" if passed else "failed"
@@ -636,7 +679,7 @@ class PRManager:
 
         for label in labels:
             try:
-                raw = await self._run(
+                raw = await run_subprocess(
                     "gh",
                     "pr",
                     "list",
@@ -651,6 +694,7 @@ class PRManager:
                     "--limit",
                     "50",
                     cwd=self._config.repo_root,
+                    gh_token=self._config.gh_token,
                 )
                 for p in json.loads(raw):
                     pr_num = p["number"]
@@ -693,7 +737,7 @@ class PRManager:
 
             for label in hitl_labels:
                 try:
-                    raw = await self._run(
+                    raw = await run_subprocess(
                         "gh",
                         "issue",
                         "list",
@@ -708,6 +752,7 @@ class PRManager:
                         "--limit",
                         "50",
                         cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
                     )
                     for issue in json.loads(raw):
                         if issue["number"] not in seen_issues:
@@ -722,7 +767,7 @@ class PRManager:
                 pr_number = 0
                 pr_url = ""
                 try:
-                    pr_raw = await self._run(
+                    pr_raw = await run_subprocess(
                         "gh",
                         "pr",
                         "list",
@@ -737,6 +782,7 @@ class PRManager:
                         "--limit",
                         "1",
                         cwd=self._config.repo_root,
+                        gh_token=self._config.gh_token,
                     )
                     pr_data = json.loads(pr_raw)
                     if pr_data:
@@ -803,29 +849,12 @@ class PRManager:
         try:
             with os.fdopen(fd, "w") as f:
                 f.write(body)
-            return await self._run(*cmd, "--body-file", tmp_path, cwd=cwd)
+            return await run_subprocess(
+                *cmd,
+                "--body-file",
+                tmp_path,
+                cwd=cwd,
+                gh_token=self._config.gh_token,
+            )
         finally:
             Path(tmp_path).unlink(missing_ok=True)
-
-    # --- subprocess helper ---
-
-    async def _run(self, *cmd: str, cwd: Path) -> str:
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-        if self._config.gh_token:
-            env["GH_TOKEN"] = self._config.gh_token
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()
