@@ -203,33 +203,6 @@ class HydraOrchestrator:
 
     # --- Phase implementations ---
 
-    @staticmethod
-    def _parse_raw_issues(raw_issues: list[dict]) -> list[GitHubIssue]:  # type: ignore[type-arg]
-        """Parse raw ``gh issue list`` JSON into :class:`GitHubIssue` objects."""
-        issues: list[GitHubIssue] = []
-        for raw in raw_issues:
-            labels = [
-                lbl["name"] if isinstance(lbl, dict) else str(lbl)
-                for lbl in raw.get("labels", [])
-            ]
-            comments = []
-            for c in raw.get("comments", []):
-                if isinstance(c, dict):
-                    comments.append(c.get("body", ""))
-                else:
-                    comments.append(str(c))
-            issues.append(
-                GitHubIssue(
-                    number=raw["number"],
-                    title=raw.get("title", ""),
-                    body=raw.get("body", ""),
-                    labels=labels,
-                    comments=comments,
-                    url=raw.get("url", ""),
-                )
-            )
-        return issues
-
     async def _fetch_issues_by_labels(
         self,
         labels: list[str],
@@ -291,7 +264,7 @@ class HydraOrchestrator:
         else:
             return []
 
-        issues = self._parse_raw_issues(list(seen.values()))
+        issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
         return issues[:limit]
 
     async def _fetch_plan_issues(self) -> list[GitHubIssue]:

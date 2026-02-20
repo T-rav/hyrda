@@ -114,6 +114,101 @@ class TestGitHubIssue:
         assert data["comments"] == []
         assert data["url"] == ""
 
+    # -- Label field validator ------------------------------------------------
+
+    def test_labels_from_dict_list(self) -> None:
+        """gh CLI returns labels as list of dicts with a 'name' key."""
+        # Arrange / Act
+        issue = GitHubIssue.model_validate(
+            {"number": 1, "title": "t", "labels": [{"name": "bug"}, {"name": "ready"}]}
+        )
+
+        # Assert
+        assert issue.labels == ["bug", "ready"]
+
+    def test_labels_from_string_list(self) -> None:
+        """Plain string lists (existing usage) must still work."""
+        # Arrange / Act
+        issue = GitHubIssue(number=1, title="t", labels=["bug", "ready"])
+
+        # Assert
+        assert issue.labels == ["bug", "ready"]
+
+    def test_labels_mixed_dict_and_string(self) -> None:
+        """Mixed list of dicts and strings should normalise correctly."""
+        # Arrange / Act
+        issue = GitHubIssue.model_validate(
+            {"number": 1, "title": "t", "labels": [{"name": "bug"}, "enhancement"]}
+        )
+
+        # Assert
+        assert issue.labels == ["bug", "enhancement"]
+
+    # -- Comment field validator -----------------------------------------------
+
+    def test_comments_from_dict_list(self) -> None:
+        """gh CLI returns comments as list of dicts with a 'body' key."""
+        # Arrange / Act
+        issue = GitHubIssue.model_validate(
+            {"number": 1, "title": "t", "comments": [{"body": "LGTM"}]}
+        )
+
+        # Assert
+        assert issue.comments == ["LGTM"]
+
+    def test_comments_from_string_list(self) -> None:
+        """Plain string lists (existing usage) must still work."""
+        # Arrange / Act
+        issue = GitHubIssue(number=1, title="t", comments=["LGTM", "Ship it"])
+
+        # Assert
+        assert issue.comments == ["LGTM", "Ship it"]
+
+    def test_comments_mixed_dict_and_string(self) -> None:
+        """Mixed list of dicts and strings should normalise correctly."""
+        # Arrange / Act
+        issue = GitHubIssue.model_validate(
+            {"number": 1, "title": "t", "comments": [{"body": "Nice"}, "plain"]}
+        )
+
+        # Assert
+        assert issue.comments == ["Nice", "plain"]
+
+    def test_comments_dict_missing_body_key(self) -> None:
+        """A dict without 'body' should fall back to empty string."""
+        # Arrange / Act
+        issue = GitHubIssue.model_validate(
+            {"number": 1, "title": "t", "comments": [{"author": "alice"}]}
+        )
+
+        # Assert
+        assert issue.comments == [""]
+
+    # -- Full round-trip -------------------------------------------------------
+
+    def test_model_validate_full_gh_json(self) -> None:
+        """Full round-trip: realistic gh issue list JSON blob."""
+        # Arrange
+        raw = {
+            "number": 42,
+            "title": "Improve widget",
+            "body": "The widget is slow.",
+            "labels": [{"name": "hydra-ready"}, {"name": "perf"}],
+            "comments": [{"body": "LGTM"}, {"body": "Needs tests"}],
+            "url": "https://github.com/org/repo/issues/42",
+        }
+
+        # Act
+        issue = GitHubIssue.model_validate(raw)
+
+        # Assert
+        assert issue.number == 42
+        assert issue.title == "Improve widget"
+        assert issue.body == "The widget is slow."
+        assert issue.labels == ["hydra-ready", "perf"]
+        assert issue.comments == ["LGTM", "Needs tests"]
+        assert issue.url == "https://github.com/org/repo/issues/42"
+
 
 # ---------------------------------------------------------------------------
 # PlannerStatus
