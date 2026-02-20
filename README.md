@@ -8,6 +8,10 @@
   Multi-agent orchestration system that automates the full GitHub issue lifecycle using Claude Code. Label an issue, Hydra plans it, implements it, opens a PR, reviews it, waits for CI, and auto-merges.
 </p>
 
+## What is Hydra?
+
+Hydra is a multi-agent orchestration system that turns GitHub issues into merged pull requests — autonomously. You label an issue, and Hydra's pipeline of specialized AI agents triages it for completeness, explores the codebase to write an implementation plan, generates code with tests in an isolated worktree, reviews its own work for quality, waits for CI, and auto-merges on success. The entire lifecycle is driven by GitHub labels, with a live dashboard for monitoring and a human-in-the-loop escape hatch when things go sideways.
+
 ## How It Works
 
 Hydra runs four concurrent async loops that continuously poll for labeled issues:
@@ -28,6 +32,39 @@ hydra-find ──> hydra-plan ──> hydra-ready ──> hydra-review ──> h
 2. **Plan loop** -- Fetches `hydra-plan` issues, runs a read-only Claude agent to explore the codebase and produce an implementation plan, posts it as a comment, swaps label to `hydra-ready`.
 3. **Implement loop** -- Fetches `hydra-ready` issues, creates git worktrees, runs implementation agents with TDD prompts, pushes branches, creates PRs, swaps to `hydra-review`.
 4. **Review loop** -- Fetches `hydra-review` issues, runs a review agent, submits a formal PR review, waits for CI, and auto-merges. CI failures escalate to `hydra-hitl` for human intervention.
+
+## Design Philosophy
+
+Hydra's pipeline draws from three open-source spec-driven development frameworks. Some patterns are already implemented; others are on the [roadmap](#roadmap).
+
+### [spec-kit](https://github.com/github/spec-kit)
+
+| Pattern | What it is | Why Hydra needs it |
+|---|---|---|
+| Structured plan schemas | Required sections (Files to Modify, Implementation Steps, Testing Strategy, Acceptance Criteria, Key Considerations) | LLMs produce wildly inconsistent plans without structure — some are 2 lines, some are novels. A schema makes plans machine-parseable and consistently actionable. |
+| Phase-gate quality checks | Quality gates (lint, typecheck, security, tests) that block code before it ships | Catches bad code early. Without gates, broken implementations waste an entire review cycle before anyone notices. |
+| `[NEEDS CLARIFICATION]` markers *(roadmap)* | When the planner is uncertain, it marks ambiguity instead of guessing | LLMs fabricate plausible-sounding answers to ambiguous requirements. Explicit uncertainty markers route unclear issues to humans instead of building the wrong thing. |
+| MVP-first task ordering | Tasks ordered so the first user story is completable end-to-end before starting the next | Prevents half-built features spread across multiple files. If the agent runs out of context or fails mid-task, at least one complete feature exists. |
+| Constitutional governance *(roadmap)* | Immutable principles file constraining all agent outputs, with agent-proposed amendments | Agents drift without constraints. A shared constitution prevents the planner from planning one way and the implementer from coding another. Self-amendment lets the system improve its own rules. |
+
+### [OpenSpec](https://github.com/Fission-AI/OpenSpec)
+
+| Pattern | What it is | Why Hydra needs it |
+|---|---|---|
+| Delta semantics *(roadmap)* | Each task tagged ADDED/MODIFIED/REMOVED/RENAMED | Replaces fuzzy "file referenced but not modified" heuristics with certain post-implementation verification. An ADDED file that doesn't exist is a guaranteed miss, not a guess. |
+| Progressive rigor | Lite plans for bug fixes, full plans for features | A typo fix doesn't need a 6-section plan with Key Considerations. Scale-adaptive planning saves planner tokens and reduces noise. |
+| Three-dimensional review | Separate checks for Completeness, Correctness, and Quality | LLM reviewers tend to rubber-stamp. Forcing three explicit dimensions means the reviewer can't skip "did the implementation address ALL requirements?" — the most common silent failure. |
+| RFC 2119 keywords *(roadmap)* | MUST/SHOULD/MAY formal requirement language | Makes constitutional principles machine-parseable and unambiguous. "Agents MUST NOT expand scope" is clearer than "agents should try to avoid scope creep." |
+
+### [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)
+
+| Pattern | What it is | Why Hydra needs it |
+|---|---|---|
+| Adversarial review *(roadmap)* | Minimum finding threshold (default 3 issues) before APPROVE is accepted | Without a floor, LLM reviewers approve everything with a generic "looks good." Requiring N findings or explicit justification for each empty category forces genuine code examination. |
+| Formalized persona constraints | Explicit behavioral boundaries per agent role | Prevents role bleed — the planner writing code, the implementer creating PRs, the reviewer rubber-stamping. Each agent has a focused prompt with explicit boundaries (e.g., planner is read-only, implementer cannot push). |
+| Pre-mortem risk analysis *(roadmap)* | "Assume this plan failed — what went wrong?" added to planner prompt | LLMs are optimistic planners. A pre-mortem surfaces edge cases and risks that the planner would otherwise silently skip. |
+| Scope escalation detection *(roadmap)* | Constitutional principle: agents must flag files not in the plan | LLM agents silently expand scope (touching files the plan didn't mention). An explicit "stop and declare" rule catches scope creep during implementation, not after review. |
+| Quality fix retry loops | Implementation agents retry `make quality` failures up to N times before escalating | Agents often produce code that fails lint or tests on the first pass. Automated retries fix the majority of issues without human intervention. |
 
 ## Prerequisites
 
@@ -70,12 +107,13 @@ HYDRA_LABEL_PLAN=hydra-plan
 HYDRA_LABEL_READY=hydra-ready
 HYDRA_LABEL_REVIEW=hydra-review
 HYDRA_LABEL_HITL=hydra-hitl
+HYDRA_LABEL_HITL_ACTIVE=hydra-hitl-active
 HYDRA_LABEL_FIXED=hydra-fixed
 ```
 
 ### 4. Create GitHub labels
 
-Hydra uses 6 lifecycle labels. Create them in your repo (reads label names from `.env`):
+Hydra uses 7 lifecycle labels. Create them in your repo (reads label names from `.env`):
 
 ```bash
 # From the hydra directory (auto-detects your repo from git remote)
@@ -200,6 +238,7 @@ gh issue create --label hydra-plan --title "Add retry logic to API client" --bod
 | `hydra-ready` | Ready for implementation | Impl agent creates worktree, writes code + tests, opens PR, swaps to `hydra-review` |
 | `hydra-review` | PR under review | Review agent checks quality, waits for CI, auto-merges, swaps to `hydra-fixed` |
 | `hydra-hitl` | Needs human help | CI failed after retries -- human intervention required |
+| `hydra-hitl-active` | HITL in progress | Being processed by HITL correction agent |
 | `hydra-fixed` | Done | PR merged successfully |
 
 Labels can be overridden via CLI flags or environment variables:
@@ -214,6 +253,7 @@ export HYDRA_LABEL_PLAN=custom-plan
 export HYDRA_LABEL_READY=custom-ready
 export HYDRA_LABEL_REVIEW=custom-review
 export HYDRA_LABEL_HITL=custom-hitl
+export HYDRA_LABEL_HITL_ACTIVE=custom-hitl-active
 export HYDRA_LABEL_FIXED=custom-fixed
 ```
 
@@ -228,6 +268,7 @@ All configuration is via CLI flags or environment variables. Defaults are sensib
 | `--ready-label` | `HYDRA_LABEL_READY` | `hydra-ready` | Label for implementation queue |
 | `--review-label` | `HYDRA_LABEL_REVIEW` | `hydra-review` | Label for review queue |
 | `--hitl-label` | `HYDRA_LABEL_HITL` | `hydra-hitl` | Label for human escalation |
+| `--hitl-active-label` | `HYDRA_LABEL_HITL_ACTIVE` | `hydra-hitl-active` | Label for HITL items being actively processed |
 | `--fixed-label` | `HYDRA_LABEL_FIXED` | `hydra-fixed` | Label for completed issues |
 | `--max-workers` | -- | `2` | Concurrent implementation agents |
 | `--max-planners` | -- | `1` | Concurrent planning agents |
@@ -249,6 +290,19 @@ All configuration is via CLI flags or environment variables. Defaults are sensib
 | `--dry-run` | -- | -- | Log actions without executing |
 | `--verbose` | -- | -- | Enable debug logging |
 | `--clean` | -- | -- | Remove all worktrees and state, then exit |
+
+## Dashboard
+
+Hydra includes a live web dashboard (React + Vite) served alongside the backend:
+
+- **Pipeline view** — see issues flowing through triage → plan → implement → review → merged
+- **Worker status** — real-time status of all active agents (planner, implementer, reviewer)
+- **Live transcripts** — stream agent output as it happens via WebSocket
+- **HITL queue** — view and respond to issues that need human intervention
+- **PR tracking** — monitor open PRs with links to GitHub
+- **Controls** — start/stop the orchestrator from the UI
+
+Access the dashboard at `http://localhost:5556` when running `make run`.
 
 ## Development
 
@@ -301,3 +355,28 @@ ui/                    React dashboard frontend
 - **Pyright** for type checking
 - **Bandit** for security scanning
 - **pytest + pytest-asyncio** for testing
+
+## Roadmap
+
+Hydra's development is tracked in two epics:
+
+- **[#207 — Spec-Driven Planning Pipeline](https://github.com/T-rav/hyrda/issues/207)** — structured plan schemas, delta semantics, progressive rigor, `[NEEDS CLARIFICATION]` markers, RFC 2119 keywords
+- **[#222 — Self-Improving Agent Pipeline](https://github.com/T-rav/hyrda/issues/222)** — memory digest, retrospectives, review insight aggregation, constitution amendments, performance tracking
+
+Planned self-improvement capabilities:
+
+- **Memory digest** — agents aggregate learnings across runs into persistent memory
+- **Retrospectives** — automated post-mortem analysis of failed or slow implementations
+- **Review insight aggregation** — patterns from review feedback inform future implementation prompts
+- **Constitution amendments** — agents propose changes to CLAUDE.md conventions based on observed patterns
+
+## Contributing
+
+- **For AI agents** — see [CLAUDE.md](CLAUDE.md) for project conventions, architecture, and development commands
+- **For humans** — check the [roadmap epics](#roadmap) above, pick an issue, and submit a PR
+- **Issue format** — Hydra processes its own issues: label with `hydra-find` and the pipeline picks it up automatically
+- **Quality gates** — all PRs must pass `make quality` (lint + typecheck + security + tests)
+
+## License
+
+[MIT](LICENSE) © 2026 Travis Frisinger
