@@ -126,7 +126,7 @@ class TestBuildConfig:
         assert cfg.batch_size == 15
         assert cfg.max_workers == 2
         assert cfg.max_planners == 1
-        assert cfg.max_reviewers == 3
+        assert cfg.max_reviewers == 5
         assert cfg.max_hitl_workers == 1
         assert cfg.hitl_active_label == ["hydra-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
