@@ -1660,3 +1660,59 @@ class TestReviewUpdateStartEvent:
         ]
         assert len(start_events) == 1
         assert "worker" in start_events[0].data
+
+
+# ---------------------------------------------------------------------------
+# Active issue persistence in review phase
+# ---------------------------------------------------------------------------
+
+
+class TestReviewActiveIssuePersistence:
+    """Tests that review phase persists active issues to state for crash recovery."""
+
+    @pytest.mark.asyncio
+    async def test_active_issue_persisted_on_review_start(
+        self, config: HydraConfig
+    ) -> None:
+        """add_active_issue should be called when review starts."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # After completion, persisted active issue should be removed
+        assert 42 not in phase._state.get_active_issue_numbers()
+
+    @pytest.mark.asyncio
+    async def test_active_issue_removed_from_state_on_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """remove_active_issue should be called even when review raises."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(side_effect=RuntimeError("boom"))
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._state.get_active_issue_numbers()
+        assert 42 not in phase._active_issues
