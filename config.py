@@ -135,6 +135,14 @@ class HydraConfig(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    def branch_for_issue(self, issue_number: int) -> str:
+        """Return the canonical branch name for a given issue number."""
+        return f"agent/issue-{issue_number}"
+
+    def worktree_path_for_issue(self, issue_number: int) -> Path:
+        """Return the worktree directory path for a given issue number."""
+        return self.worktree_base / f"issue-{issue_number}"
+
     @model_validator(mode="after")
     def resolve_defaults(self) -> HydraConfig:
         """Resolve paths, repo slug, and apply env var overrides.

@@ -377,7 +377,7 @@ class HydraOrchestrator:
 
                 if result.success and result.plan:
                     # Post plan + branch as comment on the issue
-                    branch = f"agent/issue-{issue.number}"
+                    branch = self._config.branch_for_issue(issue.number)
                     comment_body = (
                         f"## Implementation Plan\n\n"
                         f"{result.plan}\n\n"
@@ -472,7 +472,7 @@ class HydraOrchestrator:
         # For each issue, look up the open PR on its branch
         pr_infos: list[PRInfo] = []
         for issue in issues:
-            branch = f"agent/issue-{issue.number}"
+            branch = self._config.branch_for_issue(issue.number)
             try:
                 raw = await run_subprocess(
                     "gh",
@@ -529,7 +529,7 @@ class HydraOrchestrator:
             if self._stop_event.is_set():
                 return WorkerResult(
                     issue_number=issue.number,
-                    branch=f"agent/issue-{issue.number}",
+                    branch=self._config.branch_for_issue(issue.number),
                     error="stopped",
                 )
 
@@ -537,17 +537,17 @@ class HydraOrchestrator:
                 if self._stop_event.is_set():
                     return WorkerResult(
                         issue_number=issue.number,
-                        branch=f"agent/issue-{issue.number}",
+                        branch=self._config.branch_for_issue(issue.number),
                         error="stopped",
                     )
 
-                branch = f"agent/issue-{issue.number}"
+                branch = self._config.branch_for_issue(issue.number)
                 self._active_issues.add(issue.number)
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
 
                 # Resume: reuse existing worktree if present
-                wt_path = self._config.worktree_base / f"issue-{issue.number}"
+                wt_path = self._config.worktree_path_for_issue(issue.number)
                 if wt_path.is_dir():
                     logger.info(
                         "Resuming existing worktree for issue #%d", issue.number
@@ -636,7 +636,7 @@ class HydraOrchestrator:
                     )
 
                 # The reviewer works in the same worktree as the implementation
-                wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
+                wt_path = self._config.worktree_path_for_issue(pr.issue_number)
                 if not wt_path.exists():
                     # Create a fresh worktree for review
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
