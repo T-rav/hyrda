@@ -6,7 +6,6 @@ import json
 import logging
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
 
 
 class JSONFormatter(logging.Formatter):
@@ -31,7 +30,6 @@ class JSONFormatter(logging.Formatter):
 
 def setup_logging(
     *,
-    log_dir: Path | None = None,
     level: int = logging.INFO,
     json_output: bool = True,
 ) -> logging.Logger:
@@ -39,8 +37,6 @@ def setup_logging(
 
     Parameters
     ----------
-    log_dir:
-        Optional directory for a rotating log file.
     level:
         Logging level.
     json_output:
@@ -68,13 +64,5 @@ def setup_logging(
     console.setLevel(level)
     console.setFormatter(formatter)
     logger.addHandler(console)
-
-    # Optional file handler
-    if log_dir is not None:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        fh = logging.FileHandler(log_dir / "hydra.log")
-        fh.setLevel(level)
-        fh.setFormatter(formatter)
-        logger.addHandler(fh)
 
     return logger

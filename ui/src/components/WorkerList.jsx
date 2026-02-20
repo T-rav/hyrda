@@ -21,6 +21,12 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
 
   return (
     <div style={styles.sidebar}>
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
       <RoleSection
         label="Triage"
         entries={triagers}
@@ -89,17 +95,14 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
           <div
             key={num}
             onClick={() => onSelect(isNaN(Number(num)) ? num : Number(num))}
-            style={{
-              ...styles.card,
-              ...(isActive ? styles.active : {}),
-            }}
+            style={isActive ? cardActiveStyle : cardStyle}
           >
             <div style={styles.cardHeader}>
               <span style={styles.issue}>
                 {hasPendingInput && <span style={styles.inputDot} />}
                 #{num}
               </span>
-              <span style={{ ...styles.status, background: sc.bg, color: sc.fg }}>
+              <span style={statusBadgeStyles[w.status] || statusBadgeStyles.queued}>
                 {w.status}
               </span>
             </div>
@@ -193,3 +196,14 @@ const styles = {
   },
   meta: { fontSize: 11, color: '#8b949e', marginTop: 4 },
 }
+
+// Pre-computed card style variants (avoids object spread in .map())
+export const cardStyle = styles.card
+export const cardActiveStyle = { ...styles.card, ...styles.active }
+
+// Pre-computed status badge styles for each known status
+export const statusBadgeStyles = Object.fromEntries(
+  Object.entries(statusColors).map(([k, v]) => [
+    k, { ...styles.status, background: v.bg, color: v.fg }
+  ])
+)
