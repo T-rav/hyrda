@@ -1,4 +1,5 @@
 import React from 'react'
+import { theme } from '../theme'
 
 export function PRTable({ prs }) {
   if (prs.length === 0) {
@@ -43,14 +44,14 @@ const styles = {
   container: { padding: 12 },
   empty: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    height: 200, color: '#8b949e', fontSize: 13,
+    height: 200, color: theme.textMuted, fontSize: 13,
   },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th: {
-    textAlign: 'left', padding: 8, borderBottom: '1px solid #30363d',
-    color: '#8b949e', fontSize: 11,
+    textAlign: 'left', padding: 8, borderBottom: `1px solid ${theme.border}`,
+    color: theme.textMuted, fontSize: 11,
   },
-  td: { padding: 8, borderBottom: '1px solid #30363d' },
-  link: { color: '#58a6ff', textDecoration: 'none' },
-  merged: { color: '#3fb950', fontWeight: 600 },
+  td: { padding: 8, borderBottom: `1px solid ${theme.border}` },
+  link: { color: theme.accent, textDecoration: 'none' },
+  merged: { color: theme.green, fontWeight: 600 },
 }

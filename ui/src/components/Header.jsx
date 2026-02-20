@@ -1,10 +1,11 @@
 import React from 'react'
+import { theme } from '../theme'
 
 const STAGES = [
-  { key: 'triage',    label: 'TRIAGE',    color: '#39d353', role: 'triage',      configKey: null },
-  { key: 'plan',      label: 'PLAN',      color: '#a371f7', role: 'planner',     configKey: 'max_planners' },
-  { key: 'implement', label: 'IMPLEMENT', color: '#58a6ff', role: 'implementer', configKey: 'max_workers' },
-  { key: 'review',    label: 'REVIEW',    color: '#d18616', role: 'reviewer',    configKey: 'max_reviewers' },
+  { key: 'triage',    label: 'TRIAGE',    color: theme.triageGreen, role: 'triage',      configKey: null },
+  { key: 'plan',      label: 'PLAN',      color: theme.purple,      role: 'planner',     configKey: 'max_planners' },
+  { key: 'implement', label: 'IMPLEMENT', color: theme.accent,      role: 'implementer', configKey: 'max_workers' },
+  { key: 'review',    label: 'REVIEW',    color: theme.orange,      role: 'reviewer',    configKey: 'max_reviewers' },
 ]
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
@@ -46,7 +47,7 @@ export function Header({
         </span>
         <span style={{
           ...styles.dot,
-          background: connected ? '#3fb950' : '#f85149',
+          background: connected ? theme.green : theme.red,
         }} />
       </div>
       <div style={styles.center}>
@@ -71,14 +72,14 @@ export function Header({
                 {i > 0 && (
                   <div style={{
                     ...styles.connector,
-                    background: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
+                    background: lit ? stage.color : dimmed ? stage.color + '55' : theme.border,
                   }} />
                 )}
                 <div style={{
                   ...styles.pill,
-                  background: lit ? stage.color : dimmed ? stage.color + '20' : '#21262d',
-                  color: lit ? '#0d1117' : dimmed ? stage.color + '99' : '#484f58',
-                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
+                  background: lit ? stage.color : dimmed ? stage.color + '20' : theme.surfaceInset,
+                  color: lit ? theme.bg : dimmed ? stage.color + '99' : theme.textInactive,
+                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : theme.border,
                 }}>
                   {stage.label}
                   <span style={{
@@ -135,12 +136,12 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '12px 20px',
-    background: '#161b22',
-    borderBottom: '1px solid #30363d',
+    background: theme.surface,
+    borderBottom: `1px solid ${theme.border}`,
   },
   left: { display: 'flex', alignItems: 'center', gap: 10 },
-  logo: { fontSize: 18, fontWeight: 700, color: '#58a6ff' },
-  subtitle: { color: '#8b949e', fontWeight: 400, fontSize: 12, marginLeft: 8 },
+  logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
+  subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12, marginLeft: 8 },
   dot: { width: 8, height: 8, borderRadius: '50%', display: 'inline-block' },
   center: {
     display: 'flex',
@@ -151,21 +152,21 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    border: '1px solid #30363d',
+    border: `1px solid ${theme.border}`,
     borderRadius: 8,
     padding: '6px 14px',
-    background: '#0d1117',
+    background: theme.bg,
   },
   sessionLabel: {
-    color: '#8b949e',
+    color: theme.textMuted,
     fontSize: 11,
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
   stats: { display: 'flex', gap: 16, fontSize: 12 },
-  stat: { color: '#8b949e' },
-  statVal: { color: '#c9d1d9' },
+  stat: { color: theme.textMuted },
+  statVal: { color: theme.text },
   pills: { display: 'flex', alignItems: 'center', gap: 0 },
   pill: {
     padding: '4px 14px',
@@ -185,7 +186,7 @@ const styles = {
     flexShrink: 0,
   },
   count: {
-    background: 'rgba(0,0,0,0.3)',
+    background: theme.overlay,
     borderRadius: 8,
     padding: '1px 6px',
     fontSize: 10,
@@ -196,8 +197,8 @@ const styles = {
     padding: '4px 14px',
     borderRadius: 6,
     border: 'none',
-    background: '#238636',
-    color: '#ffffff',
+    background: theme.btnGreen,
+    color: theme.white,
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -206,8 +207,8 @@ const styles = {
     padding: '4px 14px',
     borderRadius: 6,
     border: 'none',
-    background: '#da3633',
-    color: '#ffffff',
+    background: theme.btnRed,
+    color: theme.white,
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
@@ -215,8 +216,8 @@ const styles = {
   stoppingBadge: {
     padding: '4px 12px',
     borderRadius: 6,
-    background: '#d29922',
-    color: '#0d1117',
+    background: theme.yellow,
+    color: theme.bg,
     fontSize: 12,
     fontWeight: 600,
   },

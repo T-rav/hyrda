@@ -1,13 +1,14 @@
 import React, { useState } from 'react'
+import { theme } from '../theme'
 
 const statusColors = {
-  queued:     { bg: 'rgba(139,148,158,0.15)', fg: '#8b949e' },
-  running:    { bg: 'rgba(88,166,255,0.15)',  fg: '#58a6ff' },
-  planning:   { bg: 'rgba(163,113,247,0.15)', fg: '#a371f7' },
-  testing:    { bg: 'rgba(210,153,34,0.15)',  fg: '#d29922' },
-  committing: { bg: 'rgba(210,134,22,0.15)',  fg: '#d18616' },
-  done:       { bg: 'rgba(63,185,80,0.15)',   fg: '#3fb950' },
-  failed:     { bg: 'rgba(248,81,73,0.15)',   fg: '#f85149' },
+  queued:     { bg: theme.mutedSubtle,  fg: theme.textMuted },
+  running:    { bg: theme.accentSubtle, fg: theme.accent },
+  planning:   { bg: theme.purpleSubtle, fg: theme.purple },
+  testing:    { bg: theme.yellowSubtle, fg: theme.yellow },
+  committing: { bg: theme.orangeSubtle, fg: theme.orange },
+  done:       { bg: theme.greenSubtle,  fg: theme.green },
+  failed:     { bg: theme.redSubtle,    fg: theme.red },
 }
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
@@ -116,9 +117,9 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
 
 const styles = {
   sidebar: {
-    borderRight: '1px solid #30363d',
+    borderRight: `1px solid ${theme.border}`,
     overflowY: 'auto',
-    background: '#161b22',
+    background: theme.surface,
   },
   sectionHeader: {
     display: 'flex',
@@ -130,32 +131,32 @@ const styles = {
   },
   chevron: {
     fontSize: 9,
-    color: '#8b949e',
+    color: theme.textMuted,
   },
   sectionLabel: {
     fontSize: 11,
     fontWeight: 600,
     textTransform: 'uppercase',
-    color: '#8b949e',
+    color: theme.textMuted,
     letterSpacing: 0.5,
   },
   sectionCount: {
     fontSize: 11,
-    color: '#58a6ff',
+    color: theme.accent,
     fontWeight: 600,
     marginLeft: 'auto',
   },
   card: {
     padding: '10px 16px',
-    borderBottom: '1px solid #30363d',
-    borderLeft: '3px solid #484f58',
+    borderBottom: `1px solid ${theme.border}`,
+    borderLeft: `3px solid ${theme.textInactive}`,
     paddingLeft: 13,
     cursor: 'pointer',
     transition: 'background 0.15s, border-left-color 0.15s',
   },
   active: {
-    background: 'rgba(88,166,255,0.08)',
-    borderLeft: '3px solid #58a6ff',
+    background: theme.accentHover,
+    borderLeft: `3px solid ${theme.accent}`,
   },
   cardHeader: {
     display: 'flex',
@@ -165,7 +166,7 @@ const styles = {
   },
   issue: {
     fontWeight: 600,
-    color: '#c9d1d9',
+    color: theme.text,
     display: 'flex',
     alignItems: 'center',
     gap: 6,
@@ -174,7 +175,7 @@ const styles = {
     width: 8,
     height: 8,
     borderRadius: '50%',
-    background: '#d29922',
+    background: theme.yellow,
     display: 'inline-block',
     animation: 'pulse 1.5s ease-in-out infinite',
   },
@@ -186,10 +187,10 @@ const styles = {
   },
   cardTitle: {
     fontSize: 12,
-    color: '#8b949e',
+    color: theme.textMuted,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  meta: { fontSize: 11, color: '#8b949e', marginTop: 4 },
+  meta: { fontSize: 11, color: theme.textMuted, marginTop: 4 },
 }
