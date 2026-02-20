@@ -260,4 +260,11 @@ describe('Header component', () => {
     render(<Header {...defaultProps} />)
     expect(screen.getByText('Session')).toBeInTheDocument()
   })
+
+  it('controls section has marginLeft for spacing from pills', () => {
+    render(<Header {...defaultProps} />)
+    const startBtn = screen.getByText('Start')
+    const controlsDiv = startBtn.parentElement
+    expect(controlsDiv.style.marginLeft).toBe('10px')
+  })
 })

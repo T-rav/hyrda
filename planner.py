@@ -133,6 +133,9 @@ class PlannerRunner:
             result += "\n\n…(truncated)"
         return result
 
+    # Patterns for detecting images in issue bodies (markdown and HTML).
+    _IMAGE_RE = re.compile(r"!\[.*?\]\(.*?\)|<img\s[^>]*>", re.IGNORECASE)
+
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the planning prompt for the agent."""
         comments_section = ""
@@ -148,6 +151,15 @@ class PlannerRunner:
             issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
         )
 
+        # Detect attached images and add a note for the planner.
+        image_note = ""
+        if self._IMAGE_RE.search(issue.body or ""):
+            image_note = (
+                "\n\n**Note:** This issue contains attached images providing "
+                "visual context. The images cannot be rendered here, but "
+                "the surrounding text describes what they show."
+            )
+
         find_label = (
             self._config.find_label[0] if self._config.find_label else "hydra-find"
         )
@@ -156,7 +168,7 @@ class PlannerRunner:
 
 ## Issue: {issue.title}
 
-{body}{comments_section}
+{body}{image_note}{comments_section}
 
 ## Instructions
 
