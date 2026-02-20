@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -13,7 +11,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
-from stream_parser import StreamParser
+from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.planner")
 
@@ -366,9 +364,7 @@ Only include this section if you actually discover issues worth filing.
 
     def terminate(self) -> None:
         """Kill all active planner subprocesses."""
-        for proc in list(self._active_procs):
-            with contextlib.suppress(ProcessLookupError):
-                proc.kill()
+        terminate_processes(self._active_procs)
 
     async def _execute(
         self,
@@ -378,93 +374,26 @@ Only include this section if you actually discover issues worth filing.
         issue_number: int,
     ) -> str:
         """Run the claude planning process."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
 
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=str(cwd),
-            env=env,
-            limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
-        )
-        self._active_procs.add(proc)
-
-        try:
-            assert proc.stdin is not None
-            assert proc.stdout is not None
-            assert proc.stderr is not None
-
-            proc.stdin.write(prompt.encode())
-            await proc.stdin.drain()
-            proc.stdin.close()
-
-            # Drain stderr in background to prevent deadlock
-            stderr_task = asyncio.create_task(proc.stderr.read())
-
-            parser = StreamParser()
-            raw_lines: list[str] = []
-            result_text = ""
-            accumulated_text = ""
-            plan_complete = False
-            async for raw in proc.stdout:
-                line = raw.decode(errors="replace").rstrip("\n")
-                raw_lines.append(line)
-                if not line.strip():
-                    continue
-
-                display, result = parser.parse(line)
-                if result is not None:
-                    result_text = result
-
-                if display.strip():
-                    accumulated_text += display + "\n"
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.TRANSCRIPT_LINE,
-                            data={
-                                "issue": issue_number,
-                                "line": display,
-                                "source": "planner",
-                            },
-                        )
-                    )
-
-                # Once we have the plan markers, the planner is done.
-                # Kill the subprocess to avoid getting stuck in hook
-                # feedback loops (the stop hook fires and the agent
-                # keeps responding to it indefinitely).
-                if not plan_complete and "PLAN_END" in accumulated_text:
-                    plan_complete = True
-                    logger.info(
-                        "Plan markers found for issue #%d — terminating planner",
-                        issue_number,
-                    )
-                    proc.kill()
-                    break
-
-            stderr_bytes = await stderr_task
-            await proc.wait()
-
-            if not plan_complete and proc.returncode != 0:
-                stderr_text = stderr_bytes.decode(errors="replace").strip()
-                logger.warning(
-                    "Planner process exited with code %d for issue #%d: %s",
-                    proc.returncode,
+        def _check_plan_complete(accumulated: str) -> bool:
+            if "PLAN_END" in accumulated:
+                logger.info(
+                    "Plan markers found for issue #%d — terminating planner",
                     issue_number,
-                    stderr_text[:500],
                 )
+                return True
+            return False
 
-            # Return the result text for plan extraction,
-            # falling back to accumulated display text, then raw output.
-            return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
-        except asyncio.CancelledError:
-            proc.kill()
-            raise
-        finally:
-            self._active_procs.discard(proc)
+        return await stream_claude_process(
+            cmd=cmd,
+            prompt=prompt,
+            cwd=cwd,
+            active_procs=self._active_procs,
+            event_bus=self._bus,
+            event_data={"issue": issue_number, "source": "planner"},
+            logger=logger,
+            on_output=_check_plan_complete,
+        )
 
     async def _emit_status(
         self, issue_number: int, worker_id: int, status: PlannerStatus
