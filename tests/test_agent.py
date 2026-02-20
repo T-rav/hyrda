@@ -1293,3 +1293,17 @@ class TestExecuteStreaming:
             await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
 
         mock_logger.warning.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_large_stream_limit(
+        self, config, event_bus: EventBus, issue, tmp_path: Path
+    ) -> None:
+        """_execute should set limit=1MB on subprocess to handle large stream-json lines."""
+        runner = AgentRunner(config, event_bus)
+        mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+        with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+            await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
+
+        kwargs = mock_exec.call_args[1]
+        assert kwargs["limit"] == 1024 * 1024

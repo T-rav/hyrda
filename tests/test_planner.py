@@ -692,3 +692,16 @@ async def test_execute_publishes_transcript_lines(config, event_bus, issue, tmp_
     for ev in transcript_events:
         assert ev.data["source"] == "planner"
         assert ev.data["issue"] == issue.number
+
+
+@pytest.mark.asyncio
+async def test_execute_uses_large_stream_limit(config, event_bus, issue, tmp_path):
+    """_execute should set limit=1MB to handle large stream-json lines."""
+    runner = _make_runner(config, event_bus)
+    mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+    with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+        await runner._execute(["claude", "-p"], "prompt", tmp_path, issue.number)
+
+    kwargs = mock_exec.call_args[1]
+    assert kwargs["limit"] == 1024 * 1024

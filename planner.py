@@ -388,6 +388,7 @@ Only include this section if you actually discover issues worth filing.
             stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd),
             env=env,
+            limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
         )
         self._active_procs.add(proc)
 

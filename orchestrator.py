@@ -639,6 +639,8 @@ class HydraOrchestrator:
 
                 status = "success" if result.success else "failed"
                 self._state.mark_issue(issue.number, status)
+                # Release so the review loop can pick it up
+                self._active_issues.discard(issue.number)
                 return result
 
         all_tasks = [
@@ -739,6 +741,8 @@ class HydraOrchestrator:
                         exc,
                     )
 
+                # Release so issue can be re-reviewed if needed
+                self._active_issues.discard(pr.issue_number)
                 return result
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]

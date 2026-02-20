@@ -223,6 +223,7 @@ class AgentRunner:
             stderr=asyncio.subprocess.PIPE,
             cwd=str(worktree_path),
             env=env,
+            limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
         )
         self._active_procs.add(proc)
 
