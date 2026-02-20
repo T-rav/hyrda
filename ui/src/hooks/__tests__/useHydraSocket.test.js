@@ -507,15 +507,15 @@ describe('useHydraSocket reducer', () => {
       expect(next.sessionImplemented).toBe(5)
     })
 
-    it('preserves workers and session stats when status is stopping', () => {
+    it('clears workers and session stats when status is stopping', () => {
       const next = reducer(staleState, {
         type: 'orchestrator_status',
         data: { status: 'stopping' },
         timestamp: '2024-01-01T00:00:01Z',
       })
       expect(next.orchestratorStatus).toBe('stopping')
-      expect(Object.keys(next.workers)).toHaveLength(2)
-      expect(next.sessionImplemented).toBe(5)
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
     })
   })
 })
