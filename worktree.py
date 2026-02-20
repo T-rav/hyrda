@@ -38,7 +38,7 @@ class WorktreeManager:
 
     def exists(self, issue_number: int) -> bool:
         """Check whether a worktree directory already exists for *issue_number*."""
-        wt_path = self._base / f"issue-{issue_number}"
+        wt_path = self._config.worktree_path_for_issue(issue_number)
         return wt_path.is_dir()
 
     async def _remote_branch_exists(self, branch: str) -> bool:
@@ -66,7 +66,7 @@ class WorktreeManager:
 
         Returns the absolute path to the new worktree.
         """
-        wt_path = self._base / f"issue-{issue_number}"
+        wt_path = self._config.worktree_path_for_issue(issue_number)
         logger.info(
             "Creating worktree %s on branch %s",
             wt_path,
@@ -133,7 +133,7 @@ class WorktreeManager:
 
     async def destroy(self, issue_number: int) -> None:
         """Remove the worktree for *issue_number*."""
-        wt_path = self._base / f"issue-{issue_number}"
+        wt_path = self._config.worktree_path_for_issue(issue_number)
         if self._config.dry_run:
             logger.info("[dry-run] Would destroy worktree %s", wt_path)
             return
@@ -155,7 +155,7 @@ class WorktreeManager:
             )
 
         # Also clean up the branch
-        branch = f"agent/issue-{issue_number}"
+        branch = self._config.branch_for_issue(issue_number)
         with contextlib.suppress(RuntimeError):
             await run_subprocess(
                 "git",

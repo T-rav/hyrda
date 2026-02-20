@@ -198,7 +198,7 @@ class HydraDashboard:
 
                 items: list[HITLItem] = []
                 for issue in raw_issues:
-                    branch = f"agent/issue-{issue['number']}"
+                    branch = self._config.branch_for_issue(issue["number"])
                     # Look up the PR for this issue's branch
                     pr_number = 0
                     pr_url = ""

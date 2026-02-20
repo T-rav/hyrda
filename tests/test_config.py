@@ -984,7 +984,10 @@ class TestHydraConfigValidationConstraints:
 class TestHydraConfigGhToken:
     """Tests for the gh_token field and HYDRA_GH_TOKEN env var resolution."""
 
-    def test_gh_token_default_is_empty(self, tmp_path: Path) -> None:
+    def test_gh_token_default_is_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("HYDRA_GH_TOKEN", raising=False)
         cfg = HydraConfig(
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -1023,3 +1026,65 @@ class TestHydraConfigGhToken:
             state_file=tmp_path / "s.json",
         )
         assert cfg.gh_token == "ghp_explicit"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – branch_for_issue / worktree_path_for_issue helpers
+# ---------------------------------------------------------------------------
+
+
+class TestBranchForIssue:
+    """Tests for HydraConfig.branch_for_issue()."""
+
+    def test_returns_canonical_branch_name(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.branch_for_issue(42) == "agent/issue-42"
+
+    def test_single_digit_issue(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.branch_for_issue(1) == "agent/issue-1"
+
+    def test_large_issue_number(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.branch_for_issue(99999) == "agent/issue-99999"
+
+
+class TestWorktreePathForIssue:
+    """Tests for HydraConfig.worktree_path_for_issue()."""
+
+    def test_returns_path_under_worktree_base(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.worktree_path_for_issue(42) == tmp_path / "wt" / "issue-42"
+
+    def test_single_digit_issue(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.worktree_path_for_issue(1) == tmp_path / "wt" / "issue-1"
+
+    def test_uses_configured_worktree_base(self, tmp_path: Path) -> None:
+        custom_base = tmp_path / "custom-worktrees"
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=custom_base,
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.worktree_path_for_issue(7) == custom_base / "issue-7"
