@@ -261,8 +261,10 @@ class TestReviewPRs:
         phase._prs.merge_pr.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_review_rebases_before_reviewing(self, config: HydraConfig) -> None:
-        """review_prs should rebase onto main and push before reviewing."""
+    async def test_review_merges_main_before_reviewing(
+        self, config: HydraConfig
+    ) -> None:
+        """review_prs should merge main and push before reviewing."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -275,7 +277,7 @@ class TestReviewPRs:
         phase._prs.merge_pr = AsyncMock(return_value=True)
         phase._prs.remove_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
-        phase._worktrees.rebase = AsyncMock(return_value=True)
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
@@ -283,15 +285,15 @@ class TestReviewPRs:
         results = await phase.review_prs([pr], [issue])
 
         assert results[0].merged is True
-        phase._worktrees.rebase.assert_awaited_once()
+        phase._worktrees.merge_main.assert_awaited_once()
         phase._prs.push_branch.assert_awaited()
         phase._reviewers.review.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_review_rebase_conflict_escalates_to_hitl(
+    async def test_review_merge_conflict_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When pre-review rebase fails (conflicts), should skip review and escalate."""
+        """When pre-review merge fails (conflicts), should skip review and escalate."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -299,7 +301,7 @@ class TestReviewPRs:
         phase._prs.post_pr_comment = AsyncMock()
         phase._prs.remove_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
-        phase._worktrees.rebase = AsyncMock(return_value=False)  # Conflicts
+        phase._worktrees.merge_main = AsyncMock(return_value=False)  # Conflicts
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
@@ -317,7 +319,7 @@ class TestReviewPRs:
     async def test_review_merge_failure_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When merge fails after successful rebase, should escalate to HITL."""
+        """When merge fails after successful merge-main, should escalate to HITL."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -331,7 +333,7 @@ class TestReviewPRs:
         phase._prs.post_pr_comment = AsyncMock()
         phase._prs.remove_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
-        phase._worktrees.rebase = AsyncMock(return_value=True)
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)

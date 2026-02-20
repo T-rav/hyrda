@@ -67,9 +67,9 @@ class ReviewPhase:
                     # Create a fresh worktree for review
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
 
-                # Rebase onto main before reviewing so we review up-to-date code
-                rebased = await self._worktrees.rebase(wt_path, pr.branch)
-                if rebased:
+                # Merge main before reviewing so we review up-to-date code
+                merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
+                if merged_main:
                     await self._prs.push_branch(wt_path, pr.branch)
                 else:
                     logger.warning(
@@ -95,7 +95,7 @@ class ReviewPhase:
                         summary="Merge conflicts with main — escalated to HITL",
                     )
 
-                # Get the diff (after rebase so it reflects current main)
+                # Get the diff (after merge so it reflects current main)
                 diff = await self._prs.get_pr_diff(pr.number)
 
                 result = await self._reviewers.review(
