@@ -1299,18 +1299,25 @@ class TestHITLCorrection:
         orch = HydraOrchestrator(config)
         assert orch.get_hitl_status(42) == "pending"
 
-    def test_get_hitl_status_returns_processing_when_active(
+    def test_get_hitl_status_returns_processing_when_active_in_impl(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._active_issues.add(42)
+        orch._active_impl_issues.add(42)
+        assert orch.get_hitl_status(42) == "processing"
+
+    def test_get_hitl_status_returns_processing_when_active_in_review(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_review_issues.add(42)
         assert orch.get_hitl_status(42) == "processing"
 
     def test_get_hitl_status_returns_pending_when_not_active(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._active_issues.add(99)
+        orch._active_impl_issues.add(99)
         assert orch.get_hitl_status(42) == "pending"
 
     @pytest.mark.parametrize(
@@ -1341,7 +1348,7 @@ class TestHITLCorrection:
     ) -> None:
         orch = HydraOrchestrator(config)
         orch._state.set_hitl_origin(42, "hydra-review")
-        orch._active_issues.add(42)
+        orch._active_impl_issues.add(42)
         assert orch.get_hitl_status(42) == "processing"
 
     def test_skip_hitl_issue_removes_correction(self, config: HydraConfig) -> None:
@@ -1606,3 +1613,112 @@ class TestSupervisorLoops:
         # The implement loop continued after the error (ran at least twice)
         assert implement_calls >= 2
         assert not orch.running
+
+
+# ---------------------------------------------------------------------------
+# Phase-specific active issue sets
+# ---------------------------------------------------------------------------
+
+
+class TestPhaseSpecificActiveIssues:
+    """Tests that _active_impl_issues and _active_review_issues are separate."""
+
+    def test_impl_issues_passed_to_implementer(self, config: HydraConfig) -> None:
+        """ImplementPhase receives _active_impl_issues, not _active_review_issues."""
+        orch = HydraOrchestrator(config)
+        assert orch._implementer._active_issues is orch._active_impl_issues
+
+    def test_review_issues_passed_to_reviewer(self, config: HydraConfig) -> None:
+        """ReviewPhase receives _active_review_issues, not _active_impl_issues."""
+        orch = HydraOrchestrator(config)
+        assert orch._reviewer._active_issues is orch._active_review_issues
+
+    def test_impl_and_review_sets_are_independent(self, config: HydraConfig) -> None:
+        """The two sets are distinct objects."""
+        orch = HydraOrchestrator(config)
+        assert orch._active_impl_issues is not orch._active_review_issues
+
+    def test_reset_clears_both_sets(self, config: HydraConfig) -> None:
+        """reset() must clear both phase-specific sets."""
+        orch = HydraOrchestrator(config)
+        orch._active_impl_issues.add(1)
+        orch._active_review_issues.add(2)
+        orch.reset()
+        assert len(orch._active_impl_issues) == 0
+        assert len(orch._active_review_issues) == 0
+
+    @pytest.mark.asyncio
+    async def test_review_loop_passes_review_issues_to_fetcher(
+        self, config: HydraConfig
+    ) -> None:
+        """_review_loop should pass _active_review_issues to fetch_reviewable_prs."""
+        orch = HydraOrchestrator(config)
+        captured_arg = None
+
+        async def capturing_fetch(
+            active: set[int],
+        ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+            nonlocal captured_arg
+            captured_arg = active
+            orch._stop_event.set()
+            return [], []
+
+        orch._fetcher.fetch_reviewable_prs = capturing_fetch  # type: ignore[method-assign]
+        await orch._review_loop()
+
+        assert captured_arg is orch._active_review_issues
+
+    @pytest.mark.asyncio
+    async def test_review_issues_do_not_block_implementation_fetch(
+        self, config: HydraConfig
+    ) -> None:
+        """Issues in _active_review_issues must not block fetch_ready_issues.
+
+        This is the key acceptance test: with issues in the review pipeline,
+        the implementation fetcher should still return new issues because it
+        only filters against _active_impl_issues.
+        """
+        orch = HydraOrchestrator(config)
+
+        # Simulate issue #100 in review
+        orch._active_review_issues.add(100)
+
+        # The implementation fetcher receives _active_impl_issues (empty),
+        # so issue #100 should NOT be filtered out if it shows up in fetch.
+        issues = [make_issue(100), make_issue(200)]
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+        result = await orch._fetcher.fetch_ready_issues(orch._active_impl_issues)
+
+        # Both issues should be returned since _active_impl_issues is empty
+        assert len(result) == 2
+        assert {i.number for i in result} == {100, 200}
+
+    @pytest.mark.asyncio
+    async def test_impl_issues_do_not_block_review_fetch(
+        self, config: HydraConfig
+    ) -> None:
+        """Issues in _active_impl_issues must not block fetch_reviewable_prs."""
+        orch = HydraOrchestrator(config)
+
+        # Simulate issue #100 being implemented
+        orch._active_impl_issues.add(100)
+
+        # fetch_reviewable_prs receives _active_review_issues (empty)
+        review_issues = [make_issue(100)]
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=review_issues)  # type: ignore[method-assign]
+
+        # Mock run_subprocess for PR lookup
+        with patch(
+            "issue_fetcher.run_subprocess",
+            new_callable=AsyncMock,
+            return_value='[{"number": 501, "url": "https://github.com/t/r/pull/501", "isDraft": false}]',
+        ):
+            prs, issues = await orch._fetcher.fetch_reviewable_prs(
+                orch._active_review_issues
+            )
+
+        # Issue #100 should not be filtered out (not in review set)
+        assert len(issues) == 1
+        assert issues[0].number == 100
+        assert len(prs) == 1
