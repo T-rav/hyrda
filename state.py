@@ -134,6 +134,22 @@ class StateTracker:
         self._data.hitl_origins.pop(str(issue_number), None)
         self.save()
 
+    # --- HITL cause tracking ---
+
+    def set_hitl_cause(self, issue_number: int, cause: str) -> None:
+        """Record the escalation reason for *issue_number*."""
+        self._data.hitl_causes[str(issue_number)] = cause
+        self.save()
+
+    def get_hitl_cause(self, issue_number: int) -> str | None:
+        """Return the escalation reason for *issue_number*, or *None*."""
+        return self._data.hitl_causes.get(str(issue_number))
+
+    def remove_hitl_cause(self, issue_number: int) -> None:
+        """Clear the escalation reason for *issue_number*."""
+        self._data.hitl_causes.pop(str(issue_number), None)
+        self.save()
+
     # --- batch tracking ---
 
     def get_current_batch(self) -> int:

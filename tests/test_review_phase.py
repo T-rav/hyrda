@@ -359,6 +359,33 @@ class TestReviewPRs:
         assert phase._state.get_hitl_origin(42) == "hydra-review"
 
     @pytest.mark.asyncio
+    async def test_review_conflict_escalation_sets_hitl_cause(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict escalation should record cause in state."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_cause(42) == "Merge conflict with main branch"
+
+    @pytest.mark.asyncio
     async def test_review_merge_conflict_resolved_by_agent(
         self, config: HydraConfig
     ) -> None:
@@ -481,6 +508,35 @@ class TestReviewPRs:
         await phase.review_prs([pr], [issue])
 
         assert phase._state.get_hitl_origin(42) == "hydra-review"
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_sets_hitl_cause(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge failure escalation should record cause in state."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_cause(42) == "PR merge failed on GitHub"
 
     @pytest.mark.asyncio
     async def test_review_merge_records_lifetime_stats(
@@ -1119,6 +1175,47 @@ class TestWaitAndFixCI:
         assert (42, ["hydra-hitl"]) in add_calls
 
     @pytest.mark.asyncio
+    async def test_ci_failure_sets_hitl_cause(self, config: HydraConfig) -> None:
+        """CI failure escalation should record cause with attempt count in state."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = _make_phase(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_hitl_cause(42) == "CI failed after 1 fix attempt(s)"
+
+    @pytest.mark.asyncio
     async def test_ci_failure_escalation_records_hitl_origin(
         self, config: HydraConfig
     ) -> None:
@@ -1246,7 +1343,107 @@ class TestResolveMergeConflicts:
 
 
 # ---------------------------------------------------------------------------
-# _active_issues cleanup (Bugs 1 & 2)
+# Review exception isolation
+# ---------------------------------------------------------------------------
+
+
+class TestReviewExceptionIsolation:
+    """Tests that _review_one catches exceptions and returns failed results."""
+
+    @pytest.mark.asyncio
+    async def test_review_exception_returns_failed_result(
+        self, config: HydraConfig
+    ) -> None:
+        """When reviewer.review raises, should return ReviewResult with error summary."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            side_effect=RuntimeError("reviewer crashed")
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert len(results) == 1
+        assert results[0].pr_number == 101
+        assert "unexpected error" in results[0].summary.lower()
+
+    @pytest.mark.asyncio
+    async def test_review_exception_releases_active_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When review crashes, issue should be removed from active_issues."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            side_effect=RuntimeError("reviewer crashed")
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_review_exception_does_not_crash_batch(
+        self, config: HydraConfig
+    ) -> None:
+        """With 2 PRs, first review crashing should not prevent the second."""
+        phase = _make_phase(config)
+        issues = [make_issue(1), make_issue(2)]
+        prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
+
+        call_count = 0
+
+        async def sometimes_crashing_review(
+            pr: PRInfo,
+            issue: GitHubIssue,
+            wt_path: Path,
+            diff: str,
+            worker_id: int = 0,
+        ) -> ReviewResult:
+            nonlocal call_count
+            call_count += 1
+            if pr.issue_number == 1:
+                raise RuntimeError("reviewer crashed for PR 1")
+            return make_review_result(pr.number, issue.number)
+
+        phase._reviewers.review = sometimes_crashing_review  # type: ignore[method-assign]
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        for i in (1, 2):
+            wt = config.worktree_base / f"issue-{i}"
+            wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs(prs, issues)
+
+        # Both results should be returned
+        assert len(results) == 2
+        result_map = {r.pr_number: r for r in results}
+        # PR 101 (issue 1) should have error summary
+        assert "unexpected error" in result_map[101].summary.lower()
+        # PR 102 (issue 2) should have succeeded
+        assert result_map[102].summary == "Looks good."
+
+
+# ---------------------------------------------------------------------------
+# _active_issues cleanup
 # ---------------------------------------------------------------------------
 
 
@@ -1286,11 +1483,12 @@ class TestActiveIssuesCleanup:
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
 
-        # The exception should propagate but _active_issues should be clean
-        with pytest.raises(RuntimeError, match="merge exploded"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_exception_during_review(
@@ -1308,10 +1506,12 @@ class TestActiveIssuesCleanup:
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
 
-        with pytest.raises(RuntimeError, match="review crashed"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_exception_during_worktree_create(
@@ -1327,10 +1527,12 @@ class TestActiveIssuesCleanup:
         )
 
         # No worktree dir exists, so create() will be called
-        with pytest.raises(RuntimeError, match="worktree create failed"):
-            await phase.review_prs([pr], [issue])
+        # Exception isolation catches the error and returns a failed result
+        results = await phase.review_prs([pr], [issue])
 
         assert 42 not in phase._active_issues
+        assert len(results) == 1
+        assert "unexpected error" in results[0].summary.lower()
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_happy_path(
@@ -1359,7 +1561,7 @@ class TestActiveIssuesCleanup:
 
 
 # ---------------------------------------------------------------------------
-# REVIEW_UPDATE start event (Bug 3)
+# REVIEW_UPDATE start event
 # ---------------------------------------------------------------------------
 
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from agent import AgentRunner
 from config import HydraConfig
@@ -190,12 +192,7 @@ class HydraOrchestrator:
         await self._prs.ensure_labels_exist()
 
         try:
-            await asyncio.gather(
-                self._triage_loop(),
-                self._plan_loop(),
-                self._implement_loop(),
-                self._review_loop(),
-            )
+            await self._supervise_loops()
         finally:
             self._running = False
             self._planners.terminate()
@@ -204,35 +201,117 @@ class HydraOrchestrator:
             await self._publish_status()
             logger.info("Hydra stopped")
 
+    async def _supervise_loops(self) -> None:
+        """Run all four loops, restarting any that crash unexpectedly."""
+        loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = [
+            ("triage", self._triage_loop),
+            ("plan", self._plan_loop),
+            ("implement", self._implement_loop),
+            ("review", self._review_loop),
+        ]
+        tasks: dict[str, asyncio.Task[None]] = {}
+        for name, factory in loop_factories:
+            tasks[name] = asyncio.create_task(factory(), name=f"hydra-{name}")
+
+        try:
+            while not self._stop_event.is_set():
+                done, _ = await asyncio.wait(
+                    tasks.values(), return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    name = task.get_name().removeprefix("hydra-")
+                    if self._stop_event.is_set():
+                        break
+                    exc = task.exception()
+                    if exc is not None:
+                        logger.error("Loop %r crashed — restarting: %s", name, exc)
+                        await self._bus.publish(
+                            HydraEvent(
+                                type=EventType.ERROR,
+                                data={
+                                    "message": f"Loop {name} crashed and was restarted",
+                                    "source": name,
+                                },
+                            )
+                        )
+                        factory_fn = dict(loop_factories)[name]
+                        tasks[name] = asyncio.create_task(
+                            factory_fn(), name=f"hydra-{name}"
+                        )
+        finally:
+            for task in tasks.values():
+                task.cancel()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
     async def _triage_loop(self) -> None:
         """Continuously poll for find-labeled issues and triage them."""
         while not self._stop_event.is_set():
-            await self._triage_find_issues()
+            try:
+                await self._triage_find_issues()
+            except Exception:
+                logger.exception("Triage loop iteration failed — will retry next cycle")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={"message": "Triage loop error", "source": "triage"},
+                    )
+                )
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
-            await self._triage_find_issues()
-            await self._plan_issues()
+            try:
+                await self._triage_find_issues()
+                await self._plan_issues()
+            except Exception:
+                logger.exception("Plan loop iteration failed — will retry next cycle")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={"message": "Plan loop error", "source": "plan"},
+                    )
+                )
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
         while not self._stop_event.is_set():
-            await self._implementer.run_batch()
+            try:
+                await self._implementer.run_batch()
+            except Exception:
+                logger.exception(
+                    "Implement loop iteration failed — will retry next cycle"
+                )
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={"message": "Implement loop error", "source": "implement"},
+                    )
+                )
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _review_loop(self) -> None:
         """Continuously poll for ``hydra-review`` issues and review their PRs."""
         while not self._stop_event.is_set():
-            prs, issues = await self._fetcher.fetch_reviewable_prs(self._active_issues)
-            if prs:
-                review_results = await self._reviewer.review_prs(prs, issues)
-                any_merged = any(r.merged for r in review_results)
-                if any_merged:
-                    await asyncio.sleep(5)
-                    await self._prs.pull_main()
+            try:
+                prs, issues = await self._fetcher.fetch_reviewable_prs(
+                    self._active_issues
+                )
+                if prs:
+                    review_results = await self._reviewer.review_prs(prs, issues)
+                    any_merged = any(r.merged for r in review_results)
+                    if any_merged:
+                        await asyncio.sleep(5)
+                        await self._prs.pull_main()
+            except Exception:
+                logger.exception("Review loop iteration failed — will retry next cycle")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={"message": "Review loop error", "source": "review"},
+                    )
+                )
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _sleep_or_stop(self, seconds: int) -> None:
@@ -285,6 +364,10 @@ class HydraOrchestrator:
                 )
             else:
                 self._state.set_hitl_origin(issue.number, self._config.find_label[0])
+                self._state.set_hitl_cause(
+                    issue.number,
+                    "Insufficient issue detail for triage",
+                )
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"
