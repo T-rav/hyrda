@@ -131,6 +131,16 @@ class HydraOrchestrator:
         self._human_input_responses[issue_number] = answer
         self._human_input_requests.pop(issue_number, None)
 
+    def get_hitl_status(self, issue_number: int) -> str:
+        """Return the HITL status for an issue: processing if active, else pending."""
+        if issue_number in self._active_issues:
+            return "processing"
+        return "pending"
+
+    def skip_hitl_issue(self, issue_number: int) -> None:
+        """Remove an issue from HITL tracking."""
+        self._hitl_corrections.pop(issue_number, None)
+
     async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
         self._stop_event.set()

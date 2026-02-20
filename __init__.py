@@ -1,3 +1,3 @@
-"""Hydra - Parallel Claude Code Issue Processor."""
+"""Hydra — Intent in. Software out."""
 
 __version__ = "1.0.0"

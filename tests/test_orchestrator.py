@@ -1204,7 +1204,6 @@ class TestPlanPhase:
         assert len(results) < len(issues)
 
 
-# ---------------------------------------------------------------------------
 # HITL loop
 # ---------------------------------------------------------------------------
 
@@ -1268,6 +1267,41 @@ class TestHITLLoop:
         pending = orch._pending_hitl_corrections()
         assert 42 not in pending
         assert 43 in pending
+
+    def test_get_hitl_status_returns_pending_by_default(
+        self, config: HydraConfig
+    ) -> None:
+        orch = self._make_orch(config)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_get_hitl_status_returns_processing_when_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = self._make_orch(config)
+        orch._active_issues.add(42)
+        assert orch.get_hitl_status(42) == "processing"
+
+    def test_get_hitl_status_returns_pending_when_not_active(
+        self, config: HydraConfig
+    ) -> None:
+        orch = self._make_orch(config)
+        orch._active_issues.add(99)
+        assert orch.get_hitl_status(42) == "pending"
+
+    def test_skip_hitl_issue_removes_correction(self, config: HydraConfig) -> None:
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        orch._hitl_corrections[42] = HITLCorrection(
+            issue_number=42, correction="Some correction"
+        )
+        orch.skip_hitl_issue(42)
+        assert 42 not in orch._hitl_corrections
+
+    def test_skip_hitl_issue_safe_when_no_correction(self, config: HydraConfig) -> None:
+        orch = self._make_orch(config)
+        orch.skip_hitl_issue(99)  # Should not raise
+        assert 99 not in orch._hitl_corrections
 
     @pytest.mark.asyncio
     async def test_hitl_loop_stops_on_stop_event(self, config: HydraConfig) -> None:

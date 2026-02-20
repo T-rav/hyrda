@@ -12,7 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from config import HydraConfig
-from events import EventBus, HydraEvent
+from events import EventBus, EventType, HydraEvent
 from models import ControlStatusConfig, ControlStatusResponse
 from pr_manager import PRManager
 from state import StateTracker
@@ -80,14 +80,62 @@ def create_router(
     async def get_hitl() -> JSONResponse:
         """Fetch issues/PRs labeled for human-in-the-loop (stuck on CI)."""
         items = await pr_manager.list_hitl_items(config.hitl_label)
-        return JSONResponse([item.model_dump() for item in items])
+        orch = get_orchestrator()
+        enriched = []
+        for item in items:
+            data = item.model_dump()
+            if orch:
+                data["status"] = orch.get_hitl_status(item.issue)
+            enriched.append(data)
+        return JSONResponse(enriched)
+
+    @router.post("/api/hitl/{issue_number}/skip")
+    async def hitl_skip(issue_number: int) -> JSONResponse:
+        """Remove a HITL issue from the queue without action."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"status": "no orchestrator"}, status_code=400)
+        orch.skip_hitl_issue(issue_number)
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "status": "resolved",
+                    "action": "skip",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
+
+    @router.post("/api/hitl/{issue_number}/close")
+    async def hitl_close(issue_number: int) -> JSONResponse:
+        """Close a HITL issue on GitHub."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"status": "no orchestrator"}, status_code=400)
+        orch.skip_hitl_issue(issue_number)
+        await pr_manager.close_issue(issue_number)
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "status": "resolved",
+                    "action": "close",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
 
     @router.post("/api/hitl/{issue_number}/correct")
-    async def submit_hitl_correction(issue_number: int, body: dict) -> JSONResponse:  # type: ignore[type-arg]
+    async def hitl_correct(issue_number: int, body: dict) -> JSONResponse:  # type: ignore[type-arg]
         """Submit a correction for an HITL issue to be processed by the orchestrator."""
         orch = get_orchestrator()
         if not orch:
-            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+            return JSONResponse({"status": "no orchestrator"}, status_code=400)
         from models import HITLCorrection
 
         correction = HITLCorrection(
@@ -96,7 +144,17 @@ def create_router(
             restore_label=body.get("restore_label", ""),
         )
         orch.submit_hitl_correction(correction)
-        return JSONResponse({"status": "queued"})
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "status": "processing",
+                    "action": "correct",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
 
     @router.get("/api/human-input")
     async def get_human_input_requests() -> JSONResponse:

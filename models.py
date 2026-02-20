@@ -264,6 +264,8 @@ class HITLItem(BaseModel):
     pr: int = 0
     prUrl: str = ""  # camelCase to match existing frontend contract
     branch: str = ""
+    cause: str = ""  # escalation reason (populated by #113)
+    status: str = "pending"  # pending | processing | resolved
 
 
 class ControlStatusConfig(BaseModel):
