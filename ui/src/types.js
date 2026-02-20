@@ -11,7 +11,7 @@
  *
  * @typedef {{ pr: number, verdict: string, summary: string, duration?: number }} ReviewData
  *
- * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string }} HITLItem
+ * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string }} HITLItem
  *
  * @typedef {Record<string, string>} HumanInputRequests
  */

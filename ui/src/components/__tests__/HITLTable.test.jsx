@@ -23,6 +23,15 @@ const mockItems = [
     cause: '',
     status: 'processing',
   },
+  {
+    issue: 7,
+    title: 'Legacy item',
+    issueUrl: '',
+    pr: 0,
+    prUrl: '',
+    branch: 'agent/issue-7',
+    status: 'pending',
+  },
 ]
 
 beforeEach(() => {
@@ -50,7 +59,7 @@ describe('HITLTable component', () => {
 
   it('renders status badges for each item', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
-    expect(screen.getByText('pending')).toBeInTheDocument()
+    expect(screen.getAllByText('pending')).toHaveLength(2)
     expect(screen.getByText('processing')).toBeInTheDocument()
   })
 
@@ -182,7 +191,7 @@ describe('HITLTable component', () => {
 
   it('shows item count in header', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
-    expect(screen.getByText('2 issues stuck on CI')).toBeInTheDocument()
+    expect(screen.getByText('3 issues stuck on CI')).toBeInTheDocument()
   })
 
   it('shows singular form for one item', () => {
@@ -206,6 +215,29 @@ describe('HITLTable component', () => {
 
   it('shows "No PR" when pr is 0', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
-    expect(screen.getByText('No PR')).toBeInTheDocument()
+    expect(screen.getAllByText('No PR')).toHaveLength(2)
+  })
+
+  it('renders Cause column header', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('Cause')).toBeInTheDocument()
+  })
+
+  it('displays cause text in table row without expanding', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('CI failure')).toBeInTheDocument()
+    expect(screen.queryByTestId('hitl-detail-42')).not.toBeInTheDocument()
+  })
+
+  it('shows em-dash for empty cause', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const row = screen.getByTestId('hitl-row-10')
+    expect(row).toHaveTextContent('—')
+  })
+
+  it('shows em-dash when cause is undefined', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const row = screen.getByTestId('hitl-row-7')
+    expect(row).toHaveTextContent('—')
   })
 })
