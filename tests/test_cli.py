@@ -1,10 +1,14 @@
-"""Tests for cli.py — parse_args and build_config."""
+"""Tests for cli.py — parse_args, build_config, and signal handling."""
 
 from __future__ import annotations
 
+import asyncio
+import signal
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
-from cli import _parse_label_arg, build_config, parse_args
+from cli import _parse_label_arg, _run_main, build_config, parse_args
 
 # ---------------------------------------------------------------------------
 # _parse_label_arg
@@ -110,7 +114,7 @@ class TestBuildConfig:
         assert cfg.batch_size == 15
         assert cfg.max_workers == 2
         assert cfg.max_planners == 1
-        assert cfg.max_reviewers == 1
+        assert cfg.max_reviewers == 2
         assert cfg.max_budget_usd == pytest.approx(0)
         assert cfg.model == "sonnet"
         assert cfg.review_model == "opus"
@@ -284,3 +288,136 @@ class TestBuildConfig:
         args = parse_args([])
         assert args.git_user_name is None
         assert args.git_user_email is None
+
+
+# ---------------------------------------------------------------------------
+# _run_main — signal handler registration
+# ---------------------------------------------------------------------------
+
+
+class TestRunMainSignalHandlers:
+    """Tests for signal handler registration in _run_main()."""
+
+    @pytest.mark.asyncio
+    async def test_headless_registers_signal_handlers(self) -> None:
+        """In headless mode, SIGINT and SIGTERM handlers are registered."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(dashboard_enabled=False)
+
+        registered_signals: list[int] = []
+        mock_loop = MagicMock()
+        mock_loop.add_signal_handler = MagicMock(
+            side_effect=lambda sig, cb: registered_signals.append(sig)
+        )
+
+        mock_orch = AsyncMock()
+        mock_orch.run = AsyncMock()
+        mock_orch.stop = AsyncMock()
+
+        with (
+            patch("cli.HydraOrchestrator", return_value=mock_orch),
+            patch("asyncio.get_running_loop", return_value=mock_loop),
+        ):
+            await _run_main(config)
+
+        assert signal.SIGINT in registered_signals
+        assert signal.SIGTERM in registered_signals
+
+    @pytest.mark.asyncio
+    async def test_headless_sigint_calls_orchestrator_stop(self) -> None:
+        """Simulating SIGINT callback should trigger orchestrator.stop()."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(dashboard_enabled=False)
+
+        handlers: dict[int, object] = {}
+
+        def capture_handler(sig: int, cb: object) -> None:
+            handlers[sig] = cb
+
+        mock_loop = MagicMock()
+        mock_loop.add_signal_handler = MagicMock(side_effect=capture_handler)
+
+        mock_orch = AsyncMock()
+        mock_orch.stop = AsyncMock()
+
+        async def fake_run() -> None:
+            # Simulate signal arriving during run
+            cb = handlers.get(signal.SIGINT)
+            if cb:
+                cb()  # type: ignore[operator]
+            # Give the stop task a chance to run
+            await asyncio.sleep(0)
+
+        mock_orch.run = fake_run
+
+        with (
+            patch("cli.HydraOrchestrator", return_value=mock_orch),
+            patch("asyncio.get_running_loop", return_value=mock_loop),
+        ):
+            await _run_main(config)
+
+        mock_orch.stop.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_dashboard_registers_signal_handlers(self) -> None:
+        """In dashboard mode, SIGINT and SIGTERM handlers are registered."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(dashboard_enabled=True)
+
+        registered_signals: list[int] = []
+
+        real_loop = asyncio.get_running_loop()
+
+        def tracking_add(sig: int, cb: object) -> None:
+            registered_signals.append(sig)
+            # Actually set the event so _run_main unblocks
+            if callable(cb):
+                cb()
+
+        mock_dashboard = AsyncMock()
+        mock_dashboard._orchestrator = None
+        mock_dashboard.start = AsyncMock()
+        mock_dashboard.stop = AsyncMock()
+
+        with (
+            patch.object(real_loop, "add_signal_handler", side_effect=tracking_add),
+            patch("dashboard.HydraDashboard", return_value=mock_dashboard),
+        ):
+            await _run_main(config)
+
+        assert signal.SIGINT in registered_signals
+        assert signal.SIGTERM in registered_signals
+
+    @pytest.mark.asyncio
+    async def test_dashboard_sigint_stops_orchestrator(self) -> None:
+        """In dashboard mode, SIGINT should stop the orchestrator if running."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(dashboard_enabled=True)
+
+        real_loop = asyncio.get_running_loop()
+
+        mock_orch = AsyncMock()
+        mock_orch.running = True
+        mock_orch.stop = AsyncMock()
+
+        mock_dashboard = AsyncMock()
+        mock_dashboard._orchestrator = mock_orch
+        mock_dashboard.start = AsyncMock()
+        mock_dashboard.stop = AsyncMock()
+
+        def trigger_stop(sig: int, cb: object) -> None:
+            if sig == signal.SIGINT and callable(cb):
+                cb()
+
+        with (
+            patch.object(real_loop, "add_signal_handler", side_effect=trigger_stop),
+            patch("dashboard.HydraDashboard", return_value=mock_dashboard),
+        ):
+            await _run_main(config)
+
+        mock_orch.stop.assert_called_once()
+        mock_dashboard.stop.assert_called_once()

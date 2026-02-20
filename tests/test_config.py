@@ -328,7 +328,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_reviewers == 1
+        assert cfg.max_reviewers == 2
 
     def test_max_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
