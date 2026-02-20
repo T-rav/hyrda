@@ -148,6 +148,8 @@ class PlannerRunner:
             issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
         )
 
+        find_label = self._config.find_label[0] if self._config.find_label else "hydra-find"
+
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -222,13 +224,16 @@ you can file them as new GitHub issues using these markers:
 NEW_ISSUES_START
 - title: Short issue title
   body: Description of the issue
-  labels: label1, label2
+  labels: {find_label}
 - title: Another issue
   body: Another description
-  labels: tech-debt
+  labels: {find_label}
 NEW_ISSUES_END
 
 Only include this section if you actually discover issues worth filing.
+
+**IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
+Do NOT invent labels. All discovered issues enter the pipeline via the find label.
 """
 
     @staticmethod

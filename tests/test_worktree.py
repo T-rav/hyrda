@@ -64,7 +64,7 @@ class TestCreate:
     async def test_create_calls_git_branch_and_worktree_add(
         self, config, tmp_path: Path
     ) -> None:
-        """create should call 'git branch -f' then 'git worktree add'."""
+        """create should clean up stale branch, fetch main, then 'git branch -f' and 'git worktree add'."""
         manager = WorktreeManager(config)
 
         # Pre-create the base directory so mkdir doesn't cause issues
@@ -76,6 +76,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -85,10 +86,12 @@ class TestCreate:
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
-        # First call: git branch -f
-        assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
-        # Second call: git worktree add
-        assert calls[1].args[:3] == ("git", "worktree", "add")
+        # First call: git fetch origin main
+        assert calls[0].args[:3] == ("git", "fetch", "origin")
+        # Second call: git branch -f
+        assert calls[1].args[:4] == ("git", "branch", "-f", "agent/issue-7")
+        # Third call: git worktree add
+        assert calls[2].args[:3] == ("git", "worktree", "add")
 
     @pytest.mark.asyncio
     async def test_create_fetches_remote_branch_when_exists(
@@ -104,6 +107,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(
                 manager, "_remote_branch_exists", return_value=True
             ) as mock_remote,
@@ -115,9 +119,11 @@ class TestCreate:
 
         mock_remote.assert_awaited_once_with("agent/issue-7")
         calls = mock_exec.call_args_list
-        # First call should be git fetch origin <branch>:<branch>
+        # First call: git fetch origin main
         assert calls[0].args[:3] == ("git", "fetch", "origin")
-        assert "agent/issue-7:agent/issue-7" in calls[0].args
+        # Second call: git fetch with force refspec for the branch
+        assert calls[1].args[:3] == ("git", "fetch", "origin")
+        assert "+refs/heads/agent/issue-7:refs/heads/agent/issue-7" in calls[1].args
         # Should NOT have git branch -f
         for call in calls:
             assert call.args[:3] != ("git", "branch", "-f"), (
@@ -138,6 +144,7 @@ class TestCreate:
             patch(
                 "asyncio.create_subprocess_exec", return_value=success_proc
             ) as mock_exec,
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -146,8 +153,8 @@ class TestCreate:
             await manager.create(issue_number=7, branch="agent/issue-7")
 
         calls = mock_exec.call_args_list
-        # First call should be git branch -f
-        assert calls[0].args[:4] == ("git", "branch", "-f", "agent/issue-7")
+        # First call: git fetch origin main; second call: git branch -f
+        assert calls[1].args[:4] == ("git", "branch", "-f", "agent/issue-7")
 
     @pytest.mark.asyncio
     async def test_create_calls_setup_env_create_venv_and_install_hooks(
@@ -165,6 +172,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env", setup_env),
             patch.object(manager, "_create_venv", create_venv),
@@ -187,6 +195,7 @@ class TestCreate:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_create_venv", new_callable=AsyncMock),
@@ -447,6 +456,41 @@ class TestMergeMain:
             result = await manager.merge_main(tmp_path)
 
         assert result is False
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._delete_local_branch
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteLocalBranch:
+    """Tests for WorktreeManager._delete_local_branch."""
+
+    @pytest.mark.asyncio
+    async def test_deletes_existing_branch(self, config, tmp_path: Path) -> None:
+        """Should call git branch -D for the given branch."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._delete_local_branch("agent/issue-7")
+
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.args[:4] == ("git", "branch", "-D", "agent/issue-7")
+
+    @pytest.mark.asyncio
+    async def test_swallows_error_when_branch_missing(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should not raise when the branch does not exist."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"error: branch not found")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager._delete_local_branch("agent/issue-999")
 
 
 # ---------------------------------------------------------------------------
@@ -747,6 +791,7 @@ class TestConfigureGitIdentity:
 
         with (
             patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
             patch.object(manager, "_configure_git_identity", configure_identity),
