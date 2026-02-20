@@ -210,7 +210,15 @@ class EventBus:
                 queue.put_nowait(event)
 
         if self._event_log is not None:
-            asyncio.ensure_future(self._event_log.append(event))
+            asyncio.ensure_future(self._persist_event(event))
+
+    async def _persist_event(self, event: HydraEvent) -> None:
+        """Write event to disk, logging any errors without crashing."""
+        try:
+            assert self._event_log is not None  # noqa: S101
+            await self._event_log.append(event)
+        except Exception:
+            logger.warning("Failed to persist event to disk", exc_info=True)
 
     async def load_history_from_disk(self) -> None:
         """Populate in-memory history from the on-disk event log."""
@@ -218,6 +226,22 @@ class EventBus:
             return
         events = await self._event_log.load(max_events=self._max_history)
         self._history = events
+
+    async def load_events_since(self, since: datetime) -> list[HydraEvent] | None:
+        """Load persisted events from disk since *since*.
+
+        Returns ``None`` when no event log is configured (caller should
+        fall back to in-memory history).
+        """
+        if self._event_log is None:
+            return None
+        return await self._event_log.load(since=since)
+
+    async def rotate_log(self, max_size_bytes: int, max_age_days: int) -> None:
+        """Rotate the on-disk event log if it exceeds *max_size_bytes*."""
+        if self._event_log is None:
+            return
+        await self._event_log.rotate(max_size_bytes, max_age_days)
 
     def subscribe(self, max_queue: int = 500) -> asyncio.Queue[HydraEvent]:
         """Return a new queue that will receive future events."""

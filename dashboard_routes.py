@@ -58,15 +58,16 @@ def create_router(
 
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:
-        if since is not None and event_bus._event_log is not None:
+        if since is not None:
             from datetime import datetime
 
             try:
                 since_dt = datetime.fromisoformat(since)
                 if since_dt.tzinfo is None:
                     since_dt = since_dt.replace(tzinfo=UTC)
-                events = await event_bus._event_log.load(since=since_dt)
-                return JSONResponse([e.model_dump() for e in events])
+                events = await event_bus.load_events_since(since_dt)
+                if events is not None:
+                    return JSONResponse([e.model_dump() for e in events])
             except (ValueError, TypeError):
                 pass  # Fall through to in-memory history
         history = event_bus.get_history()

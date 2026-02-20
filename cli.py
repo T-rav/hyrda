@@ -282,6 +282,10 @@ async def _run_main(config: HydraConfig) -> None:
 
         event_log = EventLog(config.event_log_path)
         bus = EventBus(event_log=event_log)
+        await bus.rotate_log(
+            config.event_log_max_size_mb * 1024 * 1024,
+            config.event_log_retention_days,
+        )
         await bus.load_history_from_disk()
         state = StateTracker(config.state_file)
 
@@ -316,6 +320,10 @@ async def _run_main(config: HydraConfig) -> None:
 
         event_log = EventLog(config.event_log_path)
         bus = EventBus(event_log=event_log)
+        await bus.rotate_log(
+            config.event_log_max_size_mb * 1024 * 1024,
+            config.event_log_retention_days,
+        )
         await bus.load_history_from_disk()
         orchestrator = HydraOrchestrator(config, event_bus=bus)
 

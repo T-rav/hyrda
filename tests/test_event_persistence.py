@@ -352,6 +352,66 @@ class TestEventBusWithPersistence:
         assert len(history) == 5
         assert history[0].data == {"i": 15}
 
+    @pytest.mark.asyncio
+    async def test_load_events_since_delegates_to_log(self, tmp_path: Path) -> None:
+        log = EventLog(tmp_path / "events.jsonl")
+        await log.append(_make_event_at(days_ago=10, data={"age": "old"}))
+        await log.append(_make_event_at(days_ago=1, data={"age": "new"}))
+
+        bus = EventBus(event_log=log)
+        since = datetime.now(UTC) - timedelta(days=5)
+        events = await bus.load_events_since(since)
+        assert events is not None
+        assert len(events) == 1
+        assert events[0].data == {"age": "new"}
+
+    @pytest.mark.asyncio
+    async def test_load_events_since_returns_none_without_log(self) -> None:
+        bus = EventBus()
+        result = await bus.load_events_since(datetime.now(UTC))
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_rotate_log_delegates_to_log(self, tmp_path: Path) -> None:
+        log = EventLog(tmp_path / "events.jsonl")
+        await log.append(_make_event_at(days_ago=30, data={"old": True}))
+        await log.append(_make_event_at(days_ago=1, data={"new": True}))
+
+        bus = EventBus(event_log=log)
+        await bus.rotate_log(max_size_bytes=1, max_age_days=7)
+
+        loaded = await log.load()
+        assert len(loaded) == 1
+        assert loaded[0].data == {"new": True}
+
+    @pytest.mark.asyncio
+    async def test_rotate_log_noop_without_log(self) -> None:
+        bus = EventBus()
+        # Should not raise
+        await bus.rotate_log(max_size_bytes=1, max_age_days=7)
+
+    @pytest.mark.asyncio
+    async def test_persist_event_logs_error_on_failure(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        log = EventLog(tmp_path / "events.jsonl")
+        bus = EventBus(event_log=log)
+
+        # Make the directory read-only to force a write error
+        log.path.parent.mkdir(parents=True, exist_ok=True)
+        log.path.touch()
+        log.path.chmod(0o000)
+
+        try:
+            event = _make_event(data={"fail": True})
+            await bus.publish(event)
+            # Give the fire-and-forget task a moment to complete
+            await asyncio.sleep(0.1)
+
+            assert "Failed to persist event to disk" in caplog.text
+        finally:
+            log.path.chmod(0o644)
+
 
 # ---------------------------------------------------------------------------
 # TestEventLogConfig
