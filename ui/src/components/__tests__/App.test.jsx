@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { tabActiveStyle, tabInactiveStyle } from '../../App'
+import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
 
 describe('App pre-computed tab styles', () => {
   it('tabInactiveStyle has base tab properties', () => {
@@ -32,5 +32,25 @@ describe('App pre-computed tab styles', () => {
   it('style objects are referentially stable', () => {
     expect(tabActiveStyle).toBe(tabActiveStyle)
     expect(tabInactiveStyle).toBe(tabInactiveStyle)
+    expect(hitlBadgeStyle).toBe(hitlBadgeStyle)
+  })
+
+  describe('hitlBadgeStyle', () => {
+    it('has red background and white text', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        background: 'var(--red)',
+        color: 'var(--white)',
+      })
+    })
+
+    it('has pill-shaped badge properties', () => {
+      expect(hitlBadgeStyle).toMatchObject({
+        fontSize: 10,
+        fontWeight: 700,
+        borderRadius: 10,
+        padding: '1px 6px',
+        marginLeft: 6,
+      })
+    })
   })
 })

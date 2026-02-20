@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { theme } from '../theme'
 
-export function HITLTable() {
+export function HITLTable({ onCountChange }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -9,10 +9,16 @@ export function HITLTable() {
     setLoading(true)
     fetch('/api/hitl')
       .then(r => r.json())
-      .then(data => setItems(data))
-      .catch(() => setItems([]))
+      .then(data => {
+        setItems(data)
+        onCountChange?.(data.length)
+      })
+      .catch(() => {
+        setItems([])
+        onCountChange?.(0)
+      })
       .finally(() => setLoading(false))
-  }, [])
+  }, [onCountChange])
 
   useEffect(() => {
     fetchHITL()
