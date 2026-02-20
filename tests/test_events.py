@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from events import EventBus, EventType, HydraEvent
 
 # ---------------------------------------------------------------------------
@@ -106,6 +108,7 @@ class TestHydraEvent:
 
 
 class TestEventBusPublishSubscribe:
+    @pytest.mark.asyncio
     async def test_subscriber_receives_published_event(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
@@ -116,6 +119,7 @@ class TestEventBusPublishSubscribe:
         received = queue.get_nowait()
         assert received is event
 
+    @pytest.mark.asyncio
     async def test_multiple_subscribers_all_receive_event(self) -> None:
         bus = EventBus()
         q1 = bus.subscribe()
@@ -129,6 +133,7 @@ class TestEventBusPublishSubscribe:
         assert q2.get_nowait() is event
         assert q3.get_nowait() is event
 
+    @pytest.mark.asyncio
     async def test_publish_multiple_events_in_order(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
@@ -141,16 +146,19 @@ class TestEventBusPublishSubscribe:
         assert queue.get_nowait() is e1
         assert queue.get_nowait() is e2
 
+    @pytest.mark.asyncio
     async def test_subscribe_returns_asyncio_queue(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
         assert isinstance(queue, asyncio.Queue)
 
+    @pytest.mark.asyncio
     async def test_no_subscribers_publish_does_not_raise(self) -> None:
         bus = EventBus()
         event = HydraEvent(type=EventType.BATCH_COMPLETE)
         await bus.publish(event)  # should not raise
 
+    @pytest.mark.asyncio
     async def test_subscribe_with_custom_max_queue(self) -> None:
         bus = EventBus()
         queue = bus.subscribe(max_queue=10)
@@ -163,6 +171,7 @@ class TestEventBusPublishSubscribe:
 
 
 class TestEventBusUnsubscribe:
+    @pytest.mark.asyncio
     async def test_unsubscribed_queue_receives_no_further_events(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
@@ -172,6 +181,7 @@ class TestEventBusUnsubscribe:
 
         assert queue.empty()
 
+    @pytest.mark.asyncio
     async def test_unsubscribe_only_removes_target_queue(self) -> None:
         bus = EventBus()
         q1 = bus.subscribe()
@@ -184,12 +194,14 @@ class TestEventBusUnsubscribe:
         assert q1.empty()
         assert q2.get_nowait() is event
 
+    @pytest.mark.asyncio
     async def test_unsubscribe_nonexistent_queue_is_noop(self) -> None:
         bus = EventBus()
         orphan: asyncio.Queue[HydraEvent] = asyncio.Queue()
         # Should not raise
         bus.unsubscribe(orphan)
 
+    @pytest.mark.asyncio
     async def test_unsubscribe_same_queue_twice_is_noop(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
@@ -203,6 +215,7 @@ class TestEventBusUnsubscribe:
 
 
 class TestEventBusHistory:
+    @pytest.mark.asyncio
     async def test_get_history_returns_published_events(self) -> None:
         bus = EventBus()
         e1 = HydraEvent(type=EventType.BATCH_START)
@@ -214,6 +227,7 @@ class TestEventBusHistory:
         assert e1 in history
         assert e2 in history
 
+    @pytest.mark.asyncio
     async def test_get_history_preserves_order(self) -> None:
         bus = EventBus()
         events = [
@@ -225,6 +239,7 @@ class TestEventBusHistory:
         history = bus.get_history()
         assert history == events
 
+    @pytest.mark.asyncio
     async def test_get_history_returns_copy(self) -> None:
         """Mutating the returned list must not affect internal history."""
         bus = EventBus()
@@ -235,12 +250,14 @@ class TestEventBusHistory:
 
         assert len(bus.get_history()) == 1
 
+    @pytest.mark.asyncio
     async def test_history_accumulates_across_publishes(self) -> None:
         bus = EventBus()
         for i in range(10):
             await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE, data={"i": i}))
         assert len(bus.get_history()) == 10
 
+    @pytest.mark.asyncio
     async def test_empty_history_on_new_bus(self) -> None:
         bus = EventBus()
         assert bus.get_history() == []
@@ -252,6 +269,7 @@ class TestEventBusHistory:
 
 
 class TestEventBusHistoryCap:
+    @pytest.mark.asyncio
     async def test_history_capped_at_max_history(self) -> None:
         bus = EventBus(max_history=5)
         for i in range(10):
@@ -260,6 +278,7 @@ class TestEventBusHistoryCap:
         history = bus.get_history()
         assert len(history) == 5
 
+    @pytest.mark.asyncio
     async def test_history_retains_most_recent_events_when_capped(self) -> None:
         bus = EventBus(max_history=3)
         events = [
@@ -272,6 +291,7 @@ class TestEventBusHistoryCap:
         # Should keep the last 3
         assert history == events[-3:]
 
+    @pytest.mark.asyncio
     async def test_max_history_one_keeps_latest(self) -> None:
         bus = EventBus(max_history=1)
         e1 = HydraEvent(type=EventType.BATCH_START)
@@ -283,6 +303,7 @@ class TestEventBusHistoryCap:
         assert len(history) == 1
         assert history[0] is e2
 
+    @pytest.mark.asyncio
     async def test_history_not_exceeded_by_one(self) -> None:
         limit = 100
         bus = EventBus(max_history=limit)
@@ -297,12 +318,14 @@ class TestEventBusHistoryCap:
 
 
 class TestEventBusClear:
+    @pytest.mark.asyncio
     async def test_clear_removes_history(self) -> None:
         bus = EventBus()
         await bus.publish(HydraEvent(type=EventType.BATCH_START))
         bus.clear()
         assert bus.get_history() == []
 
+    @pytest.mark.asyncio
     async def test_clear_removes_subscribers(self) -> None:
         bus = EventBus()
         queue = bus.subscribe()
@@ -312,10 +335,12 @@ class TestEventBusClear:
         await bus.publish(HydraEvent(type=EventType.BATCH_COMPLETE))
         assert queue.empty()
 
+    @pytest.mark.asyncio
     async def test_clear_on_empty_bus_does_not_raise(self) -> None:
         bus = EventBus()
         bus.clear()  # should not raise
 
+    @pytest.mark.asyncio
     async def test_bus_usable_after_clear(self) -> None:
         bus = EventBus()
         await bus.publish(HydraEvent(type=EventType.BATCH_START))
@@ -335,6 +360,7 @@ class TestEventBusClear:
 
 
 class TestEventBusSlowSubscriber:
+    @pytest.mark.asyncio
     async def test_full_queue_does_not_block_publish(self) -> None:
         """Publishing to a full subscriber queue should not raise or block."""
         bus = EventBus()
@@ -347,6 +373,7 @@ class TestEventBusSlowSubscriber:
         # Queue should still have exactly max_queue items
         assert queue.qsize() == 2
 
+    @pytest.mark.asyncio
     async def test_full_queue_drops_oldest_and_keeps_newest(self) -> None:
         """When a subscriber's queue is full, the oldest event is dropped."""
         bus = EventBus()
@@ -366,6 +393,7 @@ class TestEventBusSlowSubscriber:
         # The last event published must be present
         assert events[-1] in items
 
+    @pytest.mark.asyncio
     async def test_slow_subscriber_does_not_affect_other_subscribers(self) -> None:
         """A full slow subscriber must not prevent a normal subscriber from receiving."""
         bus = EventBus()
@@ -382,6 +410,7 @@ class TestEventBusSlowSubscriber:
         # Fast queue should have received all 5 events
         assert fast_queue.qsize() == 5
 
+    @pytest.mark.asyncio
     async def test_history_unaffected_by_slow_subscriber(self) -> None:
         """Dropped events in a subscriber queue do not affect the history."""
         bus = EventBus()
