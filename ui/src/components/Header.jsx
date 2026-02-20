@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
 import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
@@ -11,11 +11,40 @@ export function Header({
   sessionCounts, connected, orchestratorStatus,
   onStart, onStop, phase, workers, config,
 }) {
-  const canStart = orchestratorStatus === 'idle' || orchestratorStatus === 'done'
-  const isStopping = orchestratorStatus === 'stopping'
-  const isRunning = orchestratorStatus === 'running'
-
   const workerList = Object.values(workers || {})
+  const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))
+
+  // Track minimum stopping duration to prevent flicker
+  const [stoppingHeld, setStoppingHeld] = useState(false)
+  const stoppingTimer = useRef(null)
+
+  useEffect(() => {
+    if (orchestratorStatus === 'stopping') {
+      setStoppingHeld(true)
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+    } else if (stoppingHeld) {
+      stoppingTimer.current = setTimeout(() => {
+        setStoppingHeld(false)
+      }, 1500)
+    }
+    return () => {
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+    }
+  }, [orchestratorStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear held state early when workers confirm idle and status is not stopping
+  useEffect(() => {
+    if (!hasActiveWorkers && orchestratorStatus !== 'stopping') {
+      if (stoppingTimer.current) clearTimeout(stoppingTimer.current)
+      setStoppingHeld(false)
+    }
+  }, [hasActiveWorkers, orchestratorStatus])
+
+  const isStopping = orchestratorStatus === 'stopping' || stoppingHeld ||
+    (hasActiveWorkers && (orchestratorStatus === 'idle' || orchestratorStatus === 'done'))
+  const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done') &&
+    !hasActiveWorkers && !stoppingHeld
+  const isRunning = orchestratorStatus === 'running'
   const workload = {
     total: workerList.length,
     active: workerList.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
