@@ -45,10 +45,7 @@ export function Header({
           HYDRA
           <span style={styles.subtitle}>Parallel Issue Processor</span>
         </span>
-        <span style={{
-          ...styles.dot,
-          background: connected ? '#3fb950' : '#f85149',
-        }} />
+        <span style={connected ? dotConnected : dotDisconnected} />
       </div>
       <div style={styles.center}>
         <div style={styles.sessionBox}>
@@ -70,22 +67,11 @@ export function Header({
             return (
               <React.Fragment key={stage.key}>
                 {i > 0 && (
-                  <div style={{
-                    ...styles.connector,
-                    background: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
-                  }} />
+                  <div style={headerConnectorStyles[stage.key][lit ? 'lit' : 'dim']} />
                 )}
-                <div style={{
-                  ...styles.pill,
-                  background: lit ? stage.color : dimmed ? stage.color + '20' : '#21262d',
-                  color: lit ? '#0d1117' : dimmed ? stage.color + '99' : '#484f58',
-                  borderColor: lit ? stage.color : dimmed ? stage.color + '55' : '#30363d',
-                }}>
+                <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
                   {stage.label}
-                  <span style={{
-                    ...styles.count,
-                    opacity: lit ? 1 : 0.6,
-                  }}>{maxCount}</span>
+                  <span style={lit ? countLit : countDim}>{maxCount}</span>
                 </div>
               </React.Fragment>
             )
@@ -95,11 +81,7 @@ export function Header({
       <div style={styles.controls}>
         {canStart && (
           <button
-            style={{
-              ...styles.startBtn,
-              opacity: connected ? 1 : 0.4,
-              cursor: connected ? 'pointer' : 'not-allowed',
-            }}
+            style={connected ? startBtnEnabled : startBtnDisabled}
             onClick={onStart}
             disabled={!connected}
           >
@@ -223,3 +205,30 @@ const styles = {
     fontWeight: 600,
   },
 }
+
+// Pre-computed connection dot variants
+export const dotConnected = { ...styles.dot, background: '#3fb950' }
+export const dotDisconnected = { ...styles.dot, background: '#f85149' }
+
+// Pre-computed per-stage pill/connector variants (avoids object spread in .map())
+export const pillStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.pill, background: s.color, color: '#0d1117', borderColor: s.color },
+    dim: { ...styles.pill, background: s.color + '20', color: s.color + '99', borderColor: s.color + '55' },
+  }])
+)
+
+export const headerConnectorStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    lit: { ...styles.connector, background: s.color },
+    dim: { ...styles.connector, background: s.color + '55' },
+  }])
+)
+
+// Pre-computed count style variants
+export const countLit = { ...styles.count, opacity: 1 }
+export const countDim = { ...styles.count, opacity: 0.6 }
+
+// Pre-computed start button variants
+export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
+export const startBtnDisabled = { ...styles.startBtn, opacity: 0.4, cursor: 'not-allowed' }

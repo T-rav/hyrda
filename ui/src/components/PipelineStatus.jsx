@@ -33,18 +33,10 @@ export function PipelineStatus({ phase, workers }) {
         return (
           <React.Fragment key={stage.key}>
             {i > 0 && (
-              <div style={{
-                ...styles.connector,
-                background: isActive ? stage.color : '#30363d',
-              }} />
+              <div style={connectorStyles[stage.key][isActive ? 'active' : 'inactive']} />
             )}
             <div style={styles.stageWrapper}>
-              <div style={{
-                ...styles.stage,
-                background: isActive ? stage.color : '#21262d',
-                color: isActive ? '#0d1117' : '#484f58',
-                borderColor: isActive ? stage.color : '#30363d',
-              }}>
+              <div style={stageStyles[stage.key][isActive ? 'active' : 'inactive']}>
                 {stage.label}
                 {agentCount > 0 && (
                   <span style={styles.count}>{agentCount}</span>
@@ -100,3 +92,18 @@ const styles = {
     fontWeight: 700,
   },
 }
+
+// Pre-computed per-stage active/inactive style variants (avoids object spread in .map())
+export const connectorStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    active: { ...styles.connector, background: s.color },
+    inactive: { ...styles.connector, background: '#30363d' },
+  }])
+)
+
+export const stageStyles = Object.fromEntries(
+  STAGES.map(s => [s.key, {
+    active: { ...styles.stage, background: s.color, color: '#0d1117', borderColor: s.color },
+    inactive: { ...styles.stage, background: '#21262d', color: '#484f58', borderColor: '#30363d' },
+  }])
+)

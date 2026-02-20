@@ -71,10 +71,7 @@ export default function App() {
             <div
               key={tab}
               onClick={() => setActiveTab(tab)}
-              style={{
-                ...styles.tab,
-                ...(activeTab === tab ? styles.tabActive : {}),
-              }}
+              style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
               {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
@@ -156,3 +153,7 @@ const styles = {
   timelineTime: { color: '#8b949e', marginRight: 8 },
   timelineType: { fontWeight: 600, color: '#58a6ff', marginRight: 6 },
 }
+
+// Pre-computed tab style variants (avoids object spread in .map())
+export const tabInactiveStyle = styles.tab
+export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
