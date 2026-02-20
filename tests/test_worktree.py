@@ -798,10 +798,8 @@ class TestInstallHooks:
     """Tests for WorktreeManager._install_hooks."""
 
     @pytest.mark.asyncio
-    async def test_install_hooks_calls_pre_commit_install(
-        self, config, tmp_path: Path
-    ) -> None:
-        """_install_hooks should run 'pre-commit install' in the worktree."""
+    async def test_install_hooks_sets_hooks_path(self, config, tmp_path: Path) -> None:
+        """_install_hooks should set core.hooksPath to .githooks."""
         manager = WorktreeManager(config)
         success_proc = _make_proc()
 
@@ -811,13 +809,18 @@ class TestInstallHooks:
             await manager._install_hooks(tmp_path)
 
         mock_exec.assert_called_once()
-        assert mock_exec.call_args.args[:2] == ("pre-commit", "install")
+        assert mock_exec.call_args.args[:4] == (
+            "git",
+            "config",
+            "core.hooksPath",
+            ".githooks",
+        )
 
     @pytest.mark.asyncio
     async def test_install_hooks_swallows_errors(self, config, tmp_path: Path) -> None:
-        """_install_hooks should not propagate errors if pre-commit install fails."""
+        """_install_hooks should not propagate errors if git config fails."""
         manager = WorktreeManager(config)
-        fail_proc = _make_proc(returncode=1, stderr=b"pre-commit not found")
+        fail_proc = _make_proc(returncode=1, stderr=b"error")
 
         with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
             # Should not raise

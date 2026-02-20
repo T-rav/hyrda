@@ -634,14 +634,42 @@ class HydraOrchestrator:
                         summary="Issue not found",
                     )
 
-                # Get the diff
-                diff = await self._prs.get_pr_diff(pr.number)
-
                 # The reviewer works in the same worktree as the implementation
                 wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
                 if not wt_path.exists():
                     # Create a fresh worktree for review
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
+
+                # Rebase onto main before reviewing so we review up-to-date code
+                rebased = await self._worktrees.rebase(wt_path, pr.branch)
+                if rebased:
+                    await self._prs.push_branch(wt_path, pr.branch)
+                else:
+                    logger.warning(
+                        "PR #%d has conflicts with %s — escalating to HITL",
+                        pr.number,
+                        self._config.main_branch,
+                    )
+                    await self._prs.post_pr_comment(
+                        pr.number,
+                        f"**Merge conflicts** with `{self._config.main_branch}` "
+                        "that could not be resolved automatically. "
+                        "Escalating to human review.",
+                    )
+                    for lbl in self._config.review_label:
+                        await self._prs.remove_label(pr.issue_number, lbl)
+                    await self._prs.add_labels(
+                        pr.issue_number, [self._config.hitl_label[0]]
+                    )
+                    self._active_issues.discard(pr.issue_number)
+                    return ReviewResult(
+                        pr_number=pr.number,
+                        issue_number=pr.issue_number,
+                        summary="Merge conflicts with main — escalated to HITL",
+                    )
+
+                # Get the diff (after rebase so it reflects current main)
+                diff = await self._prs.get_pr_diff(pr.number)
 
                 result = await self._reviewers.review(
                     pr, issue, wt_path, diff, worker_id=idx
@@ -684,6 +712,22 @@ class HydraOrchestrator:
                                 await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.add_labels(
                                 pr.issue_number, [self._config.fixed_label[0]]
+                            )
+                        else:
+                            logger.warning(
+                                "PR #%d merge failed — escalating to HITL",
+                                pr.number,
+                            )
+                            await self._prs.post_pr_comment(
+                                pr.number,
+                                "**Merge failed** — PR could not be merged. "
+                                "Escalating to human review.",
+                            )
+                            for lbl in self._config.review_label:
+                                await self._prs.remove_label(pr.issue_number, lbl)
+                            await self._prs.add_labels(
+                                pr.issue_number,
+                                [self._config.hitl_label[0]],
                             )
 
                 # Cleanup worktree after review
