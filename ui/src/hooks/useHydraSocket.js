@@ -102,7 +102,8 @@ export function reducer(state, action) {
 
     case 'triage_update': {
       const triageKey = `triage-${action.data.issue}`
-      const triageStatus = action.data.status === 'done' ? 'done' : 'running'
+      const triageStatus = action.data.status === 'done' ? 'done'
+        : action.data.status === 'failed' ? 'failed' : 'evaluating'
       const triageWorker = {
         status: triageStatus,
         worker: action.data.worker,
@@ -127,7 +128,7 @@ export function reducer(state, action) {
     case 'planner_update': {
       const planKey = `plan-${action.data.issue}`
       const planStatus = action.data.status === 'done' ? 'done'
-        : action.data.status === 'failed' ? 'failed' : 'running'
+        : action.data.status === 'failed' ? 'failed' : 'planning'
       const planWorker = {
         status: planStatus,
         worker: action.data.worker,
@@ -151,7 +152,7 @@ export function reducer(state, action) {
 
     case 'review_update': {
       const reviewKey = `review-${action.data.pr}`
-      const reviewStatus = action.data.status === 'done' ? 'done' : 'running'
+      const reviewStatus = action.data.status === 'done' ? 'done' : 'reviewing'
       const reviewWorker = {
         status: reviewStatus,
         worker: action.data.worker,

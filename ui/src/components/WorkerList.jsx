@@ -2,16 +2,19 @@ import React, { useState } from 'react'
 import { theme } from '../theme'
 
 const statusColors = {
-  queued:     { bg: theme.mutedSubtle,  fg: theme.textMuted },
-  running:    { bg: theme.accentSubtle, fg: theme.accent },
-  planning:   { bg: theme.purpleSubtle, fg: theme.purple },
-  testing:    { bg: theme.yellowSubtle, fg: theme.yellow },
-  committing: { bg: theme.orangeSubtle, fg: theme.orange },
-  done:       { bg: theme.greenSubtle,  fg: theme.green },
-  failed:     { bg: theme.redSubtle,    fg: theme.red },
+  queued:      { bg: theme.mutedSubtle,  fg: theme.textMuted },
+  running:     { bg: theme.accentSubtle, fg: theme.accent },
+  planning:    { bg: theme.purpleSubtle, fg: theme.purple },
+  reviewing:   { bg: theme.orangeSubtle, fg: theme.orange },
+  evaluating:  { bg: theme.greenSubtle,  fg: theme.triageGreen },
+  testing:     { bg: theme.yellowSubtle, fg: theme.yellow },
+  committing:  { bg: theme.orangeSubtle, fg: theme.orange },
+  quality_fix: { bg: theme.yellowSubtle, fg: theme.yellow },
+  done:        { bg: theme.greenSubtle,  fg: theme.green },
+  failed:      { bg: theme.redSubtle,    fg: theme.red },
 }
 
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'evaluating', 'quality_fix']
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)

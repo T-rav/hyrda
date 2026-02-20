@@ -9,7 +9,7 @@ import { HITLTable } from './components/HITLTable'
 import { theme } from './theme'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline']
-const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
+const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'evaluating', 'quality_fix']
 
 export default function App() {
   const {

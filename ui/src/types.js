@@ -1,9 +1,9 @@
 /**
- * @typedef {'batch_start'|'phase_change'|'worker_update'|'transcript_line'|'pr_created'|'review_update'|'merge_update'|'batch_complete'|'error'} EventType
+ * @typedef {'batch_start'|'phase_change'|'worker_update'|'transcript_line'|'pr_created'|'review_update'|'merge_update'|'batch_complete'|'triage_update'|'planner_update'|'orchestrator_status'|'ci_check'|'issue_created'|'error'} EventType
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
  *
- * @typedef {'queued'|'running'|'testing'|'committing'|'done'|'failed'} WorkerStatus
+ * @typedef {'queued'|'running'|'planning'|'reviewing'|'evaluating'|'testing'|'committing'|'quality_fix'|'done'|'failed'} WorkerStatus
  *
  * @typedef {{ status: WorkerStatus, worker: number, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *

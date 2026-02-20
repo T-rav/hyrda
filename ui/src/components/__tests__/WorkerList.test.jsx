@@ -3,13 +3,16 @@ import { render, screen } from '@testing-library/react'
 import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles } from '../WorkerList'
 
 const statusColors = {
-  queued:     { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
-  running:    { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
-  planning:   { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
-  testing:    { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
-  committing: { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
-  done:       { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
-  failed:     { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
+  queued:      { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
+  running:     { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
+  planning:    { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
+  reviewing:   { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  evaluating:  { bg: 'var(--green-subtle)',  fg: 'var(--triage-green)' },
+  testing:     { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  committing:  { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  quality_fix: { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  done:        { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  failed:      { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
 }
 
 describe('WorkerList pre-computed styles', () => {
@@ -72,5 +75,37 @@ describe('WorkerList component', () => {
     expect(screen.getByText('#2')).toBeInTheDocument()
     expect(screen.getByText('running')).toBeInTheDocument()
     expect(screen.getByText('done')).toBeInTheDocument()
+  })
+
+  it('renders workers with planning status', () => {
+    const workers = {
+      'plan-10': { status: 'planning', title: 'Plan Issue #10', branch: '', worker: 0, role: 'planner', transcript: [], pr: null },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('planning')).toBeInTheDocument()
+  })
+
+  it('renders workers with reviewing status', () => {
+    const workers = {
+      'review-5': { status: 'reviewing', title: 'PR #5 (Issue #3)', branch: '', worker: 0, role: 'reviewer', transcript: [], pr: 5 },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('reviewing')).toBeInTheDocument()
+  })
+
+  it('renders workers with evaluating status', () => {
+    const workers = {
+      'triage-7': { status: 'evaluating', title: 'Triage Issue #7', branch: '', worker: 0, role: 'triage', transcript: [], pr: null },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('evaluating')).toBeInTheDocument()
+  })
+
+  it('renders workers with quality_fix status', () => {
+    const workers = {
+      42: { status: 'quality_fix', title: 'Fix issue #42', branch: 'agent/issue-42', worker: 0, role: 'implementer', transcript: [], pr: null },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('quality_fix')).toBeInTheDocument()
   })
 })

@@ -109,4 +109,104 @@ describe('useHydraSocket reducer', () => {
     expect(next.events[0].type).toBe('hitl_update')
     expect(next.events[0].data.issue).toBe(42)
   })
+
+  describe('triage_update status mapping', () => {
+    it('maps evaluating status to evaluating (not running)', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 10, status: 'evaluating', worker: 0 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-10'].status).toBe('evaluating')
+      expect(next.workers['triage-10'].role).toBe('triage')
+    })
+
+    it('maps done status to done', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 10, status: 'done', worker: 0 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-10'].status).toBe('done')
+    })
+
+    it('maps failed status to failed', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 10, status: 'failed', worker: 0 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-10'].status).toBe('failed')
+    })
+
+    it('maps unknown triage status to evaluating', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 10, status: 'something_else', worker: 0 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-10'].status).toBe('evaluating')
+    })
+  })
+
+  describe('planner_update status mapping', () => {
+    it('maps planning status to planning (not running)', () => {
+      const next = reducer(initialState, {
+        type: 'planner_update',
+        data: { issue: 20, status: 'planning', worker: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['plan-20'].status).toBe('planning')
+      expect(next.workers['plan-20'].role).toBe('planner')
+    })
+
+    it('maps done status to done', () => {
+      const next = reducer(initialState, {
+        type: 'planner_update',
+        data: { issue: 20, status: 'done', worker: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['plan-20'].status).toBe('done')
+    })
+
+    it('maps failed status to failed', () => {
+      const next = reducer(initialState, {
+        type: 'planner_update',
+        data: { issue: 20, status: 'failed', worker: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['plan-20'].status).toBe('failed')
+    })
+  })
+
+  describe('review_update status mapping', () => {
+    it('maps reviewing status to reviewing (not running)', () => {
+      const next = reducer(initialState, {
+        type: 'review_update',
+        data: { pr: 30, issue: 15, status: 'reviewing', worker: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['review-30'].status).toBe('reviewing')
+      expect(next.workers['review-30'].role).toBe('reviewer')
+    })
+
+    it('maps done status to done and appends to reviews', () => {
+      const next = reducer(initialState, {
+        type: 'review_update',
+        data: { pr: 30, issue: 15, status: 'done', worker: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['review-30'].status).toBe('done')
+      expect(next.reviews).toHaveLength(1)
+    })
+
+    it('maps in-progress status to reviewing', () => {
+      const next = reducer(initialState, {
+        type: 'review_update',
+        data: { pr: 30, issue: 15, status: 'in_progress', worker: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['review-30'].status).toBe('reviewing')
+    })
+  })
 })
