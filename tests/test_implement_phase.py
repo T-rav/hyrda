@@ -386,3 +386,117 @@ class TestImplementIncludesPush:
         assert results[0].success is True
         # Issue should have been released from active_issues
         assert 42 not in phase._active_issues
+
+
+# ---------------------------------------------------------------------------
+# Worker exception isolation
+# ---------------------------------------------------------------------------
+
+
+class TestWorkerExceptionIsolation:
+    """Tests that _worker catches exceptions and returns failed results."""
+
+    @pytest.mark.asyncio
+    async def test_worker_exception_returns_failed_result(
+        self, config: HydraConfig
+    ) -> None:
+        """When agent.run raises, worker should return a WorkerResult with error."""
+        issue = make_issue(42)
+
+        async def crashing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            raise RuntimeError("agent crashed")
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=crashing_agent)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert results[0].error is not None
+        assert "Worker exception" in results[0].error
+
+    @pytest.mark.asyncio
+    async def test_worker_exception_marks_issue_failed(
+        self, config: HydraConfig
+    ) -> None:
+        """When worker crashes, issue should be marked as 'failed' in state."""
+        issue = make_issue(42)
+
+        async def crashing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            raise RuntimeError("agent crashed")
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=crashing_agent)
+
+        await phase.run_batch()
+
+        assert phase._state.get_issue_status(42) == "failed"
+
+    @pytest.mark.asyncio
+    async def test_worker_exception_releases_active_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When worker crashes, issue should be removed from active_issues."""
+        issue = make_issue(42)
+
+        async def crashing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            raise RuntimeError("agent crashed")
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=crashing_agent)
+
+        await phase.run_batch()
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_worker_exception_does_not_crash_batch(
+        self, config: HydraConfig
+    ) -> None:
+        """With 2 issues, first worker crashing should not prevent the second."""
+        issues = [make_issue(1), make_issue(2)]
+
+        call_count = 0
+
+        async def sometimes_crashing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            nonlocal call_count
+            call_count += 1
+            if issue.number == 1:
+                raise RuntimeError("agent crashed for issue 1")
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, _ = _make_phase(config, issues, agent_run=sometimes_crashing_agent)
+
+        results, _ = await phase.run_batch()
+
+        # Both results should be returned
+        assert len(results) == 2
+        issue_numbers = {r.issue_number for r in results}
+        assert issue_numbers == {1, 2}
+        # Issue 1 failed, issue 2 succeeded
+        result_map = {r.issue_number: r for r in results}
+        assert result_map[1].success is False
+        assert result_map[1].error is not None
+        assert result_map[2].success is True
