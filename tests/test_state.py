@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -579,3 +581,90 @@ class TestLifetimeStats:
         # Existing data is preserved
         assert tracker.get_current_batch() == 5
         assert tracker.get_issue_status(1) == "success"
+
+
+# ---------------------------------------------------------------------------
+# Atomic save
+# ---------------------------------------------------------------------------
+
+
+class TestAtomicSave:
+    def test_save_uses_atomic_replace(self, tmp_path: Path) -> None:
+        """save() should write to a temp file then atomically replace."""
+        tracker = make_tracker(tmp_path)
+        with patch("state.os.replace", wraps=os.replace) as mock_replace:
+            tracker.save()
+            mock_replace.assert_called_once()
+            args = mock_replace.call_args[0]
+            # Second arg should be the state file path
+            assert str(args[1]) == str(tmp_path / "state.json")
+            # First arg (temp file) should no longer exist after replace
+            assert not Path(args[0]).exists()
+
+    def test_save_cleans_up_temp_on_write_failure(self, tmp_path: Path) -> None:
+        """If writing to the temp file fails, the temp file should be removed."""
+        tracker = make_tracker(tmp_path)
+        state_dir = tmp_path
+
+        with (
+            patch("state.os.fdopen", side_effect=OSError("disk full")),
+            pytest.raises(OSError, match="disk full"),
+        ):
+            tracker.save()
+
+        # No leftover temp files
+        temps = list(state_dir.glob(".state-*.tmp"))
+        assert temps == []
+
+    def test_save_cleans_up_temp_on_fsync_failure(self, tmp_path: Path) -> None:
+        """If fsync fails, the temp file should be cleaned up."""
+        tracker = make_tracker(tmp_path)
+
+        with (
+            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            pytest.raises(OSError, match="fsync failed"),
+        ):
+            tracker.save()
+
+        temps = list(tmp_path.glob(".state-*.tmp"))
+        assert temps == []
+
+    def test_save_does_not_corrupt_existing_file_on_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """A failed save must leave the original state file intact."""
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.mark_issue(1, "success")
+
+        original_content = state_file.read_text()
+
+        with (
+            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            pytest.raises(OSError),
+        ):
+            tracker.save()
+
+        # Original file should be unchanged
+        assert state_file.read_text() == original_content
+        data = json.loads(state_file.read_text())
+        assert data["processed_issues"]["1"] == "success"
+
+    def test_no_temp_files_left_after_successful_save(self, tmp_path: Path) -> None:
+        """After a normal save, no temp files should remain."""
+        tracker = make_tracker(tmp_path)
+        tracker.save()
+
+        temps = list(tmp_path.glob(".state-*.tmp"))
+        assert temps == []
+
+    def test_save_temp_file_in_same_directory(self, tmp_path: Path) -> None:
+        """The temp file must be created in the same dir as the state file."""
+        tracker = make_tracker(tmp_path)
+        with patch(
+            "state.tempfile.mkstemp", wraps=__import__("tempfile").mkstemp
+        ) as mock_mkstemp:
+            tracker.save()
+            mock_mkstemp.assert_called_once()
+            kwargs = mock_mkstemp.call_args[1]
+            assert str(kwargs["dir"]) == str(tmp_path)
