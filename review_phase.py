@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraConfig
+from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager
 from reviewer import ReviewRunner
@@ -30,6 +31,7 @@ class ReviewPhase:
         stop_event: asyncio.Event,
         active_issues: set[int],
         agents: AgentRunner | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -39,6 +41,7 @@ class ReviewPhase:
         self._stop_event = stop_event
         self._active_issues = active_issues
         self._agents = agents
+        self._bus = event_bus or EventBus()
 
     async def review_prs(
         self,
@@ -56,152 +59,171 @@ class ReviewPhase:
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
                 self._active_issues.add(pr.issue_number)
-                issue = issue_map.get(pr.issue_number)
-                if issue is None:
-                    return ReviewResult(
-                        pr_number=pr.number,
-                        issue_number=pr.issue_number,
-                        summary="Issue not found",
-                    )
 
-                # The reviewer works in the same worktree as the implementation
-                wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
-                if not wt_path.exists():
-                    # Create a fresh worktree for review
-                    wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
-
-                # Merge main into the branch before reviewing so we review
-                # up-to-date code.  Merge keeps the push fast-forward
-                # so no force-push is needed.
-                merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
-                if not merged_main:
-                    # Conflicts — let the agent try to resolve them
-                    logger.info(
-                        "PR #%d has conflicts with %s — running agent to resolve",
-                        pr.number,
-                        self._config.main_branch,
+                # Publish a start event immediately so the dashboard
+                # shows this worker as active during pre-review work
+                # (worktree creation, merge, conflict resolution).
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.REVIEW_UPDATE,
+                        data={
+                            "pr": pr.number,
+                            "issue": pr.issue_number,
+                            "worker": idx,
+                            "status": "start",
+                            "role": "reviewer",
+                        },
                     )
-                    merged_main = await self._resolve_merge_conflicts(
-                        pr, issue, wt_path, worker_id=idx
-                    )
-                if merged_main:
-                    await self._prs.push_branch(wt_path, pr.branch)
-                else:
-                    logger.warning(
-                        "PR #%d merge conflict resolution failed — escalating to HITL",
-                        pr.number,
-                    )
-                    await self._prs.post_pr_comment(
-                        pr.number,
-                        f"**Merge conflicts** with "
-                        f"`{self._config.main_branch}` could not be "
-                        "resolved automatically. "
-                        "Escalating to human review.",
-                    )
-                    self._state.set_hitl_origin(
-                        pr.issue_number, self._config.review_label[0]
-                    )
-                    for lbl in self._config.review_label:
-                        await self._prs.remove_label(pr.issue_number, lbl)
-                        await self._prs.remove_pr_label(pr.number, lbl)
-                    await self._prs.add_labels(
-                        pr.issue_number, [self._config.hitl_label[0]]
-                    )
-                    await self._prs.add_pr_labels(
-                        pr.number, [self._config.hitl_label[0]]
-                    )
-                    self._active_issues.discard(pr.issue_number)
-                    return ReviewResult(
-                        pr_number=pr.number,
-                        issue_number=pr.issue_number,
-                        summary="Merge conflicts with main — escalated to HITL",
-                    )
-
-                # Get the diff (after merge so it reflects current main)
-                diff = await self._prs.get_pr_diff(pr.number)
-
-                result = await self._reviewers.review(
-                    pr, issue, wt_path, diff, worker_id=idx
                 )
 
-                # If reviewer made fixes, push them
-                if result.fixes_made:
-                    await self._prs.push_branch(wt_path, pr.branch)
-
-                # Post review summary as PR comment
-                if result.summary and pr.number > 0:
-                    await self._prs.post_pr_comment(pr.number, result.summary)
-
-                # Submit formal GitHub PR review for non-approve verdicts.
-                # Approve is skipped to avoid "cannot approve your own PR"
-                # errors — Hydra merges directly once CI passes.
-                if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
-                    await self._prs.submit_review(
-                        pr.number, result.verdict, result.summary
-                    )
-
-                self._state.mark_pr(pr.number, result.verdict.value)
-                self._state.mark_issue(pr.issue_number, "reviewed")
-
-                # Merge immediately if approved (with optional CI gate)
-                if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
-                    should_merge = True
-                    if self._config.max_ci_fix_attempts > 0:
-                        should_merge = await self.wait_and_fix_ci(
-                            pr, issue, wt_path, result, idx
-                        )
-                    if should_merge:
-                        success = await self._prs.merge_pr(pr.number)
-                        if success:
-                            result.merged = True
-                            self._state.mark_issue(pr.issue_number, "merged")
-                            self._state.record_pr_merged()
-                            self._state.record_issue_completed()
-                            for lbl in self._config.review_label:
-                                await self._prs.remove_label(pr.issue_number, lbl)
-                            await self._prs.add_labels(
-                                pr.issue_number,
-                                [self._config.fixed_label[0]],
-                            )
-                        else:
-                            logger.warning(
-                                "PR #%d merge failed — escalating to HITL",
-                                pr.number,
-                            )
-                            await self._prs.post_pr_comment(
-                                pr.number,
-                                "**Merge failed** — PR could not be merged. "
-                                "Escalating to human review.",
-                            )
-                            self._state.set_hitl_origin(
-                                pr.issue_number, self._config.review_label[0]
-                            )
-                            for lbl in self._config.review_label:
-                                await self._prs.remove_label(pr.issue_number, lbl)
-                                await self._prs.remove_pr_label(pr.number, lbl)
-                            await self._prs.add_labels(
-                                pr.issue_number,
-                                [self._config.hitl_label[0]],
-                            )
-                            await self._prs.add_pr_labels(
-                                pr.number,
-                                [self._config.hitl_label[0]],
-                            )
-
-                # Cleanup worktree after review
                 try:
-                    await self._worktrees.destroy(pr.issue_number)
-                    self._state.remove_worktree(pr.issue_number)
-                except RuntimeError as exc:
-                    logger.warning(
-                        "Could not destroy worktree for issue #%d: %s",
-                        pr.issue_number,
-                        exc,
+                    issue = issue_map.get(pr.issue_number)
+                    if issue is None:
+                        return ReviewResult(
+                            pr_number=pr.number,
+                            issue_number=pr.issue_number,
+                            summary="Issue not found",
+                        )
+
+                    # The reviewer works in the same worktree as the implementation
+                    wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
+                    if not wt_path.exists():
+                        # Create a fresh worktree for review
+                        wt_path = await self._worktrees.create(
+                            pr.issue_number, pr.branch
+                        )
+
+                    # Merge main into the branch before reviewing so we review
+                    # up-to-date code.  Merge keeps the push fast-forward
+                    # so no force-push is needed.
+                    merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
+                    if not merged_main:
+                        # Conflicts — let the agent try to resolve them
+                        logger.info(
+                            "PR #%d has conflicts with %s — running agent to resolve",
+                            pr.number,
+                            self._config.main_branch,
+                        )
+                        merged_main = await self._resolve_merge_conflicts(
+                            pr, issue, wt_path, worker_id=idx
+                        )
+                    if merged_main:
+                        await self._prs.push_branch(wt_path, pr.branch)
+                    else:
+                        logger.warning(
+                            "PR #%d merge conflict resolution failed — escalating to HITL",
+                            pr.number,
+                        )
+                        await self._prs.post_pr_comment(
+                            pr.number,
+                            f"**Merge conflicts** with "
+                            f"`{self._config.main_branch}` could not be "
+                            "resolved automatically. "
+                            "Escalating to human review.",
+                        )
+                        self._state.set_hitl_origin(
+                            pr.issue_number, self._config.review_label[0]
+                        )
+                        for lbl in self._config.review_label:
+                            await self._prs.remove_label(pr.issue_number, lbl)
+                            await self._prs.remove_pr_label(pr.number, lbl)
+                        await self._prs.add_labels(
+                            pr.issue_number, [self._config.hitl_label[0]]
+                        )
+                        await self._prs.add_pr_labels(
+                            pr.number, [self._config.hitl_label[0]]
+                        )
+                        return ReviewResult(
+                            pr_number=pr.number,
+                            issue_number=pr.issue_number,
+                            summary="Merge conflicts with main — escalated to HITL",
+                        )
+
+                    # Get the diff (after merge so it reflects current main)
+                    diff = await self._prs.get_pr_diff(pr.number)
+
+                    result = await self._reviewers.review(
+                        pr, issue, wt_path, diff, worker_id=idx
                     )
 
-                # Release so issue can be re-reviewed if needed
-                self._active_issues.discard(pr.issue_number)
-                return result
+                    # If reviewer made fixes, push them
+                    if result.fixes_made:
+                        await self._prs.push_branch(wt_path, pr.branch)
+
+                    # Post review summary as PR comment
+                    if result.summary and pr.number > 0:
+                        await self._prs.post_pr_comment(pr.number, result.summary)
+
+                    # Submit formal GitHub PR review for non-approve verdicts.
+                    # Approve is skipped to avoid "cannot approve your own PR"
+                    # errors — Hydra merges directly once CI passes.
+                    if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
+                        await self._prs.submit_review(
+                            pr.number, result.verdict, result.summary
+                        )
+
+                    self._state.mark_pr(pr.number, result.verdict.value)
+                    self._state.mark_issue(pr.issue_number, "reviewed")
+
+                    # Merge immediately if approved (with optional CI gate)
+                    if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
+                        should_merge = True
+                        if self._config.max_ci_fix_attempts > 0:
+                            should_merge = await self.wait_and_fix_ci(
+                                pr, issue, wt_path, result, idx
+                            )
+                        if should_merge:
+                            success = await self._prs.merge_pr(pr.number)
+                            if success:
+                                result.merged = True
+                                self._state.mark_issue(pr.issue_number, "merged")
+                                self._state.record_pr_merged()
+                                self._state.record_issue_completed()
+                                for lbl in self._config.review_label:
+                                    await self._prs.remove_label(pr.issue_number, lbl)
+                                await self._prs.add_labels(
+                                    pr.issue_number,
+                                    [self._config.fixed_label[0]],
+                                )
+                            else:
+                                logger.warning(
+                                    "PR #%d merge failed — escalating to HITL",
+                                    pr.number,
+                                )
+                                await self._prs.post_pr_comment(
+                                    pr.number,
+                                    "**Merge failed** — PR could not be merged. "
+                                    "Escalating to human review.",
+                                )
+                                self._state.set_hitl_origin(
+                                    pr.issue_number, self._config.review_label[0]
+                                )
+                                for lbl in self._config.review_label:
+                                    await self._prs.remove_label(pr.issue_number, lbl)
+                                    await self._prs.remove_pr_label(pr.number, lbl)
+                                await self._prs.add_labels(
+                                    pr.issue_number,
+                                    [self._config.hitl_label[0]],
+                                )
+                                await self._prs.add_pr_labels(
+                                    pr.number,
+                                    [self._config.hitl_label[0]],
+                                )
+
+                    # Cleanup worktree after review
+                    try:
+                        await self._worktrees.destroy(pr.issue_number)
+                        self._state.remove_worktree(pr.issue_number)
+                    except RuntimeError as exc:
+                        logger.warning(
+                            "Could not destroy worktree for issue #%d: %s",
+                            pr.issue_number,
+                            exc,
+                        )
+
+                    return result
+                finally:
+                    self._active_issues.discard(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
         for task in asyncio.as_completed(tasks):
