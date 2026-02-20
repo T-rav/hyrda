@@ -11,7 +11,7 @@ from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, JudgeResult, PRInfo, ReviewResult, ReviewVerdict
-from pr_manager import PRManager
+from pr_manager import PRManager, SelfReviewError
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
     ReviewInsightStore,
@@ -105,6 +105,7 @@ class ReviewPhase:
                     # Merge main into the branch before reviewing so we review
                     # up-to-date code.  Merge keeps the push fast-forward
                     # so no force-push is needed.
+                    await self._publish_review_status(pr, idx, "merge_main")
                     merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
                     if not merged_main:
                         # Conflicts — let the agent try to resolve them
@@ -112,6 +113,9 @@ class ReviewPhase:
                             "PR #%d has conflicts with %s — running agent to resolve",
                             pr.number,
                             self._config.main_branch,
+                        )
+                        await self._publish_review_status(
+                            pr, idx, "conflict_resolution"
                         )
                         merged_main = await self._resolve_merge_conflicts(
                             pr, issue, wt_path, worker_id=idx
@@ -123,6 +127,7 @@ class ReviewPhase:
                             "PR #%d merge conflict resolution failed — escalating to HITL",
                             pr.number,
                         )
+                        await self._publish_review_status(pr, idx, "escalating")
                         await self._prs.post_pr_comment(
                             pr.number,
                             f"**Merge conflicts** with "
@@ -171,9 +176,17 @@ class ReviewPhase:
                     # Approve is skipped to avoid "cannot approve your own PR"
                     # errors — Hydra merges directly once CI passes.
                     if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
-                        await self._prs.submit_review(
-                            pr.number, result.verdict, result.summary
-                        )
+                        try:
+                            await self._prs.submit_review(
+                                pr.number, result.verdict, result.summary
+                            )
+                        except SelfReviewError:
+                            logger.info(
+                                "Skipping formal %s review on own PR #%d"
+                                " — already posted as comment",
+                                result.verdict.value,
+                                pr.number,
+                            )
 
                     self._state.mark_pr(pr.number, result.verdict.value)
                     self._state.mark_issue(pr.issue_number, "reviewed")
@@ -189,6 +202,7 @@ class ReviewPhase:
                                 pr, issue, wt_path, result, idx
                             )
                         if should_merge:
+                            await self._publish_review_status(pr, idx, "merging")
                             success = await self._prs.merge_pr(pr.number)
                             if success:
                                 result.merged = True
@@ -218,6 +232,7 @@ class ReviewPhase:
                                     "PR #%d merge failed — escalating to HITL",
                                     pr.number,
                                 )
+                                await self._publish_review_status(pr, idx, "escalating")
                                 await self._prs.post_pr_comment(
                                     pr.number,
                                     "**Merge failed** — PR could not be merged. "
@@ -266,6 +281,7 @@ class ReviewPhase:
                         summary="Review failed due to unexpected error",
                     )
                 finally:
+                    await self._publish_review_status(pr, idx, "done")
                     self._active_issues.discard(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
@@ -291,6 +307,7 @@ class ReviewPhase:
         summary = ""
 
         for attempt in range(max_attempts + 1):
+            await self._publish_review_status(pr, worker_id, "ci_wait")
             passed, summary = await self._prs.wait_for_ci(
                 pr.number,
                 self._config.ci_check_timeout,
@@ -306,6 +323,7 @@ class ReviewPhase:
                 break
 
             # Run the CI fix agent
+            await self._publish_review_status(pr, worker_id, "ci_fix")
             fix_result = await self._reviewers.fix_ci(
                 pr,
                 issue,
@@ -328,6 +346,7 @@ class ReviewPhase:
 
         # CI failed after all attempts — escalate to human
         result.ci_passed = False
+        await self._publish_review_status(pr, worker_id, "escalating")
         await self._prs.post_pr_comment(
             pr.number,
             f"**CI failed** after {result.ci_fix_attempts} fix attempt(s).\n\n"
@@ -458,6 +477,23 @@ class ReviewPhase:
             f"{judge_result.verification_instructions}\n\n"
             "---\n"
             "*Generated by Hydra*\n"
+        )
+
+    async def _publish_review_status(
+        self, pr: PRInfo, worker_id: int, status: str
+    ) -> None:
+        """Emit a REVIEW_UPDATE event with the given status."""
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.REVIEW_UPDATE,
+                data={
+                    "pr": pr.number,
+                    "issue": pr.issue_number,
+                    "worker": worker_id,
+                    "status": status,
+                    "role": "reviewer",
+                },
+            )
         )
 
     async def _resolve_merge_conflicts(
