@@ -72,6 +72,12 @@ class HydraConfig(BaseModel):
         le=20,
         description="Max total implementation attempts per issue before HITL escalation",
     )
+    gh_max_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max retry attempts for gh CLI calls",
+    )
 
     # Label lifecycle
     review_label: list[str] = Field(
@@ -230,6 +236,13 @@ class HydraConfig(BaseModel):
         if env_max_attempts is not None and self.max_issue_attempts == 3:
             with contextlib.suppress(ValueError):
                 object.__setattr__(self, "max_issue_attempts", int(env_max_attempts))
+
+        # gh retry override
+        if self.gh_max_retries == 3:  # still at default
+            env_retries = os.environ.get("HYDRA_GH_MAX_RETRIES")
+            if env_retries is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "gh_max_retries", int(env_retries))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
