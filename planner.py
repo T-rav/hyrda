@@ -148,7 +148,9 @@ class PlannerRunner:
             issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
         )
 
-        find_label = self._config.find_label[0] if self._config.find_label else "hydra-find"
+        find_label = (
+            self._config.find_label[0] if self._config.find_label else "hydra-find"
+        )
 
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
