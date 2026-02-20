@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import HydraConfig
 
+from events import EventBus, EventType
 from models import (
     GitHubIssue,
     PRInfo,
@@ -72,7 +73,12 @@ def make_review_result(
     )
 
 
-def _make_phase(config: HydraConfig, *, agents: AsyncMock | None = None) -> ReviewPhase:
+def _make_phase(
+    config: HydraConfig,
+    *,
+    agents: AsyncMock | None = None,
+    event_bus: EventBus | None = None,
+) -> ReviewPhase:
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
     stop_event = asyncio.Event()
@@ -93,6 +99,7 @@ def _make_phase(config: HydraConfig, *, agents: AsyncMock | None = None) -> Revi
         stop_event=stop_event,
         active_issues=active_issues,
         agents=agents,
+        event_bus=event_bus or EventBus(),
     )
 
     return phase
@@ -1236,3 +1243,218 @@ class TestResolveMergeConflicts:
 
         assert result is False
         phase._worktrees.abort_merge.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _active_issues cleanup (Bugs 1 & 2)
+# ---------------------------------------------------------------------------
+
+
+class TestActiveIssuesCleanup:
+    """Tests that _active_issues is cleaned up on all code paths."""
+
+    @pytest.mark.asyncio
+    async def test_active_issues_cleaned_on_early_return_issue_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        """When issue is not in issue_map, _active_issues must be cleaned up."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 999)
+
+        wt = config.worktree_base / "issue-999"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [])  # no matching issues
+
+        assert 999 not in phase._active_issues
+        assert len(results) == 1
+        assert results[0].summary == "Issue not found"
+
+    @pytest.mark.asyncio
+    async def test_active_issues_cleaned_on_exception_during_merge_main(
+        self, config: HydraConfig
+    ) -> None:
+        """If merge_main raises, _active_issues must still be cleaned up."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.merge_main = AsyncMock(
+            side_effect=RuntimeError("merge exploded")
+        )
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        # The exception should propagate but _active_issues should be clean
+        with pytest.raises(RuntimeError, match="merge exploded"):
+            await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_active_issues_cleaned_on_exception_during_review(
+        self, config: HydraConfig
+    ) -> None:
+        """If reviewers.review raises, _active_issues must still be cleaned up."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(side_effect=RuntimeError("review crashed"))
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(RuntimeError, match="review crashed"):
+            await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_active_issues_cleaned_on_exception_during_worktree_create(
+        self, config: HydraConfig
+    ) -> None:
+        """If worktrees.create raises, _active_issues must still be cleaned up."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.create = AsyncMock(
+            side_effect=RuntimeError("worktree create failed")
+        )
+
+        # No worktree dir exists, so create() will be called
+        with pytest.raises(RuntimeError, match="worktree create failed"):
+            await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+    @pytest.mark.asyncio
+    async def test_active_issues_cleaned_on_happy_path(
+        self, config: HydraConfig
+    ) -> None:
+        """On the happy path, _active_issues must be empty after review_prs."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert 42 not in phase._active_issues
+
+
+# ---------------------------------------------------------------------------
+# REVIEW_UPDATE start event (Bug 3)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewUpdateStartEvent:
+    """Tests that a REVIEW_UPDATE event is published at the start of _review_one()."""
+
+    @pytest.mark.asyncio
+    async def test_review_update_start_event_published_before_review(
+        self, config: HydraConfig
+    ) -> None:
+        """A REVIEW_UPDATE 'start' event should be published when _review_one() starts."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Check that a REVIEW_UPDATE event with status "start" was published
+        history = bus.get_history()
+        start_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "start"
+        ]
+        assert len(start_events) == 1
+        assert start_events[0].data["pr"] == 101
+        assert start_events[0].data["issue"] == 42
+        assert start_events[0].data["role"] == "reviewer"
+
+    @pytest.mark.asyncio
+    async def test_review_update_start_event_published_even_when_issue_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        """A REVIEW_UPDATE 'start' event is published even if the issue is missing."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        pr = make_pr_info(101, 999)
+
+        wt = config.worktree_base / "issue-999"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [])
+
+        history = bus.get_history()
+        start_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "start"
+        ]
+        assert len(start_events) == 1
+        assert start_events[0].data["pr"] == 101
+        assert start_events[0].data["issue"] == 999
+
+    @pytest.mark.asyncio
+    async def test_review_update_start_event_includes_worker_id(
+        self, config: HydraConfig
+    ) -> None:
+        """The start event should include the worker ID."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        start_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "start"
+        ]
+        assert len(start_events) == 1
+        assert "worker" in start_events[0].data
