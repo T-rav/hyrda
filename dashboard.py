@@ -316,6 +316,9 @@ class HydraDashboard:
                     try:
                         await ws.send_text(event.model_dump_json())
                     except Exception:
+                        logger.warning(
+                            "WebSocket error during history replay", exc_info=True
+                        )
                         return
 
                 # Stream live events
