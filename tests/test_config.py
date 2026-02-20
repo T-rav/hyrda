@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 # conftest.py already inserts the hydra package directory into sys.path
-from config import HydraConfig, _find_repo_root
+from config import HydraConfig, _detect_repo_slug, _find_repo_root
 
 # ---------------------------------------------------------------------------
 # _find_repo_root
@@ -103,6 +103,163 @@ class TestFindRepoRoot:
 
         # Assert
         assert result == git_root.resolve()
+
+
+# ---------------------------------------------------------------------------
+# _detect_repo_slug
+# ---------------------------------------------------------------------------
+
+
+class TestDetectRepoSlug:
+    """Tests for the _detect_repo_slug() helper."""
+
+    def test_ssh_remote_url(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse SSH remote URL and strip .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="git@github.com:owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_https_remote_url(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse HTTPS remote URL and strip .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://github.com/owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_ssh_url_without_git_suffix(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse SSH remote URL without .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="git@github.com:owner/repo\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_https_url_without_git_suffix(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should parse HTTPS remote URL without .git suffix."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://github.com/owner/repo\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == "owner/repo"
+
+    def test_empty_remote_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string when git remote output is empty."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=""
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_subprocess_file_not_found_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string when git is not installed."""
+
+        # Arrange
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise FileNotFoundError("git not found")
+
+        monkeypatch.setattr(subprocess, "run", _raise)
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_subprocess_os_error_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string on OSError."""
+
+        # Arrange
+        def _raise(*_args: object, **_kwargs: object) -> None:
+            raise OSError("subprocess failed")
+
+        monkeypatch.setattr(subprocess, "run", _raise)
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
+
+    def test_non_github_remote_returns_empty_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should return empty string for non-GitHub hosts."""
+        # Arrange
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda *_args, **_kwargs: subprocess.CompletedProcess(
+                args=[], returncode=0, stdout="https://gitlab.com/owner/repo.git\n"
+            ),
+        )
+
+        # Act
+        result = _detect_repo_slug(tmp_path)
+
+        # Assert
+        assert result == ""
 
 
 # ---------------------------------------------------------------------------
