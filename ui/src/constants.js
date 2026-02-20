@@ -4,7 +4,10 @@ import { theme } from './theme'
  * Statuses that indicate a worker is actively processing.
  * Used across dashboard components to filter/count active workers.
  */
-export const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'start']
+export const ACTIVE_STATUSES = [
+  'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix',
+  'start', 'merge_main', 'conflict_resolution', 'ci_wait', 'ci_fix', 'merging',
+]
 
 /**
  * Canonical pipeline stage definitions.
