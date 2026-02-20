@@ -2196,3 +2196,4 @@ class TestGranularReviewStatusEvents:
         ]
         assert review_statuses.index("start") < review_statuses.index("merge_main")
         assert review_statuses.index("merge_main") < review_statuses.index("merging")
+        assert review_statuses[-1] == "done"

@@ -261,6 +261,7 @@ class ReviewPhase:
                         summary="Review failed due to unexpected error",
                     )
                 finally:
+                    await self._publish_review_status(pr, idx, "done")
                     self._active_issues.discard(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
