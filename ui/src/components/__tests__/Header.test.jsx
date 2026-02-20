@@ -239,6 +239,16 @@ describe('Header component', () => {
     expect(screen.getByText('1 failed')).toBeInTheDocument()
   })
 
+  it('counts quality_fix workers as active in workload summary', () => {
+    const workers = {
+      1: { status: 'quality_fix', worker: 1, role: 'implementer', title: 'Fix #1', branch: '', transcript: [], pr: null },
+      2: { status: 'queued', worker: 2, role: 'implementer', title: 'Issue #2', branch: '', transcript: [], pr: null },
+    }
+    render(<Header {...defaultProps} workers={workers} />)
+    expect(screen.getByText('2 total')).toBeInTheDocument()
+    expect(screen.getByText('1 active')).toBeInTheDocument()
+  })
+
   it('renders arrows between session pills', () => {
     render(<Header {...defaultProps} />)
     // 5 session stages means 4 arrows
