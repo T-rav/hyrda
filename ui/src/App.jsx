@@ -13,7 +13,7 @@ const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'plann
 
 export default function App() {
   const {
-    connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
+    connected, batchNum, phase, orchestratorStatus, workers, reviews,
     mergedCount, sessionPrsCount, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
   } = useHydraSocket()
