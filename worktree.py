@@ -264,6 +264,59 @@ class WorktreeManager:
                 )
             return False
 
+    async def start_merge_main(self, worktree_path: Path, branch: str) -> bool:
+        """Begin merging main into *branch*, leaving conflicts for manual resolution.
+
+        Like :meth:`merge_main` but does **not** abort on conflict.
+        The caller is expected to resolve the conflict markers and
+        complete the merge with ``git add . && git commit --no-edit``.
+
+        Returns *True* if the merge completed cleanly (no conflicts),
+        *False* if conflicts remain in the working tree.
+        """
+        try:
+            await run_subprocess(
+                "git",
+                "fetch",
+                "origin",
+                self._config.main_branch,
+                branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            # Fast-forward local branch to match remote
+            await run_subprocess(
+                "git",
+                "merge",
+                "--ff-only",
+                f"origin/{branch}",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            await run_subprocess(
+                "git",
+                "merge",
+                f"origin/{self._config.main_branch}",
+                "--no-edit",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return True
+        except RuntimeError:
+            # Leave conflict markers in place — caller will resolve
+            return False
+
+    async def abort_merge(self, worktree_path: Path) -> None:
+        """Abort an in-progress merge in *worktree_path*."""
+        with contextlib.suppress(RuntimeError):
+            await run_subprocess(
+                "git",
+                "merge",
+                "--abort",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:

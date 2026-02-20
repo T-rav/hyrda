@@ -955,10 +955,53 @@ class TestReviewPRs:
         mock_reviewers.review.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_review_merge_main_conflict_escalates_to_hitl(
+    async def test_review_conflict_resolved_by_agent(self, config: HydraConfig) -> None:
+        """When merge conflicts, agent resolves them and review proceeds."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        mock_reviewers = AsyncMock()
+        mock_reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        orch._reviewers = mock_reviewers
+
+        mock_prs = AsyncMock()
+        mock_prs.get_pr_diff = AsyncMock(return_value="diff text")
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.merge_pr = AsyncMock(return_value=True)
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.destroy = AsyncMock()
+        mock_wt.merge_main = AsyncMock(return_value=False)  # Conflicts
+        mock_wt.start_merge_main = AsyncMock(return_value=False)  # Has conflicts
+        orch._worktrees = mock_wt
+
+        mock_agents = AsyncMock()
+        mock_agents._build_command = lambda wt: ["claude", "-p"]
+        mock_agents._execute = AsyncMock(return_value="resolved")
+        mock_agents._verify_result = AsyncMock(return_value=(True, "OK"))
+        orch._agents = mock_agents
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await orch._review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        mock_wt.start_merge_main.assert_awaited_once()
+        mock_agents._execute.assert_awaited_once()
+        mock_reviewers.review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_conflict_agent_fails_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When pre-review merge of main fails (conflicts), skip review and escalate."""
+        """When agent cannot resolve conflicts, escalate to HITL."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -975,7 +1018,15 @@ class TestReviewPRs:
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
         mock_wt.merge_main = AsyncMock(return_value=False)  # Conflicts
+        mock_wt.start_merge_main = AsyncMock(return_value=False)
+        mock_wt.abort_merge = AsyncMock()
         orch._worktrees = mock_wt
+
+        mock_agents = AsyncMock()
+        mock_agents._build_command = lambda wt: ["claude", "-p"]
+        mock_agents._execute = AsyncMock(return_value="failed")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        orch._agents = mock_agents
 
         wt = config.worktree_base / "issue-42"
         wt.mkdir(parents=True, exist_ok=True)
@@ -984,9 +1035,7 @@ class TestReviewPRs:
 
         assert results[0].merged is False
         assert "conflicts" in results[0].summary.lower()
-        # Review should NOT have been called
         mock_reviewers.review.assert_not_awaited()
-        # Should escalate to HITL
         mock_prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
 
     @pytest.mark.asyncio

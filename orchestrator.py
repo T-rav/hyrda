@@ -641,21 +641,31 @@ class HydraOrchestrator:
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
 
                 # Merge main into the branch before reviewing so we review
-                # up-to-date code.  Merge (not rebase) keeps the push
-                # fast-forward so no force-push is needed.
+                # up-to-date code.  Merge keeps the push fast-forward
+                # so no force-push is needed.
                 merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
+                if not merged_main:
+                    # Conflicts — let the agent try to resolve them
+                    logger.info(
+                        "PR #%d has conflicts with %s — running agent to resolve",
+                        pr.number,
+                        self._config.main_branch,
+                    )
+                    merged_main = await self._resolve_merge_conflicts(
+                        pr, issue, wt_path, worker_id=idx
+                    )
                 if merged_main:
                     await self._prs.push_branch(wt_path, pr.branch)
                 else:
                     logger.warning(
-                        "PR #%d has conflicts with %s — escalating to HITL",
+                        "PR #%d merge conflict resolution failed — escalating to HITL",
                         pr.number,
-                        self._config.main_branch,
                     )
                     await self._prs.post_pr_comment(
                         pr.number,
-                        f"**Merge conflicts** with `{self._config.main_branch}` "
-                        "that could not be resolved automatically. "
+                        f"**Merge conflicts** with "
+                        f"`{self._config.main_branch}` could not be "
+                        "resolved automatically. "
                         "Escalating to human review.",
                     )
                     for lbl in self._config.review_label:
@@ -761,6 +771,64 @@ class HydraOrchestrator:
             results.append(await task)
 
         return results
+
+    async def _resolve_merge_conflicts(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        worker_id: int,
+    ) -> bool:
+        """Use the implementation agent to resolve merge conflicts.
+
+        Starts a merge (leaving conflict markers), runs the agent to
+        resolve them, and verifies the result with ``make quality``.
+        Returns *True* if the conflicts were resolved successfully.
+        """
+        # Start merge leaving conflict markers in place
+        clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
+        if clean:
+            # No conflicts after all (race / already resolved)
+            return True
+
+        try:
+            prompt = (
+                f"The branch for issue #{issue.number} ({issue.title}) has "
+                f"merge conflicts with main.\n\n"
+                "There is a `git merge` in progress with conflict markers "
+                "in the working tree.\n\n"
+                "## Instructions\n\n"
+                "1. Run `git diff --name-only --diff-filter=U` to list "
+                "conflicted files.\n"
+                "2. Open each conflicted file, understand both sides of the "
+                "conflict, and resolve the markers.\n"
+                "3. Stage all resolved files with `git add`.\n"
+                "4. Complete the merge with "
+                "`git commit --no-edit`.\n"
+                "5. Run `make quality` to ensure everything passes.\n"
+                "6. If quality fails, fix the issues and commit again.\n\n"
+                "## Rules\n\n"
+                "- Keep the intent of the original PR changes.\n"
+                "- Incorporate upstream (main) changes correctly.\n"
+                "- Do NOT push to remote. Do NOT create pull requests.\n"
+                "- Ensure `make quality` passes before finishing.\n"
+            )
+
+            cmd = self._agents._build_command(wt_path)
+            await self._agents._execute(cmd, prompt, wt_path, issue.number)
+
+            # Verify quality passes
+            success, _ = await self._agents._verify_result(wt_path, pr.branch)
+            return success
+        except Exception as exc:
+            logger.error(
+                "Conflict resolution agent failed for PR #%d: %s",
+                pr.number,
+                exc,
+            )
+            # Abort the merge to leave a clean state
+            await self._worktrees.abort_merge(wt_path)
+            return False
 
     async def _wait_and_fix_ci(
         self,
