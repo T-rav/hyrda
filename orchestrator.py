@@ -658,8 +658,12 @@ class HydraOrchestrator:
                     )
                     for lbl in self._config.review_label:
                         await self._prs.remove_label(pr.issue_number, lbl)
+                        await self._prs.remove_pr_label(pr.number, lbl)
                     await self._prs.add_labels(
                         pr.issue_number, [self._config.hitl_label[0]]
+                    )
+                    await self._prs.add_pr_labels(
+                        pr.number, [self._config.hitl_label[0]]
                     )
                     self._active_issues.discard(pr.issue_number)
                     return ReviewResult(
@@ -725,8 +729,13 @@ class HydraOrchestrator:
                             )
                             for lbl in self._config.review_label:
                                 await self._prs.remove_label(pr.issue_number, lbl)
+                                await self._prs.remove_pr_label(pr.number, lbl)
                             await self._prs.add_labels(
                                 pr.issue_number,
+                                [self._config.hitl_label[0]],
+                            )
+                            await self._prs.add_pr_labels(
+                                pr.number,
                                 [self._config.hitl_label[0]],
                             )
 
@@ -814,7 +823,9 @@ class HydraOrchestrator:
         # Swap to HITL label so the dashboard HITL tab picks it up
         for lbl in self._config.review_label:
             await self._prs.remove_label(issue.number, lbl)
+            await self._prs.remove_pr_label(pr.number, lbl)
         await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+        await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
         return False
 
     async def _set_phase(self, phase: Phase) -> None:
