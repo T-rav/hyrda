@@ -277,4 +277,61 @@ describe('HITLTable component', () => {
     const table = screen.getByText('Fix widget').closest('table')
     expect(table.style.minWidth).toBe('600px')
   })
+
+  it('shows approve button when isMemorySuggestion is true', () => {
+    const items = [{ ...mockItems[0], isMemorySuggestion: true }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.getByTestId('hitl-approve-memory-42')).toBeInTheDocument()
+    expect(screen.getByText('Approve as Memory')).toBeInTheDocument()
+  })
+
+  it('hides approve button when isMemorySuggestion is false', () => {
+    const items = [{ ...mockItems[0], isMemorySuggestion: false }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    expect(screen.queryByTestId('hitl-approve-memory-42')).not.toBeInTheDocument()
+  })
+
+  it('calls correct API on approve memory click', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+    const onRefresh = vi.fn()
+
+    const items = [{ ...mockItems[0], isMemorySuggestion: true }]
+    render(<HITLTable items={items} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    fireEvent.click(screen.getByTestId('hitl-approve-memory-42'))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/hitl/42/approve-memory', {
+        method: 'POST',
+      })
+    })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
+  })
+
+  it('uses purple badge for memory suggestion cause', () => {
+    const items = [{
+      ...mockItems[0],
+      isMemorySuggestion: true,
+      cause: 'Memory suggestion',
+    }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    const badge = screen.getByTestId('hitl-cause-42')
+    expect(badge.style.background).toBe('var(--purple-subtle)')
+    expect(badge.style.color).toBe('var(--purple)')
+  })
+
+  it('uses orange badge for non-memory cause', () => {
+    const items = [{ ...mockItems[0], isMemorySuggestion: false }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    fireEvent.click(screen.getByTestId('hitl-row-42'))
+    const badge = screen.getByTestId('hitl-cause-42')
+    expect(badge.style.background).toBe('var(--orange-subtle)')
+    expect(badge.style.color).toBe('var(--orange)')
+  })
 })

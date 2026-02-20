@@ -7,7 +7,7 @@ export function HITLTable({ items, onRefresh }) {
   const [expandedIssue, setExpandedIssue] = useState(null)
   const [corrections, setCorrections] = useState({})
   const [actionLoading, setActionLoading] = useState(null)
-  const { submitCorrection, skipIssue, closeIssue } = useHITLCorrection()
+  const { submitCorrection, skipIssue, closeIssue, approveAsMemory } = useHITLCorrection()
 
   const toggleExpand = (issueNum) => {
     setExpandedIssue(prev => prev === issueNum ? null : issueNum)
@@ -39,6 +39,14 @@ export function HITLTable({ items, onRefresh }) {
     if (!window.confirm(`Close issue #${issueNum}? This cannot be undone from the dashboard.`)) return
     setActionLoading({ issue: issueNum, action: 'close' })
     await closeIssue(issueNum)
+    setActionLoading(null)
+    setExpandedIssue(null)
+    onRefresh()
+  }
+
+  const handleApproveMemory = async (issueNum) => {
+    setActionLoading({ issue: issueNum, action: 'approve' })
+    await approveAsMemory(issueNum)
     setActionLoading(null)
     setExpandedIssue(null)
     onRefresh()
@@ -116,7 +124,7 @@ export function HITLTable({ items, onRefresh }) {
                     <td colSpan={6} style={styles.detailCell}>
                       <div style={styles.detailPanel}>
                         {item.cause && (
-                          <div style={styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
+                          <div style={item.isMemorySuggestion ? styles.memoryCauseBadge : styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
                             Cause: {item.cause}
                           </div>
                         )}
@@ -153,6 +161,16 @@ export function HITLTable({ items, onRefresh }) {
                           >
                             {isActionLoading(item.issue, 'close') ? 'Closing...' : 'Close issue'}
                           </button>
+                          {item.isMemorySuggestion && (
+                            <button
+                              style={styles.approveMemoryBtn}
+                              disabled={isAnyActionLoading(item.issue)}
+                              onClick={e => { e.stopPropagation(); handleApproveMemory(item.issue) }}
+                              data-testid={`hitl-approve-memory-${item.issue}`}
+                            >
+                              {isActionLoading(item.issue, 'approve') ? 'Approving...' : 'Approve as Memory'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -239,4 +257,10 @@ const styles = {
   retryBtn: { ...btnBase, background: theme.btnGreen, color: theme.white },
   skipBtn: { ...btnBase, background: theme.surfaceInset, color: theme.text, border: `1px solid ${theme.border}` },
   closeBtn: { ...btnBase, background: theme.btnRed, color: theme.white },
+  approveMemoryBtn: { ...btnBase, background: theme.purple, color: theme.white },
+  memoryCauseBadge: {
+    display: 'inline-block', marginBottom: 8,
+    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+    background: theme.purpleSubtle, color: theme.purple,
+  },
 }

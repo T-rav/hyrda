@@ -1882,6 +1882,179 @@ class TestHITLCloseEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/hitl/{issue}/approve-memory
+# ---------------------------------------------------------------------------
+
+
+class TestHITLApproveMemoryEndpoint:
+    """Tests for the POST /api/hitl/{issue}/approve-memory route."""
+
+    def test_approve_memory_returns_ok_with_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            response = client.post("/api/hitl/42/approve-memory")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_approve_memory_calls_orchestrator_skip(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        orch.skip_hitl_issue.assert_called_once_with(42)
+
+    def test_approve_memory_returns_400_without_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post("/api/hitl/42/approve-memory")
+
+        assert response.status_code == 400
+        assert response.json() == {"status": "no orchestrator"}
+
+    def test_approve_memory_publishes_hitl_update_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type.value == "hitl_update"]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["status"] == "resolved"
+        assert hitl_events[0].data["action"] == "approved_as_memory"
+
+    def test_approve_memory_removes_hitl_origin(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-improve")
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        assert state.get_hitl_origin(42) is None
+
+    def test_approve_memory_adds_memory_label(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch(
+                "pr_manager.PRManager.add_labels", new_callable=AsyncMock
+            ) as mock_add,
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        mock_add.assert_called_once_with(42, ["hydra-memory"])
+
+    def test_approve_memory_removes_improve_and_hitl_labels(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch(
+                "pr_manager.PRManager.remove_label", new_callable=AsyncMock
+            ) as mock_remove,
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        # Should remove both improve and hitl labels
+        removed_labels = [call.args[1] for call in mock_remove.call_args_list]
+        assert "hydra-improve" in removed_labels
+        assert "hydra-hitl" in removed_labels
+
+
+# ---------------------------------------------------------------------------
 # GET /api/hitl enriched with status
 # ---------------------------------------------------------------------------
 

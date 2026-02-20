@@ -63,6 +63,8 @@ class ConfigFactory:
         fixed_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
+        improve_label: list[str] | None = None,
+        memory_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
         repo: str = "test-org/test-repo",
@@ -103,6 +105,10 @@ class ConfigFactory:
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],
+            improve_label=improve_label
+            if improve_label is not None
+            else ["hydra-improve"],
+            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
             repo=repo,
