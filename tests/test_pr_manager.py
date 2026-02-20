@@ -883,6 +883,63 @@ async def test_remove_label_dry_run_skips_command(dry_config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# add_pr_labels
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_calls_gh_pr_edit_for_each_label(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, ["bug", "enhancement"])
+
+    assert mock_create.call_count == 2
+
+    first_args = mock_create.call_args_list[0][0]
+    assert first_args[0] == "gh"
+    assert "pr" in first_args
+    assert "edit" in first_args
+    assert "--add-label" in first_args
+
+    second_args = mock_create.call_args_list[1][0]
+    assert "--add-label" in second_args
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, ["bug"])
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_empty_list_skips_command(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.add_pr_labels(101, [])
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_add_pr_labels_subprocess_error_does_not_raise(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="label error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await manager.add_pr_labels(101, ["bug"])
+
+
+# ---------------------------------------------------------------------------
 # get_pr_diff
 # ---------------------------------------------------------------------------
 
