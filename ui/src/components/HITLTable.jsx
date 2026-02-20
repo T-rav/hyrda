@@ -1,29 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState } from 'react'
 import { theme } from '../theme'
 import { useHITLCorrection } from '../hooks/useHITLCorrection'
 
-export function HITLTable() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+export function HITLTable({ items, onRefresh }) {
   const [expandedIssue, setExpandedIssue] = useState(null)
   const [corrections, setCorrections] = useState({})
   const [actionLoading, setActionLoading] = useState(null)
   const { submitCorrection, skipIssue, closeIssue } = useHITLCorrection()
-
-  const fetchHITL = useCallback(() => {
-    setLoading(true)
-    fetch('/api/hitl')
-      .then(r => r.json())
-      .then(data => setItems(data))
-      .catch(() => setItems([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    fetchHITL()
-    const interval = setInterval(fetchHITL, 30000)
-    return () => clearInterval(interval)
-  }, [fetchHITL])
 
   const toggleExpand = (issueNum) => {
     setExpandedIssue(prev => prev === issueNum ? null : issueNum)
@@ -40,7 +23,7 @@ export function HITLTable() {
     await submitCorrection(issueNum, text)
     setCorrections(prev => ({ ...prev, [issueNum]: '' }))
     setActionLoading(null)
-    fetchHITL()
+    onRefresh()
   }
 
   const handleSkip = async (issueNum) => {
@@ -48,7 +31,7 @@ export function HITLTable() {
     await skipIssue(issueNum)
     setActionLoading(null)
     setExpandedIssue(null)
-    fetchHITL()
+    onRefresh()
   }
 
   const handleClose = async (issueNum) => {
@@ -57,7 +40,7 @@ export function HITLTable() {
     await closeIssue(issueNum)
     setActionLoading(null)
     setExpandedIssue(null)
-    fetchHITL()
+    onRefresh()
   }
 
   const isActionLoading = (issueNum, action) =>
@@ -65,10 +48,6 @@ export function HITLTable() {
 
   const isAnyActionLoading = (issueNum) =>
     actionLoading && actionLoading.issue === issueNum
-
-  if (loading && items.length === 0) {
-    return <div style={styles.empty}>Loading...</div>
-  }
 
   if (items.length === 0) {
     return <div style={styles.empty}>No stuck PRs</div>
@@ -80,7 +59,7 @@ export function HITLTable() {
         <span style={styles.headerText}>
           {items.length} issue{items.length !== 1 ? 's' : ''} stuck on CI
         </span>
-        <button onClick={fetchHITL} style={styles.refresh}>Refresh</button>
+        <button onClick={onRefresh} style={styles.refresh}>Refresh</button>
       </div>
       <table style={styles.table}>
         <thead>

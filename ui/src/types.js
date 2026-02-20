@@ -3,13 +3,17 @@
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
  *
- * @typedef {'queued'|'running'|'testing'|'committing'|'done'|'failed'} WorkerStatus
+ * @typedef {'queued'|'planning'|'running'|'testing'|'committing'|'quality_fix'|'reviewing'|'done'|'failed'} WorkerStatus
  *
- * @typedef {{ status: WorkerStatus, worker: number, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
+ * @typedef {{ status: WorkerStatus, worker: number, role: string, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *
  * @typedef {{ pr: number, issue: number, branch: string, draft: boolean, url: string }} PRData
  *
  * @typedef {{ pr: number, verdict: string, summary: string, duration?: number }} ReviewData
+ *
+ * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string }} HITLItem
+ *
+ * @typedef {Record<string, string>} HumanInputRequests
  */
 
 export {}

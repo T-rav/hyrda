@@ -665,20 +665,23 @@ async def test_plan_emits_planning_and_failed_events_on_error(
 def test_terminate_kills_active_processes(config, event_bus):
     runner = _make_runner(config, event_bus)
     mock_proc = MagicMock()
+    mock_proc.pid = 12345
     runner._active_procs.add(mock_proc)
 
-    runner.terminate()
+    with patch("runner_utils.os.killpg") as mock_killpg:
+        runner.terminate()
 
-    mock_proc.kill.assert_called_once()
+    mock_killpg.assert_called_once()
 
 
 def test_terminate_handles_process_lookup_error(config, event_bus):
     runner = _make_runner(config, event_bus)
     mock_proc = MagicMock()
-    mock_proc.kill.side_effect = ProcessLookupError
+    mock_proc.pid = 12345
     runner._active_procs.add(mock_proc)
 
-    runner.terminate()  # Should not raise
+    with patch("runner_utils.os.killpg", side_effect=ProcessLookupError):
+        runner.terminate()  # Should not raise
 
 
 def test_terminate_with_no_active_processes(config, event_bus):

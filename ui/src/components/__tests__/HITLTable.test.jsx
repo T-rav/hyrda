@@ -30,83 +30,33 @@ beforeEach(() => {
 })
 
 describe('HITLTable component', () => {
-  it('renders table with items after fetch', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('#42')).toBeInTheDocument()
-    })
+  it('renders table with items', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('#42')).toBeInTheDocument()
     expect(screen.getByText('Fix widget')).toBeInTheDocument()
     expect(screen.getByText('#99')).toBeInTheDocument()
     expect(screen.getByText('agent/issue-42')).toBeInTheDocument()
   })
 
-  it('shows loading state initially', () => {
-    global.fetch = vi.fn().mockReturnValue(new Promise(() => {}))
-
-    render(<HITLTable />)
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
+  it('shows empty state when no items', () => {
+    render(<HITLTable items={[]} onRefresh={() => {}} />)
+    expect(screen.getByText('No stuck PRs')).toBeInTheDocument()
   })
 
-  it('shows empty state when no items', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([]),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('No stuck PRs')).toBeInTheDocument()
-    })
+  it('renders status column header', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('Status')).toBeInTheDocument()
   })
 
-  it('renders status column header', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('Status')).toBeInTheDocument()
-    })
+  it('renders status badges for each item', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('pending')).toBeInTheDocument()
+    expect(screen.getByText('processing')).toBeInTheDocument()
   })
 
-  it('renders status badges for each item', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('pending')).toBeInTheDocument()
-      expect(screen.getByText('processing')).toBeInTheDocument()
-    })
-  })
-
-  it('expands row on click to show detail panel', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('expands row on click to show detail panel', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
-
     expect(screen.getByTestId('hitl-detail-42')).toBeInTheDocument()
     expect(screen.getByTestId('hitl-textarea-42')).toBeInTheDocument()
     expect(screen.getByTestId('hitl-retry-42')).toBeInTheDocument()
@@ -114,136 +64,56 @@ describe('HITLTable component', () => {
     expect(screen.getByTestId('hitl-close-42')).toBeInTheDocument()
   })
 
-  it('collapses row on second click', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('collapses row on second click', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     expect(screen.getByTestId('hitl-detail-42')).toBeInTheDocument()
-
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     expect(screen.queryByTestId('hitl-detail-42')).not.toBeInTheDocument()
   })
 
-  it('shows cause badge when cause is non-empty', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('shows cause badge when cause is non-empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     expect(screen.getByTestId('hitl-cause-42')).toBeInTheDocument()
     expect(screen.getByText('Cause: CI failure')).toBeInTheDocument()
   })
 
-  it('hides cause badge when cause is empty', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-10')).toBeInTheDocument()
-    })
-
+  it('hides cause badge when cause is empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-10'))
     expect(screen.queryByTestId('hitl-cause-10')).not.toBeInTheDocument()
   })
 
-  it('updates correction text area state', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('updates correction text area state', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
-
     const textarea = screen.getByTestId('hitl-textarea-42')
     fireEvent.change(textarea, { target: { value: 'Mock the DB' } })
     expect(textarea.value).toBe('Mock the DB')
   })
 
-  it('retry button is disabled when textarea is empty', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('retry button is disabled when textarea is empty', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     expect(screen.getByTestId('hitl-retry-42')).toBeDisabled()
   })
 
-  it('retry button is enabled when textarea has text', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+  it('retry button is enabled when textarea has text', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
-
     const textarea = screen.getByTestId('hitl-textarea-42')
     fireEvent.change(textarea, { target: { value: 'Fix the tests' } })
     expect(screen.getByTestId('hitl-retry-42')).not.toBeDisabled()
   })
 
   it('calls correct API on retry click', async () => {
-    const fetchMock = vi.fn()
-    // First call: fetchHITL
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-    // Second call: POST correction
-    fetchMock.mockResolvedValueOnce({ ok: true })
-    // Third call: refetch after action
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     global.fetch = fetchMock
+    const onRefresh = vi.fn()
 
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
-
     const textarea = screen.getByTestId('hitl-textarea-42')
     fireEvent.change(textarea, { target: { value: 'Fix the tests' } })
     fireEvent.click(screen.getByTestId('hitl-retry-42'))
@@ -255,27 +125,17 @@ describe('HITLTable component', () => {
         body: JSON.stringify({ correction: 'Fix the tests' }),
       })
     })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
   })
 
   it('calls correct API on skip click', async () => {
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-    fetchMock.mockResolvedValueOnce({ ok: true })
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([]),
-    })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     global.fetch = fetchMock
+    const onRefresh = vi.fn()
 
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     fireEvent.click(screen.getByTestId('hitl-skip-42'))
 
@@ -284,29 +144,18 @@ describe('HITLTable component', () => {
         method: 'POST',
       })
     })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
   })
 
   it('calls correct API on close click with confirmation', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-
-    const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-    fetchMock.mockResolvedValueOnce({ ok: true })
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([]),
-    })
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     global.fetch = fetchMock
+    const onRefresh = vi.fn()
 
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     fireEvent.click(screen.getByTestId('hitl-close-42'))
 
@@ -315,54 +164,48 @@ describe('HITLTable component', () => {
         method: 'POST',
       })
     })
+    await waitFor(() => {
+      expect(onRefresh).toHaveBeenCalled()
+    })
   })
 
-  it('does not call close API when confirmation is cancelled', async () => {
+  it('does not call close API when confirmation is cancelled', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(false)
-
     const fetchMock = vi.fn()
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
     global.fetch = fetchMock
 
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByTestId('hitl-row-42')).toBeInTheDocument()
-    })
-
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
     fireEvent.click(screen.getByTestId('hitl-close-42'))
-
-    // Only the initial fetch should have been called
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('shows item count in header', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockItems),
-    })
-
-    render(<HITLTable />)
-
-    await waitFor(() => {
-      expect(screen.getByText('2 issues stuck on CI')).toBeInTheDocument()
-    })
+  it('shows item count in header', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('2 issues stuck on CI')).toBeInTheDocument()
   })
 
-  it('shows singular form for one item', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve([mockItems[0]]),
-    })
+  it('shows singular form for one item', () => {
+    render(<HITLTable items={[mockItems[0]]} onRefresh={() => {}} />)
+    expect(screen.getByText('1 issue stuck on CI')).toBeInTheDocument()
+  })
 
-    render(<HITLTable />)
+  it('refresh button calls onRefresh prop', () => {
+    const onRefresh = vi.fn()
+    render(<HITLTable items={mockItems} onRefresh={onRefresh} />)
+    fireEvent.click(screen.getByText('Refresh'))
+    expect(onRefresh).toHaveBeenCalledOnce()
+  })
 
-    await waitFor(() => {
-      expect(screen.getByText('1 issue stuck on CI')).toBeInTheDocument()
-    })
+  it('does not fetch data on mount (no side effects)', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    render(<HITLTable items={[]} onRefresh={() => {}} />)
+    expect(fetchSpy).not.toHaveBeenCalled()
+    fetchSpy.mockRestore()
+  })
+
+  it('shows "No PR" when pr is 0', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    expect(screen.getByText('No PR')).toBeInTheDocument()
   })
 })
