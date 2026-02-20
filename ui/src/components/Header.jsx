@@ -40,10 +40,9 @@ export function Header({
     }
   }, [hasActiveWorkers, orchestratorStatus])
 
-  const isStopping = orchestratorStatus === 'stopping' || stoppingHeld ||
-    (hasActiveWorkers && (orchestratorStatus === 'idle' || orchestratorStatus === 'done'))
+  const isStopping = orchestratorStatus === 'stopping' || stoppingHeld
   const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done') &&
-    !hasActiveWorkers && !stoppingHeld
+    !stoppingHeld
   const isRunning = orchestratorStatus === 'running'
   const workload = {
     total: workerList.length,

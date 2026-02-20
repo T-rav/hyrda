@@ -348,10 +348,10 @@ describe('Header component', () => {
       1: { status: 'planning', worker: 1, role: 'planner', title: 'Plan #1', branch: '', transcript: [], pr: null },
     }
 
-    it('does not show Start when orchestratorStatus is idle but workers are active', () => {
+    it('shows Start when orchestratorStatus is idle even with stale active workers', () => {
       render(<Header {...defaultProps} orchestratorStatus="idle" workers={activeWorkers} />)
-      expect(screen.queryByText('Start')).toBeNull()
-      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.getByText('Start')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping\u2026')).toBeNull()
     })
 
     it('shows Start when idle and all workers are done', () => {
@@ -367,10 +367,10 @@ describe('Header component', () => {
       expect(screen.queryByText('Stop')).toBeNull()
     })
 
-    it('does not show Start when orchestratorStatus is idle but workers still planning', () => {
+    it('shows Start when orchestratorStatus is idle even with stale planning workers', () => {
       render(<Header {...defaultProps} orchestratorStatus="idle" workers={planningWorkers} />)
-      expect(screen.queryByText('Start')).toBeNull()
-      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.getByText('Start')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping\u2026')).toBeNull()
     })
 
     it('shows Start when orchestratorStatus is done and no active workers', () => {
@@ -378,10 +378,10 @@ describe('Header component', () => {
       expect(screen.getByText('Start')).toBeInTheDocument()
     })
 
-    it('does not show Start when orchestratorStatus is done but workers are active', () => {
+    it('shows Start when orchestratorStatus is done even with stale active workers', () => {
       render(<Header {...defaultProps} orchestratorStatus="done" workers={activeWorkers} />)
-      expect(screen.queryByText('Start')).toBeNull()
-      expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
+      expect(screen.getByText('Start')).toBeInTheDocument()
+      expect(screen.queryByText('Stopping\u2026')).toBeNull()
     })
   })
 
