@@ -83,6 +83,32 @@ class IssueFetcher:
         issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
         return issues[:limit]
 
+    async def fetch_issue_by_number(self, issue_number: int) -> GitHubIssue | None:
+        """Fetch a single issue by its number.
+
+        Returns ``None`` if the issue cannot be fetched.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would fetch issue #%d", issue_number)
+            return None
+        try:
+            raw = await run_subprocess(
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "--repo",
+                self._config.repo,
+                "--json",
+                "number,title,body,labels,comments,url",
+                gh_token=self._config.gh_token,
+            )
+            data = json.loads(raw)
+            return GitHubIssue.model_validate(data)
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            logger.error("Could not fetch issue #%d: %s", issue_number, exc)
+            return None
+
     async def fetch_plan_issues(self) -> list[GitHubIssue]:
         """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
         if not self._config.planner_label:

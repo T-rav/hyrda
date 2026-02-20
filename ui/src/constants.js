@@ -6,6 +6,9 @@ import { theme } from './theme'
  */
 export const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix', 'start']
 
+/** Maximum number of events retained in the frontend event buffer. */
+export const MAX_EVENTS = 5000
+
 /**
  * Canonical pipeline stage definitions.
  * All stage metadata lives here to prevent drift across components.
