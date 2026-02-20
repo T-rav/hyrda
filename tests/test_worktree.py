@@ -374,29 +374,31 @@ class TestDestroyAll:
 # ---------------------------------------------------------------------------
 
 
-class TestRebase:
+class TestMergeMain:
     """Tests for WorktreeManager.rebase."""
 
     @pytest.mark.asyncio
-    async def test_rebase_success_returns_true(self, config, tmp_path: Path) -> None:
-        """rebase should return True when both fetch and rebase succeed."""
+    async def test_merge_main_success_returns_true(
+        self, config, tmp_path: Path
+    ) -> None:
+        """merge_main should return True when both fetch and merge succeed."""
         manager = WorktreeManager(config)
         success_proc = _make_proc()
 
         with patch("asyncio.create_subprocess_exec", return_value=success_proc):
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path)
 
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_rebase_failure_aborts_and_returns_false(
+    async def test_merge_main_conflict_aborts_and_returns_false(
         self, config, tmp_path: Path
     ) -> None:
-        """rebase should abort and return False when rebase conflicts occur."""
+        """merge_main should abort and return False when conflicts occur."""
         manager = WorktreeManager(config)
 
         fetch_proc = _make_proc(returncode=0)
-        rebase_fail_proc = _make_proc(
+        merge_fail_proc = _make_proc(
             returncode=1, stderr=b"CONFLICT (content): Merge conflict"
         )
         abort_proc = _make_proc(returncode=0)
@@ -409,13 +411,13 @@ class TestRebase:
             if call_count == 1:
                 return fetch_proc  # git fetch succeeds
             if call_count == 2:
-                return rebase_fail_proc  # git rebase fails
-            return abort_proc  # git rebase --abort
+                return merge_fail_proc  # git merge fails
+            return abort_proc  # git merge --abort
 
         with patch(
             "asyncio.create_subprocess_exec", side_effect=fake_exec
         ) as mock_exec:
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path)
 
         assert result is False
         # Verify abort was called
@@ -423,10 +425,10 @@ class TestRebase:
         assert len(abort_calls) == 1
 
     @pytest.mark.asyncio
-    async def test_rebase_fetch_failure_returns_false(
+    async def test_merge_main_fetch_failure_returns_false(
         self, config, tmp_path: Path
     ) -> None:
-        """rebase should return False if the initial fetch fails."""
+        """merge_main should return False if the initial fetch fails."""
         manager = WorktreeManager(config)
 
         fetch_fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
@@ -442,7 +444,7 @@ class TestRebase:
             return abort_proc
 
         with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
-            result = await manager.rebase(tmp_path, "agent/issue-7")
+            result = await manager.merge_main(tmp_path)
 
         assert result is False
 

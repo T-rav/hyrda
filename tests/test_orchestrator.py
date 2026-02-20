@@ -917,8 +917,10 @@ class TestReviewPRs:
         mock_prs.merge_pr.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_review_rebases_before_reviewing(self, config: HydraConfig) -> None:
-        """_review_prs should rebase onto main and push before reviewing."""
+    async def test_review_merges_main_before_reviewing(
+        self, config: HydraConfig
+    ) -> None:
+        """_review_prs should merge main into the branch and push before reviewing."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -939,7 +941,7 @@ class TestReviewPRs:
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
-        mock_wt.rebase = AsyncMock(return_value=True)
+        mock_wt.merge_main = AsyncMock(return_value=True)
         orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"
@@ -948,15 +950,15 @@ class TestReviewPRs:
         results = await orch._review_prs([pr], [issue])
 
         assert results[0].merged is True
-        mock_wt.rebase.assert_awaited_once()
-        mock_prs.push_branch.assert_awaited()
+        mock_wt.merge_main.assert_awaited_once()
+        mock_prs.push_branch.assert_awaited_once()
         mock_reviewers.review.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_review_rebase_conflict_escalates_to_hitl(
+    async def test_review_merge_main_conflict_escalates_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        """When pre-review rebase fails (conflicts), should skip review and escalate."""
+        """When pre-review merge of main fails (conflicts), skip review and escalate."""
         orch = HydraOrchestrator(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
@@ -972,7 +974,7 @@ class TestReviewPRs:
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
-        mock_wt.rebase = AsyncMock(return_value=False)  # Conflicts
+        mock_wt.merge_main = AsyncMock(return_value=False)  # Conflicts
         orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"
@@ -1013,7 +1015,7 @@ class TestReviewPRs:
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
-        mock_wt.rebase = AsyncMock(return_value=True)
+        mock_wt.merge_main = AsyncMock(return_value=True)
         orch._worktrees = mock_wt
 
         wt = config.worktree_base / "issue-42"

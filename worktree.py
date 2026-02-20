@@ -189,8 +189,11 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
-    async def rebase(self, worktree_path: Path, branch: str) -> bool:
-        """Rebase *branch* onto latest main inside *worktree_path*.
+    async def merge_main(self, worktree_path: Path) -> bool:
+        """Merge latest main into the current branch inside *worktree_path*.
+
+        Uses merge (not rebase) so the push remains fast-forward and
+        doesn't require ``--force``.
 
         Returns *True* on success, *False* if conflicts arise.
         """
@@ -205,18 +208,19 @@ class WorktreeManager:
             )
             await run_subprocess(
                 "git",
-                "rebase",
+                "merge",
                 f"origin/{self._config.main_branch}",
+                "--no-edit",
                 cwd=worktree_path,
                 gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError:
-            # Abort rebase on conflict
+            # Abort merge on conflict
             with contextlib.suppress(RuntimeError):
                 await run_subprocess(
                     "git",
-                    "rebase",
+                    "merge",
                     "--abort",
                     cwd=worktree_path,
                     gh_token=self._config.gh_token,
