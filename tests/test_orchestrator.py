@@ -689,6 +689,17 @@ class TestStopMechanism:
         orch._reviewers._active_procs.add(mock_proc)
         assert orch.run_status == "stopping"
 
+    def test_run_status_stopping_with_hitl_procs_active(
+        self, config: HydraConfig
+    ) -> None:
+        """run_status returns 'stopping' when HITL runner has active procs after shutdown."""
+        orch = HydraOrchestrator(config)
+        orch._running = False
+        orch._stop_event.set()
+        mock_proc = AsyncMock()
+        orch._hitl_runner._active_procs.add(mock_proc)
+        assert orch.run_status == "stopping"
+
     def test_has_active_processes_false_when_empty(self, config: HydraConfig) -> None:
         """_has_active_processes returns False when all runners have empty _active_procs."""
         orch = HydraOrchestrator(config)
