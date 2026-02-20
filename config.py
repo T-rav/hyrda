@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -64,6 +65,12 @@ class HydraConfig(BaseModel):
         ge=0,
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
+    )
+    gh_max_retries: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Max retry attempts for gh CLI calls",
     )
 
     # Label lifecycle
@@ -235,6 +242,13 @@ class HydraConfig(BaseModel):
         env_min_words = os.environ.get("HYDRA_MIN_PLAN_WORDS")
         if env_min_words is not None and self.min_plan_words == 200:
             object.__setattr__(self, "min_plan_words", int(env_min_words))
+
+        # gh retry override
+        if self.gh_max_retries == 3:  # still at default
+            env_retries = os.environ.get("HYDRA_GH_MAX_RETRIES")
+            if env_retries is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "gh_max_retries", int(env_retries))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
