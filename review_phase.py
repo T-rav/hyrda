@@ -123,6 +123,10 @@ class ReviewPhase:
                         self._state.set_hitl_origin(
                             pr.issue_number, self._config.review_label[0]
                         )
+                        self._state.set_hitl_cause(
+                            pr.issue_number,
+                            "Merge conflict with main branch",
+                        )
                         for lbl in self._config.review_label:
                             await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.remove_pr_label(pr.number, lbl)
@@ -196,6 +200,10 @@ class ReviewPhase:
                                 )
                                 self._state.set_hitl_origin(
                                     pr.issue_number, self._config.review_label[0]
+                                )
+                                self._state.set_hitl_cause(
+                                    pr.issue_number,
+                                    "PR merge failed on GitHub",
                                 )
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
@@ -292,6 +300,10 @@ class ReviewPhase:
         )
         # Swap to HITL label so the dashboard HITL tab picks it up
         self._state.set_hitl_origin(issue.number, self._config.review_label[0])
+        self._state.set_hitl_cause(
+            issue.number,
+            f"CI failed after {result.ci_fix_attempts} fix attempt(s)",
+        )
         for lbl in self._config.review_label:
             await self._prs.remove_label(issue.number, lbl)
             await self._prs.remove_pr_label(pr.number, lbl)

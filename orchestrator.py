@@ -285,6 +285,10 @@ class HydraOrchestrator:
                 )
             else:
                 self._state.set_hitl_origin(issue.number, self._config.find_label[0])
+                self._state.set_hitl_cause(
+                    issue.number,
+                    "Insufficient issue detail for triage",
+                )
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"
