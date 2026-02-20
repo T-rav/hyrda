@@ -19,6 +19,7 @@ from models import (
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
+    WorkerStatus,
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
@@ -792,6 +793,18 @@ class HydraOrchestrator:
             return True
 
         try:
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.RUNNING.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
+
             prompt = (
                 f"The branch for issue #{issue.number} ({issue.title}) has "
                 f"merge conflicts with main.\n\n"
@@ -818,13 +831,48 @@ class HydraOrchestrator:
             await self._agents._execute(cmd, prompt, wt_path, issue.number)
 
             # Verify quality passes
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.TESTING.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
             success, _ = await self._agents._verify_result(wt_path, pr.branch)
+
+            status = WorkerStatus.DONE if success else WorkerStatus.FAILED
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": status.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
             return success
         except Exception as exc:
             logger.error(
                 "Conflict resolution agent failed for PR #%d: %s",
                 pr.number,
                 exc,
+            )
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.FAILED.value,
+                        "role": "conflict-resolver",
+                    },
+                )
             )
             # Abort the merge to leave a clean state
             await self._worktrees.abort_merge(wt_path)
