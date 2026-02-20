@@ -10,7 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
+from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.reviewer")
@@ -53,7 +53,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "reviewing",
+                    "status": ReviewerStatus.REVIEWING.value,
                     "role": "reviewer",
                 },
             )
@@ -94,7 +94,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "done",
+                    "status": ReviewerStatus.DONE.value,
                     "verdict": result.verdict.value,
                     "duration": time.monotonic() - start,
                     "role": "reviewer",
@@ -131,7 +131,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "fixing",
+                    "status": ReviewerStatus.FIXING.value,
                     "attempt": attempt,
                 },
             )
@@ -165,7 +165,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "fix_done",
+                    "status": ReviewerStatus.FIX_DONE.value,
                     "attempt": attempt,
                     "verdict": result.verdict.value,
                 },

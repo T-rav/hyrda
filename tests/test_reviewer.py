@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from events import EventType
-from models import ReviewVerdict
+from models import ReviewerStatus, ReviewVerdict
 from reviewer import ReviewRunner
 from tests.helpers import ConfigFactory, make_streaming_proc
 
@@ -397,8 +397,8 @@ async def test_review_publishes_review_update_events(
     assert len(review_events) >= 2
 
     statuses = [e.data["status"] for e in review_events]
-    assert "reviewing" in statuses
-    assert "done" in statuses
+    assert ReviewerStatus.REVIEWING.value in statuses
+    assert ReviewerStatus.DONE.value in statuses
 
 
 @pytest.mark.asyncio
@@ -420,7 +420,8 @@ async def test_review_start_event_includes_worker_id(
     reviewing_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "reviewing"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.REVIEWING.value
     )
     assert reviewing_event.data["worker"] == 3
     assert reviewing_event.data["pr"] == pr_info.number
@@ -446,7 +447,8 @@ async def test_review_done_event_includes_verdict_and_duration(
     done_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "done"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.DONE.value
     )
     assert done_event.data["verdict"] == ReviewVerdict.REQUEST_CHANGES.value
     assert "duration" in done_event.data
@@ -463,7 +465,9 @@ async def test_review_dry_run_still_publishes_review_update_event(
     events = event_bus.get_history()
     review_events = [e for e in events if e.type == EventType.REVIEW_UPDATE]
     # The "reviewing" event is published before the dry-run check
-    assert any(e.data.get("status") == "reviewing" for e in review_events)
+    assert any(
+        e.data.get("status") == ReviewerStatus.REVIEWING.value for e in review_events
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -838,5 +842,5 @@ async def test_fix_ci_publishes_ci_check_events(
     ci_events = [e for e in events if e.type == EventType.CI_CHECK]
     assert len(ci_events) >= 2
     statuses = [e.data["status"] for e in ci_events]
-    assert "fixing" in statuses
-    assert "fix_done" in statuses
+    assert ReviewerStatus.FIXING.value in statuses
+    assert ReviewerStatus.FIX_DONE.value in statuses

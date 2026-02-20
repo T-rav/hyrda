@@ -135,6 +135,16 @@ class PRInfo(BaseModel):
 # --- Reviews ---
 
 
+class ReviewerStatus(StrEnum):
+    """Lifecycle status of a reviewer agent."""
+
+    REVIEWING = "reviewing"
+    DONE = "done"
+    FAILED = "failed"
+    FIXING = "fixing"
+    FIX_DONE = "fix_done"
+
+
 class ReviewVerdict(StrEnum):
     """Verdict from a reviewer agent."""
 
