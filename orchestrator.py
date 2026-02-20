@@ -163,6 +163,9 @@ class HydraOrchestrator:
             )
         finally:
             self._running = False
+            self._planners.terminate()
+            self._agents.terminate()
+            self._reviewers.terminate()
             await self._publish_status()
             logger.info("Hydra stopped")
 
