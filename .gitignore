@@ -211,3 +211,4 @@ node_modules/
 
 # Hydra runtime state
 .hydra/
+.DS_Store

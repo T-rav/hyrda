@@ -613,6 +613,150 @@ class TestSetupEnv:
 
 
 # ---------------------------------------------------------------------------
+# WorktreeManager._configure_git_identity
+# ---------------------------------------------------------------------------
+
+
+class TestConfigureGitIdentity:
+    """Tests for WorktreeManager._configure_git_identity."""
+
+    @pytest.mark.asyncio
+    async def test_sets_user_name_and_email(self, tmp_path: Path) -> None:
+        """Should run git config for both user.name and user.email."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 2
+        assert calls[0].args == ("git", "config", "user.name", "Bot")
+        assert calls[1].args == ("git", "config", "user.email", "bot@example.com")
+
+    @pytest.mark.asyncio
+    async def test_skips_when_both_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should not run any git config commands when identity is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_sets_only_name_when_email_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should only set user.name when email is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 1
+        assert calls[0].args == ("git", "config", "user.name", "Bot")
+
+    @pytest.mark.asyncio
+    async def test_sets_only_email_when_name_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Should only set user.email when name is empty."""
+        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._configure_git_identity(tmp_path)
+
+        calls = mock_exec.call_args_list
+        assert len(calls) == 1
+        assert calls[0].args == ("git", "config", "user.email", "bot@example.com")
+
+    @pytest.mark.asyncio
+    async def test_called_during_create(self, tmp_path: Path) -> None:
+        """_configure_git_identity should be called during create()."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            git_user_name="Bot",
+            git_user_email="bot@example.com",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+        cfg.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc()
+        configure_identity = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
+            patch.object(manager, "_setup_env"),
+            patch.object(manager, "_configure_git_identity", configure_identity),
+            patch.object(manager, "_create_venv", new_callable=AsyncMock),
+            patch.object(manager, "_install_hooks", new_callable=AsyncMock),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+        configure_identity.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
 # WorktreeManager._create_venv
 # ---------------------------------------------------------------------------
 

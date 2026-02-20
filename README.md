@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/hydra-logo.png" alt="Hydra" width="200">
+  <img src="docs/hydra-logo-small.png" alt="Hydra" width="200">
 </p>
 
 <h1 align="center">Hydra</h1>
