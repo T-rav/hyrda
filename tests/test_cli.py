@@ -291,6 +291,16 @@ class TestBuildConfig:
         assert cfg.review_budget_usd == pytest.approx(5.0)
         assert cfg.planner_budget_usd == pytest.approx(3.0)
 
+    def test_min_plan_words_passed_through(self) -> None:
+        args = parse_args(["--min-plan-words", "300"])
+        cfg = build_config(args)
+        assert cfg.min_plan_words == 300
+
+    def test_lite_plan_labels_passed_through(self) -> None:
+        args = parse_args(["--lite-plan-labels", "hotfix,patch,minor"])
+        cfg = build_config(args)
+        assert cfg.lite_plan_labels == ["hotfix", "patch", "minor"]
+
     def test_git_user_name_passed_through(self) -> None:
         args = parse_args(["--git-user-name", "T-rav-Hydra-Ops"])
         cfg = build_config(args)
