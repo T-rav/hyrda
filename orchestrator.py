@@ -66,8 +66,10 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of issues active in this run (avoids double-processing)
-        self._active_issues: set[int] = set()
+        # In-memory tracking of issues active per phase (avoids double-processing)
+        self._active_impl_issues: set[int] = set()
+        self._active_review_issues: set[int] = set()
+        self._active_hitl_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
@@ -84,7 +86,7 @@ class HydraOrchestrator:
             self._prs,
             self._fetcher,
             self._stop_event,
-            self._active_issues,
+            self._active_impl_issues,
         )
         self._reviewer = ReviewPhase(
             config,
@@ -93,7 +95,7 @@ class HydraOrchestrator:
             self._reviewers,
             self._prs,
             self._stop_event,
-            self._active_issues,
+            self._active_review_issues,
             agents=self._agents,
             event_bus=self._bus,
         )
@@ -162,7 +164,11 @@ class HydraOrchestrator:
         waiting on human action.  Falls back to ``"pending"`` when no
         origin data is available.
         """
-        if issue_number in self._active_issues:
+        if (
+            issue_number in self._active_impl_issues
+            or issue_number in self._active_review_issues
+            or issue_number in self._active_hitl_issues
+        ):
             return "processing"
         origin = self._state.get_hitl_origin(issue_number)
         if origin:
@@ -190,7 +196,9 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
-        self._active_issues.clear()
+        self._active_impl_issues.clear()
+        self._active_review_issues.clear()
+        self._active_hitl_issues.clear()
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -328,7 +336,7 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 prs, issues = await self._fetcher.fetch_reviewable_prs(
-                    self._active_issues
+                    self._active_review_issues
                 )
                 if prs:
                     review_results = await self._reviewer.review_prs(prs, issues)
@@ -398,7 +406,7 @@ class HydraOrchestrator:
             if self._stop_event.is_set():
                 return
 
-            self._active_issues.add(issue_number)
+            self._active_hitl_issues.add(issue_number)
             try:
                 issue = await self._fetcher.fetch_issue_by_number(issue_number)
                 if not issue:
@@ -502,7 +510,7 @@ class HydraOrchestrator:
             except Exception:
                 logger.exception("HITL processing failed for issue #%d", issue_number)
             finally:
-                self._active_issues.discard(issue_number)
+                self._active_hitl_issues.discard(issue_number)
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
