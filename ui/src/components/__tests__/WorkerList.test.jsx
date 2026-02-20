@@ -3,13 +3,13 @@ import { render, screen } from '@testing-library/react'
 import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles } from '../WorkerList'
 
 const statusColors = {
-  queued:     { bg: 'rgba(139,148,158,0.15)', fg: '#8b949e' },
-  running:    { bg: 'rgba(88,166,255,0.15)',  fg: '#58a6ff' },
-  planning:   { bg: 'rgba(163,113,247,0.15)', fg: '#a371f7' },
-  testing:    { bg: 'rgba(210,153,34,0.15)',  fg: '#d29922' },
-  committing: { bg: 'rgba(210,134,22,0.15)',  fg: '#d18616' },
-  done:       { bg: 'rgba(63,185,80,0.15)',   fg: '#3fb950' },
-  failed:     { bg: 'rgba(248,81,73,0.15)',   fg: '#f85149' },
+  queued:     { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
+  running:    { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
+  planning:   { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
+  testing:    { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  committing: { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  done:       { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  failed:     { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
 }
 
 describe('WorkerList pre-computed styles', () => {
@@ -18,13 +18,13 @@ describe('WorkerList pre-computed styles', () => {
     expect(cardActiveStyle).toHaveProperty('padding')
     expect(cardActiveStyle).toHaveProperty('cursor', 'pointer')
     // active props
-    expect(cardActiveStyle).toHaveProperty('background', 'rgba(88,166,255,0.08)')
-    expect(cardActiveStyle.borderLeft).toBe('3px solid #58a6ff')
+    expect(cardActiveStyle).toHaveProperty('background', 'var(--accent-hover)')
+    expect(cardActiveStyle.borderLeft).toBe('3px solid var(--accent)')
   })
 
   it('cardStyle does not have active background', () => {
     expect(cardStyle.background).toBeUndefined()
-    expect(cardStyle.borderLeft).toBe('3px solid #484f58')
+    expect(cardStyle.borderLeft).toBe('3px solid var(--text-inactive)')
   })
 
   it('statusBadgeStyles has an entry for every statusColors key', () => {
