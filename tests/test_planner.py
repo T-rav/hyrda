@@ -218,6 +218,77 @@ def test_truncate_text_no_truncation_when_under_limit():
 
 
 # ---------------------------------------------------------------------------
+# _build_prompt - image handling
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_notes_images_in_body(config, event_bus):
+    """When the issue body contains markdown images, the prompt should note them."""
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=99,
+        title="Fix layout bug",
+        body="The layout is broken.\n\n![screenshot](https://example.com/img.png)\n\nSee above.",
+        labels=[],
+        comments=[],
+        url="",
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "image" in prompt.lower() or "screenshot" in prompt.lower()
+    assert "visual" in prompt.lower() or "attached" in prompt.lower()
+
+
+def test_build_prompt_notes_html_images_in_body(config, event_bus):
+    """When the issue body contains HTML img tags, the prompt should note them."""
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=99,
+        title="Fix layout bug",
+        body='See screenshot:\n\n<img src="https://example.com/img.png" />\n\nPlease fix.',
+        labels=[],
+        comments=[],
+        url="",
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "image" in prompt.lower() or "screenshot" in prompt.lower()
+
+
+def test_build_prompt_no_image_note_when_no_images(config, event_bus, issue):
+    """When the issue body has no images, no image note should be added."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "image" not in prompt.lower() or "image" in issue.body.lower()
+    # The specific note about attached images should not appear
+    assert "visual context" not in prompt.lower()
+
+
+def test_build_prompt_handles_multiple_images(config, event_bus):
+    """Multiple images in the body should still produce a single note."""
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=99,
+        title="Fix layout bug",
+        body="![img1](https://example.com/1.png)\n![img2](https://example.com/2.png)",
+        labels=[],
+        comments=[],
+        url="",
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    # Should mention images
+    assert "image" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
 # _extract_plan
 # ---------------------------------------------------------------------------
 

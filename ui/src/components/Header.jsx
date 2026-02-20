@@ -1,18 +1,11 @@
 import React from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
-const STAGES = [
-  { key: 'triage',    label: 'TRIAGE',    color: theme.triageGreen, role: 'triage',      configKey: null },
-  { key: 'plan',      label: 'PLAN',      color: theme.purple,      role: 'planner',     configKey: 'max_planners' },
-  { key: 'implement', label: 'IMPLEMENT', color: theme.accent,      role: 'implementer', configKey: 'max_workers' },
-  { key: 'review',    label: 'REVIEW',    color: theme.orange,      role: 'reviewer',    configKey: 'max_reviewers' },
-]
+const toUpper = s => ({ ...s, label: s.label.toUpperCase() })
 
-const SESSION_STAGES = [
-  ...STAGES,
-  { key: 'merged', label: 'MERGED', color: theme.green },
-]
+const STAGES = PIPELINE_STAGES.filter(s => s.role != null).map(toUpper)
+const SESSION_STAGES = PIPELINE_STAGES.map(toUpper)
 
 export function Header({
   sessionCounts, connected, orchestratorStatus,
@@ -28,6 +21,14 @@ export function Header({
     active: workerList.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
     done: workerList.filter(w => w.status === 'done').length,
     failed: workerList.filter(w => w.status === 'failed').length,
+  }
+
+  // Count active workers per role for the stage pills
+  const activeByRole = {}
+  for (const w of workerList) {
+    if (ACTIVE_STATUSES.includes(w.status) && w.role) {
+      activeByRole[w.role] = (activeByRole[w.role] || 0) + 1
+    }
   }
 
   return (
@@ -67,6 +68,7 @@ export function Header({
         <div style={styles.pills}>
           {STAGES.map((stage, i) => {
             const maxCount = stage.configKey && config ? config[stage.configKey] : 1
+            const activeCount = stage.role ? (activeByRole[stage.role] || 0) : 0
             const lit = isRunning
             return (
               <React.Fragment key={stage.key}>
@@ -75,7 +77,9 @@ export function Header({
                 )}
                 <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
                   {stage.label}
-                  <span style={lit ? countLit : countDim}>{maxCount}</span>
+                  <span style={lit ? countLit : countDim}>
+                    {isRunning ? `${activeCount}/${maxCount}` : maxCount}
+                  </span>
                 </div>
               </React.Fragment>
             )
@@ -211,7 +215,7 @@ const styles = {
     fontSize: 9,
     fontWeight: 700,
   },
-  controls: { display: 'flex', alignItems: 'center', gap: 10 },
+  controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10 },
   startBtn: {
     padding: '4px 14px',
     borderRadius: 6,
