@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # --- GitHub ---
 
@@ -18,6 +19,22 @@ class GitHubIssue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str = ""
+
+    @field_validator("labels", mode="before")
+    @classmethod
+    def _normalise_labels(cls, v: Any) -> list[str]:
+        """Normalise ``gh`` CLI label objects (``{"name": "..."}`` dicts) to plain strings."""
+        if isinstance(v, list):
+            return [lbl["name"] if isinstance(lbl, dict) else str(lbl) for lbl in v]
+        return v  # type: ignore[return-value]
+
+    @field_validator("comments", mode="before")
+    @classmethod
+    def _normalise_comments(cls, v: Any) -> list[str]:
+        """Normalise ``gh`` CLI comment objects (``{"body": "..."}`` dicts) to plain strings."""
+        if isinstance(v, list):
+            return [c.get("body", "") if isinstance(c, dict) else str(c) for c in v]
+        return v  # type: ignore[return-value]
 
 
 # --- Triage ---
