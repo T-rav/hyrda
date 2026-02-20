@@ -929,3 +929,39 @@ class TestLifetimeStatsModel:
         copy = stats.model_copy()
         copy.issues_completed = 99
         assert stats.issues_completed == 5
+
+
+# ---------------------------------------------------------------------------
+# Memory state tracking
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryState:
+    """Tests for memory state tracking methods."""
+
+    def test_update_and_get_memory_state(self, tmp_path: Path) -> None:
+        state = StateTracker(tmp_path / "state.json")
+        state.update_memory_state([10, 20, 30], "abc123")
+
+        ids, digest_hash, last_synced = state.get_memory_state()
+        assert ids == [10, 20, 30]
+        assert digest_hash == "abc123"
+        assert last_synced is not None
+
+    def test_memory_state_defaults(self, tmp_path: Path) -> None:
+        state = StateTracker(tmp_path / "state.json")
+        ids, digest_hash, last_synced = state.get_memory_state()
+        assert ids == []
+        assert digest_hash == ""
+        assert last_synced is None
+
+    def test_memory_state_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        state = StateTracker(state_file)
+        state.update_memory_state([5, 15], "xyz789")
+
+        # Reload from disk
+        state2 = StateTracker(state_file)
+        ids, digest_hash, _ = state2.get_memory_state()
+        assert ids == [5, 15]
+        assert digest_hash == "xyz789"

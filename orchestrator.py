@@ -222,13 +222,14 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _supervise_loops(self) -> None:
-        """Run all five loops, restarting any that crash unexpectedly."""
+        """Run all six loops, restarting any that crash unexpectedly."""
         loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = [
             ("triage", self._triage_loop),
             ("plan", self._plan_loop),
             ("implement", self._implement_loop),
             ("review", self._review_loop),
             ("hitl", self._hitl_loop),
+            ("memory", self._memory_sync_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -349,6 +350,26 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _memory_sync_loop(self) -> None:
+        """Continuously sync the memory digest from hydra-memory issues."""
+        while not self._stop_event.is_set():
+            try:
+                from memory import sync as memory_sync  # noqa: PLC0415
+
+                await memory_sync(self._config, self._state, self._bus)
+            except Exception:
+                logger.exception("Memory sync failed — will retry next cycle")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={
+                            "message": "Memory sync error",
+                            "source": "memory",
+                        },
+                    )
+                )
+            await self._sleep_or_stop(self._config.memory_sync_interval)
 
     async def _process_hitl_corrections(self) -> None:
         """Process all pending HITL corrections."""

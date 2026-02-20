@@ -84,6 +84,7 @@ def create_router(
                 *config.hitl_label,
                 *config.hitl_active_label,
                 *config.planner_label,
+                *config.memory_label,
             }
         )
         items = await pr_manager.list_open_prs(all_labels)
@@ -174,6 +175,33 @@ def create_router(
         )
         return JSONResponse({"status": "ok"})
 
+    @router.post("/api/hitl/{issue_number}/approve-memory")
+    async def hitl_approve_memory(issue_number: int) -> JSONResponse:
+        """Approve a HITL issue as an accepted memory learning."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"status": "no orchestrator"}, status_code=400)
+        orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
+
+        # Remove HITL / find labels, add memory label
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        for lbl in config.find_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.memory_label)
+
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.MEMORY_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "action": "approved",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
+
     @router.get("/api/human-input")
     async def get_human_input_requests() -> JSONResponse:
         orch = get_orchestrator()
@@ -232,6 +260,7 @@ def create_router(
                 hitl_label=config.hitl_label,
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
+                memory_label=config.memory_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,

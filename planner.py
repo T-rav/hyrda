@@ -10,6 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from runner_utils import stream_claude_process, terminate_processes
 
@@ -236,6 +237,15 @@ class PlannerRunner:
             self._config.find_label[0] if self._config.find_label else "hydra-find"
         )
 
+        memory_section = ""
+        digest = load_digest(self._config)
+        if digest:
+            memory_section = (
+                "\n\n## Institutional Memory\n\n"
+                "The following learnings from past runs may help:\n\n"
+                f"{digest}"
+            )
+
         # --- Scale-adaptive schema section ---
         if scale == "lite":
             mode_note = (
@@ -368,6 +378,18 @@ or one-line bodies will be rejected. Include file paths, function names, and con
 
 **IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
 Do NOT invent labels. All discovered issues enter the pipeline via the find label.
+{memory_section}
+## Memory Suggestions (Optional)
+
+If you discover a pattern, insight, or lesson that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: <short descriptive title>
+learning: <what was learned and why it matters>
+context: <when/how this was discovered>
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely useful, non-obvious learnings. Most runs should NOT produce suggestions.
 """
 
     # Required plan sections — each must appear as a ## header.

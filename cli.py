@@ -127,6 +127,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
+        "--memory-label",
+        default=None,
+        help="Labels for accepted agent learnings, comma-separated (default: hydra-memory)",
+    )
+    parser.add_argument(
+        "--memory-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between memory sync polls (default: 120)",
+    )
+    parser.add_argument(
         "--planner-model",
         default=None,
         help="Model for planning agents (default: opus)",
@@ -235,6 +246,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ci_check_timeout",
         "ci_poll_interval",
         "max_ci_fix_attempts",
+        "memory_sync_interval",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
@@ -258,6 +270,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "memory_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

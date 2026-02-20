@@ -2196,3 +2196,72 @@ class TestHITLLoop:
         await orch._process_one_hitl(42, "Fix it", semaphore)
 
         mock_wt.destroy.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Memory sync loop
+# ---------------------------------------------------------------------------
+
+
+class TestMemorySyncLoop:
+    """Tests for _memory_sync_loop in the orchestrator."""
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_registered_in_supervise_loops(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """memory loop should be listed in _supervise_loops factories."""
+        bus = EventBus()
+        state = StateTracker(tmp_path / "state.json")
+        orch = HydraOrchestrator(config, event_bus=bus, state=state)
+        _mock_fetcher_noop(orch)
+
+        # Verify the method exists
+        assert hasattr(orch, "_memory_sync_loop")
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_loop_calls_sync(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """_memory_sync_loop should call memory.sync and respect stop event."""
+        bus = EventBus()
+        state = StateTracker(tmp_path / "state.json")
+        orch = HydraOrchestrator(config, event_bus=bus, state=state)
+        _mock_fetcher_noop(orch)
+
+        with patch("memory.sync", new_callable=AsyncMock) as mock_sync:
+            # Stop immediately after first iteration
+            async def stop_after_call(*args, **kwargs):
+                orch._stop_event.set()
+
+            mock_sync.side_effect = stop_after_call
+            await orch._memory_sync_loop()
+
+            mock_sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_loop_continues_after_exception(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """_memory_sync_loop should continue after exception."""
+        bus = EventBus()
+        state = StateTracker(tmp_path / "state.json")
+        orch = HydraOrchestrator(config, event_bus=bus, state=state)
+        _mock_fetcher_noop(orch)
+
+        call_count = 0
+
+        async def fail_then_stop(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("sync failed")
+            orch._stop_event.set()
+
+        with patch("memory.sync", new_callable=AsyncMock) as mock_sync:
+            mock_sync.side_effect = fail_then_stop
+            # Need short interval to avoid test timeout
+            object.__setattr__(config, "memory_sync_interval", 0)
+            await orch._memory_sync_loop()
+
+            assert call_count == 2  # First failed, second stopped

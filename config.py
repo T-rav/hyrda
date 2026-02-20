@@ -165,6 +165,28 @@ class HydraConfig(BaseModel):
         default=True, description="Enable the live web dashboard"
     )
 
+    # Memory
+    memory_label: list[str] = Field(
+        default=["hydra-memory"],
+        description="Labels for accepted agent learnings (OR logic)",
+    )
+    memory_sync_interval: int = Field(
+        default=120,
+        ge=10,
+        le=600,
+        description="Seconds between memory sync polls",
+    )
+    memory_digest_path: Path = Field(
+        default=Path("."),
+        description="Path to memory digest file",
+    )
+    memory_max_digest_entries: int = Field(
+        default=50,
+        ge=1,
+        le=200,
+        description="Max entries in the memory digest",
+    )
+
     # Polling
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
@@ -209,6 +231,8 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL        → hitl_label
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
+            HYDRA_LABEL_MEMORY      → memory_label
+            HYDRA_MEMORY_SYNC_INTERVAL → memory_sync_interval
         """
         # Paths
         if self.repo_root == Path("."):
@@ -219,6 +243,8 @@ class HydraConfig(BaseModel):
             self.state_file = self.repo_root / ".hydra" / "state.json"
         if self.event_log_path == Path("."):
             self.event_log_path = self.repo_root / ".hydra" / "events.jsonl"
+        if self.memory_digest_path == Path("."):
+            self.memory_digest_path = self.repo_root / ".hydra" / "memory" / "digest.md"
 
         # Repo slug: env var → git remote → empty
         if not self.repo:
@@ -264,6 +290,15 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
 
+        # Memory sync interval override
+        if self.memory_sync_interval == 120:  # still at default
+            env_mem_interval = os.environ.get("HYDRA_MEMORY_SYNC_INTERVAL")
+            if env_mem_interval is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "memory_sync_interval", int(env_mem_interval)
+                    )
+
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
             "HYDRA_LABEL_FIND": ("find_label", ["hydra-find"]),
@@ -273,6 +308,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
+            "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)

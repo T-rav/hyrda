@@ -65,6 +65,8 @@ class TestParseArgs:
             "planner_label",
             "planner_model",
             "planner_budget_usd",
+            "memory_label",
+            "memory_sync_interval",
             "repo",
             "main_branch",
             "dashboard_port",
@@ -458,3 +460,22 @@ class TestRunMainSignalHandlers:
 
         mock_orch.stop.assert_called_once()
         mock_dashboard.stop.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Memory CLI args
+# ---------------------------------------------------------------------------
+
+
+class TestMemoryCliArgs:
+    """Tests for --memory-label and --memory-sync-interval args."""
+
+    def test_memory_label_arg_parsing(self) -> None:
+        args = parse_args(["--memory-label", "my-mem,other-mem"])
+        config = build_config(args)
+        assert config.memory_label == ["my-mem", "other-mem"]
+
+    def test_memory_sync_interval_arg_parsing(self) -> None:
+        args = parse_args(["--memory-sync-interval", "300"])
+        config = build_config(args)
+        assert config.memory_sync_interval == 300

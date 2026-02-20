@@ -10,6 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_digest
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 
@@ -227,6 +228,15 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
     def _build_review_prompt(self, pr: PRInfo, issue: GitHubIssue, diff: str) -> str:
         """Build the review prompt for the agent."""
+        memory_section = ""
+        digest = load_digest(self._config)
+        if digest:
+            memory_section = (
+                "\n\n## Institutional Memory\n\n"
+                "The following learnings from past runs may help:\n\n"
+                f"{digest}"
+            )
+
         ui_criteria = ""
         if "ui/" in diff:
             ui_criteria = """
@@ -281,6 +291,18 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 Example:
 VERDICT: APPROVE
 SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
+{memory_section}
+## Memory Suggestions (Optional)
+
+If you discover a pattern, insight, or lesson that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: <short descriptive title>
+learning: <what was learned and why it matters>
+context: <when/how this was discovered>
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely useful, non-obvious learnings. Most runs should NOT produce suggestions.
 """
 
     def _parse_verdict(self, transcript: str) -> ReviewVerdict:

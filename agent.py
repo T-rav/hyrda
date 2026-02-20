@@ -9,10 +9,25 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_digest
 from models import GitHubIssue, WorkerResult, WorkerStatus
 from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.agent")
+
+_MEMORY_SUGGESTION_INSTRUCTION = """
+## Memory Suggestions (Optional)
+
+If you discover a pattern, insight, or lesson that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: <short descriptive title>
+learning: <what was learned and why it matters>
+context: <when/how this was discovered>
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely useful, non-obvious learnings. Most runs should NOT produce suggestions.
+"""
 
 
 class AgentRunner:
@@ -170,6 +185,15 @@ class AgentRunner:
             formatted = "\n".join(f"- {c}" for c in other_comments)
             comments_section = f"\n\n## Discussion\n{formatted}"
 
+        memory_section = ""
+        digest = load_digest(self._config)
+        if digest:
+            memory_section = (
+                "\n\n## Institutional Memory\n\n"
+                "The following learnings from past runs may help:\n\n"
+                f"{digest}"
+            )
+
         return f"""You are implementing GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -202,7 +226,8 @@ class AgentRunner:
 - Do NOT run `git push` or `gh pr create`.
 - Ensure `make quality` passes before committing.
 - If you encounter issues, commit what works with a descriptive message.
-"""
+{memory_section}
+{_MEMORY_SUGGESTION_INSTRUCTION}"""
 
     def terminate(self) -> None:
         """Kill all active agent subprocesses."""

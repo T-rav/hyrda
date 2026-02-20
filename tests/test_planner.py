@@ -1487,3 +1487,42 @@ def test_build_retry_prompt_full_has_all_sections(config, event_bus, issue):
     assert "## Files to Modify" in prompt
     assert "## Acceptance Criteria" in prompt
     assert "## Key Considerations" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Memory injection in _build_prompt
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPromptMemory:
+    """Tests for memory digest injection in PlannerRunner._build_prompt."""
+
+    def test_prompt_includes_memory_digest_when_available(
+        self, config, event_bus, issue, tmp_path: Path
+    ) -> None:
+        digest_path = tmp_path / "memory" / "digest.md"
+        digest_path.parent.mkdir(parents=True)
+        digest_path.write_text("# Hydra Memory\n\nCheck test output carefully.")
+        object.__setattr__(config, "memory_digest_path", digest_path)
+
+        runner = _make_runner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Institutional Memory" in prompt
+        assert "Check test output carefully" in prompt
+
+    def test_prompt_omits_memory_when_empty(
+        self, config, event_bus, issue, tmp_path: Path
+    ) -> None:
+        object.__setattr__(
+            config, "memory_digest_path", tmp_path / "nonexistent" / "digest.md"
+        )
+        runner = _make_runner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Institutional Memory" not in prompt
+
+    def test_prompt_includes_memory_suggestion_instruction(
+        self, config, event_bus, issue
+    ) -> None:
+        runner = _make_runner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "MEMORY_SUGGESTION_START" in prompt

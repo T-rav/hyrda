@@ -29,6 +29,7 @@ class TestEventTypeEnum:
             "ISSUE_CREATED",
             "BATCH_COMPLETE",
             "HITL_UPDATE",
+            "MEMORY_UPDATE",
             "ORCHESTRATOR_STATUS",
             "ERROR",
         }

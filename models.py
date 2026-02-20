@@ -93,6 +93,18 @@ class PlanResult(BaseModel):
     retry_attempted: bool = False
 
 
+# --- Memory ---
+
+
+class MemorySuggestion(BaseModel):
+    """A learning suggested by an agent for long-term memory."""
+
+    title: str
+    learning: str
+    context: str = ""
+    source: str = ""
+
+
 # --- Worker ---
 
 
@@ -225,6 +237,9 @@ class StateData(BaseModel):
     hitl_origins: dict[str, str] = Field(default_factory=dict)
     hitl_causes: dict[str, str] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    memory_issue_ids: list[int] = Field(default_factory=list)
+    memory_digest_hash: str = ""
+    memory_last_synced: str | None = None
     last_updated: str | None = None
 
 
@@ -266,6 +281,7 @@ class ControlStatusConfig(BaseModel):
     hitl_label: list[str] = Field(default_factory=list)
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
+    memory_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0

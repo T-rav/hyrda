@@ -68,6 +68,9 @@ class ConfigFactory:
         min_plan_words: int = 200,
         max_new_files_warning: int = 5,
         lite_plan_labels: list[str] | None = None,
+        memory_label: list[str] | None = None,
+        memory_sync_interval: int = 120,
+        memory_max_digest_entries: int = 50,
         repo: str = "test-org/test-repo",
         dry_run: bool = False,
         gh_token: str = "",
@@ -113,6 +116,9 @@ class ConfigFactory:
             lite_plan_labels=lite_plan_labels
             if lite_plan_labels is not None
             else ["bug", "typo", "docs"],
+            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
+            memory_sync_interval=memory_sync_interval,
+            memory_max_digest_entries=memory_max_digest_entries,
             repo=repo,
             dry_run=dry_run,
             gh_token=gh_token,

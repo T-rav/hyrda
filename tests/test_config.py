@@ -1441,3 +1441,67 @@ class TestWorktreePathForIssue:
             state_file=tmp_path / "s.json",
         )
         assert cfg.worktree_path_for_issue(7) == custom_base / "issue-7"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – memory fields
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMemory:
+    """Tests for memory-related config fields."""
+
+    def test_memory_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["hydra-memory"]
+
+    def test_memory_sync_interval_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_sync_interval == 120
+
+    def test_memory_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_MEMORY", "custom-memory")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["custom-memory"]
+
+    def test_memory_sync_interval_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MEMORY_SYNC_INTERVAL", "300")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_sync_interval == 300
+
+    def test_memory_digest_path_resolved(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_digest_path == tmp_path / ".hydra" / "memory" / "digest.md"
+
+    def test_custom_memory_label_value(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            memory_label=["my-memory"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_label == ["my-memory"]

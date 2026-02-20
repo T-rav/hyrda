@@ -172,6 +172,23 @@ class StateTracker:
         """Return a copy of the raw state dict."""
         return self._data.model_dump()
 
+    # --- memory tracking ---
+
+    def update_memory_state(self, issue_ids: list[int], digest_hash: str) -> None:
+        """Record the current set of memory issue IDs and digest hash."""
+        self._data.memory_issue_ids = issue_ids
+        self._data.memory_digest_hash = digest_hash
+        self._data.memory_last_synced = datetime.now(UTC).isoformat()
+        self.save()
+
+    def get_memory_state(self) -> tuple[list[int], str, str | None]:
+        """Return ``(issue_ids, digest_hash, last_synced)``."""
+        return (
+            list(self._data.memory_issue_ids),
+            self._data.memory_digest_hash,
+            self._data.memory_last_synced,
+        )
+
     # --- lifetime stats ---
 
     def record_issue_completed(self) -> None:

@@ -1399,6 +1399,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         hitl_label=["custom-hitl"],
         hitl_active_label=["custom-hitl-active"],
         fixed_label=["custom-fixed"],
+        memory_label=["custom-memory"],
         repo=config.repo,
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1426,6 +1427,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-hitl",
         "custom-hitl-active",
         "custom-fixed",
+        "custom-memory",
     }
 
 
@@ -2134,3 +2136,23 @@ class TestRetryWrapperUsage:
 
         _, kwargs = mock_retry.call_args
         assert kwargs["max_retries"] == 5
+
+
+# ---------------------------------------------------------------------------
+# _HYDRA_LABELS includes memory label
+# ---------------------------------------------------------------------------
+
+
+class TestHydraLabelsIncludesMemory:
+    """Tests that _HYDRA_LABELS contains the memory label entry."""
+
+    def test_memory_label_in_hydra_labels(self) -> None:
+        fields = [entry[0] for entry in PRManager._HYDRA_LABELS]
+        assert "memory_label" in fields
+
+    def test_memory_label_has_correct_color(self) -> None:
+        for field, color, _ in PRManager._HYDRA_LABELS:
+            if field == "memory_label":
+                assert color == "1d76db"
+                return
+        pytest.fail("memory_label not found in _HYDRA_LABELS")

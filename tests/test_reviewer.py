@@ -869,3 +869,54 @@ async def test_fix_ci_publishes_ci_check_events(
     statuses = [e.data["status"] for e in ci_events]
     assert "fixing" in statuses
     assert "fix_done" in statuses
+
+
+# ---------------------------------------------------------------------------
+# Memory injection in _build_review_prompt
+# ---------------------------------------------------------------------------
+
+
+class TestBuildReviewPromptMemory:
+    """Tests for memory digest injection in ReviewRunner._build_review_prompt."""
+
+    def test_prompt_includes_memory_digest_when_available(
+        self, config, event_bus, tmp_path: Path
+    ) -> None:
+        from models import GitHubIssue, PRInfo
+
+        digest_path = tmp_path / "memory" / "digest.md"
+        digest_path.parent.mkdir(parents=True)
+        digest_path.write_text("# Memory\n\nReview comments carefully.")
+        object.__setattr__(config, "memory_digest_path", digest_path)
+
+        runner = _make_runner(config, event_bus)
+        pr = PRInfo(number=10, issue_number=1, branch="test")
+        issue = GitHubIssue(number=1, title="Test", body="Body")
+        prompt = runner._build_review_prompt(pr, issue, "diff content")
+        assert "Institutional Memory" in prompt
+        assert "Review comments carefully" in prompt
+
+    def test_prompt_omits_memory_when_empty(
+        self, config, event_bus, tmp_path: Path
+    ) -> None:
+        from models import GitHubIssue, PRInfo
+
+        object.__setattr__(
+            config, "memory_digest_path", tmp_path / "nonexistent" / "digest.md"
+        )
+        runner = _make_runner(config, event_bus)
+        pr = PRInfo(number=10, issue_number=1, branch="test")
+        issue = GitHubIssue(number=1, title="Test", body="Body")
+        prompt = runner._build_review_prompt(pr, issue, "diff content")
+        assert "Institutional Memory" not in prompt
+
+    def test_prompt_includes_memory_suggestion_instruction(
+        self, config, event_bus
+    ) -> None:
+        from models import GitHubIssue, PRInfo
+
+        runner = _make_runner(config, event_bus)
+        pr = PRInfo(number=10, issue_number=1, branch="test")
+        issue = GitHubIssue(number=1, title="Test", body="Body")
+        prompt = runner._build_review_prompt(pr, issue, "diff content")
+        assert "MEMORY_SUGGESTION_START" in prompt

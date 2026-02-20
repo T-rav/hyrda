@@ -186,3 +186,126 @@ class TestHITLEndpointCause:
         assert len(items) == 1
         # cause should be the default empty string from model_dump, not overwritten
         assert items[0]["cause"] == ""
+
+
+class TestApproveMemoryEndpoint:
+    """Tests for POST /api/hitl/{issue_number}/approve-memory."""
+
+    def test_approve_memory_route_registered(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/hitl/{issue_number}/approve-memory" in paths
+
+    @pytest.mark.asyncio
+    async def test_approve_memory_relabels_correctly(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        mock_orch = AsyncMock()
+        mock_orch.skip_hitl_issue = AsyncMock()
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: mock_orch,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Mock label operations
+        pr_mgr.remove_label = AsyncMock()  # type: ignore[method-assign]
+        pr_mgr.add_labels = AsyncMock()  # type: ignore[method-assign]
+
+        # Find and call the approve-memory endpoint
+        endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl/{issue_number}/approve-memory"
+                and hasattr(route, "endpoint")
+            ):
+                endpoint = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert endpoint is not None
+        response = await endpoint(42)
+
+        import json
+
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        pr_mgr.add_labels.assert_called_once_with(42, config.memory_label)
+
+
+class TestControlStatusIncludesMemoryLabel:
+    """Tests that GET /api/control/status includes memory_label."""
+
+    @pytest.mark.asyncio
+    async def test_get_control_status_includes_memory_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Find and call the get_control_status handler
+        endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/status"
+                and hasattr(route, "endpoint")
+            ):
+                endpoint = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert endpoint is not None
+        response = await endpoint()
+
+        import json
+
+        data = json.loads(response.body)
+        assert "memory_label" in data["config"]
+        assert data["config"]["memory_label"] == config.memory_label
