@@ -88,6 +88,52 @@ class TestCreateRouter:
         assert expected_paths.issubset(paths)
 
 
+class TestControlStatusImproveLabel:
+    """Tests that /api/control/status includes improve_label."""
+
+    @pytest.mark.asyncio
+    async def test_control_status_includes_improve_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /api/control/status should include improve_label from config."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        get_control_status = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/status"
+                and hasattr(route, "endpoint")
+            ):
+                get_control_status = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_control_status is not None
+        response = await get_control_status()
+        import json
+
+        data = json.loads(response.body)
+        assert "config" in data
+        assert "improve_label" in data["config"]
+        assert data["config"]["improve_label"] == config.improve_label
+
+
 class TestHITLEndpointCause:
     """Tests that /api/hitl includes the cause from state."""
 

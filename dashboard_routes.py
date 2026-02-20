@@ -84,6 +84,7 @@ def create_router(
                 *config.hitl_label,
                 *config.hitl_active_label,
                 *config.planner_label,
+                *config.improve_label,
             }
         )
         items = await pr_manager.list_open_prs(all_labels)
@@ -232,6 +233,7 @@ def create_router(
                 hitl_label=config.hitl_label,
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
+                improve_label=config.improve_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,

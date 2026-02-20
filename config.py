@@ -227,6 +227,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL        → hitl_label
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
+            HYDRA_LABEL_IMPROVE     → improve_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -291,6 +292,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
+            "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)
