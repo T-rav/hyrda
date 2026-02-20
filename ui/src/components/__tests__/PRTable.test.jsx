@@ -136,4 +136,27 @@ describe('PRTable', () => {
       expect(screen.getByText('No pull requests yet')).toBeInTheDocument()
     })
   })
+
+  it('container has overflowX auto for horizontal scrolling', async () => {
+    mockFetchWith([makePR()])
+
+    render(<PRTable />)
+    await waitFor(() => {
+      expect(screen.getByText('#42')).toBeInTheDocument()
+    })
+    const table = screen.getByText('#42').closest('table')
+    const container = table.parentElement
+    expect(container.style.overflowX).toBe('auto')
+  })
+
+  it('table has minWidth to prevent column squishing', async () => {
+    mockFetchWith([makePR()])
+
+    render(<PRTable />)
+    await waitFor(() => {
+      expect(screen.getByText('#42')).toBeInTheDocument()
+    })
+    const table = screen.getByText('#42').closest('table')
+    expect(table.style.minWidth).toBe('500px')
+  })
 })
