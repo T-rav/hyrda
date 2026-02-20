@@ -227,6 +227,17 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
     def _build_review_prompt(self, pr: PRInfo, issue: GitHubIssue, diff: str) -> str:
         """Build the review prompt for the agent."""
+        ui_criteria = ""
+        if "ui/" in diff:
+            ui_criteria = """
+7. **UI-specific checks** (PR modifies frontend code):
+   - DRY: No duplicated constants, types, or styles — import from `constants.js`, `types.js`, `theme.js`.
+   - Responsive: Layout containers set `minWidth`; flex items handle shrinking (`minWidth: 0` or `overflow: hidden`).
+   - Style consistency: Spacing uses 4px grid multiples; colors come from `theme.js`, not hardcoded values.
+   - Component reuse: No new component that duplicates an existing one in `ui/src/components/`.
+   - Shared code: New constants/types belong in centralized files, not inline.
+"""
+
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -250,7 +261,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
    - Review code quality patterns (SRP, type hints, naming, complexity)
    - Review test quality (3As structure, factories, edge cases)
    - Check for security issues (injection, crypto, auth)
-
+{ui_criteria}
 ## If Issues Found
 
 If you find issues that you can fix:
