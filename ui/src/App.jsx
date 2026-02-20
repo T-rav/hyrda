@@ -14,7 +14,8 @@ const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'plann
 export default function App() {
   const {
     connected, batchNum, phase, orchestratorStatus, workers, reviews,
-    mergedCount, sessionPrsCount, lifetimeStats, config, events,
+    mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
+    sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
@@ -51,9 +52,13 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        prsCount={sessionPrsCount}
-        mergedCount={mergedCount}
-        issuesFound={lifetimeStats?.issues_created ?? 0}
+        sessionCounts={{
+          triage: sessionTriaged,
+          plan: sessionPlanned,
+          implement: sessionImplemented,
+          review: sessionReviewed,
+          merged: mergedCount,
+        }}
         connected={connected}
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
