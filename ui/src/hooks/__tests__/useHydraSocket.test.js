@@ -452,4 +452,70 @@ describe('useHydraSocket reducer', () => {
       ])
     })
   })
+
+  describe('orchestrator_status clears stale session state', () => {
+    const staleState = {
+      ...initialState,
+      orchestratorStatus: 'running',
+      workers: {
+        1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+        'plan-2': { status: 'planning', worker: 2, role: 'planner', title: 'Plan Issue #2', branch: '', transcript: [], pr: null },
+      },
+      sessionTriaged: 3,
+      sessionPlanned: 2,
+      sessionImplemented: 5,
+      sessionReviewed: 4,
+      mergedCount: 1,
+      sessionPrsCount: 3,
+    }
+
+    it('clears workers and session stats when status transitions to idle', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'idle' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('idle')
+      expect(next.workers).toEqual({})
+      expect(next.sessionTriaged).toBe(0)
+      expect(next.sessionPlanned).toBe(0)
+      expect(next.sessionImplemented).toBe(0)
+      expect(next.sessionReviewed).toBe(0)
+      expect(next.mergedCount).toBe(0)
+      expect(next.sessionPrsCount).toBe(0)
+    })
+
+    it('clears workers and session stats when status transitions to done', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'done' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('done')
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
+    })
+
+    it('preserves workers and session stats when status is running', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'running' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('running')
+      expect(Object.keys(next.workers)).toHaveLength(2)
+      expect(next.sessionImplemented).toBe(5)
+    })
+
+    it('preserves workers and session stats when status is stopping', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'stopping' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('stopping')
+      expect(Object.keys(next.workers)).toHaveLength(2)
+      expect(next.sessionImplemented).toBe(5)
+    })
+  })
 })
