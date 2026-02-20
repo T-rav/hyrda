@@ -212,6 +212,15 @@ describe('useHydraSocket reducer', () => {
       expect(next.sessionPlanned).toBe(0)
     })
 
+    it('planner_update passes through planning status instead of normalizing to running', () => {
+      const next = reducer(initialState, {
+        type: 'planner_update',
+        data: { issue: 7, status: 'planning', worker: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['plan-7'].status).toBe('planning')
+    })
+
     it('review_update increments sessionReviewed when status is done', () => {
       const next = reducer(initialState, {
         type: 'review_update',
@@ -242,6 +251,15 @@ describe('useHydraSocket reducer', () => {
         timestamp: '2024-01-01T00:00:00Z',
       })
       expect(next.sessionReviewed).toBe(0)
+    })
+
+    it('review_update passes through reviewing status instead of normalizing to running', () => {
+      const next = reducer(initialState, {
+        type: 'review_update',
+        data: { issue: 3, pr: 20, status: 'reviewing', worker: 3 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['review-20'].status).toBe('reviewing')
     })
 
     it('phase_change resets all session counters on new run', () => {

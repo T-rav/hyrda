@@ -8,7 +8,7 @@ describe('ACTIVE_STATUSES', () => {
 
   it('contains expected active statuses', () => {
     expect(ACTIVE_STATUSES).toEqual([
-      'running', 'testing', 'committing', 'reviewing', 'planning',
+      'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix',
     ])
   })
 
