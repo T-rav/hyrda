@@ -404,6 +404,31 @@ class PRManager:
                 exc,
             )
 
+    async def remove_pr_label(self, pr_number: int, label: str) -> None:
+        """Remove *label* from a GitHub pull request."""
+        if self._config.dry_run:
+            return
+        try:
+            await run_subprocess(
+                "gh",
+                "pr",
+                "edit",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--remove-label",
+                label,
+                cwd=self._config.repo_root,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not remove label %r from PR #%d: %s",
+                label,
+                pr_number,
+                exc,
+            )
+
     async def add_pr_labels(self, pr_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub pull request."""
         if self._config.dry_run or not labels:

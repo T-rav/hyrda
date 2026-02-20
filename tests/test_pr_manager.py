@@ -940,6 +940,47 @@ async def test_add_pr_labels_subprocess_error_does_not_raise(config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# remove_pr_label
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_calls_gh_pr_edit(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_pr_label(101, "hydra-review")
+
+    args = mock_create.call_args[0]
+    assert "pr" in args
+    assert "edit" in args
+    assert "--remove-label" in args
+    assert "hydra-review" in args
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_dry_run_skips_command(dry_config, event_bus):
+    manager = _make_manager(dry_config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.remove_pr_label(101, "hydra-review")
+
+    mock_create.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_remove_pr_label_subprocess_error_does_not_raise(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=1, stderr="label error")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        # Should not raise
+        await manager.remove_pr_label(101, "hydra-review")
+
+
+# ---------------------------------------------------------------------------
 # get_pr_diff
 # ---------------------------------------------------------------------------
 
