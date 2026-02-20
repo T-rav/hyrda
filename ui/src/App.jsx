@@ -74,7 +74,9 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'prs' ? 'Pull Requests' : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'prs'
+                ? <>Pull Requests{state.prs.length > 0 && <span style={styles.tabBadge}>{state.prs.length}</span>}</>
+                : tab === 'hitl' ? 'HITL' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -153,8 +155,18 @@ const styles = {
   },
   timelineTime: { color: theme.textMuted, marginRight: 8 },
   timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
+  tabBadge: {
+    marginLeft: 6,
+    padding: '1px 6px',
+    borderRadius: 10,
+    fontSize: 10,
+    fontWeight: 600,
+    background: theme.border,
+    color: theme.textMuted,
+  },
 }
 
 // Pre-computed tab style variants (avoids object spread in .map())
 export const tabInactiveStyle = styles.tab
 export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
+export const tabBadgeStyle = styles.tabBadge
