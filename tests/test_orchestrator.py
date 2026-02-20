@@ -1389,6 +1389,13 @@ class TestHITLCorrection:
         orch._active_review_issues.add(42)
         assert orch.get_hitl_status(42) == "processing"
 
+    def test_get_hitl_status_returns_processing_when_active_in_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        orch = HydraOrchestrator(config)
+        orch._active_hitl_issues.add(42)
+        assert orch.get_hitl_status(42) == "processing"
+
     def test_get_hitl_status_returns_pending_when_not_active(
         self, config: HydraConfig
     ) -> None:
