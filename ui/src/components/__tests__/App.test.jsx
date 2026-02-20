@@ -83,6 +83,15 @@ describe('HITL badge rendering', () => {
   })
 })
 
+describe('Layout min-width', () => {
+  it('root layout has minWidth to prevent overlap at narrow viewports', async () => {
+    const { default: App } = await import('../../App')
+    const { container } = render(<App />)
+    const layout = container.firstChild
+    expect(layout.style.minWidth).toBe('1024px')
+  })
+})
+
 describe('App pre-computed tab styles', () => {
   it('tabInactiveStyle has base tab properties', () => {
     expect(tabInactiveStyle).toMatchObject({
