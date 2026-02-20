@@ -50,6 +50,7 @@ class ConfigFactory:
         max_workers: int = 2,
         max_planners: int = 1,
         max_reviewers: int = 1,
+        max_hitl_workers: int = 1,
         max_budget_usd: float = 1.0,
         model: str = "sonnet",
         review_model: str = "opus",
@@ -60,6 +61,7 @@ class ConfigFactory:
         max_quality_fix_attempts: int = 2,
         review_label: list[str] | None = None,
         hitl_label: list[str] | None = None,
+        hitl_active_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
@@ -86,6 +88,7 @@ class ConfigFactory:
             max_workers=max_workers,
             max_planners=max_planners,
             max_reviewers=max_reviewers,
+            max_hitl_workers=max_hitl_workers,
             max_budget_usd=max_budget_usd,
             model=model,
             review_model=review_model,
@@ -96,6 +99,9 @@ class ConfigFactory:
             max_quality_fix_attempts=max_quality_fix_attempts,
             review_label=review_label if review_label is not None else ["hydra-review"],
             hitl_label=hitl_label if hitl_label is not None else ["hydra-hitl"],
+            hitl_active_label=hitl_active_label
+            if hitl_active_label is not None
+            else ["hydra-hitl-active"],
             fixed_label=fixed_label if fixed_label is not None else ["hydra-fixed"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label

@@ -73,6 +73,7 @@ class TestCreateRouter:
             "/api/events",
             "/api/prs",
             "/api/hitl",
+            "/api/hitl/{issue_number}/correct",
             "/api/human-input",
             "/api/human-input/{issue_number}",
             "/api/control/start",
@@ -82,3 +83,33 @@ class TestCreateRouter:
         }
 
         assert expected_paths.issubset(paths)
+
+
+class TestHITLCorrectionEndpoint:
+    """Tests for POST /api/hitl/{issue_number}/correct."""
+
+    def _make_router(self, config, event_bus, tmp_path, orchestrator=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: orchestrator,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def test_hitl_correct_route_registered(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        router = self._make_router(config, event_bus, tmp_path)
+        paths = {route.path for route in router.routes}  # type: ignore[union-attr]
+        assert "/api/hitl/{issue_number}/correct" in paths

@@ -32,6 +32,7 @@ class PRManager:
         ("ready_label", "0e8a16", "Issue ready for implementation"),
         ("review_label", "fbca04", "Issue/PR under review"),
         ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
+        ("hitl_active_label", "e36209", "HITL correction actively in progress"),
         ("fixed_label", "0075ca", "PR merged — issue completed"),
     )
 

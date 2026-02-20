@@ -9,10 +9,13 @@ import logging
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
 from models import (
     GitHubIssue,
+    HITLCorrection,
+    HITLResult,
     Phase,
     PlanResult,
 )
@@ -50,11 +53,14 @@ class HydraOrchestrator:
         self._prs = PRManager(config, self._bus)
         self._reviewers = ReviewRunner(config, self._bus)
         self._triage = TriageRunner(config, self._bus)
+        self._hitl_runner = HITLRunner(config, self._bus)
         self._dashboard: object | None = None
         # Pending human-input requests: {issue_number: question}
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
+        # Pending HITL corrections: {issue_number: HITLCorrection}
+        self._hitl_corrections: dict[int, HITLCorrection] = {}
         # In-memory tracking of issues active in this run (avoids double-processing)
         self._active_issues: set[int] = set()
         # Stop mechanism for dashboard control
@@ -132,6 +138,7 @@ class HydraOrchestrator:
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        self._hitl_runner.terminate()
         await self._publish_status()
 
     # Alias for backward compatibility
@@ -178,12 +185,14 @@ class HydraOrchestrator:
                 self._plan_loop(),
                 self._implement_loop(),
                 self._review_loop(),
+                self._hitl_loop(),
             )
         finally:
             self._running = False
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
+            self._hitl_runner.terminate()
             await self._publish_status()
             logger.info("Hydra stopped")
 
@@ -217,6 +226,123 @@ class HydraOrchestrator:
                     await asyncio.sleep(5)
                     await self._prs.pull_main()
             await self._sleep_or_stop(self._config.poll_interval)
+
+    async def _hitl_loop(self) -> None:
+        """Continuously poll for pending HITL corrections and process them."""
+        while not self._stop_event.is_set():
+            corrections = self._pending_hitl_corrections()
+            if corrections:
+                await self._process_hitl_batch(corrections)
+            await self._sleep_or_stop(self._config.poll_interval)
+
+    def _pending_hitl_corrections(self) -> dict[int, HITLCorrection]:
+        """Return queued corrections that are not already being processed."""
+        return {
+            num: corr
+            for num, corr in self._hitl_corrections.items()
+            if num not in self._active_issues
+        }
+
+    async def _process_hitl_batch(
+        self, corrections: dict[int, HITLCorrection]
+    ) -> list[HITLResult]:
+        """Process a batch of HITL corrections with concurrency limiting."""
+        semaphore = asyncio.Semaphore(self._config.max_hitl_workers)
+        results: list[HITLResult] = []
+
+        async def _correct_one(idx: int, correction: HITLCorrection) -> HITLResult:
+            async with semaphore:
+                issue_number = correction.issue_number
+                self._active_issues.add(issue_number)
+
+                try:
+                    # Fetch full issue data
+                    issues = await self._fetcher.fetch_issues_by_labels(
+                        self._config.hitl_label, self._config.batch_size
+                    )
+                    issue = next((i for i in issues if i.number == issue_number), None)
+                    if issue is None:
+                        self._hitl_corrections.pop(issue_number, None)
+                        self._active_issues.discard(issue_number)
+                        return HITLResult(
+                            issue_number=issue_number,
+                            error="Issue not found with HITL label",
+                        )
+
+                    # Swap label: hydra-hitl → hydra-hitl-active
+                    for lbl in self._config.hitl_label:
+                        await self._prs.remove_label(issue_number, lbl)
+                    await self._prs.add_labels(
+                        issue_number, [self._config.hitl_active_label[0]]
+                    )
+
+                    # Reuse or create worktree
+                    branch = self._config.branch_for_issue(issue_number)
+                    wt_path = self._config.worktree_path_for_issue(issue_number)
+                    if not wt_path.is_dir():
+                        wt_path = await self._worktrees.create(issue_number, branch)
+
+                    # Run correction agent
+                    result = await self._hitl_runner.correct(
+                        issue, correction.correction, wt_path, worker_id=idx
+                    )
+
+                    if result.success:
+                        # Push changes
+                        await self._prs.push_branch(wt_path, branch)
+
+                        # Post success comment
+                        await self._prs.post_comment(
+                            issue_number,
+                            "**HITL Correction Applied**\n\n"
+                            f"Correction: {correction.correction[:500]}\n\n"
+                            "Changes pushed — restoring to pipeline.",
+                        )
+
+                        # Remove hitl-active label, restore previous stage label
+                        for lbl in self._config.hitl_active_label:
+                            await self._prs.remove_label(issue_number, lbl)
+                        restore = (
+                            correction.restore_label or self._config.review_label[0]
+                        )
+                        await self._prs.add_labels(issue_number, [restore])
+                    else:
+                        # Swap back: hitl-active → hydra-hitl
+                        for lbl in self._config.hitl_active_label:
+                            await self._prs.remove_label(issue_number, lbl)
+                        await self._prs.add_labels(
+                            issue_number, [self._config.hitl_label[0]]
+                        )
+                        # Post failure comment
+                        await self._prs.post_comment(
+                            issue_number,
+                            "**HITL Correction Failed**\n\n"
+                            f"Error: {result.error or 'Unknown'}\n\n"
+                            "Issue returned to HITL queue.",
+                        )
+
+                    return result
+                finally:
+                    # Always clean up tracking state
+                    self._hitl_corrections.pop(issue_number, None)
+                    self._active_issues.discard(issue_number)
+
+        tasks = [
+            asyncio.create_task(_correct_one(i, corr))
+            for i, corr in enumerate(corrections.values())
+        ]
+        for task in asyncio.as_completed(tasks):
+            results.append(await task)
+            if self._stop_event.is_set():
+                for t in tasks:
+                    t.cancel()
+                break
+
+        return results
+
+    def submit_hitl_correction(self, correction: HITLCorrection) -> None:
+        """Queue a correction for processing by the HITL loop."""
+        self._hitl_corrections[correction.issue_number] = correction
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""

@@ -1171,3 +1171,411 @@ class TestPlanPhase:
 
         # Not all 3 should have completed — stop event triggers cancellation
         assert len(results) < len(issues)
+
+
+# ---------------------------------------------------------------------------
+# HITL loop
+# ---------------------------------------------------------------------------
+
+
+class TestHITLLoop:
+    """Tests for the HITL correction loop in the orchestrator."""
+
+    def _make_orch(self, config: HydraConfig) -> HydraOrchestrator:
+        """Create an orchestrator with mocked external dependencies."""
+        orch = HydraOrchestrator(config)
+        orch._prs = AsyncMock()
+        orch._prs.remove_label = AsyncMock()
+        orch._prs.add_labels = AsyncMock()
+        orch._prs.post_comment = AsyncMock()
+        orch._prs.push_branch = AsyncMock(return_value=True)
+        orch._prs.ensure_labels_exist = AsyncMock()
+        return orch
+
+    def test_submit_hitl_correction_queues(self, config: HydraConfig) -> None:
+        """submit_hitl_correction() should add to _hitl_corrections dict."""
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix the auth flow",
+            restore_label="hydra-review",
+        )
+        orch.submit_hitl_correction(correction)
+
+        assert 42 in orch._hitl_corrections
+        assert orch._hitl_corrections[42].correction == "Fix the auth flow"
+
+    def test_submit_hitl_correction_replaces_existing(
+        self, config: HydraConfig
+    ) -> None:
+        """Submitting a correction for the same issue replaces the previous one."""
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        orch.submit_hitl_correction(HITLCorrection(issue_number=42, correction="First"))
+        orch.submit_hitl_correction(
+            HITLCorrection(issue_number=42, correction="Second")
+        )
+
+        assert orch._hitl_corrections[42].correction == "Second"
+
+    def test_pending_hitl_corrections_excludes_active(
+        self, config: HydraConfig
+    ) -> None:
+        """_pending_hitl_corrections should skip issues already in _active_issues."""
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        orch._hitl_corrections[42] = HITLCorrection(issue_number=42, correction="Fix")
+        orch._hitl_corrections[43] = HITLCorrection(
+            issue_number=43, correction="Fix too"
+        )
+        orch._active_issues.add(42)
+
+        pending = orch._pending_hitl_corrections()
+        assert 42 not in pending
+        assert 43 in pending
+
+    @pytest.mark.asyncio
+    async def test_hitl_loop_stops_on_stop_event(self, config: HydraConfig) -> None:
+        """HITL loop should exit when stop event is set."""
+        orch = self._make_orch(config)
+
+        loop_iterations = 0
+        original_pending = orch._pending_hitl_corrections
+
+        def counting_pending() -> dict:
+            nonlocal loop_iterations
+            loop_iterations += 1
+            orch._stop_event.set()
+            return original_pending()
+
+        orch._pending_hitl_corrections = counting_pending  # type: ignore[method-assign]
+
+        await orch._hitl_loop()
+
+        assert loop_iterations == 1
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_success_restores_review_label(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, label should swap from hitl-active to the restore label."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix the CI",
+            restore_label="hydra-review",
+        )
+
+        # Mock fetcher to return the issue
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        # Mock worktree path exists
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        # Mock the HITL runner to succeed
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        result = await orch._process_hitl_batch({42: correction})
+
+        assert len(result) == 1
+        assert result[0].success is True
+
+        # Verify labels were swapped correctly
+        orch._prs.add_labels.assert_any_call(42, ["hydra-review"])
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_success_defaults_to_review_label(
+        self, config: HydraConfig
+    ) -> None:
+        """When no restore_label is specified, default to config.review_label[0]."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix it",
+            restore_label="",  # empty = default
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        orch._prs.add_labels.assert_any_call(42, [config.review_label[0]])
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_failure_restores_hitl_label(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, label should swap back from hitl-active to hydra-hitl."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix the bug",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(
+                issue_number=42, success=False, error="Quality failed"
+            )
+        )
+
+        result = await orch._process_hitl_batch({42: correction})
+
+        assert result[0].success is False
+        orch._prs.add_labels.assert_any_call(42, [config.hitl_label[0]])
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_posts_success_comment(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, a comment should be posted on the issue."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix the auth flow",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        orch._prs.post_comment.assert_called_once()
+        comment = orch._prs.post_comment.call_args.args[1]
+        assert "HITL Correction Applied" in comment
+        assert "Fix the auth flow" in comment
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_posts_failure_comment(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, a failure comment should be posted."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix it",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(
+                issue_number=42, success=False, error="Agent crashed"
+            )
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        orch._prs.post_comment.assert_called_once()
+        comment = orch._prs.post_comment.call_args.args[1]
+        assert "HITL Correction Failed" in comment
+        assert "Agent crashed" in comment
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_pushes_branch(self, config: HydraConfig) -> None:
+        """On success, changes should be pushed to the remote."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix it",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        orch._prs.push_branch.assert_called_once_with(
+            wt_path, config.branch_for_issue(42)
+        )
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_reuses_existing_worktree(
+        self, config: HydraConfig
+    ) -> None:
+        """If a worktree already exists, it should be reused without creating a new one."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        issue = make_issue(42)
+        correction = HITLCorrection(
+            issue_number=42,
+            correction="Fix it",
+        )
+
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        # Create worktree dir so it already exists
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._worktrees.create = AsyncMock()  # type: ignore[method-assign]
+        orch._hitl_runner.correct = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        await orch._process_hitl_batch({42: correction})
+
+        # worktree.create should NOT have been called
+        orch._worktrees.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_hitl_loop_skips_active_issues(self, config: HydraConfig) -> None:
+        """Issues already in _active_issues should be skipped by the HITL loop."""
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        orch._hitl_corrections[42] = HITLCorrection(issue_number=42, correction="Fix")
+        orch._active_issues.add(42)
+
+        pending = orch._pending_hitl_corrections()
+        assert len(pending) == 0
+
+    @pytest.mark.asyncio
+    async def test_hitl_loop_concurrency_limited(self, config: HydraConfig) -> None:
+        """Semaphore should limit concurrent corrections to max_hitl_workers."""
+        from models import HITLCorrection, HITLResult
+
+        orch = self._make_orch(config)
+        concurrency = {"current": 0, "peak": 0}
+
+        async def slow_correct(issue, correction, wt_path, worker_id=0) -> HITLResult:
+            concurrency["current"] += 1
+            concurrency["peak"] = max(concurrency["peak"], concurrency["current"])
+            await asyncio.sleep(0)  # yield
+            concurrency["current"] -= 1
+            return HITLResult(issue_number=issue.number, success=True)
+
+        orch._hitl_runner.correct = slow_correct  # type: ignore[method-assign]
+
+        # Create multiple corrections
+        corrections = {}
+        for i in range(1, 5):
+            corrections[i] = HITLCorrection(issue_number=i, correction=f"Fix #{i}")
+            orch._hitl_corrections[i] = corrections[i]
+
+        issues = [make_issue(i) for i in range(1, 5)]
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+
+        # Create worktree dirs
+        for i in range(1, 5):
+            config.worktree_path_for_issue(i).mkdir(parents=True, exist_ok=True)
+
+        await orch._process_hitl_batch(corrections)
+
+        assert concurrency["peak"] <= config.max_hitl_workers
+
+    @pytest.mark.asyncio
+    async def test_stop_terminates_hitl_runner(self, config: HydraConfig) -> None:
+        """stop() should call _hitl_runner.terminate()."""
+        orch = self._make_orch(config)
+        with patch.object(orch._hitl_runner, "terminate") as mock_term:
+            await orch.stop()
+        mock_term.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_run_includes_hitl_loop(self, config: HydraConfig) -> None:
+        """run() should include _hitl_loop in asyncio.gather."""
+        orch = self._make_orch(config)
+
+        hitl_loop_called = False
+
+        async def fake_hitl_loop() -> None:
+            nonlocal hitl_loop_called
+            hitl_loop_called = True
+            # Don't set stop — let another loop handle that
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        orch._hitl_loop = fake_hitl_loop  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert hitl_loop_called is True
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_cleans_up_on_issue_not_found(
+        self, config: HydraConfig
+    ) -> None:
+        """If the issue is not found, correction should be removed from queue."""
+        from models import HITLCorrection
+
+        orch = self._make_orch(config)
+        correction = HITLCorrection(
+            issue_number=99,
+            correction="Fix it",
+        )
+        orch._hitl_corrections[99] = correction
+
+        # Fetcher returns empty list (issue not found)
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
+
+        results = await orch._process_hitl_batch({99: correction})
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert "not found" in (results[0].error or "")
+        assert 99 not in orch._hitl_corrections
+        assert 99 not in orch._active_issues
+
+    @pytest.mark.asyncio
+    async def test_run_finally_terminates_hitl_runner(
+        self, config: HydraConfig
+    ) -> None:
+        """The finally block in run() should terminate the HITL runner."""
+        orch = self._make_orch(config)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        with patch.object(orch._hitl_runner, "terminate") as mock_term:
+            await orch.run()
+
+        mock_term.assert_called_once()

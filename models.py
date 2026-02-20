@@ -157,6 +157,37 @@ class ReviewResult(BaseModel):
     ci_fix_attempts: int = 0
 
 
+# --- HITL ---
+
+
+class HITLStatus(StrEnum):
+    """Lifecycle status of an HITL correction worker."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    TESTING = "testing"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class HITLCorrection(BaseModel):
+    """A correction submitted by the dashboard for an HITL issue."""
+
+    issue_number: int
+    correction: str
+    restore_label: str = ""  # Label to restore on success (e.g. "hydra-review")
+
+
+class HITLResult(BaseModel):
+    """Outcome of applying an HITL correction."""
+
+    issue_number: int
+    success: bool = False
+    error: str | None = None
+    transcript: str = ""
+    duration_seconds: float = 0.0
+
+
 # --- Batch ---
 
 

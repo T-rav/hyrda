@@ -81,6 +81,22 @@ def create_router(
         items = await pr_manager.list_hitl_items(config.hitl_label)
         return JSONResponse([item.model_dump() for item in items])
 
+    @router.post("/api/hitl/{issue_number}/correct")
+    async def submit_hitl_correction(issue_number: int, body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Submit a correction for an HITL issue to be processed by the orchestrator."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+        from models import HITLCorrection
+
+        correction = HITLCorrection(
+            issue_number=issue_number,
+            correction=body.get("correction", ""),
+            restore_label=body.get("restore_label", ""),
+        )
+        orch.submit_hitl_correction(correction)
+        return JSONResponse({"status": "queued"})
+
     @router.get("/api/human-input")
     async def get_human_input_requests() -> JSONResponse:
         orch = get_orchestrator()
