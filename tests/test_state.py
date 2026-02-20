@@ -377,6 +377,87 @@ class TestHITLOriginTracking:
 
 
 # ---------------------------------------------------------------------------
+# HITL cause tracking
+# ---------------------------------------------------------------------------
+
+
+class TestHITLCauseTracking:
+    def test_set_hitl_cause_stores_cause(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_cause(42, "CI failed after 2 fix attempts")
+        assert tracker.get_hitl_cause(42) == "CI failed after 2 fix attempts"
+
+    def test_get_hitl_cause_returns_none_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_hitl_cause(999) is None
+
+    def test_set_hitl_cause_triggers_save(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_hitl_cause(42, "Merge conflict with main branch")
+        assert state_file.exists()
+
+    def test_set_hitl_cause_overwrites(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_cause(42, "First cause")
+        tracker.set_hitl_cause(42, "Second cause")
+        assert tracker.get_hitl_cause(42) == "Second cause"
+
+    def test_remove_hitl_cause_deletes_entry(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_cause(42, "Some cause")
+        tracker.remove_hitl_cause(42)
+        assert tracker.get_hitl_cause(42) is None
+
+    def test_remove_hitl_cause_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        # Should not raise
+        tracker.remove_hitl_cause(999)
+        assert tracker.get_hitl_cause(999) is None
+
+    def test_multiple_causes_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
+        tracker.set_hitl_cause(2, "Merge conflict with main branch")
+        assert tracker.get_hitl_cause(1) == "CI failed after 2 fix attempts"
+        assert tracker.get_hitl_cause(2) == "Merge conflict with main branch"
+
+    def test_hitl_cause_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_hitl_cause(42, "PR merge failed on GitHub")
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_hitl_cause(42) == "PR merge failed on GitHub"
+
+    def test_reset_clears_hitl_causes(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_hitl_cause(42, "Some cause")
+        tracker.reset()
+        assert tracker.get_hitl_cause(42) is None
+
+    def test_migration_adds_hitl_causes_to_old_file(self, tmp_path: Path) -> None:
+        """Loading a state file without hitl_causes should default to {}."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "hitl_origins": {"42": "hydra-review"},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_hitl_cause(42) is None
+        # Existing data is preserved
+        assert tracker.get_current_batch() == 5
+        assert tracker.get_issue_status(1) == "success"
+
+
+# ---------------------------------------------------------------------------
 # Batch tracking
 # ---------------------------------------------------------------------------
 
@@ -469,6 +550,7 @@ class TestReset:
         tracker.set_branch(1, "agent/issue-1")
         tracker.mark_pr(10, "open")
         tracker.set_hitl_origin(1, "hydra-review")
+        tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
         tracker.increment_batch()
 
         tracker.reset()
@@ -479,6 +561,7 @@ class TestReset:
         assert tracker.get_branch(1) is None
         assert tracker.get_pr_status(10) is None
         assert tracker.get_hitl_origin(1) is None
+        assert tracker.get_hitl_cause(1) is None
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +632,7 @@ class TestToDict:
             "active_branches",
             "reviewed_prs",
             "hitl_origins",
+            "hitl_causes",
             "lifetime_stats",
             "last_updated",
         }
@@ -770,6 +854,7 @@ class TestStateDataModel:
         assert data.active_branches == {}
         assert data.reviewed_prs == {}
         assert data.hitl_origins == {}
+        assert data.hitl_causes == {}
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
@@ -782,6 +867,7 @@ class TestStateDataModel:
             "active_branches": {"2": "agent/issue-2"},
             "reviewed_prs": {"10": "merged"},
             "hitl_origins": {"42": "hydra-review"},
+            "hitl_causes": {"42": "CI failed after 2 fix attempts"},
             "lifetime_stats": {
                 "issues_completed": 3,
                 "prs_merged": 1,
@@ -792,6 +878,7 @@ class TestStateDataModel:
         data = StateData.model_validate(raw)
         assert data.current_batch == 5
         assert data.processed_issues["1"] == "success"
+        assert data.hitl_causes["42"] == "CI failed after 2 fix attempts"
         assert data.lifetime_stats.prs_merged == 1
 
     def test_handles_partial_data(self) -> None:
