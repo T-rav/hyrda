@@ -11,7 +11,7 @@ from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
-from pr_manager import PRManager
+from pr_manager import PRManager, SelfReviewError
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
     ReviewInsightStore,
@@ -176,9 +176,17 @@ class ReviewPhase:
                     # Approve is skipped to avoid "cannot approve your own PR"
                     # errors — Hydra merges directly once CI passes.
                     if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
-                        await self._prs.submit_review(
-                            pr.number, result.verdict, result.summary
-                        )
+                        try:
+                            await self._prs.submit_review(
+                                pr.number, result.verdict, result.summary
+                            )
+                        except SelfReviewError:
+                            logger.info(
+                                "Skipping formal %s review on own PR #%d"
+                                " — already posted as comment",
+                                result.verdict.value,
+                                pr.number,
+                            )
 
                     self._state.mark_pr(pr.number, result.verdict.value)
                     self._state.mark_issue(pr.issue_number, "reviewed")
