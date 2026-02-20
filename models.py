@@ -139,6 +139,19 @@ class PRInfo(BaseModel):
 # --- Reviews ---
 
 
+class HITLResult(BaseModel):
+    """Outcome of an HITL correction agent run."""
+
+    issue_number: int
+    success: bool = False
+    error: str | None = None
+    transcript: str = ""
+    duration_seconds: float = 0.0
+
+
+# --- Reviews ---
+
+
 class ReviewVerdict(StrEnum):
     """Verdict from a reviewer agent."""
 
