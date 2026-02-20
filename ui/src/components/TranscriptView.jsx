@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { theme } from '../theme'
 
 const ACTIVE_STATUSES = ['running', 'testing', 'committing', 'reviewing', 'planning']
 
@@ -71,16 +72,16 @@ export function TranscriptView({ workers, selectedWorker }) {
 }
 
 const mdStyles = {
-  h1: { fontSize: 16, fontWeight: 700, color: '#e6edf3', margin: '8px 0 4px' },
-  h2: { fontSize: 14, fontWeight: 700, color: '#e6edf3', margin: '6px 0 3px' },
-  h3: { fontSize: 13, fontWeight: 600, color: '#e6edf3', margin: '4px 0 2px' },
-  inlineCode: { background: '#161b22', padding: '2px 5px', borderRadius: 4, fontSize: 11, color: '#79c0ff' },
-  pre: { background: '#161b22', padding: 8, borderRadius: 6, overflowX: 'auto', fontSize: 11, lineHeight: 1.5, margin: '4px 0' },
-  codeBlock: { color: '#e6edf3' },
+  h1: { fontSize: 16, fontWeight: 700, color: theme.textBright, margin: '8px 0 4px' },
+  h2: { fontSize: 14, fontWeight: 700, color: theme.textBright, margin: '6px 0 3px' },
+  h3: { fontSize: 13, fontWeight: 600, color: theme.textBright, margin: '4px 0 2px' },
+  inlineCode: { background: theme.surface, padding: '2px 5px', borderRadius: 4, fontSize: 11, color: theme.codeText },
+  pre: { background: theme.surface, padding: 8, borderRadius: 6, overflowX: 'auto', fontSize: 11, lineHeight: 1.5, margin: '4px 0' },
+  codeBlock: { color: theme.textBright },
   ul: { margin: '2px 0', paddingLeft: 20 },
   ol: { margin: '2px 0', paddingLeft: 20 },
   li: { margin: '1px 0' },
-  strong: { color: '#e6edf3' },
+  strong: { color: theme.textBright },
   p: { margin: '2px 0' },
 }
 
@@ -112,11 +113,11 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#8b949e',
+    color: theme.textMuted,
     fontSize: 14,
   },
   waiting: {
-    color: '#8b949e',
+    color: theme.textMuted,
     padding: '20px 0',
     fontStyle: 'italic',
   },
@@ -126,18 +127,18 @@ const styles = {
     alignItems: 'center',
     padding: '8px 0',
     marginBottom: 8,
-    borderBottom: '1px solid #30363d',
+    borderBottom: `1px solid ${theme.border}`,
   },
-  label: { fontWeight: 700, color: '#58a6ff', fontSize: 14 },
-  role: { color: '#a371f7', fontSize: 11, fontWeight: 600 },
-  branch: { color: '#8b949e', fontSize: 11 },
-  lines: { color: '#8b949e', fontSize: 11, marginLeft: 'auto' },
+  label: { fontWeight: 700, color: theme.accent, fontSize: 14 },
+  role: { color: theme.purple, fontSize: 11, fontWeight: 600 },
+  branch: { color: theme.textMuted, fontSize: 11 },
+  lines: { color: theme.textMuted, fontSize: 11, marginLeft: 'auto' },
   line: {
     padding: '1px 0',
     wordBreak: 'break-word',
   },
   linePrefix: {
-    color: '#58a6ff',
+    color: theme.accent,
     fontWeight: 600,
     fontSize: 11,
   },
