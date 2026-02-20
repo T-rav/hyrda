@@ -763,7 +763,7 @@ class PRManager:
 
             items: list[HITLItem] = []
             for issue in raw_issues:
-                branch = f"agent/issue-{issue['number']}"
+                branch = self._config.branch_for_issue(issue["number"])
                 pr_number = 0
                 pr_url = ""
                 try:
