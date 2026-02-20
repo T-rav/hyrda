@@ -208,4 +208,17 @@ describe('HITLTable component', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
     expect(screen.getByText('No PR')).toBeInTheDocument()
   })
+
+  it('container has overflowX auto for horizontal scrolling', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const table = screen.getByText('Fix widget').closest('table')
+    const container = table.parentElement
+    expect(container.style.overflowX).toBe('auto')
+  })
+
+  it('table has minWidth to prevent column squishing', () => {
+    render(<HITLTable items={mockItems} onRefresh={() => {}} />)
+    const table = screen.getByText('Fix widget').closest('table')
+    expect(table.style.minWidth).toBe('600px')
+  })
 })

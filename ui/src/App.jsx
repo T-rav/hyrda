@@ -128,6 +128,7 @@ const styles = {
     gridTemplateRows: 'auto 1fr',
     gridTemplateColumns: '280px 1fr',
     height: '100vh',
+    minWidth: '1024px',
   },
   main: {
     display: 'flex',
