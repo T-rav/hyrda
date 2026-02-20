@@ -223,6 +223,8 @@ class TestPlannerStatus:
         [
             (PlannerStatus.QUEUED, "queued"),
             (PlannerStatus.PLANNING, "planning"),
+            (PlannerStatus.VALIDATING, "validating"),
+            (PlannerStatus.RETRYING, "retrying"),
             (PlannerStatus.DONE, "done"),
             (PlannerStatus.FAILED, "failed"),
         ],
@@ -233,8 +235,8 @@ class TestPlannerStatus:
     def test_enum_is_string_subclass(self) -> None:
         assert isinstance(PlannerStatus.DONE, str)
 
-    def test_all_four_members_present(self) -> None:
-        assert len(PlannerStatus) == 4
+    def test_all_members_present(self) -> None:
+        assert len(PlannerStatus) == 6
 
     def test_lookup_by_value(self) -> None:
         status = PlannerStatus("planning")
@@ -312,6 +314,25 @@ class TestPlanResult:
         result = PlanResult(issue_number=1, new_issues=[spec])
         assert len(result.new_issues) == 1
         assert result.new_issues[0].title == "Bug"
+
+    def test_validation_errors_defaults_to_empty_list(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.validation_errors == []
+
+    def test_validation_errors_can_be_populated(self) -> None:
+        result = PlanResult(
+            issue_number=1,
+            validation_errors=["Missing section", "Too short"],
+        )
+        assert len(result.validation_errors) == 2
+
+    def test_retry_attempted_defaults_to_false(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.retry_attempted is False
+
+    def test_retry_attempted_can_be_set(self) -> None:
+        result = PlanResult(issue_number=1, retry_attempted=True)
+        assert result.retry_attempted is True
 
     def test_all_fields_set(self) -> None:
         result = PlanResult(
@@ -635,6 +656,7 @@ class TestReviewResult:
             summary="Looks great!",
             fixes_made=True,
             transcript="Reviewed 5 files.",
+            duration_seconds=12.3,
         )
 
         # Assert
@@ -644,6 +666,15 @@ class TestReviewResult:
         assert review.summary == "Looks great!"
         assert review.fixes_made is True
         assert review.transcript == "Reviewed 5 files."
+        assert review.duration_seconds == pytest.approx(12.3)
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=42.5)
+        assert review.duration_seconds == pytest.approx(42.5)
 
     def test_ci_passed_defaults_to_none(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
