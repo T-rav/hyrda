@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
-import os
 from pathlib import Path
 
 from config import HydraConfig
+from subprocess_util import run_subprocess
 
 logger = logging.getLogger("hydra.worktree")
 
@@ -18,7 +17,8 @@ class WorktreeManager:
 
     Each worktree gets:
     - A fresh branch from ``main``
-    - Symlinked ``venv/``, ``.env``, and ``node_modules/`` dirs
+    - An independent venv via ``uv sync``
+    - Symlinked ``.env`` and ``node_modules/`` dirs
     - Copied ``.claude/settings.local.json``
     - Pre-commit hooks installed
     """
@@ -41,16 +41,29 @@ class WorktreeManager:
         wt_path = self._base / f"issue-{issue_number}"
         return wt_path.is_dir()
 
+    async def _delete_local_branch(self, branch: str) -> None:
+        """Delete a local branch if it exists, ignoring errors."""
+        with contextlib.suppress(RuntimeError):
+            await run_subprocess(
+                "git",
+                "branch",
+                "-D",
+                branch,
+                cwd=self._repo_root,
+                gh_token=self._config.gh_token,
+            )
+
     async def _remote_branch_exists(self, branch: str) -> bool:
         """Check whether *branch* exists on the remote."""
         try:
-            output = await self._run(
+            output = await run_subprocess(
                 "git",
                 "ls-remote",
                 "--heads",
                 "origin",
                 branch,
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
             return bool(output.strip())
         except RuntimeError:
@@ -80,6 +93,20 @@ class WorktreeManager:
         # Ensure base directory exists
         self._base.mkdir(parents=True, exist_ok=True)
 
+        # Clean up any stale local branch (from previous runs) to avoid
+        # fetch conflicts and worktree checkout errors
+        await self._delete_local_branch(branch)
+
+        # Fetch latest main so we branch from the latest state
+        await run_subprocess(
+            "git",
+            "fetch",
+            "origin",
+            self._config.main_branch,
+            cwd=self._repo_root,
+            gh_token=self._config.gh_token,
+        )
+
         # Check if the branch already exists on the remote (resumable work)
         if await self._remote_branch_exists(branch):
             logger.info(
@@ -87,36 +114,41 @@ class WorktreeManager:
                 branch,
                 extra={"issue": issue_number},
             )
-            await self._run(
+            await run_subprocess(
                 "git",
                 "fetch",
                 "origin",
-                f"{branch}:{branch}",
+                f"+refs/heads/{branch}:refs/heads/{branch}",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
         else:
             # Create a fresh branch from main
-            await self._run(
+            await run_subprocess(
                 "git",
                 "branch",
                 "-f",
                 branch,
                 f"origin/{self._config.main_branch}",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
 
         # Create the worktree
-        await self._run(
+        await run_subprocess(
             "git",
             "worktree",
             "add",
             str(wt_path),
             branch,
             cwd=self._repo_root,
+            gh_token=self._config.gh_token,
         )
 
         # Set up the environment inside the worktree
         self._setup_env(wt_path)
+        await self._configure_git_identity(wt_path)
+        await self._create_venv(wt_path)
         await self._install_hooks(wt_path)
 
         logger.info(
@@ -134,13 +166,14 @@ class WorktreeManager:
             return
 
         if wt_path.exists():
-            await self._run(
+            await run_subprocess(
                 "git",
                 "worktree",
                 "remove",
                 str(wt_path),
                 "--force",
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
             logger.info(
                 "Destroyed worktree %s",
@@ -151,12 +184,13 @@ class WorktreeManager:
         # Also clean up the branch
         branch = f"agent/issue-{issue_number}"
         with contextlib.suppress(RuntimeError):
-            await self._run(
+            await run_subprocess(
                 "git",
                 "branch",
                 "-D",
                 branch,
                 cwd=self._repo_root,
+                gh_token=self._config.gh_token,
             )
 
     async def destroy_all(self) -> None:
@@ -173,44 +207,120 @@ class WorktreeManager:
 
         # Final prune
         with contextlib.suppress(RuntimeError):
-            await self._run("git", "worktree", "prune", cwd=self._repo_root)
+            await run_subprocess(
+                "git",
+                "worktree",
+                "prune",
+                cwd=self._repo_root,
+                gh_token=self._config.gh_token,
+            )
 
-    async def rebase(self, worktree_path: Path, branch: str) -> bool:
-        """Rebase *branch* onto latest main inside *worktree_path*.
+    async def merge_main(self, worktree_path: Path, branch: str) -> bool:
+        """Merge latest main into *branch* inside *worktree_path*.
+
+        First pulls the branch itself so the local copy is in sync with
+        the remote, then merges ``origin/main``.  Because this uses merge
+        the subsequent push is always fast-forward.
 
         Returns *True* on success, *False* if conflicts arise.
         """
         try:
-            await self._run(
+            await run_subprocess(
                 "git",
                 "fetch",
                 "origin",
                 self._config.main_branch,
+                branch,
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
-            await self._run(
+            # Fast-forward local branch to match remote so push stays ff
+            await run_subprocess(
                 "git",
-                "rebase",
-                f"origin/{self._config.main_branch}",
+                "merge",
+                "--ff-only",
+                f"origin/{branch}",
                 cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            await run_subprocess(
+                "git",
+                "merge",
+                f"origin/{self._config.main_branch}",
+                "--no-edit",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
             )
             return True
         except RuntimeError:
-            # Abort rebase on conflict
+            # Abort merge on conflict
             with contextlib.suppress(RuntimeError):
-                await self._run("git", "rebase", "--abort", cwd=worktree_path)
+                await run_subprocess(
+                    "git",
+                    "merge",
+                    "--abort",
+                    cwd=worktree_path,
+                    gh_token=self._config.gh_token,
+                )
             return False
+
+    async def start_merge_main(self, worktree_path: Path, branch: str) -> bool:
+        """Begin merging main into *branch*, leaving conflicts for manual resolution.
+
+        Like :meth:`merge_main` but does **not** abort on conflict.
+        The caller is expected to resolve the conflict markers and
+        complete the merge with ``git add . && git commit --no-edit``.
+
+        Returns *True* if the merge completed cleanly (no conflicts),
+        *False* if conflicts remain in the working tree.
+        """
+        try:
+            await run_subprocess(
+                "git",
+                "fetch",
+                "origin",
+                self._config.main_branch,
+                branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            # Fast-forward local branch to match remote
+            await run_subprocess(
+                "git",
+                "merge",
+                "--ff-only",
+                f"origin/{branch}",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            await run_subprocess(
+                "git",
+                "merge",
+                f"origin/{self._config.main_branch}",
+                "--no-edit",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return True
+        except RuntimeError:
+            # Leave conflict markers in place — caller will resolve
+            return False
+
+    async def abort_merge(self, worktree_path: Path) -> None:
+        """Abort an in-progress merge in *worktree_path*."""
+        with contextlib.suppress(RuntimeError):
+            await run_subprocess(
+                "git",
+                "merge",
+                "--abort",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
 
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
-        """Symlink venv, .env, and node_modules into the worktree."""
-        # Symlink venv/
-        venv_src = self._repo_root / "venv"
-        venv_dst = wt_path / "venv"
-        if venv_src.exists() and not venv_dst.exists():
-            venv_dst.symlink_to(venv_src)
-
+        """Symlink .env and node_modules into the worktree."""
         # Symlink .env
         env_src = self._repo_root / ".env"
         env_dst = wt_path / ".env"
@@ -232,37 +342,46 @@ class WorktreeManager:
                 nm_dst.parent.mkdir(parents=True, exist_ok=True)
                 nm_dst.symlink_to(nm_src)
 
-    async def _install_hooks(self, wt_path: Path) -> None:
-        """Run ``pre-commit install`` in the worktree."""
-        try:
-            await self._run("pre-commit", "install", cwd=wt_path)
-        except RuntimeError as exc:
-            logger.warning("pre-commit install failed: %s", exc)
-
-    # --- subprocess helper ---
-
-    async def _run(self, *cmd: str, cwd: Path) -> str:
-        """Run a subprocess and return stdout.
-
-        Raises :class:`RuntimeError` on non-zero exit.
-        """
-        env = {**os.environ}
-        # Prevent CLAUDECODE nesting detection
-        env.pop("CLAUDECODE", None)
-        if self._config.gh_token:
-            env["GH_TOKEN"] = self._config.gh_token
-
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
+    async def _configure_git_identity(self, wt_path: Path) -> None:
+        """Set git user.name and user.email in the worktree (local scope)."""
+        if self._config.git_user_name:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.name",
+                self._config.git_user_name,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
             )
-        return stdout.decode().strip()
+        if self._config.git_user_email:
+            await run_subprocess(
+                "git",
+                "config",
+                "user.email",
+                self._config.git_user_email,
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
+
+    async def _create_venv(self, wt_path: Path) -> None:
+        """Create an independent venv in the worktree via ``uv sync``."""
+        try:
+            await run_subprocess(
+                "uv", "sync", cwd=wt_path, gh_token=self._config.gh_token
+            )
+        except RuntimeError as exc:
+            logger.warning("uv sync failed in %s: %s", wt_path, exc)
+
+    async def _install_hooks(self, wt_path: Path) -> None:
+        """Point the worktree at the shared .githooks directory."""
+        try:
+            await run_subprocess(
+                "git",
+                "config",
+                "core.hooksPath",
+                ".githooks",
+                cwd=wt_path,
+                gh_token=self._config.gh_token,
+            )
+        except RuntimeError as exc:
+            logger.warning("git hooks setup failed: %s", exc)

@@ -6,7 +6,6 @@ import asyncio
 import contextlib
 import json
 import logging
-import os
 from pathlib import Path
 
 from agent import AgentRunner
@@ -20,11 +19,13 @@ from models import (
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
+    WorkerStatus,
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
 from reviewer import ReviewRunner
 from state import StateTracker
+from subprocess_util import run_subprocess
 from triage import TriageRunner
 from worktree import WorktreeManager
 
@@ -106,13 +107,14 @@ class HydraOrchestrator:
         self._human_input_responses[issue_number] = answer
         self._human_input_requests.pop(issue_number, None)
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
         self._stop_event.set()
         logger.info("Stop requested — terminating active processes")
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        await self._publish_status()
 
     # Alias for backward compatibility
     request_stop = stop
@@ -202,33 +204,6 @@ class HydraOrchestrator:
 
     # --- Phase implementations ---
 
-    @staticmethod
-    def _parse_raw_issues(raw_issues: list[dict]) -> list[GitHubIssue]:  # type: ignore[type-arg]
-        """Parse raw ``gh issue list`` JSON into :class:`GitHubIssue` objects."""
-        issues: list[GitHubIssue] = []
-        for raw in raw_issues:
-            labels = [
-                lbl["name"] if isinstance(lbl, dict) else str(lbl)
-                for lbl in raw.get("labels", [])
-            ]
-            comments = []
-            for c in raw.get("comments", []):
-                if isinstance(c, dict):
-                    comments.append(c.get("body", ""))
-                else:
-                    comments.append(str(c))
-            issues.append(
-                GitHubIssue(
-                    number=raw["number"],
-                    title=raw.get("title", ""),
-                    body=raw.get("body", ""),
-                    labels=labels,
-                    comments=comments,
-                    url=raw.get("url", ""),
-                )
-            )
-        return issues
-
     async def _fetch_issues_by_labels(
         self,
         labels: list[str],
@@ -265,7 +240,7 @@ class HydraOrchestrator:
             if label is not None:
                 cmd += ["--label", label]
             try:
-                raw = await self._gh_run(*cmd)
+                raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
                 for item in json.loads(raw):
                     seen.setdefault(item["number"], item)
             except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
@@ -290,7 +265,7 @@ class HydraOrchestrator:
         else:
             return []
 
-        issues = self._parse_raw_issues(list(seen.values()))
+        issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
         return issues[:limit]
 
     async def _fetch_plan_issues(self) -> list[GitHubIssue]:
@@ -499,7 +474,7 @@ class HydraOrchestrator:
         for issue in issues:
             branch = f"agent/issue-{issue.number}"
             try:
-                raw = await self._gh_run(
+                raw = await run_subprocess(
                     "gh",
                     "pr",
                     "list",
@@ -513,6 +488,7 @@ class HydraOrchestrator:
                     "number,url,isDraft",
                     "--limit",
                     "1",
+                    gh_token=self._config.gh_token,
                 )
                 prs_json = json.loads(raw)
                 if prs_json:
@@ -532,26 +508,6 @@ class HydraOrchestrator:
         non_draft = [p for p in pr_infos if not p.draft and p.number > 0]
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
-
-    async def _gh_run(self, *cmd: str) -> str:
-        """Run a gh CLI command and return stdout."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
-        if self._config.gh_token:
-            env["GH_TOKEN"] = self._config.gh_token
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise RuntimeError(
-                f"Command {cmd!r} failed (rc={proc.returncode}): "
-                f"{stderr.decode().strip()}"
-            )
-        return stdout.decode().strip()
 
     async def _implement_batch(
         self,
@@ -638,6 +594,8 @@ class HydraOrchestrator:
 
                 status = "success" if result.success else "failed"
                 self._state.mark_issue(issue.number, status)
+                # Release so the review loop can pick it up
+                self._active_issues.discard(issue.number)
                 return result
 
         all_tasks = [
@@ -677,14 +635,58 @@ class HydraOrchestrator:
                         summary="Issue not found",
                     )
 
-                # Get the diff
-                diff = await self._prs.get_pr_diff(pr.number)
-
                 # The reviewer works in the same worktree as the implementation
                 wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
                 if not wt_path.exists():
                     # Create a fresh worktree for review
                     wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
+
+                # Merge main into the branch before reviewing so we review
+                # up-to-date code.  Merge keeps the push fast-forward
+                # so no force-push is needed.
+                merged_main = await self._worktrees.merge_main(wt_path, pr.branch)
+                if not merged_main:
+                    # Conflicts — let the agent try to resolve them
+                    logger.info(
+                        "PR #%d has conflicts with %s — running agent to resolve",
+                        pr.number,
+                        self._config.main_branch,
+                    )
+                    merged_main = await self._resolve_merge_conflicts(
+                        pr, issue, wt_path, worker_id=idx
+                    )
+                if merged_main:
+                    await self._prs.push_branch(wt_path, pr.branch)
+                else:
+                    logger.warning(
+                        "PR #%d merge conflict resolution failed — escalating to HITL",
+                        pr.number,
+                    )
+                    await self._prs.post_pr_comment(
+                        pr.number,
+                        f"**Merge conflicts** with "
+                        f"`{self._config.main_branch}` could not be "
+                        "resolved automatically. "
+                        "Escalating to human review.",
+                    )
+                    for lbl in self._config.review_label:
+                        await self._prs.remove_label(pr.issue_number, lbl)
+                        await self._prs.remove_pr_label(pr.number, lbl)
+                    await self._prs.add_labels(
+                        pr.issue_number, [self._config.hitl_label[0]]
+                    )
+                    await self._prs.add_pr_labels(
+                        pr.number, [self._config.hitl_label[0]]
+                    )
+                    self._active_issues.discard(pr.issue_number)
+                    return ReviewResult(
+                        pr_number=pr.number,
+                        issue_number=pr.issue_number,
+                        summary="Merge conflicts with main — escalated to HITL",
+                    )
+
+                # Get the diff (after rebase so it reflects current main)
+                diff = await self._prs.get_pr_diff(pr.number)
 
                 result = await self._reviewers.review(
                     pr, issue, wt_path, diff, worker_id=idx
@@ -698,10 +700,12 @@ class HydraOrchestrator:
                 if result.summary and pr.number > 0:
                     await self._prs.post_pr_comment(pr.number, result.summary)
 
-                # Submit formal GitHub PR review
-                if pr.number > 0:
+                # Submit formal GitHub PR review for non-approve verdicts.
+                # Approve is skipped to avoid "cannot approve your own PR"
+                # errors — Hydra merges directly once CI passes.
+                if pr.number > 0 and result.verdict != ReviewVerdict.APPROVE:
                     await self._prs.submit_review(
-                        pr.number, result.verdict.value, result.summary
+                        pr.number, result.verdict, result.summary
                     )
 
                 self._state.mark_pr(pr.number, result.verdict.value)
@@ -726,6 +730,27 @@ class HydraOrchestrator:
                             await self._prs.add_labels(
                                 pr.issue_number, [self._config.fixed_label[0]]
                             )
+                        else:
+                            logger.warning(
+                                "PR #%d merge failed — escalating to HITL",
+                                pr.number,
+                            )
+                            await self._prs.post_pr_comment(
+                                pr.number,
+                                "**Merge failed** — PR could not be merged. "
+                                "Escalating to human review.",
+                            )
+                            for lbl in self._config.review_label:
+                                await self._prs.remove_label(pr.issue_number, lbl)
+                                await self._prs.remove_pr_label(pr.number, lbl)
+                            await self._prs.add_labels(
+                                pr.issue_number,
+                                [self._config.hitl_label[0]],
+                            )
+                            await self._prs.add_pr_labels(
+                                pr.number,
+                                [self._config.hitl_label[0]],
+                            )
 
                 # Cleanup worktree after review
                 try:
@@ -738,6 +763,8 @@ class HydraOrchestrator:
                         exc,
                     )
 
+                # Release so issue can be re-reviewed if needed
+                self._active_issues.discard(pr.issue_number)
                 return result
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
@@ -745,6 +772,111 @@ class HydraOrchestrator:
             results.append(await task)
 
         return results
+
+    async def _resolve_merge_conflicts(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        worker_id: int,
+    ) -> bool:
+        """Use the implementation agent to resolve merge conflicts.
+
+        Starts a merge (leaving conflict markers), runs the agent to
+        resolve them, and verifies the result with ``make quality``.
+        Returns *True* if the conflicts were resolved successfully.
+        """
+        # Start merge leaving conflict markers in place
+        clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
+        if clean:
+            # No conflicts after all (race / already resolved)
+            return True
+
+        try:
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.RUNNING.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
+
+            prompt = (
+                f"The branch for issue #{issue.number} ({issue.title}) has "
+                f"merge conflicts with main.\n\n"
+                "There is a `git merge` in progress with conflict markers "
+                "in the working tree.\n\n"
+                "## Instructions\n\n"
+                "1. Run `git diff --name-only --diff-filter=U` to list "
+                "conflicted files.\n"
+                "2. Open each conflicted file, understand both sides of the "
+                "conflict, and resolve the markers.\n"
+                "3. Stage all resolved files with `git add`.\n"
+                "4. Complete the merge with "
+                "`git commit --no-edit`.\n"
+                "5. Run `make quality` to ensure everything passes.\n"
+                "6. If quality fails, fix the issues and commit again.\n\n"
+                "## Rules\n\n"
+                "- Keep the intent of the original PR changes.\n"
+                "- Incorporate upstream (main) changes correctly.\n"
+                "- Do NOT push to remote. Do NOT create pull requests.\n"
+                "- Ensure `make quality` passes before finishing.\n"
+            )
+
+            cmd = self._agents._build_command(wt_path)
+            await self._agents._execute(cmd, prompt, wt_path, issue.number)
+
+            # Verify quality passes
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.TESTING.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
+            success, _ = await self._agents._verify_result(wt_path, pr.branch)
+
+            status = WorkerStatus.DONE if success else WorkerStatus.FAILED
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": status.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
+            return success
+        except Exception as exc:
+            logger.error(
+                "Conflict resolution agent failed for PR #%d: %s",
+                pr.number,
+                exc,
+            )
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={
+                        "issue": issue.number,
+                        "worker": worker_id,
+                        "status": WorkerStatus.FAILED.value,
+                        "role": "conflict-resolver",
+                    },
+                )
+            )
+            # Abort the merge to leave a clean state
+            await self._worktrees.abort_merge(wt_path)
+            return False
 
     async def _wait_and_fix_ci(
         self,
@@ -809,7 +941,9 @@ class HydraOrchestrator:
         # Swap to HITL label so the dashboard HITL tab picks it up
         for lbl in self._config.review_label:
             await self._prs.remove_label(issue.number, lbl)
+            await self._prs.remove_pr_label(pr.number, lbl)
         await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+        await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
         return False
 
     async def _set_phase(self, phase: Phase) -> None:

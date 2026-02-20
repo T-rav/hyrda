@@ -29,6 +29,14 @@ def make_state(tmp_path: Path) -> StateTracker:
     return StateTracker(tmp_path / "state.json")
 
 
+def _make_gh_proc(stdout: str = "[]", returncode: int = 0) -> AsyncMock:
+    """Build a mock for asyncio.create_subprocess_exec returning *stdout*."""
+    proc = AsyncMock()
+    proc.returncode = returncode
+    proc.communicate = AsyncMock(return_value=(stdout.encode(), b""))
+    return proc
+
+
 def make_orchestrator_mock(
     requests: dict | None = None,
     running: bool = False,
@@ -40,9 +48,8 @@ def make_orchestrator_mock(
     orch.provide_human_input = MagicMock()
     orch.running = running
     orch.run_status = run_status
-    orch.stop = MagicMock()
-    orch.request_stop = MagicMock()
-    orch._publish_status = AsyncMock()
+    orch.stop = AsyncMock()
+    orch.request_stop = AsyncMock()
     return orch
 
 
@@ -179,6 +186,35 @@ class TestIndexRoute:
 
         assert response.status_code == 200
         assert "<h1>" in response.text
+
+
+# ---------------------------------------------------------------------------
+# Accessibility
+# ---------------------------------------------------------------------------
+
+
+class TestAccessibility:
+    """Tests for accessibility attributes in the dashboard HTML."""
+
+    @pytest.mark.skip(
+        reason="aria attribute is rendered by React in the browser, not in the HTML shell"
+    )
+    def test_human_input_field_has_aria_labelledby(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The human-input field must be linked to its label for screen readers."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/")
+
+        assert 'aria-labelledby="human-input-question"' in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +426,257 @@ class TestEventsRoute:
 
         assert len(body) == 1
         assert body[0]["type"] == EventType.BATCH_START.value
+
+
+# ---------------------------------------------------------------------------
+# GET /api/prs
+# ---------------------------------------------------------------------------
+
+
+class TestPRsRoute:
+    """Tests for the GET /api/prs route."""
+
+    def test_prs_returns_200(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc()):
+            response = client.get("/api/prs")
+
+        assert response.status_code == 200
+
+    def test_prs_returns_empty_list_when_no_open_prs(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch("asyncio.create_subprocess_exec", return_value=_make_gh_proc("[]")):
+            response = client.get("/api/prs")
+
+        assert response.json() == []
+
+    def test_prs_returns_empty_list_on_gh_failure(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc("", returncode=1),
+        ):
+            response = client.get("/api/prs")
+
+        assert response.json() == []
+
+    def test_prs_happy_path_returns_pr_list(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 10,
+                    "url": "https://github.com/org/repo/pull/10",
+                    "headRefName": "agent/issue-42",
+                    "isDraft": False,
+                    "title": "Fix widget",
+                },
+                {
+                    "number": 11,
+                    "url": "https://github.com/org/repo/pull/11",
+                    "headRefName": "agent/issue-55",
+                    "isDraft": True,
+                    "title": "Add feature",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 2
+
+        assert body[0]["pr"] == 10
+        assert body[0]["issue"] == 42
+        assert body[0]["branch"] == "agent/issue-42"
+        assert body[0]["url"] == "https://github.com/org/repo/pull/10"
+        assert body[0]["draft"] is False
+        assert body[0]["title"] == "Fix widget"
+
+        assert body[1]["pr"] == 11
+        assert body[1]["issue"] == 55
+        assert body[1]["branch"] == "agent/issue-55"
+        assert body[1]["draft"] is True
+        assert body[1]["title"] == "Add feature"
+
+    def test_prs_includes_all_expected_fields(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 7,
+                    "url": "https://github.com/org/repo/pull/7",
+                    "headRefName": "agent/issue-99",
+                    "isDraft": False,
+                    "title": "Some PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 1
+        expected_keys = {"pr", "issue", "branch", "url", "draft", "title"}
+        assert set(body[0].keys()) == expected_keys
+
+    def test_prs_deduplicates_across_labels(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        # Same PR returned for every label query
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 42,
+                    "url": "https://github.com/org/repo/pull/42",
+                    "headRefName": "agent/issue-10",
+                    "isDraft": False,
+                    "title": "Duplicate PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        # Even though 5 labels each return the same PR, it should appear once
+        assert len(body) == 1
+        assert body[0]["pr"] == 42
+
+    def test_prs_non_standard_branch_sets_issue_to_zero(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        import json as _json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        pr_data = _json.dumps(
+            [
+                {
+                    "number": 5,
+                    "url": "https://github.com/org/repo/pull/5",
+                    "headRefName": "feature/my-branch",
+                    "isDraft": False,
+                    "title": "Manual PR",
+                },
+            ]
+        )
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc(pr_data),
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
+        assert len(body) == 1
+        assert body[0]["issue"] == 0
+        assert body[0]["branch"] == "feature/my-branch"
+
+    def test_prs_returns_empty_on_malformed_json(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "asyncio.create_subprocess_exec",
+            return_value=_make_gh_proc("not valid json"),
+        ):
+            response = client.get("/api/prs")
+
+        # The outer try/except catches the JSON error and returns []
+        assert response.json() == []
 
 
 # ---------------------------------------------------------------------------
@@ -918,16 +1205,276 @@ class TestControlStatusEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/hitl
+# WebSocket /ws
 # ---------------------------------------------------------------------------
 
 
-def _make_gh_proc(stdout: str = "[]", returncode: int = 0) -> AsyncMock:
-    """Build a mock for asyncio.create_subprocess_exec returning *stdout*."""
-    proc = AsyncMock()
-    proc.returncode = returncode
-    proc.communicate = AsyncMock(return_value=(stdout.encode(), b""))
-    return proc
+class TestWebSocketEndpoint:
+    """Tests for the WebSocket /ws endpoint."""
+
+    def test_websocket_connects_successfully(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws"):
+            pass  # Connection opens and closes without error
+
+    def test_websocket_receives_history_on_connect(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+
+        async def publish_events() -> None:
+            await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"batch": 1}))
+            await bus.publish(
+                HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "implement"})
+            )
+
+        asyncio.run(publish_events())
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            msg1 = json.loads(ws.receive_text())
+            msg2 = json.loads(ws.receive_text())
+
+        assert msg1["type"] == "batch_start"
+        assert msg1["data"]["batch"] == 1
+        assert msg2["type"] == "phase_change"
+        assert msg2["data"]["phase"] == "implement"
+
+    def test_websocket_history_events_are_valid_json(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+
+        async def publish() -> None:
+            await bus.publish(
+                HydraEvent(
+                    type=EventType.WORKER_UPDATE,
+                    data={"issue": 42, "status": "running"},
+                )
+            )
+
+        asyncio.run(publish())
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            raw = ws.receive_text()
+
+        parsed = json.loads(raw)
+        assert "type" in parsed
+        assert "timestamp" in parsed
+        assert "data" in parsed
+        assert parsed["type"] == "worker_update"
+        assert parsed["data"]["issue"] == 42
+
+    def test_websocket_receives_live_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        event = HydraEvent(type=EventType.PR_CREATED, data={"pr": 99})
+
+        original_subscribe = bus.subscribe
+
+        def subscribe_with_preload(
+            *_args: object, **_kwargs: object
+        ) -> asyncio.Queue[HydraEvent]:
+            queue = original_subscribe()
+            queue.put_nowait(event)
+            return queue
+
+        bus.subscribe = subscribe_with_preload  # type: ignore[assignment]
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            msg = json.loads(ws.receive_text())
+
+        assert msg["type"] == "pr_created"
+        assert msg["data"]["pr"] == 99
+
+    def test_websocket_subscribes_to_event_bus_on_connect(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+
+        original_subscribe = bus.subscribe
+
+        def subscribe_with_preload(
+            *_args: object, **_kwargs: object
+        ) -> asyncio.Queue[HydraEvent]:
+            queue = original_subscribe()
+            queue.put_nowait(event)
+            return queue
+
+        bus.subscribe = subscribe_with_preload  # type: ignore[assignment]
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+            assert len(bus._subscribers) >= 1
+
+    def test_websocket_unsubscribes_on_disconnect(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import time
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+
+        original_subscribe = bus.subscribe
+
+        def subscribe_with_preload(
+            *_args: object, **_kwargs: object
+        ) -> asyncio.Queue[HydraEvent]:
+            queue = original_subscribe()
+            queue.put_nowait(event)
+            return queue
+
+        bus.subscribe = subscribe_with_preload  # type: ignore[assignment]
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            ws.receive_text()
+
+        # Poll briefly for async cleanup
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            if len(bus._subscribers) == 0:
+                break
+            time.sleep(0.05)
+
+        assert len(bus._subscribers) == 0
+
+    def test_multiple_websocket_clients_receive_same_history(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+
+        async def publish_events() -> None:
+            await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"batch": 1}))
+            await bus.publish(
+                HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "plan"})
+            )
+
+        asyncio.run(publish_events())
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws") as ws1:
+            msgs1 = [json.loads(ws1.receive_text()) for _ in range(2)]
+
+        with client.websocket_connect("/ws") as ws2:
+            msgs2 = [json.loads(ws2.receive_text()) for _ in range(2)]
+
+        assert msgs1[0]["type"] == msgs2[0]["type"]
+        assert msgs1[0]["data"] == msgs2[0]["data"]
+        assert msgs1[1]["type"] == msgs2[1]["type"]
+        assert msgs1[1]["data"] == msgs2[1]["data"]
+
+    def test_websocket_sends_multiple_history_events_in_order(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        import json
+
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+
+        async def publish_events() -> None:
+            await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"step": 1}))
+            await bus.publish(HydraEvent(type=EventType.PHASE_CHANGE, data={"step": 2}))
+            await bus.publish(
+                HydraEvent(type=EventType.WORKER_UPDATE, data={"step": 3})
+            )
+
+        asyncio.run(publish_events())
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with client.websocket_connect("/ws") as ws:
+            msgs = [json.loads(ws.receive_text()) for _ in range(3)]
+
+        assert msgs[0]["type"] == "batch_start"
+        assert msgs[1]["type"] == "phase_change"
+        assert msgs[2]["type"] == "worker_update"
+        assert msgs[0]["data"]["step"] == 1
+        assert msgs[1]["data"]["step"] == 2
+        assert msgs[2]["data"]["step"] == 3
+
+
+# ---------------------------------------------------------------------------
+# GET /api/hitl
+# ---------------------------------------------------------------------------
 
 
 class TestHITLRoute:
@@ -1071,3 +1618,107 @@ class TestHITLRoute:
         assert len(body) == 1
         assert body[0]["pr"] == 0
         assert body[0]["prUrl"] == ""
+
+
+# ---------------------------------------------------------------------------
+# WebSocket error logging
+# ---------------------------------------------------------------------------
+
+
+class TestWebSocketErrorLogging:
+    """Tests that unexpected WebSocket errors are logged, not silently swallowed."""
+
+    def test_websocket_logs_warning_on_history_replay_error(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """When send_text raises during history replay, a warning is logged."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+
+        # Publish an event so history is non-empty
+        async def publish() -> None:
+            await bus.publish(HydraEvent(type=EventType.BATCH_START, data={"batch": 1}))
+
+        asyncio.run(publish())
+
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        with patch("dashboard.logger") as mock_logger:
+            with (
+                patch(
+                    "starlette.websockets.WebSocket.send_text",
+                    side_effect=RuntimeError("serialization failed"),
+                ),
+                client.websocket_connect("/ws"),
+            ):
+                pass
+
+            mock_logger.warning.assert_any_call(
+                "WebSocket error during history replay", exc_info=True
+            )
+
+    def test_websocket_logs_warning_on_live_stream_error(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """When send_text raises during live streaming, a warning is logged."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        # Pre-populate a queue with one event so queue.get() returns immediately
+        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+        pre_populated_queue: asyncio.Queue[HydraEvent] = asyncio.Queue()
+        pre_populated_queue.put_nowait(event)
+
+        with patch("dashboard.logger") as mock_logger:
+            # subscribe() returns the pre-populated queue (no history, so
+            # send_text is only called during the live streaming phase)
+            with (
+                patch.object(bus, "subscribe", return_value=pre_populated_queue),
+                patch.object(bus, "get_history", return_value=[]),
+                patch(
+                    "starlette.websockets.WebSocket.send_text",
+                    side_effect=RuntimeError("live stream send failed"),
+                ),
+                client.websocket_connect("/ws"),
+            ):
+                pass
+
+            mock_logger.warning.assert_any_call(
+                "WebSocket error during live streaming", exc_info=True
+            )
+
+    def test_websocket_disconnect_not_logged(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        """WebSocketDisconnect should be handled silently (no warning logged)."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, bus, state)
+        app = dashboard.create_app()
+        client = TestClient(app)
+
+        with patch("dashboard.logger") as mock_logger:
+            with client.websocket_connect("/ws"):
+                # Just connect and disconnect normally
+                pass
+
+            # logger.warning should NOT have been called with WebSocket error messages
+            for call in mock_logger.warning.call_args_list:
+                assert "WebSocket error" not in str(call)

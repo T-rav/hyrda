@@ -70,19 +70,33 @@ export function TranscriptView({ workers, selectedWorker }) {
   )
 }
 
+const mdStyles = {
+  h1: { fontSize: 16, fontWeight: 700, color: '#e6edf3', margin: '8px 0 4px' },
+  h2: { fontSize: 14, fontWeight: 700, color: '#e6edf3', margin: '6px 0 3px' },
+  h3: { fontSize: 13, fontWeight: 600, color: '#e6edf3', margin: '4px 0 2px' },
+  inlineCode: { background: '#161b22', padding: '2px 5px', borderRadius: 4, fontSize: 11, color: '#79c0ff' },
+  pre: { background: '#161b22', padding: 8, borderRadius: 6, overflowX: 'auto', fontSize: 11, lineHeight: 1.5, margin: '4px 0' },
+  codeBlock: { color: '#e6edf3' },
+  ul: { margin: '2px 0', paddingLeft: 20 },
+  ol: { margin: '2px 0', paddingLeft: 20 },
+  li: { margin: '1px 0' },
+  strong: { color: '#e6edf3' },
+  p: { margin: '2px 0' },
+}
+
 const mdComponents = {
-  h1: ({ children }) => <h1 style={{ fontSize: 16, fontWeight: 700, color: '#e6edf3', margin: '8px 0 4px' }}>{children}</h1>,
-  h2: ({ children }) => <h2 style={{ fontSize: 14, fontWeight: 700, color: '#e6edf3', margin: '6px 0 3px' }}>{children}</h2>,
-  h3: ({ children }) => <h3 style={{ fontSize: 13, fontWeight: 600, color: '#e6edf3', margin: '4px 0 2px' }}>{children}</h3>,
+  h1: ({ children }) => <h1 style={mdStyles.h1}>{children}</h1>,
+  h2: ({ children }) => <h2 style={mdStyles.h2}>{children}</h2>,
+  h3: ({ children }) => <h3 style={mdStyles.h3}>{children}</h3>,
   code: ({ inline, children }) =>
     inline
-      ? <code style={{ background: '#161b22', padding: '2px 5px', borderRadius: 4, fontSize: 11, color: '#79c0ff' }}>{children}</code>
-      : <pre style={{ background: '#161b22', padding: 8, borderRadius: 6, overflowX: 'auto', fontSize: 11, lineHeight: 1.5, margin: '4px 0' }}><code style={{ color: '#e6edf3' }}>{children}</code></pre>,
-  ul: ({ children }) => <ul style={{ margin: '2px 0', paddingLeft: 20 }}>{children}</ul>,
-  ol: ({ children }) => <ol style={{ margin: '2px 0', paddingLeft: 20 }}>{children}</ol>,
-  li: ({ children }) => <li style={{ margin: '1px 0' }}>{children}</li>,
-  strong: ({ children }) => <strong style={{ color: '#e6edf3' }}>{children}</strong>,
-  p: ({ children }) => <p style={{ margin: '2px 0' }}>{children}</p>,
+      ? <code style={mdStyles.inlineCode}>{children}</code>
+      : <pre style={mdStyles.pre}><code style={mdStyles.codeBlock}>{children}</code></pre>,
+  ul: ({ children }) => <ul style={mdStyles.ul}>{children}</ul>,
+  ol: ({ children }) => <ol style={mdStyles.ol}>{children}</ol>,
+  li: ({ children }) => <li style={mdStyles.li}>{children}</li>,
+  strong: ({ children }) => <strong style={mdStyles.strong}>{children}</strong>,
+  p: ({ children }) => <p style={mdStyles.p}>{children}</p>,
 }
 
 const styles = {

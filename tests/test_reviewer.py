@@ -215,11 +215,12 @@ async def test_review_success_path(config, event_bus, pr_info, issue, tmp_path):
     )
 
     mock_execute = AsyncMock(return_value=transcript)
-    mock_has_commits = AsyncMock(return_value=False)
+    mock_has_changes = AsyncMock(return_value=False)
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", mock_execute),
-        patch.object(runner, "_has_new_commits", mock_has_commits),
+        patch.object(runner, "_has_changes", mock_has_changes),
         patch.object(runner, "_save_transcript"),
     ):
         result = await runner.review(pr_info, issue, tmp_path, "some diff", worker_id=0)
@@ -242,11 +243,12 @@ async def test_review_success_path_with_fixes(
     )
 
     mock_execute = AsyncMock(return_value=transcript)
-    mock_has_commits = AsyncMock(return_value=True)
+    mock_has_changes = AsyncMock(return_value=True)
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", mock_execute),
-        patch.object(runner, "_has_new_commits", mock_has_commits),
+        patch.object(runner, "_has_changes", mock_has_changes),
         patch.object(runner, "_save_transcript"),
     ):
         result = await runner.review(pr_info, issue, tmp_path, "some diff")
@@ -268,7 +270,10 @@ async def test_review_failure_path_on_exception(
 
     mock_execute = AsyncMock(side_effect=RuntimeError("subprocess crashed"))
 
-    with patch.object(runner, "_execute", mock_execute):
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", mock_execute),
+    ):
         result = await runner.review(pr_info, issue, tmp_path, "some diff")
 
     assert result.verdict == ReviewVerdict.COMMENT
@@ -340,8 +345,9 @@ async def test_review_events_include_reviewer_role(
     transcript = "All good.\nVERDICT: APPROVE\nSUMMARY: Looks great"
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
-        patch.object(runner, "_has_new_commits", AsyncMock(return_value=False)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
         patch.object(runner, "_save_transcript"),
     ):
         await runner.review(pr_info, issue, tmp_path, "diff", worker_id=1)
@@ -377,8 +383,9 @@ async def test_review_publishes_review_update_events(
     transcript = "All good.\nVERDICT: APPROVE\nSUMMARY: Looks great"
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
-        patch.object(runner, "_has_new_commits", AsyncMock(return_value=False)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
         patch.object(runner, "_save_transcript"),
     ):
         await runner.review(pr_info, issue, tmp_path, "diff", worker_id=2)
@@ -402,8 +409,9 @@ async def test_review_start_event_includes_worker_id(
     transcript = "VERDICT: APPROVE\nSUMMARY: ok"
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
-        patch.object(runner, "_has_new_commits", AsyncMock(return_value=False)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
         patch.object(runner, "_save_transcript"),
     ):
         await runner.review(pr_info, issue, tmp_path, "diff", worker_id=3)
@@ -427,8 +435,9 @@ async def test_review_done_event_includes_verdict_and_duration(
     transcript = "VERDICT: REQUEST_CHANGES\nSUMMARY: needs work"
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
-        patch.object(runner, "_has_new_commits", AsyncMock(return_value=False)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
         patch.object(runner, "_save_transcript"),
     ):
         await runner.review(pr_info, issue, tmp_path, "diff")
@@ -458,43 +467,161 @@ async def test_review_dry_run_still_publishes_review_update_event(
 
 
 # ---------------------------------------------------------------------------
-# _has_new_commits
+# _get_head_sha
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_has_new_commits_returns_true_when_staged(config, event_bus, tmp_path):
+async def test_get_head_sha_returns_sha(config, event_bus, tmp_path):
     runner = _make_runner(config, event_bus)
-    # returncode != 0 means there are staged changes
-    mock_create = make_streaming_proc(returncode=1)
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"abc123def456\n", b""))
+    mock_create = AsyncMock(return_value=mock_proc)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await runner._has_new_commits(tmp_path)
+        result = await runner._get_head_sha(tmp_path)
+
+    assert result == "abc123def456"
+
+
+@pytest.mark.asyncio
+async def test_get_head_sha_returns_none_on_failure(config, event_bus, tmp_path):
+    runner = _make_runner(config, event_bus)
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 128
+    mock_proc.communicate = AsyncMock(return_value=(b"", b"fatal: not a git repo"))
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await runner._get_head_sha(tmp_path)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_head_sha_returns_none_on_file_not_found(config, event_bus, tmp_path):
+    runner = _make_runner(config, event_bus)
+    mock_create = AsyncMock(side_effect=FileNotFoundError("git not found"))
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await runner._get_head_sha(tmp_path)
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _has_changes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_has_changes_true_when_head_moved(config, event_bus, tmp_path):
+    runner = _make_runner(config, event_bus)
+
+    with patch.object(runner, "_get_head_sha", AsyncMock(return_value="def456")):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
 
     assert result is True
 
 
 @pytest.mark.asyncio
-async def test_has_new_commits_returns_false_when_clean(config, event_bus, tmp_path):
+async def test_has_changes_true_when_uncommitted_changes(config, event_bus, tmp_path):
     runner = _make_runner(config, event_bus)
-    # returncode 0 means no staged changes
-    mock_create = make_streaming_proc(returncode=0)
+    # Same SHA (no new commits), but dirty working tree
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b" M foo.py\n", b""))
+    mock_create = AsyncMock(return_value=mock_proc)
 
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await runner._has_new_commits(tmp_path)
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch("asyncio.create_subprocess_exec", mock_create),
+    ):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_has_changes_false_when_clean(config, event_bus, tmp_path):
+    runner = _make_runner(config, event_bus)
+    # Same SHA and clean status
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch("asyncio.create_subprocess_exec", mock_create),
+    ):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
 
     assert result is False
 
 
 @pytest.mark.asyncio
-async def test_has_new_commits_returns_false_on_file_not_found(
+async def test_has_changes_true_when_both_commits_and_dirty(
     config, event_bus, tmp_path
 ):
     runner = _make_runner(config, event_bus)
-    mock_create = AsyncMock(side_effect=FileNotFoundError("git not found"))
+    # HEAD moved — should return True immediately without checking status
 
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await runner._has_new_commits(tmp_path)
+    with patch.object(runner, "_get_head_sha", AsyncMock(return_value="def456")):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_has_changes_false_on_file_not_found(config, event_bus, tmp_path):
+    runner = _make_runner(config, event_bus)
+
+    with patch.object(
+        runner, "_get_head_sha", AsyncMock(side_effect=FileNotFoundError)
+    ):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_has_changes_true_when_before_sha_none_and_dirty(
+    config, event_bus, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+    # before_sha is None (e.g., empty repo) — falls through to status check
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"?? new_file.py\n", b""))
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch("asyncio.create_subprocess_exec", mock_create),
+    ):
+        result = await runner._has_changes(tmp_path, before_sha=None)
+
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_has_changes_false_when_before_sha_none_and_clean(
+    config, event_bus, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+    # before_sha is None, clean status
+    mock_proc = AsyncMock()
+    mock_proc.returncode = 0
+    mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch("asyncio.create_subprocess_exec", mock_create),
+    ):
+        result = await runner._has_changes(tmp_path, before_sha=None)
 
     assert result is False
 
@@ -579,6 +706,19 @@ async def test_execute_publishes_transcript_line_events(
         assert ev.data["source"] == "reviewer"
 
 
+@pytest.mark.asyncio
+async def test_execute_uses_large_stream_limit(config, event_bus, pr_info, tmp_path):
+    """_execute should set limit=1MB to handle large stream-json lines."""
+    runner = _make_runner(config, event_bus)
+    mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+    with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
+        await runner._execute(["claude", "-p"], "prompt", tmp_path, pr_info.number)
+
+    kwargs = mock_exec.call_args[1]
+    assert kwargs["limit"] == 1024 * 1024
+
+
 # ---------------------------------------------------------------------------
 # _build_ci_fix_prompt
 # ---------------------------------------------------------------------------
@@ -616,11 +756,12 @@ async def test_fix_ci_success_path(config, event_bus, pr_info, issue, tmp_path):
     transcript = "Fixed lint.\nVERDICT: APPROVE\nSUMMARY: Fixed CI failures"
 
     mock_execute = AsyncMock(return_value=transcript)
-    mock_has_commits = AsyncMock(return_value=True)
+    mock_has_changes = AsyncMock(return_value=True)
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", mock_execute),
-        patch.object(runner, "_has_new_commits", mock_has_commits),
+        patch.object(runner, "_has_changes", mock_has_changes),
         patch.object(runner, "_save_transcript"),
     ):
         result = await runner.fix_ci(
@@ -643,7 +784,10 @@ async def test_fix_ci_failure_path(config, event_bus, pr_info, issue, tmp_path):
 
     mock_execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
 
-    with patch.object(runner, "_execute", mock_execute):
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", mock_execute),
+    ):
         result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
 
     assert result.verdict == ReviewVerdict.REQUEST_CHANGES
@@ -680,8 +824,9 @@ async def test_fix_ci_publishes_ci_check_events(
     transcript = "VERDICT: APPROVE\nSUMMARY: Fixed"
 
     with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
         patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
-        patch.object(runner, "_has_new_commits", AsyncMock(return_value=True)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=True)),
         patch.object(runner, "_save_transcript"),
     ):
         await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
