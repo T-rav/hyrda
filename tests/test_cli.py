@@ -296,6 +296,11 @@ class TestBuildConfig:
         cfg = build_config(args)
         assert cfg.min_plan_words == 300
 
+    def test_lite_plan_labels_passed_through(self) -> None:
+        args = parse_args(["--lite-plan-labels", "hotfix,patch,minor"])
+        cfg = build_config(args)
+        assert cfg.lite_plan_labels == ["hotfix", "patch", "minor"]
+
     def test_git_user_name_passed_through(self) -> None:
         args = parse_args(["--git-user-name", "T-rav-Hydra-Ops"])
         cfg = build_config(args)

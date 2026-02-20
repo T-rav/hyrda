@@ -67,6 +67,7 @@ class ConfigFactory:
         planner_budget_usd: float = 1.0,
         min_plan_words: int = 200,
         max_new_files_warning: int = 5,
+        lite_plan_labels: list[str] | None = None,
         repo: str = "test-org/test-repo",
         dry_run: bool = False,
         gh_token: str = "",
@@ -109,6 +110,9 @@ class ConfigFactory:
             planner_budget_usd=planner_budget_usd,
             min_plan_words=min_plan_words,
             max_new_files_warning=max_new_files_warning,
+            lite_plan_labels=lite_plan_labels
+            if lite_plan_labels is not None
+            else ["bug", "typo", "docs"],
             repo=repo,
             dry_run=dry_run,
             gh_token=gh_token,

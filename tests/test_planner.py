@@ -1259,3 +1259,231 @@ def test_build_retry_prompt_includes_clarification_instruction(
     runner = _make_runner(config, event_bus)
     prompt = runner._build_retry_prompt(issue, "failed plan", ["some error"])
     assert "NEEDS CLARIFICATION" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Scale detection
+# ---------------------------------------------------------------------------
+
+
+def test_detect_plan_scale_lite_by_label(config, event_bus):
+    """Issues with a lite-plan label (e.g. 'bug') get a lite plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash", labels=["bug"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_lite_label_case_insensitive(config, event_bus):
+    """Label matching is case-insensitive."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix typo", labels=["BUG"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_lite_by_short_body_and_title(config, event_bus):
+    """Short body + small-fix title keyword → lite plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1, title="Fix typo in README", body="Small change needed.", labels=[]
+    )
+    assert runner._detect_plan_scale(issue) == "lite"
+
+
+def test_detect_plan_scale_full_by_default(config, event_bus):
+    """Issues without lite labels or short body default to full plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1,
+        title="Add authentication system",
+        body="A" * 600,
+        labels=["feature"],
+    )
+    assert runner._detect_plan_scale(issue) == "full"
+
+
+def test_detect_plan_scale_short_body_but_no_fix_keyword(config, event_bus):
+    """Short body without small-fix keyword in title → full plan."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(
+        number=1,
+        title="Implement new auth system",
+        body="Short body",
+        labels=[],
+    )
+    assert runner._detect_plan_scale(issue) == "full"
+
+
+def test_detect_plan_scale_custom_lite_labels(event_bus, tmp_path):
+    """Custom lite_plan_labels config is respected."""
+    from models import GitHubIssue
+
+    cfg = ConfigFactory.create(
+        lite_plan_labels=["hotfix", "patch"],
+        repo_root=tmp_path,
+    )
+    runner = _make_runner(cfg, event_bus)
+    issue = GitHubIssue(number=1, title="Critical fix", labels=["hotfix"])
+    assert runner._detect_plan_scale(issue) == "lite"
+
+    issue2 = GitHubIssue(number=2, title="Add authentication", labels=["bug"])
+    assert runner._detect_plan_scale(issue2) == "full"
+
+
+# ---------------------------------------------------------------------------
+# Lite plan validation
+# ---------------------------------------------------------------------------
+
+
+def _lite_plan() -> str:
+    """Return a plan with only lite-required sections."""
+    return (
+        "## Files to Modify\n\n"
+        "- src/app.py — fix the crash\n\n"
+        "## Implementation Steps\n\n"
+        "1. Identify the root cause in app.py\n"
+        "2. Apply the fix to the affected function\n"
+        "3. Add error handling for edge case\n\n"
+        "## Testing Strategy\n\n"
+        "- Add tests/test_app.py for the crash scenario\n"
+    )
+
+
+def test_validate_lite_plan_accepts_three_sections(config, event_bus):
+    """A lite plan with only 3 sections passes validation."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    errors = runner._validate_plan(issue, _lite_plan(), scale="lite")
+    assert errors == []
+
+
+def test_validate_lite_plan_no_minimum_word_count(config, event_bus):
+    """Lite plans skip the minimum word count check."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    # _lite_plan() is well under 200 words
+    errors = runner._validate_plan(issue, _lite_plan(), scale="lite")
+    assert not any("words" in e for e in errors)
+
+
+def test_validate_lite_plan_rejects_missing_required_section(config, event_bus):
+    """Lite plan missing a required section (e.g. Testing Strategy) is rejected."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix crash")
+    plan = _lite_plan().replace("## Testing Strategy", "## Tests")
+    errors = runner._validate_plan(issue, plan, scale="lite")
+    assert any("Testing Strategy" in e for e in errors)
+
+
+def test_validate_full_plan_rejects_lite_sections_only(config, event_bus):
+    """A full plan with only 3 sections fails (missing Acceptance Criteria etc.)."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Add feature")
+    errors = runner._validate_plan(issue, _lite_plan(), scale="full")
+    missing = [e for e in errors if "Missing required section" in e]
+    assert (
+        len(missing) >= 3
+    )  # Missing New Files, Acceptance Criteria, Key Considerations
+
+
+# ---------------------------------------------------------------------------
+# Lite plan — Phase -1 gates skipped
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_lite_plan_skips_phase_minus_one_gates(config, event_bus):
+    """Lite plan issues should not run Phase -1 gates."""
+    from models import GitHubIssue
+
+    runner = _make_runner(config, event_bus)
+    issue = GitHubIssue(number=1, title="Fix typo", labels=["bug"])
+
+    lite_transcript = f"PLAN_START\n{_lite_plan()}\nPLAN_END\nSUMMARY: Fix the crash"
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=lite_transcript)),
+        patch.object(runner, "_save_transcript"),
+        patch.object(runner, "_run_phase_minus_one_gates") as mock_gates,
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    mock_gates.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Pre-mortem prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_pre_mortem_for_full(config, event_bus, issue):
+    """Full plan prompt includes the pre-mortem section."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue, scale="full")
+    assert "pre-mortem" in prompt.lower()
+    assert "top 3 most likely reasons" in prompt.lower()
+
+
+def test_build_prompt_no_pre_mortem_for_lite(config, event_bus, issue):
+    """Lite plan prompt does NOT include the pre-mortem section."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue, scale="lite")
+    assert "pre-mortem" not in prompt.lower()
+
+
+def test_build_prompt_indicates_plan_mode(config, event_bus, issue):
+    """Prompt indicates the plan mode (LITE or FULL)."""
+    runner = _make_runner(config, event_bus)
+
+    full_prompt = runner._build_prompt(issue, scale="full")
+    assert "FULL" in full_prompt
+
+    lite_prompt = runner._build_prompt(issue, scale="lite")
+    assert "LITE" in lite_prompt
+
+
+# ---------------------------------------------------------------------------
+# Lite plan retry prompt
+# ---------------------------------------------------------------------------
+
+
+def test_build_retry_prompt_lite_has_fewer_sections(config, event_bus, issue):
+    """Retry prompt for lite plan only lists 3 required sections."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(
+        issue, "failed plan", ["some error"], scale="lite"
+    )
+    assert "## Files to Modify" in prompt
+    assert "## Implementation Steps" in prompt
+    assert "## Testing Strategy" in prompt
+    assert "## Acceptance Criteria" not in prompt
+    assert "## Key Considerations" not in prompt
+
+
+def test_build_retry_prompt_full_has_all_sections(config, event_bus, issue):
+    """Retry prompt for full plan lists all 6 required sections."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_retry_prompt(
+        issue, "failed plan", ["some error"], scale="full"
+    )
+    assert "## Files to Modify" in prompt
+    assert "## Acceptance Criteria" in prompt
+    assert "## Key Considerations" in prompt

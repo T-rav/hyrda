@@ -144,6 +144,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Minimum word count for a valid plan (default: 200)",
     )
     parser.add_argument(
+        "--lite-plan-labels",
+        default=None,
+        help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
+    )
+    parser.add_argument(
         "--repo",
         default=None,
         help="GitHub repo owner/name (auto-detected from git remote if omitted)",
@@ -253,6 +258,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "lite_plan_labels",
     ):
         val = getattr(args, field)
         if val is not None:

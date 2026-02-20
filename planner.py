@@ -55,8 +55,11 @@ class PlannerRunner:
             return result
 
         try:
+            scale = self._detect_plan_scale(issue)
+            logger.info("Issue #%d classified as %s plan", issue.number, scale)
+
             cmd = self._build_command()
-            prompt = self._build_prompt(issue)
+            prompt = self._build_prompt(issue, scale=scale)
             transcript = await self._execute(
                 cmd, prompt, self._config.repo_root, issue.number
             )
@@ -70,10 +73,13 @@ class PlannerRunner:
                 await self._emit_status(
                     issue.number, worker_id, PlannerStatus.VALIDATING
                 )
-                validation_errors = self._validate_plan(issue, result.plan)
-                gate_errors, _gate_warnings = self._run_phase_minus_one_gates(
-                    result.plan
-                )
+                validation_errors = self._validate_plan(issue, result.plan, scale=scale)
+                if scale == "lite":
+                    gate_errors: list[str] = []
+                else:
+                    gate_errors, _gate_warnings = self._run_phase_minus_one_gates(
+                        result.plan
+                    )
                 all_errors = validation_errors + gate_errors
                 result.validation_errors = all_errors
 
@@ -90,7 +96,7 @@ class PlannerRunner:
                         issue.number, worker_id, PlannerStatus.RETRYING
                     )
                     retry_prompt = self._build_retry_prompt(
-                        issue, result.plan, all_errors
+                        issue, result.plan, all_errors, scale=scale
                     )
                     retry_transcript = await self._execute(
                         cmd, retry_prompt, self._config.repo_root, issue.number
@@ -99,10 +105,15 @@ class PlannerRunner:
 
                     retry_plan = self._extract_plan(retry_transcript)
                     if retry_plan:
-                        retry_validation = self._validate_plan(issue, retry_plan)
-                        retry_gate_errors, _ = self._run_phase_minus_one_gates(
-                            retry_plan
+                        retry_validation = self._validate_plan(
+                            issue, retry_plan, scale=scale
                         )
+                        if scale == "lite":
+                            retry_gate_errors: list[str] = []
+                        else:
+                            retry_gate_errors, _ = self._run_phase_minus_one_gates(
+                                retry_plan
+                            )
                         retry_all_errors = retry_validation + retry_gate_errors
                         if not retry_all_errors:
                             result.plan = retry_plan
@@ -193,8 +204,12 @@ class PlannerRunner:
     # Patterns for detecting images in issue bodies (markdown and HTML).
     _IMAGE_RE = re.compile(r"!\[.*?\]\(.*?\)|<img\s[^>]*>", re.IGNORECASE)
 
-    def _build_prompt(self, issue: GitHubIssue) -> str:
-        """Build the planning prompt for the agent."""
+    def _build_prompt(self, issue: GitHubIssue, *, scale: str = "full") -> str:
+        """Build the planning prompt for the agent.
+
+        *scale* is ``"lite"`` or ``"full"``.  The prompt adjusts which
+        sections are required and whether to include the pre-mortem step.
+        """
         comments_section = ""
         if issue.comments:
             truncated = [
@@ -221,6 +236,50 @@ class PlannerRunner:
             self._config.find_label[0] if self._config.find_label else "hydra-find"
         )
 
+        # --- Scale-adaptive schema section ---
+        if scale == "lite":
+            mode_note = (
+                "**Plan mode: LITE** — This is a small issue (bug fix, typo, or docs). "
+                "Only the core sections are required.\n\n"
+            )
+            schema_section = (
+                "## Plan Format — LITE SCHEMA\n\n"
+                "Your plan MUST include ALL of the following sections with these EXACT headers.\n"
+                "Plans missing any required section will be rejected and you will be asked to retry.\n\n"
+                "- `## Files to Modify` — list each existing file and what changes are needed "
+                "(must reference at least one file path)\n"
+                "- `## Implementation Steps` — ordered numbered list of steps "
+                "(must have at least 3 steps)\n"
+                "- `## Testing Strategy` — what tests to write and what to verify "
+                "(must reference specific test file paths or patterns; do NOT defer testing)"
+            )
+            pre_mortem_section = ""
+        else:
+            mode_note = (
+                "**Plan mode: FULL** — This issue requires a comprehensive plan "
+                "with all sections.\n\n"
+            )
+            schema_section = (
+                "## Plan Format — REQUIRED SCHEMA\n\n"
+                "Your plan MUST include ALL of the following sections with these EXACT headers.\n"
+                "Plans missing any required section will be rejected and you will be asked to retry.\n\n"
+                "- `## Files to Modify` — list each existing file and what changes are needed "
+                "(must reference at least one file path)\n"
+                '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
+                "- `## Implementation Steps` — ordered numbered list of steps "
+                "(must have at least 3 steps)\n"
+                "- `## Testing Strategy` — what tests to write and what to verify "
+                "(must reference specific test file paths or patterns; do NOT defer testing)\n"
+                "- `## Acceptance Criteria` — extracted or synthesized from the issue\n"
+                "- `## Key Considerations` — edge cases, backward compatibility, dependencies"
+            )
+            pre_mortem_section = (
+                "\n\n## Pre-Mortem\n\n"
+                "Before finalizing your plan, conduct a brief pre-mortem: assume this implementation\n"
+                "failed. What are the top 3 most likely reasons for failure? Add these as risks in the\n"
+                "`## Key Considerations` section."
+            )
+
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -229,7 +288,7 @@ class PlannerRunner:
 
 ## Instructions
 
-You are in READ-ONLY mode. Do NOT create, modify, or delete any files.
+{mode_note}You are in READ-ONLY mode. Do NOT create, modify, or delete any files.
 Do NOT run any commands that change state (no git commit, no file writes, no installs).
 
 Your job is to explore the codebase and create a detailed implementation plan.
@@ -278,17 +337,7 @@ PLAN_END
 Then provide a one-line summary:
 SUMMARY: <brief one-line description of the plan>
 
-## Plan Format — REQUIRED SCHEMA
-
-Your plan MUST include ALL of the following sections with these EXACT headers.
-Plans missing any required section will be rejected and you will be asked to retry.
-
-- `## Files to Modify` — list each existing file and what changes are needed (must reference at least one file path)
-- `## New Files` — list new files to create, or state "None" if no new files needed
-- `## Implementation Steps` — ordered numbered list of steps (must have at least 3 steps)
-- `## Testing Strategy` — what tests to write and what to verify (must reference specific test file paths or patterns; do NOT defer testing)
-- `## Acceptance Criteria` — extracted or synthesized from the issue
-- `## Key Considerations` — edge cases, backward compatibility, dependencies
+{schema_section}{pre_mortem_section}
 
 ## Handling Uncertainty
 
@@ -331,11 +380,45 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
         "## Key Considerations",
     )
 
+    # Lite plans require only these three sections.
+    LITE_REQUIRED_SECTIONS: tuple[str, ...] = (
+        "## Files to Modify",
+        "## Implementation Steps",
+        "## Testing Strategy",
+    )
+
+    # Body length threshold for scale detection heuristic.
+    _LITE_BODY_THRESHOLD = 500
+
+    # Title keywords suggesting a small fix (used with body length heuristic).
+    _SMALL_FIX_WORDS: frozenset[str] = frozenset(
+        {"fix", "typo", "correct", "patch", "update", "rename", "bump", "tweak"}
+    )
+
     # Pattern for detecting test-first gate violations.
     _TEST_LATER_RE = re.compile(
         r"\b(later|tbd|todo|to\s+be\s+determined|will\s+be\s+added\s+later)\b",
         re.IGNORECASE,
     )
+
+    def _detect_plan_scale(self, issue: GitHubIssue) -> str:
+        """Determine whether *issue* needs a ``"lite"`` or ``"full"`` plan.
+
+        Lite plans are used for small issues (bug fixes, typos, docs).
+        Full plans are the default for features and multi-file changes.
+        """
+        lite_labels = {lbl.lower() for lbl in self._config.lite_plan_labels}
+        for label in issue.labels:
+            if label.lower() in lite_labels:
+                return "lite"
+
+        body_len = len(issue.body or "")
+        if body_len < self._LITE_BODY_THRESHOLD:
+            title_words = {w.lower() for w in issue.title.split()}
+            if title_words & self._SMALL_FIX_WORDS:
+                return "lite"
+
+        return "full"
 
     @staticmethod
     def _significant_words(text: str, min_length: int = 4) -> set[str]:
@@ -376,16 +459,25 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
                 words.add(w)
         return words
 
-    def _validate_plan(self, issue: GitHubIssue, plan: str) -> list[str]:
+    def _validate_plan(
+        self, issue: GitHubIssue, plan: str, scale: str = "full"
+    ) -> list[str]:
         """Validate that *plan* has all required sections and minimum content.
+
+        *scale* is ``"lite"`` or ``"full"``.  Lite plans only require three
+        sections and skip the minimum word count check.
 
         Returns a list of validation error strings.  An empty list means the
         plan is valid.
         """
         errors: list[str] = []
 
+        required = (
+            self.LITE_REQUIRED_SECTIONS if scale == "lite" else self.REQUIRED_SECTIONS
+        )
+
         # --- Required sections ---
-        for section in self.REQUIRED_SECTIONS:
+        for section in required:
             if not re.search(re.escape(section), plan, re.IGNORECASE):
                 errors.append(f"Missing required section: {section}")
 
@@ -428,11 +520,12 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
                     "## Implementation Steps must have at least 3 numbered steps"
                 )
 
-        # --- Minimum word count ---
-        word_count = len(plan.split())
-        min_words = self._config.min_plan_words
-        if word_count < min_words:
-            errors.append(f"Plan has {word_count} words, minimum is {min_words}")
+        # --- Minimum word count (full plans only) ---
+        if scale != "lite":
+            word_count = len(plan.split())
+            min_words = self._config.min_plan_words
+            if word_count < min_words:
+                errors.append(f"Plan has {word_count} words, minimum is {min_words}")
 
         # --- [NEEDS CLARIFICATION] marker count ---
         clarification_markers = re.findall(
@@ -613,9 +706,34 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
         issue: GitHubIssue,
         failed_plan: str,
         validation_errors: list[str],
+        *,
+        scale: str = "full",
     ) -> str:
         """Build a retry prompt that includes the original issue, the failed plan, and validation feedback."""
         error_list = "\n".join(f"- {e}" for e in validation_errors)
+
+        if scale == "lite":
+            sections_list = (
+                "- `## Files to Modify` — list each existing file and what changes are needed "
+                "(must reference at least one file path)\n"
+                "- `## Implementation Steps` — ordered numbered list of steps "
+                "(must have at least 3 steps)\n"
+                "- `## Testing Strategy` — what tests to write and what to verify "
+                "(must reference specific test file paths or patterns; do NOT defer testing)"
+            )
+        else:
+            sections_list = (
+                "- `## Files to Modify` — list each existing file and what changes are needed "
+                "(must reference at least one file path)\n"
+                '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
+                "- `## Implementation Steps` — ordered numbered list of steps "
+                "(must have at least 3 steps)\n"
+                "- `## Testing Strategy` — what tests to write and what to verify "
+                "(must reference specific test file paths or patterns; do NOT defer testing)\n"
+                "- `## Acceptance Criteria` — extracted or synthesized from the issue\n"
+                "- `## Key Considerations` — edge cases, backward compatibility, dependencies"
+            )
+
         return f"""You previously generated a plan for GitHub issue #{issue.number} but it failed validation.
 
 ## Issue: {issue.title}
@@ -635,12 +753,7 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
 Please fix the plan to address ALL of the validation errors above.
 Your plan MUST include ALL of the following sections with these EXACT headers:
 
-- `## Files to Modify` — list each existing file and what changes are needed (must reference at least one file path)
-- `## New Files` — list new files to create, or state "None" if no new files needed
-- `## Implementation Steps` — ordered numbered list of steps (must have at least 3 steps)
-- `## Testing Strategy` — what tests to write and what to verify (must reference specific test file paths or patterns; do NOT defer testing)
-- `## Acceptance Criteria` — extracted or synthesized from the issue
-- `## Key Considerations` — edge cases, backward compatibility, dependencies
+{sections_list}
 
 If any requirement is ambiguous, mark it with `[NEEDS CLARIFICATION: <description>]`
 rather than guessing. Plans with 4+ markers will be escalated for human review.

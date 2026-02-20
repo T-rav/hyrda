@@ -1342,6 +1342,46 @@ class TestHydraConfigMinPlanWords:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – lite_plan_labels env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigLitePlanLabels:
+    """Tests for lite_plan_labels field and HYDRA_LITE_PLAN_LABELS env var."""
+
+    def test_lite_plan_labels_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["bug", "typo", "docs"]
+
+    def test_lite_plan_labels_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LITE_PLAN_LABELS", "hotfix,patch")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["hotfix", "patch"]
+
+    def test_lite_plan_labels_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LITE_PLAN_LABELS", "hotfix,patch")
+        cfg = HydraConfig(
+            lite_plan_labels=["custom"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.lite_plan_labels == ["custom"]
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers
 # ---------------------------------------------------------------------------
 
