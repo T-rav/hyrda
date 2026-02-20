@@ -1,0 +1,179 @@
+"""Route handlers for the Hydra dashboard API."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from collections.abc import Callable
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse
+
+from config import HydraConfig
+from events import EventBus, HydraEvent
+from models import ControlStatusConfig, ControlStatusResponse
+from pr_manager import PRManager
+from state import StateTracker
+
+if TYPE_CHECKING:
+    from orchestrator import HydraOrchestrator
+
+logger = logging.getLogger("hydra.dashboard")
+
+
+def create_router(
+    config: HydraConfig,
+    event_bus: EventBus,
+    state: StateTracker,
+    pr_manager: PRManager,
+    get_orchestrator: Callable[[], HydraOrchestrator | None],
+    set_orchestrator: Callable[[HydraOrchestrator], None],
+    set_run_task: Callable[[asyncio.Task[None]], None],
+    ui_dist_dir: Path,
+    template_dir: Path,
+) -> APIRouter:
+    """Create an APIRouter with all dashboard route handlers."""
+    router = APIRouter()
+
+    @router.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        react_index = ui_dist_dir / "index.html"
+        if react_index.exists():
+            return HTMLResponse(react_index.read_text())
+        template_path = template_dir / "index.html"
+        if template_path.exists():
+            return HTMLResponse(template_path.read_text())
+        return HTMLResponse("<h1>Hydra Dashboard</h1><p>Run 'make ui' to build.</p>")
+
+    @router.get("/api/state")
+    async def get_state() -> JSONResponse:
+        return JSONResponse(state.to_dict())
+
+    @router.get("/api/stats")
+    async def get_stats() -> JSONResponse:
+        return JSONResponse(state.get_lifetime_stats())
+
+    @router.get("/api/events")
+    async def get_events() -> JSONResponse:
+        history = event_bus.get_history()
+        return JSONResponse([e.model_dump() for e in history])
+
+    @router.get("/api/prs")
+    async def get_prs() -> JSONResponse:
+        """Fetch all open Hydra PRs from GitHub."""
+        all_labels = list(
+            {
+                *config.ready_label,
+                *config.review_label,
+                *config.fixed_label,
+                *config.hitl_label,
+                *config.planner_label,
+            }
+        )
+        items = await pr_manager.list_open_prs(all_labels)
+        return JSONResponse([item.model_dump() for item in items])
+
+    @router.get("/api/hitl")
+    async def get_hitl() -> JSONResponse:
+        """Fetch issues/PRs labeled for human-in-the-loop (stuck on CI)."""
+        items = await pr_manager.list_hitl_items(config.hitl_label)
+        return JSONResponse([item.model_dump() for item in items])
+
+    @router.get("/api/human-input")
+    async def get_human_input_requests() -> JSONResponse:
+        orch = get_orchestrator()
+        if orch:
+            return JSONResponse(orch.human_input_requests)
+        return JSONResponse({})
+
+    @router.post("/api/human-input/{issue_number}")
+    async def provide_human_input(issue_number: int, body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        orch = get_orchestrator()
+        if orch:
+            answer = body.get("answer", "")
+            orch.provide_human_input(issue_number, answer)
+            return JSONResponse({"status": "ok"})
+        return JSONResponse({"status": "no orchestrator"}, status_code=400)
+
+    @router.post("/api/control/start")
+    async def start_orchestrator() -> JSONResponse:
+        orch = get_orchestrator()
+        if orch and orch.running:
+            return JSONResponse({"error": "already running"}, status_code=409)
+
+        from orchestrator import HydraOrchestrator
+
+        new_orch = HydraOrchestrator(
+            config,
+            event_bus=event_bus,
+            state=state,
+        )
+        set_orchestrator(new_orch)
+        set_run_task(asyncio.create_task(new_orch.run()))
+        return JSONResponse({"status": "started"})
+
+    @router.post("/api/control/stop")
+    async def stop_orchestrator() -> JSONResponse:
+        orch = get_orchestrator()
+        if not orch or not orch.running:
+            return JSONResponse({"error": "not running"}, status_code=400)
+        await orch.request_stop()
+        return JSONResponse({"status": "stopping"})
+
+    @router.get("/api/control/status")
+    async def get_control_status() -> JSONResponse:
+        orch = get_orchestrator()
+        status = "idle"
+        if orch:
+            status = orch.run_status
+        response = ControlStatusResponse(
+            status=status,
+            config=ControlStatusConfig(
+                repo=config.repo,
+                ready_label=config.ready_label,
+                find_label=config.find_label,
+                planner_label=config.planner_label,
+                review_label=config.review_label,
+                hitl_label=config.hitl_label,
+                fixed_label=config.fixed_label,
+                max_workers=config.max_workers,
+                max_planners=config.max_planners,
+                max_reviewers=config.max_reviewers,
+                batch_size=config.batch_size,
+                model=config.model,
+            ),
+        )
+        return JSONResponse(response.model_dump())
+
+    @router.websocket("/ws")
+    async def websocket_endpoint(ws: WebSocket) -> None:
+        await ws.accept()
+
+        # Snapshot history BEFORE subscribing to avoid duplicates.
+        history = event_bus.get_history()
+        queue = event_bus.subscribe()
+
+        # Send history on connect
+        for event in history:
+            try:
+                await ws.send_text(event.model_dump_json())
+            except Exception:
+                logger.warning("WebSocket error during history replay", exc_info=True)
+                break
+
+        # Stream live events
+        try:
+            while True:
+                event: HydraEvent = await queue.get()
+                await ws.send_text(event.model_dump_json())
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            logger.warning("WebSocket error during live streaming", exc_info=True)
+            pass
+        finally:
+            event_bus.unsubscribe(queue)
+
+    return router
