@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -14,6 +13,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from stream_parser import StreamParser
+from subprocess_util import make_clean_env
 
 logger = logging.getLogger("hydra.planner")
 
@@ -378,8 +378,7 @@ Only include this section if you actually discover issues worth filing.
         issue_number: int,
     ) -> str:
         """Run the claude planning process."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
+        env = make_clean_env()
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,

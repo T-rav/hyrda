@@ -7,6 +7,18 @@ import os
 from pathlib import Path
 
 
+def make_clean_env(gh_token: str = "") -> dict[str, str]:
+    """Build a subprocess env dict with ``CLAUDECODE`` stripped.
+
+    When *gh_token* is non-empty it is injected as ``GH_TOKEN``.
+    """
+    env = {**os.environ}
+    env.pop("CLAUDECODE", None)
+    if gh_token:
+        env["GH_TOKEN"] = gh_token
+    return env
+
+
 async def run_subprocess(
     *cmd: str,
     cwd: Path | None = None,
@@ -20,10 +32,7 @@ async def run_subprocess(
 
     Raises :class:`RuntimeError` on non-zero exit.
     """
-    env = {**os.environ}
-    env.pop("CLAUDECODE", None)
-    if gh_token:
-        env["GH_TOKEN"] = gh_token
+    env = make_clean_env(gh_token)
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,

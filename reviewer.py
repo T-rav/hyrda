@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
 import re
 import time
 from pathlib import Path
@@ -14,6 +13,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from stream_parser import StreamParser
+from subprocess_util import make_clean_env
 
 logger = logging.getLogger("hydra.reviewer")
 
@@ -313,8 +313,7 @@ SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
         pr_number: int,
     ) -> str:
         """Run the claude review process."""
-        env = {**os.environ}
-        env.pop("CLAUDECODE", None)
+        env = make_clean_env()
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
