@@ -947,6 +947,8 @@ class TestHITLItem:
         assert item.pr == 0
         assert item.prUrl == ""
         assert item.branch == ""
+        assert item.cause == ""
+        assert item.status == "pending"
 
     def test_all_fields_set(self) -> None:
         item = HITLItem(
@@ -956,6 +958,8 @@ class TestHITLItem:
             pr=99,
             prUrl="https://github.com/org/repo/pull/99",
             branch="agent/issue-42",
+            cause="CI failure",
+            status="processing",
         )
         assert item.issue == 42
         assert item.title == "Fix widget"
@@ -963,9 +967,19 @@ class TestHITLItem:
         assert item.pr == 99
         assert item.prUrl == "https://github.com/org/repo/pull/99"
         assert item.branch == "agent/issue-42"
+        assert item.cause == "CI failure"
+        assert item.status == "processing"
+
+    def test_cause_defaults_to_empty_string(self) -> None:
+        item = HITLItem(issue=1)
+        assert item.cause == ""
+
+    def test_status_defaults_to_pending(self) -> None:
+        item = HITLItem(issue=1)
+        assert item.status == "pending"
 
     def test_serialization_with_model_dump(self) -> None:
-        """Confirm camelCase keys (issueUrl, prUrl) serialize correctly."""
+        """Confirm camelCase keys (issueUrl, prUrl) and new fields serialize correctly."""
         item = HITLItem(
             issue=10,
             title="Broken thing",
@@ -973,6 +987,8 @@ class TestHITLItem:
             pr=20,
             prUrl="https://example.com/pull/20",
             branch="agent/issue-10",
+            cause="test failure",
+            status="processing",
         )
         data = item.model_dump()
         assert data == {
@@ -982,7 +998,16 @@ class TestHITLItem:
             "pr": 20,
             "prUrl": "https://example.com/pull/20",
             "branch": "agent/issue-10",
+            "cause": "test failure",
+            "status": "processing",
         }
+
+    def test_serialization_defaults_include_new_fields(self) -> None:
+        """model_dump includes cause and status even with defaults."""
+        item = HITLItem(issue=1)
+        data = item.model_dump()
+        assert data["cause"] == ""
+        assert data["status"] == "pending"
 
 
 # ---------------------------------------------------------------------------
