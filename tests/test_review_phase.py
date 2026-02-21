@@ -2609,7 +2609,7 @@ class TestGranularReviewStatusEvents:
             if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "merge_fix"
         ]
         # One event from the caller in review_prs, one from the retry loop
-        assert len(conflict_events) >= 1
+        assert len(conflict_events) == 2
         assert conflict_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
