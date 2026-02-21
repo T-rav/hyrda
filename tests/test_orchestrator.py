@@ -3279,3 +3279,47 @@ class TestMemorySuggestionFiling:
         await orch._review_loop()
 
         orch._file_memory_suggestion.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_review_loop_multiple_results_files_each(
+        self, config: HydraConfig
+    ) -> None:
+        """Multiple reviewer results: only those with transcripts trigger filing."""
+        orch = HydraOrchestrator(config)
+        issue_a = make_issue(10)
+        issue_b = make_issue(20)
+        pr_a = make_pr_info(number=201, issue_number=10)
+        pr_b = make_pr_info(number=202, issue_number=20)
+        r1 = make_review_result(
+            pr_number=201, issue_number=10, transcript=MEMORY_TRANSCRIPT
+        )
+        r2 = make_review_result(pr_number=202, issue_number=20, transcript="")
+
+        orch._store.get_reviewable = lambda _max_count: [issue_a, issue_b]  # type: ignore[method-assign]
+        orch._store.get_active_issues = lambda: {10: "review", 20: "review"}  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
+            return_value=([pr_a, pr_b], [issue_a, issue_b])
+        )
+        orch._reviewer.review_prs = AsyncMock(return_value=[r1, r2])  # type: ignore[method-assign]
+        orch._prs.pull_main = AsyncMock()  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        call_count = 0
+
+        def get_reviewable_once(_max_count: int) -> list[GitHubIssue]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [issue_a, issue_b]
+            orch._stop_event.set()
+            return []
+
+        orch._store.get_reviewable = get_reviewable_once  # type: ignore[method-assign]
+
+        await orch._review_loop()
+
+        orch._file_memory_suggestion.assert_awaited_once_with(
+            MEMORY_TRANSCRIPT,
+            "reviewer",
+            "PR #201",
+        )
