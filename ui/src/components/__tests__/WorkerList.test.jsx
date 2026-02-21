@@ -1,15 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, cardStylesByStage, sectionHeaderByRole, sectionLabelByRole } from '../WorkerList'
+import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, sectionHeaderStyles, sectionLabelStyles, sectionCountStyles } from '../WorkerList'
 import { PIPELINE_STAGES } from '../../constants'
-
-// Shared expected colors for stage-specific style tests
-const expectedStageColors = {
-  triage: 'var(--triage-green)',
-  planner: 'var(--purple)',
-  implementer: 'var(--accent)',
-  reviewer: 'var(--orange)',
-}
 
 const statusColors = {
   queued:              { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
@@ -76,123 +68,77 @@ describe('WorkerList pre-computed styles', () => {
   })
 })
 
-describe('cardStylesByStage pre-computed styles', () => {
-  it('has entries for all four pipeline roles', () => {
-    for (const role of ['triage', 'planner', 'implementer', 'reviewer']) {
-      expect(cardStylesByStage).toHaveProperty(role)
+const SIDEBAR_STAGES = PIPELINE_STAGES.filter(s => s.role != null)
+
+describe('WorkerList section header styles', () => {
+  it('sectionHeaderStyles has an entry for every sidebar pipeline stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      expect(sectionHeaderStyles).toHaveProperty(stage.key)
+      expect(sectionHeaderStyles[stage.key]).toMatchObject({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 12px',
+        cursor: 'pointer',
+        userSelect: 'none',
+        borderRadius: 6,
+        transition: 'background 0.15s',
+      })
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('background')
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('border')
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('borderLeft')
     }
   })
 
-  it('each entry has normal and active variants', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(cardStylesByStage[role]).toHaveProperty('normal')
-      expect(cardStylesByStage[role]).toHaveProperty('active')
+  it('each sectionHeaderStyle uses the correct stage color', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const headerStyle = sectionHeaderStyles[stage.key]
+      expect(headerStyle.background).toBe(stage.subtleColor)
+      expect(headerStyle.borderLeft).toBe(`3px solid ${stage.color}`)
+      expect(headerStyle.border).toBe(`1px solid ${stage.color}33`)
     }
   })
 
-  it('normal variant uses the stage color for borderLeft', () => {
-    for (const [role, color] of Object.entries(expectedStageColors)) {
-      expect(cardStylesByStage[role].normal.borderLeft).toBe(`3px solid ${color}`)
+  it('sectionLabelStyles has correct color per stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const labelStyle = sectionLabelStyles[stage.key]
+      expect(labelStyle.color).toBe(stage.color)
+      expect(labelStyle).toMatchObject({
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+      })
     }
   })
 
-  it('active variant uses the stage color for borderLeft (not generic accent)', () => {
-    for (const [role, color] of Object.entries(expectedStageColors)) {
-      expect(cardStylesByStage[role].active.borderLeft).toBe(`3px solid ${color}`)
+  it('sectionCountStyles has correct color per stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const countStyle = sectionCountStyles[stage.key]
+      expect(countStyle.color).toBe(stage.color)
+      expect(countStyle).toMatchObject({
+        fontSize: 11,
+        fontWeight: 600,
+        marginLeft: 'auto',
+      })
     }
   })
 
-  it('active variant has accent-hover background', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(cardStylesByStage[role].active.background).toBe('var(--accent-hover)')
-    }
-  })
-
-  it('normal variant inherits base card properties', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(cardStylesByStage[role].normal).toHaveProperty('padding')
-      expect(cardStylesByStage[role].normal).toHaveProperty('cursor', 'pointer')
-    }
-  })
-
-  it('active variant inherits base card properties', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(cardStylesByStage[role].active).toHaveProperty('padding')
-      expect(cardStylesByStage[role].active).toHaveProperty('cursor', 'pointer')
-    }
-  })
-
-  it('style objects are referentially stable', () => {
-    expect(cardStylesByStage.triage.normal).toBe(cardStylesByStage.triage.normal)
-    expect(cardStylesByStage.implementer.active).toBe(cardStylesByStage.implementer.active)
-  })
-
-  it('uses only colors from PIPELINE_STAGES (no new colors)', () => {
-    const stageColors = PIPELINE_STAGES.filter(s => s.role).map(s => s.color)
-    for (const role of Object.keys(expectedStageColors)) {
-      const borderColor = cardStylesByStage[role].normal.borderLeft.replace('3px solid ', '')
-      expect(stageColors).toContain(borderColor)
-    }
-  })
-})
-
-describe('sectionHeaderByRole pre-computed styles', () => {
-  it('has entries for all four pipeline roles', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(sectionHeaderByRole).toHaveProperty(role)
-    }
-  })
-
-  it('each entry has a colored bottom border', () => {
-    for (const [role, color] of Object.entries(expectedStageColors)) {
-      expect(sectionHeaderByRole[role].borderBottom).toBe(`2px solid ${color}`)
-    }
-  })
-
-  it('each entry inherits base sectionHeader properties', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(sectionHeaderByRole[role]).toHaveProperty('display', 'flex')
-      expect(sectionHeaderByRole[role]).toHaveProperty('cursor', 'pointer')
-      expect(sectionHeaderByRole[role]).toHaveProperty('userSelect', 'none')
-    }
-  })
-})
-
-describe('sectionLabelByRole pre-computed styles', () => {
-  it('has entries for all four pipeline roles', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(sectionLabelByRole).toHaveProperty(role)
-    }
-  })
-
-  it('each entry uses the stage color', () => {
-    for (const [role, color] of Object.entries(expectedStageColors)) {
-      expect(sectionLabelByRole[role].color).toBe(color)
-    }
-  })
-
-  it('each entry has fontSize 12', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(sectionLabelByRole[role].fontSize).toBe(12)
-    }
-  })
-
-  it('each entry inherits base sectionLabel properties', () => {
-    for (const role of Object.keys(expectedStageColors)) {
-      expect(sectionLabelByRole[role]).toHaveProperty('fontWeight', 600)
-      expect(sectionLabelByRole[role]).toHaveProperty('textTransform', 'uppercase')
-    }
+  it('section style objects are referentially stable', () => {
+    expect(sectionHeaderStyles.triage).toBe(sectionHeaderStyles.triage)
+    expect(sectionLabelStyles.triage).toBe(sectionLabelStyles.triage)
+    expect(sectionCountStyles.triage).toBe(sectionCountStyles.triage)
   })
 })
 
 describe('WorkerList component', () => {
   it('renders without errors with empty workers', () => {
     render(<WorkerList workers={{}} selectedWorker={null} onSelect={() => {}} />)
-    // Section headers should still render
+    // Section headers should render pipeline stage names
     expect(screen.getByText('Triage')).toBeInTheDocument()
-    expect(screen.getByText('Planners')).toBeInTheDocument()
-    expect(screen.getByText('Implementers')).toBeInTheDocument()
-    expect(screen.getByText('Reviewers')).toBeInTheDocument()
+    expect(screen.getByText('Plan')).toBeInTheDocument()
+    expect(screen.getByText('Implement')).toBeInTheDocument()
+    expect(screen.getByText('Review')).toBeInTheDocument()
   })
 
   it('renders workers with reviewing and planning statuses', () => {
@@ -236,7 +182,7 @@ describe('WorkerList component', () => {
       2: { status: 'queued', title: 'Queued issue', branch: '', worker: 1, role: 'implementer' },
     }
     render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
-    // Implementers section should show 1/2 (1 active out of 2 total)
+    // Implement section should show 1/2 (1 active out of 2 total)
     expect(screen.getByText('1/2')).toBeInTheDocument()
   })
 
