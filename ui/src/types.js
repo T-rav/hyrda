@@ -14,6 +14,10 @@
  * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string, status: string }} HITLItem
  *
  * @typedef {Record<string, string>} HumanInputRequests
+ *
+ * @typedef {{ name: string, status: string, last_run: string|null, details: Record<string, any> }} BackgroundWorkerState
+ *
+ * @typedef {{ lifetime: { issues_completed: number, prs_merged: number, issues_created: number }, rates: Record<string, number> }} MetricsData
  */
 
 export {}

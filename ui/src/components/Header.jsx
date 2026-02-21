@@ -65,7 +65,8 @@ export function Header({
         <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
         <div style={styles.logoGroup}>
           <span style={styles.logo}>HYDRA</span>
-          <span style={styles.subtitle}>Intent in. Software out.</span>
+          <span style={styles.subtitle}>Intent in.</span>
+          <span style={styles.subtitle}>Software out.</span>
         </div>
         <span style={connected ? dotConnected : dotDisconnected} />
       </div>
@@ -149,7 +150,7 @@ const styles = {
     background: theme.surface,
     borderBottom: `1px solid ${theme.border}`,
   },
-  left: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  left: { display: 'flex', alignItems: 'flex-end', gap: 8, flexShrink: 0 },
   logoImg: { width: 56, height: 56 },
   logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
