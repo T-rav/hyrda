@@ -1,10 +1,12 @@
 """Live web dashboard for Hydra — FastAPI + WebSocket."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus
@@ -12,6 +14,8 @@ from pr_manager import PRManager
 from state import StateTracker
 
 if TYPE_CHECKING:
+    from fastapi import FastAPI
+
     from orchestrator import HydraOrchestrator
 
 logger = logging.getLogger("hydra.dashboard")
@@ -34,7 +38,7 @@ class HydraDashboard:
         config: HydraConfig,
         event_bus: EventBus,
         state: StateTracker,
-        orchestrator: Optional["HydraOrchestrator"] = None,
+        orchestrator: HydraOrchestrator | None = None,
     ) -> None:
         self._config = config
         self._bus = event_bus
@@ -42,9 +46,9 @@ class HydraDashboard:
         self._orchestrator = orchestrator
         self._server_task: asyncio.Task[None] | None = None
         self._run_task: asyncio.Task[None] | None = None
-        self._app: Any = None
+        self._app: FastAPI | None = None
 
-    def create_app(self) -> Any:
+    def create_app(self) -> FastAPI:
         """Build and return the FastAPI application."""
         try:
             from fastapi import FastAPI
@@ -95,7 +99,7 @@ class HydraDashboard:
         self._app = app
         return app
 
-    def _set_orchestrator(self, orch: "HydraOrchestrator") -> None:
+    def _set_orchestrator(self, orch: HydraOrchestrator) -> None:
         self._orchestrator = orch
 
     def _set_run_task(self, task: asyncio.Task[None]) -> None:
