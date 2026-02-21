@@ -359,3 +359,86 @@ class TestCommentPosting:
 
         mock_prs.post_comment.assert_not_awaited()
         mock_prs.post_pr_comment.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Counter accumulation
+# ---------------------------------------------------------------------------
+
+
+class TestCounterAccumulation:
+    """Verify the HITL escalation counter accumulates across multiple calls."""
+
+    @pytest.mark.asyncio
+    async def test_counter_increments_per_escalation(self, config: HydraConfig) -> None:
+        """Each escalate_to_hitl call increments total_hitl_escalations by one."""
+        escalator, state, _, _ = _make_escalator(config)
+
+        await escalator.escalate_to_hitl(
+            issue_number=1, cause="First", origin_label="hydra-review"
+        )
+        await escalator.escalate_to_hitl(
+            issue_number=2, cause="Second", origin_label="hydra-ready"
+        )
+        await escalator.escalate_to_hitl(
+            issue_number=3, cause="Third", origin_label="hydra-plan"
+        )
+
+        stats = state.get_lifetime_stats()
+        assert stats["total_hitl_escalations"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Full escalation sequence
+# ---------------------------------------------------------------------------
+
+
+class TestFullSequence:
+    """Verify that all five steps execute together when all params are provided."""
+
+    @pytest.mark.asyncio
+    async def test_full_escalation_executes_all_steps(
+        self, config: HydraConfig
+    ) -> None:
+        """All five steps — comment, state, labels, and event — run in one call."""
+        bus = EventBus()
+        escalator, state, mock_prs, _ = _make_escalator(config, bus=bus)
+
+        event = HydraEvent(
+            type=EventType.HITL_ESCALATION,
+            data={"issue": 42, "pr": 101, "cause": "ci_failure"},
+        )
+        await escalator.escalate_to_hitl(
+            issue_number=42,
+            cause="CI failed after 3 attempts",
+            origin_label="hydra-review",
+            current_labels=["hydra-review"],
+            pr_number=101,
+            comment="Escalating to HITL due to CI failure.",
+            comment_on_pr=True,
+            event=event,
+        )
+
+        # State was recorded
+        assert state.get_hitl_origin(42) == "hydra-review"
+        assert state.get_hitl_cause(42) == "CI failed after 3 attempts"
+        assert state.get_lifetime_stats()["total_hitl_escalations"] == 1
+
+        # Comment posted on PR (not issue)
+        mock_prs.post_pr_comment.assert_awaited_once_with(
+            101, "Escalating to HITL due to CI failure."
+        )
+        mock_prs.post_comment.assert_not_awaited()
+
+        # Old label removed from issue and PR
+        mock_prs.remove_label.assert_awaited_once_with(42, "hydra-review")
+        mock_prs.remove_pr_label.assert_awaited_once_with(101, "hydra-review")
+
+        # HITL label added to issue and PR
+        mock_prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
+        mock_prs.add_pr_labels.assert_awaited_once_with(101, [config.hitl_label[0]])
+
+        # Event published
+        history = bus.get_history()
+        assert len(history) == 1
+        assert history[0].type == EventType.HITL_ESCALATION
