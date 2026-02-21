@@ -195,14 +195,14 @@ ensure-labels:
 hot:
 	@echo "$(BLUE)Sending config update to running Hydra instance on :$(PORT)...$(RESET)"
 	@JSON='{"persist": true'; \
-	[ -n "$(WORKERS)" ] && [ "$(WORKERS)" != "3" ] && JSON="$$JSON, \"max_workers\": $(WORKERS)"; \
-	[ -n "$(MODEL)" ] && [ "$(MODEL)" != "opus" ] && JSON="$$JSON, \"model\": \"$(MODEL)\""; \
-	[ -n "$(BUDGET)" ] && [ "$(BUDGET)" != "0" ] && JSON="$$JSON, \"max_budget_usd\": $(BUDGET)"; \
-	[ -n "$(BATCH_SIZE)" ] && [ "$(BATCH_SIZE)" != "15" ] && JSON="$$JSON, \"batch_size\": $(BATCH_SIZE)"; \
-	[ -n "$(REVIEWERS)" ] && [ "$(REVIEWERS)" != "5" ] && JSON="$$JSON, \"max_reviewers\": $(REVIEWERS)"; \
-	[ -n "$(REVIEW_MODEL)" ] && [ "$(REVIEW_MODEL)" != "opus" ] && JSON="$$JSON, \"review_model\": \"$(REVIEW_MODEL)\""; \
-	[ -n "$(PLANNERS)" ] && JSON="$$JSON, \"max_planners\": $(PLANNERS)"; \
-	[ -n "$(HITL_WORKERS)" ] && [ "$(HITL_WORKERS)" != "1" ] && JSON="$$JSON, \"max_hitl_workers\": $(HITL_WORKERS)"; \
+	[ "$(origin WORKERS)" = "command line" ] && JSON="$$JSON, \"max_workers\": $(WORKERS)"; \
+	[ "$(origin MODEL)" = "command line" ] && JSON="$$JSON, \"model\": \"$(MODEL)\""; \
+	[ "$(origin BUDGET)" = "command line" ] && JSON="$$JSON, \"max_budget_usd\": $(BUDGET)"; \
+	[ "$(origin BATCH_SIZE)" = "command line" ] && JSON="$$JSON, \"batch_size\": $(BATCH_SIZE)"; \
+	[ "$(origin REVIEWERS)" = "command line" ] && JSON="$$JSON, \"max_reviewers\": $(REVIEWERS)"; \
+	[ "$(origin REVIEW_MODEL)" = "command line" ] && JSON="$$JSON, \"review_model\": \"$(REVIEW_MODEL)\""; \
+	[ "$(origin PLANNERS)" = "command line" ] && JSON="$$JSON, \"max_planners\": $(PLANNERS)"; \
+	[ "$(origin HITL_WORKERS)" = "command line" ] && JSON="$$JSON, \"max_hitl_workers\": $(HITL_WORKERS)"; \
 	JSON="$$JSON}"; \
 	curl -s -X PATCH "http://localhost:$(PORT)/api/control/config" \
 		-H "Content-Type: application/json" \

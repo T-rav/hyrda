@@ -187,3 +187,71 @@ class TestPatchConfigEndpoint:
 
         file_data = json.loads(config_path.read_text())
         assert "persist" not in file_data
+
+    @pytest.mark.asyncio
+    async def test_patch_config_rejects_invalid_int_below_min(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """PATCH should reject values that violate Pydantic field constraints (ge)."""
+        state = make_state(tmp_path)
+        router = _make_router(config, event_bus, state, tmp_path)
+        endpoint = _find_endpoint(router, "/api/control/config")
+        assert endpoint is not None
+
+        original = config.max_workers
+        response = await endpoint({"max_workers": 0})
+        data = json.loads(response.body)
+
+        assert response.status_code == 422
+        assert data["status"] == "error"
+        assert config.max_workers == original  # Unchanged
+
+    @pytest.mark.asyncio
+    async def test_patch_config_rejects_invalid_int_above_max(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """PATCH should reject values that violate Pydantic field constraints (le)."""
+        state = make_state(tmp_path)
+        router = _make_router(config, event_bus, state, tmp_path)
+        endpoint = _find_endpoint(router, "/api/control/config")
+        assert endpoint is not None
+
+        original = config.max_workers
+        response = await endpoint({"max_workers": 999})
+        data = json.loads(response.body)
+
+        assert response.status_code == 422
+        assert data["status"] == "error"
+        assert config.max_workers == original  # Unchanged
+
+    @pytest.mark.asyncio
+    async def test_patch_config_rejects_negative_budget(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """PATCH should reject negative budget values (ge=0 constraint)."""
+        state = make_state(tmp_path)
+        router = _make_router(config, event_bus, state, tmp_path)
+        endpoint = _find_endpoint(router, "/api/control/config")
+        assert endpoint is not None
+
+        response = await endpoint({"max_budget_usd": -5.0})
+        data = json.loads(response.body)
+
+        assert response.status_code == 422
+        assert data["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_patch_config_accepts_valid_boundary_values(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """PATCH should accept values at the boundary of valid ranges."""
+        state = make_state(tmp_path)
+        router = _make_router(config, event_bus, state, tmp_path)
+        endpoint = _find_endpoint(router, "/api/control/config")
+        assert endpoint is not None
+
+        response = await endpoint({"max_workers": 10})
+        data = json.loads(response.body)
+
+        assert data["status"] == "ok"
+        assert config.max_workers == 10
