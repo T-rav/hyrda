@@ -43,6 +43,7 @@ class EventType(StrEnum):
     REVIEW_INSIGHT = "review_insight"
     BACKGROUND_WORKER_STATUS = "background_worker_status"
     SYSTEM_ALERT = "system_alert"
+    VERIFICATION_JUDGE = "verification_judge"
 
 
 class HydraEvent(BaseModel):
