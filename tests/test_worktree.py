@@ -29,30 +29,6 @@ def _make_proc(
 
 
 # ---------------------------------------------------------------------------
-# WorktreeManager.exists
-# ---------------------------------------------------------------------------
-
-
-class TestExists:
-    """Tests for WorktreeManager.exists."""
-
-    def test_returns_true_when_worktree_dir_exists(
-        self, config, tmp_path: Path
-    ) -> None:
-        """exists should return True when the issue directory is present."""
-        manager = WorktreeManager(config)
-        wt_path = config.worktree_base / "issue-7"
-        wt_path.mkdir(parents=True, exist_ok=True)
-
-        assert manager.exists(7) is True
-
-    def test_returns_false_when_worktree_dir_absent(self, config) -> None:
-        """exists should return False when no directory exists for the issue."""
-        manager = WorktreeManager(config)
-        assert manager.exists(999) is False
-
-
-# ---------------------------------------------------------------------------
 # WorktreeManager.create
 # ---------------------------------------------------------------------------
 

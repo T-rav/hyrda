@@ -1178,13 +1178,3 @@ class HydraOrchestrator:
                 break
 
         return results
-
-    async def _set_phase(self, phase: Phase) -> None:
-        """Update the current phase and broadcast."""
-        logger.info("Phase: %s", phase.value)
-        await self._bus.publish(
-            HydraEvent(
-                type=EventType.PHASE_CHANGE,
-                data={"phase": phase.value},
-            )
-        )
