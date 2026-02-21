@@ -78,8 +78,8 @@ async def file_memory_suggestion(
         f"**Source:** {suggestion.source}\n"
     )
     labels = [config.hitl_label[0]]
-    if config.find_label:
-        labels.append(config.find_label[0])
+    if config.improve_label:
+        labels.append(config.improve_label[0])
 
     return await pr_manager.create_issue(title, body, labels)
 

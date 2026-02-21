@@ -266,6 +266,13 @@ class TestApproveMemoryEndpoint:
         assert data["status"] == "ok"
         pr_mgr.add_labels.assert_called_once_with(42, config.memory_label)
 
+        # Verify HITL + improve labels are removed (not find labels)
+        remove_calls = [call.args for call in pr_mgr.remove_label.call_args_list]
+        for lbl in config.hitl_label:
+            assert (42, lbl) in remove_calls
+        for lbl in config.improve_label:
+            assert (42, lbl) in remove_calls
+
 
 class TestControlStatusIncludesMemoryLabel:
     """Tests that GET /api/control/status includes memory_label."""

@@ -190,11 +190,12 @@ def create_router(
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
+        state.remove_hitl_cause(issue_number)
 
-        # Remove HITL / find labels, add memory label
+        # Remove HITL / improve labels, add memory label
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
-        for lbl in config.find_label:
+        for lbl in config.improve_label:
             await pr_manager.remove_label(issue_number, lbl)
         await pr_manager.add_labels(issue_number, config.memory_label)
 

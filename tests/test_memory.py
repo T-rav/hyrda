@@ -146,6 +146,7 @@ class TestFileMemorySuggestion:
         assert "**Context:** Discovered during issue #10" in body
         labels = call_args[0][2]
         assert "hydra-hitl" in labels
+        assert "hydra-improve" in labels
 
     @pytest.mark.asyncio
     async def test_dry_run_skips_filing(self) -> None:
