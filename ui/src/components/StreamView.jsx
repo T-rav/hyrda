@@ -19,7 +19,9 @@ function PendingIntentCard({ intent }) {
 
 function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
-  const queuedCount = issues.length - activeCount
+  const failedCount = issues.filter(i => i.overallStatus === 'failed').length
+  const hitlCount = issues.filter(i => i.overallStatus === 'hitl').length
+  const queuedCount = issues.length - activeCount - failedCount - hitlCount
   const hasRole = !!stage.role
 
   return (
@@ -39,6 +41,8 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
         <span style={sectionCountStyles[stage.key]}>
           <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
           <span> · {queuedCount} queued</span>
+          {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
+          {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
           <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
         </span>
         {hasRole && (
@@ -93,7 +97,10 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
     currentStage: stageKey,
-    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isDone ? 'done' : 'active',
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
+      : pipeIssue.status === 'failed' ? 'failed'
+      : isDone ? 'done'
+      : 'active',
     startTime: null,
     endTime: null,
     pr,
@@ -300,6 +307,14 @@ const styles = {
   },
   activeBadge: {
     fontWeight: 700,
+  },
+  failedBadge: {
+    fontWeight: 700,
+    color: theme.red,
+  },
+  hitlBadge: {
+    fontWeight: 700,
+    color: theme.yellow,
   },
   statusDot: {
     display: 'inline-block',
