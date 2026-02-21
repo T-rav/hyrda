@@ -235,6 +235,7 @@ class StateData(BaseModel):
     reviewed_prs: dict[str, str] = Field(default_factory=dict)
     hitl_origins: dict[str, str] = Field(default_factory=dict)
     hitl_causes: dict[str, str] = Field(default_factory=dict)
+    worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
     last_updated: str | None = None
 
@@ -277,6 +278,7 @@ class ControlStatusConfig(BaseModel):
     hitl_label: list[str] = Field(default_factory=list)
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
+    improve_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0

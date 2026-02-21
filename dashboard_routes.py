@@ -91,6 +91,7 @@ def create_router(
                 *config.hitl_label,
                 *config.hitl_active_label,
                 *config.planner_label,
+                *config.improve_label,
             }
         )
         items = await pr_manager.list_open_prs(all_labels)
@@ -107,6 +108,17 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
+            if not cause:
+                origin = state.get_hitl_origin(item.issue)
+                if origin:
+                    if origin in config.improve_label:
+                        cause = "Self-improvement proposal"
+                    elif origin in config.review_label:
+                        cause = "Review escalation"
+                    elif origin in config.find_label:
+                        cause = "Triage escalation"
+                    else:
+                        cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
             enriched.append(data)
@@ -239,6 +251,7 @@ def create_router(
                 hitl_label=config.hitl_label,
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
+                improve_label=config.improve_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,

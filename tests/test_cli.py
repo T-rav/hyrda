@@ -64,6 +64,7 @@ class TestParseArgs:
             "fixed_label",
             "find_label",
             "planner_label",
+            "improve_label",
             "planner_model",
             "planner_budget_usd",
             "repo",
@@ -142,6 +143,7 @@ class TestBuildConfig:
         assert cfg.fixed_label == ["hydra-fixed"]
         assert cfg.find_label == ["hydra-find"]
         assert cfg.planner_label == ["hydra-plan"]
+        assert cfg.improve_label == ["hydra-improve"]
         assert cfg.planner_model == "opus"
         assert cfg.planner_budget_usd == pytest.approx(0)
         assert cfg.main_branch == "main"
@@ -238,6 +240,8 @@ class TestBuildConfig:
                 "g,h",
                 "--planner-label",
                 "i",
+                "--improve-label",
+                "j,k",
             ]
         )
         cfg = build_config(args)
@@ -249,6 +253,7 @@ class TestBuildConfig:
         assert cfg.fixed_label == ["f"]
         assert cfg.find_label == ["g", "h"]
         assert cfg.planner_label == ["i"]
+        assert cfg.improve_label == ["j", "k"]
 
     def test_planner_model_passed_through(self) -> None:
         args = parse_args(["--planner-model", "sonnet"])
@@ -326,6 +331,11 @@ class TestBuildConfig:
         args = parse_args(["--hitl-active-label", "my-active"])
         cfg = build_config(args)
         assert cfg.hitl_active_label == ["my-active"]
+
+    def test_improve_label_passed_through(self) -> None:
+        args = parse_args(["--improve-label", "my-improve"])
+        cfg = build_config(args)
+        assert cfg.improve_label == ["my-improve"]
 
     def test_git_identity_defaults_to_none_in_parse_args(self) -> None:
         args = parse_args([])

@@ -2035,6 +2035,137 @@ class TestReviewUpdateStartEvent:
         assert "worker" in start_events[0].data
 
 
+# ---------------------------------------------------------------------------
+# Retrospective integration
+# ---------------------------------------------------------------------------
+
+
+class TestRetrospectiveIntegration:
+    """Tests that retrospective.record() is called correctly after merge."""
+
+    @pytest.mark.asyncio
+    async def test_retrospective_called_on_successful_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """retrospective.record() should be called when PR is merged."""
+        mock_retro = AsyncMock()
+        phase = _make_phase(config)
+        phase._retrospective = mock_retro
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        mock_retro.record.assert_awaited_once()
+        call_kwargs = mock_retro.record.call_args[1]
+        assert call_kwargs["issue_number"] == 42
+        assert call_kwargs["pr_number"] == 101
+        assert call_kwargs["review_result"].merged is True
+
+    @pytest.mark.asyncio
+    async def test_retrospective_not_called_on_failed_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """retrospective.record() should NOT be called when merge fails."""
+        mock_retro = AsyncMock()
+        phase = _make_phase(config)
+        phase._retrospective = mock_retro
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        mock_retro.record.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_retrospective_failure_does_not_crash_review(
+        self, config: HydraConfig
+    ) -> None:
+        """If retrospective.record() raises, it should not crash the review."""
+        mock_retro = AsyncMock()
+        mock_retro.record = AsyncMock(side_effect=RuntimeError("retro boom"))
+        phase = _make_phase(config)
+        phase._retrospective = mock_retro
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        # Should not raise despite retro failure
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is True
+
+    @pytest.mark.asyncio
+    async def test_retrospective_not_called_when_not_configured(
+        self, config: HydraConfig
+    ) -> None:
+        """When no retrospective is set, merge should work normally."""
+        phase = _make_phase(config)
+        # phase._retrospective is None by default
+
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is True
+
+
+# ---------------------------------------------------------------------------
 # Review insight integration
 # ---------------------------------------------------------------------------
 
