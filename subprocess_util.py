@@ -49,7 +49,7 @@ _RESET_TIME_RE = re.compile(
 )
 
 
-def _is_credit_exhaustion(text: str) -> bool:
+def is_credit_exhaustion(text: str) -> bool:
     """Check if *text* indicates an API credit exhaustion condition."""
     text_lower = text.lower()
     return any(p in text_lower for p in _CREDIT_PATTERNS)
@@ -72,6 +72,10 @@ def parse_credit_resume_time(text: str) -> datetime | None:
     hour = int(match.group(1))
     ampm = match.group(2).lower()
     tz_name = match.group(3)
+
+    # Validate 12-hour clock range (1–12)
+    if hour < 1 or hour > 12:
+        return None
 
     # Convert 12-hour to 24-hour
     if ampm == "am":

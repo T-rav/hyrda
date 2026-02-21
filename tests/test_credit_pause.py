@@ -20,7 +20,7 @@ from models import PlanResult
 from orchestrator import HydraOrchestrator
 from subprocess_util import (
     CreditExhaustedError,
-    _is_credit_exhaustion,
+    is_credit_exhaustion,
     parse_credit_resume_time,
 )
 from tests.helpers import ConfigFactory, make_streaming_proc
@@ -62,29 +62,29 @@ def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
 
 
 # ===========================================================================
-# subprocess_util — _is_credit_exhaustion
+# subprocess_util — is_credit_exhaustion
 # ===========================================================================
 
 
 class TestIsCreditExhaustion:
-    """Tests for the _is_credit_exhaustion helper."""
+    """Tests for the is_credit_exhaustion helper."""
 
     def test_detects_usage_limit_reached(self) -> None:
-        assert _is_credit_exhaustion("Your usage limit reached") is True
+        assert is_credit_exhaustion("Your usage limit reached") is True
 
     def test_detects_credit_balance_too_low(self) -> None:
-        assert _is_credit_exhaustion("Your credit balance is too low") is True
+        assert is_credit_exhaustion("Your credit balance is too low") is True
 
     def test_detects_rate_limit_error(self) -> None:
-        assert _is_credit_exhaustion("error: rate_limit_error") is True
+        assert is_credit_exhaustion("error: rate_limit_error") is True
 
     def test_returns_false_for_normal_text(self) -> None:
-        assert _is_credit_exhaustion("Everything is fine") is False
+        assert is_credit_exhaustion("Everything is fine") is False
 
     def test_is_case_insensitive(self) -> None:
-        assert _is_credit_exhaustion("USAGE LIMIT REACHED") is True
-        assert _is_credit_exhaustion("Credit Balance Is Too Low") is True
-        assert _is_credit_exhaustion("Rate_Limit_Error") is True
+        assert is_credit_exhaustion("USAGE LIMIT REACHED") is True
+        assert is_credit_exhaustion("Credit Balance Is Too Low") is True
+        assert is_credit_exhaustion("Rate_Limit_Error") is True
 
 
 # ===========================================================================
@@ -145,6 +145,12 @@ class TestParseCreditResumeTime:
         assert result is not None
         # Should be tomorrow
         assert result > now_utc
+
+    def test_returns_none_for_invalid_hour(self) -> None:
+        """Hours outside 1-12 range should return None instead of crashing."""
+        assert parse_credit_resume_time("reset at 0am") is None
+        assert parse_credit_resume_time("reset at 13pm") is None
+        assert parse_credit_resume_time("reset at 99am") is None
 
     def test_invalid_timezone_falls_back(self) -> None:
         """Unknown timezone should not crash, falls back to local time."""
@@ -537,7 +543,5 @@ class TestConfigCreditPauseBuffer:
         assert config.credit_pause_buffer_minutes == 1
 
     def test_custom_value(self) -> None:
-        config = ConfigFactory.create()
-        # Use object.__setattr__ since Pydantic models can be frozen
-        object.__setattr__(config, "credit_pause_buffer_minutes", 5)
+        config = ConfigFactory.create(credit_pause_buffer_minutes=5)
         assert config.credit_pause_buffer_minutes == 5

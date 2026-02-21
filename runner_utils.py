@@ -15,7 +15,7 @@ from events import EventBus, EventType, HydraEvent
 from stream_parser import StreamParser
 from subprocess_util import (
     CreditExhaustedError,
-    _is_credit_exhaustion,
+    is_credit_exhaustion,
     make_clean_env,
     parse_credit_resume_time,
 )
@@ -135,7 +135,7 @@ async def stream_claude_process(
 
         # Check for credit exhaustion in both stderr and transcript
         combined = f"{stderr_text}\n{accumulated_text}"
-        if _is_credit_exhaustion(combined):
+        if is_credit_exhaustion(combined):
             resume_at = parse_credit_resume_time(combined)
             raise CreditExhaustedError("API credit limit reached", resume_at=resume_at)
 
