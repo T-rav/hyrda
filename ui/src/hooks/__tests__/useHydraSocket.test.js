@@ -21,6 +21,8 @@ const initialState = {
   events: [],
   hitlItems: [],
   humanInputRequests: {},
+  backgroundWorkers: [],
+  metrics: null,
 }
 
 describe('useHydraSocket reducer', () => {
@@ -349,6 +351,69 @@ describe('useHydraSocket reducer', () => {
     })
   })
 
+  describe('background worker status', () => {
+    it('initial state includes backgroundWorkers and metrics', () => {
+      expect(initialState.backgroundWorkers).toEqual([])
+      expect(initialState.metrics).toBeNull()
+    })
+
+    it('background_worker_status event updates backgroundWorkers array', () => {
+      const next = reducer(initialState, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: { count: 5 } },
+        timestamp: '2026-01-01T00:00:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].name).toBe('memory_sync')
+      expect(next.backgroundWorkers[0].status).toBe('ok')
+    })
+
+    it('background_worker_status event for existing worker replaces entry', () => {
+      const state = {
+        ...initialState,
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: {} }],
+      }
+      const next = reducer(state, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'error', last_run: '2026-01-01T00:01:00Z', details: {} },
+        timestamp: '2026-01-01T00:01:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].status).toBe('error')
+    })
+
+    it('BACKGROUND_WORKERS action sets the full array', () => {
+      const workers = [
+        { name: 'memory_sync', status: 'ok', last_run: null, details: {} },
+        { name: 'metrics', status: 'disabled', last_run: null, details: {} },
+      ]
+      const next = reducer(initialState, { type: 'BACKGROUND_WORKERS', data: workers })
+      expect(next.backgroundWorkers).toEqual(workers)
+    })
+
+    it('METRICS action sets metrics state', () => {
+      const metricsData = { lifetime: { issues_completed: 5, prs_merged: 3 }, rates: { merge_rate: 0.6 } }
+      const next = reducer(initialState, { type: 'METRICS', data: metricsData })
+      expect(next.metrics).toEqual(metricsData)
+    })
+
+    it('phase_change does NOT reset backgroundWorkers on new run', () => {
+      const state = {
+        ...initialState,
+        phase: 'idle',
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok' }],
+        metrics: { lifetime: { issues_completed: 1 }, rates: {} },
+      }
+      const next = reducer(state, {
+        type: 'phase_change',
+        data: { phase: 'plan' },
+        timestamp: new Date().toISOString(),
+      })
+      expect(next.backgroundWorkers).toEqual([{ name: 'memory_sync', status: 'ok' }])
+      expect(next.metrics).toEqual({ lifetime: { issues_completed: 1 }, rates: {} })
+    })
+  })
+
   describe('event cap (MAX_EVENTS)', () => {
     it('addEvent caps events at MAX_EVENTS', () => {
       const state = {
@@ -450,6 +515,78 @@ describe('useHydraSocket reducer', () => {
         '2024-01-01T00:00:02Z',
         '2024-01-01T00:00:01Z',
       ])
+    })
+  })
+
+  describe('PR deduplication', () => {
+    it('EXISTING_PRS replaces state instead of prepending', () => {
+      const state = { ...initialState, prs: [{ pr: 1 }, { pr: 2 }] }
+      const next = reducer(state, { type: 'EXISTING_PRS', data: [{ pr: 3 }, { pr: 4 }] })
+      expect(next.prs).toEqual([{ pr: 3 }, { pr: 4 }])
+    })
+
+    it('EXISTING_PRS on reconnect does not duplicate', () => {
+      const data = [{ pr: 10 }, { pr: 20 }]
+      let state = reducer(initialState, { type: 'EXISTING_PRS', data })
+      state = reducer(state, { type: 'EXISTING_PRS', data })
+      expect(state.prs).toHaveLength(2)
+      expect(state.prs).toEqual(data)
+    })
+
+    it('pr_created does not add duplicate PR', () => {
+      const state = { ...initialState, prs: [{ pr: 42, issue: 1 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 42, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(1)
+      expect(next.sessionPrsCount).toBe(1)
+    })
+
+    it('pr_created adds new PR when not a duplicate', () => {
+      const state = { ...initialState, prs: [{ pr: 42 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 43, issue: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(2)
+      expect(next.sessionPrsCount).toBe(2)
+    })
+
+    it('pr_created deduplicates after EXISTING_PRS backfill', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 10 }, { pr: 20 }],
+      })
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 10, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(state.prs).toHaveLength(2)
+      expect(state.sessionPrsCount).toBe(0)
+    })
+
+    it('WebSocket reconnect with overlapping data does not inflate count', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }],
+      })
+      // Simulate a pr_created event during the session
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 4, issue: 4 },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(state.prs).toHaveLength(4)
+      // Simulate reconnect — EXISTING_PRS replaces with fresh API data
+      state = reducer(state, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }, { pr: 4 }],
+      })
+      expect(state.prs).toHaveLength(4)
     })
   })
 

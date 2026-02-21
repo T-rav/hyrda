@@ -82,10 +82,58 @@ class TestCreateRouter:
             "/api/control/start",
             "/api/control/stop",
             "/api/control/status",
+            "/api/system/workers",
+            "/api/metrics",
             "/ws",
         }
 
         assert expected_paths.issubset(paths)
+
+
+class TestControlStatusImproveLabel:
+    """Tests that /api/control/status includes improve_label."""
+
+    @pytest.mark.asyncio
+    async def test_control_status_includes_improve_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /api/control/status should include improve_label from config."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        get_control_status = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/status"
+                and hasattr(route, "endpoint")
+            ):
+                get_control_status = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_control_status is not None
+        response = await get_control_status()
+        import json
+
+        data = json.loads(response.body)
+        assert "config" in data
+        assert "improve_label" in data["config"]
+        assert data["config"]["improve_label"] == config.improve_label
 
 
 class TestHITLEndpointCause:
@@ -184,5 +232,145 @@ class TestHITLEndpointCause:
 
         items = json.loads(response.body)
         assert len(items) == 1
-        # cause should be the default empty string from model_dump, not overwritten
+        # No cause or origin — should remain empty
         assert items[0]["cause"] == ""
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_falls_back_to_origin_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When no cause is set but origin is, should fall back to origin description."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Set origin but not cause
+        state.set_hitl_origin(42, "hydra-review")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "Review escalation"
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_origin_fallback_unknown_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Unknown origin label should produce generic fallback message."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        state.set_hitl_origin(42, "some-unknown-label")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "Escalation (reason not recorded)"
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_cause_takes_precedence_over_origin(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When both cause and origin are set, cause should take precedence."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
+        state.set_hitl_origin(42, "hydra-review")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "CI failed after 2 fix attempt(s)"

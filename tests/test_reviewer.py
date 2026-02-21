@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from events import EventType
-from models import ReviewVerdict
+from models import ReviewerStatus, ReviewVerdict
 from reviewer import ReviewRunner
 from tests.helpers import ConfigFactory, make_streaming_proc
 
@@ -182,7 +182,7 @@ def test_build_review_prompt_fix_section_runs_tests_when_ci_disabled(
     runner = _make_runner(config, event_bus)
     prompt = runner._build_review_prompt(pr_info, issue, "diff")
 
-    assert "make test-fast" in prompt
+    assert "`make test`" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -466,8 +466,8 @@ async def test_review_publishes_review_update_events(
     assert len(review_events) >= 2
 
     statuses = [e.data["status"] for e in review_events]
-    assert "reviewing" in statuses
-    assert "done" in statuses
+    assert ReviewerStatus.REVIEWING.value in statuses
+    assert ReviewerStatus.DONE.value in statuses
 
 
 @pytest.mark.asyncio
@@ -489,7 +489,8 @@ async def test_review_start_event_includes_worker_id(
     reviewing_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "reviewing"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.REVIEWING.value
     )
     assert reviewing_event.data["worker"] == 3
     assert reviewing_event.data["pr"] == pr_info.number
@@ -515,7 +516,8 @@ async def test_review_done_event_includes_verdict_and_duration(
     done_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "done"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.DONE.value
     )
     assert done_event.data["verdict"] == ReviewVerdict.REQUEST_CHANGES.value
     assert "duration" in done_event.data
@@ -532,7 +534,9 @@ async def test_review_dry_run_still_publishes_review_update_event(
     events = event_bus.get_history()
     review_events = [e for e in events if e.type == EventType.REVIEW_UPDATE]
     # The "reviewing" event is published before the dry-run check
-    assert any(e.data.get("status") == "reviewing" for e in review_events)
+    assert any(
+        e.data.get("status") == ReviewerStatus.REVIEWING.value for e in review_events
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -817,6 +821,16 @@ def test_build_ci_fix_prompt_includes_pr_and_issue_context(
     assert "Attempt 2" in prompt
 
 
+def test_build_ci_fix_prompt_uses_configured_test_command(event_bus, pr_info, issue):
+    """CI fix prompt should use the configured test_command."""
+    cfg = ConfigFactory.create(test_command="npm test")
+    runner = _make_runner(cfg, event_bus)
+    prompt = runner._build_ci_fix_prompt(pr_info, issue, "CI failed", 1)
+
+    assert "`npm test`" in prompt
+    assert "make test-fast" not in prompt
+
+
 # ---------------------------------------------------------------------------
 # fix_ci — success path
 # ---------------------------------------------------------------------------
@@ -907,8 +921,8 @@ async def test_fix_ci_publishes_ci_check_events(
     ci_events = [e for e in events if e.type == EventType.CI_CHECK]
     assert len(ci_events) >= 2
     statuses = [e.data["status"] for e in ci_events]
-    assert "fixing" in statuses
-    assert "fix_done" in statuses
+    assert ReviewerStatus.FIXING.value in statuses
+    assert ReviewerStatus.FIX_DONE.value in statuses
 
 
 # ---------------------------------------------------------------------------
@@ -1000,3 +1014,80 @@ async def test_fix_ci_failure_records_duration(
         result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
 
     assert result.duration_seconds > 0
+
+
+# ---------------------------------------------------------------------------
+# Reviewer diff truncation
+# ---------------------------------------------------------------------------
+
+
+def test_build_review_prompt_truncates_long_diff_with_warning(
+    config, event_bus, pr_info, issue
+):
+    """Diff exceeding max_review_diff_chars should be truncated with a note."""
+    runner = _make_runner(config, event_bus)
+    long_diff = "x" * 20_000
+    prompt = runner._build_review_prompt(pr_info, issue, long_diff)
+
+    assert "x" * 15_000 in prompt
+    assert "x" * 20_000 not in prompt
+    assert "Diff truncated" in prompt
+    assert "review may be incomplete" in prompt
+
+
+def test_build_review_prompt_preserves_short_diff(config, event_bus, pr_info, issue):
+    """Diff under max_review_diff_chars should pass through unchanged."""
+    runner = _make_runner(config, event_bus)
+    short_diff = "diff --git a/foo.py\n+added line"
+    prompt = runner._build_review_prompt(pr_info, issue, short_diff)
+
+    assert short_diff in prompt
+    assert "Diff truncated" not in prompt
+
+
+def test_build_review_prompt_diff_truncation_configurable(event_bus, pr_info, issue):
+    """max_review_diff_chars should control the truncation limit."""
+    cfg = ConfigFactory.create(max_review_diff_chars=5_000)
+    runner = _make_runner(cfg, event_bus)
+    diff = "x" * 10_000
+    prompt = runner._build_review_prompt(pr_info, issue, diff)
+
+    assert "x" * 5_000 in prompt
+    assert "x" * 10_000 not in prompt
+    assert "5,000 chars" in prompt
+
+
+def test_build_review_prompt_logs_warning_on_truncation(
+    config, event_bus, pr_info, issue
+):
+    """Should log a warning when diff is truncated."""
+    runner = _make_runner(config, event_bus)
+    long_diff = "x" * 20_000
+
+    with patch("reviewer.logger") as mock_logger:
+        runner._build_review_prompt(pr_info, issue, long_diff)
+
+    mock_logger.warning.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Reviewer test_command configuration
+# ---------------------------------------------------------------------------
+
+
+def test_build_review_prompt_uses_configured_test_command(event_bus, pr_info, issue):
+    """Reviewer prompt should use the configured test_command."""
+    cfg = ConfigFactory.create(test_command="npm test", max_ci_fix_attempts=0)
+    runner = _make_runner(cfg, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "`npm test`" in prompt
+    assert "make test-fast" not in prompt
+
+
+def test_build_review_prompt_no_make_test_fast(config, event_bus, pr_info, issue):
+    """Reviewer prompt should not reference make test-fast anywhere."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "make test-fast" not in prompt

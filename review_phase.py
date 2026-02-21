@@ -579,8 +579,9 @@ class ReviewPhase:
     ) -> bool:
         """Use the implementation agent to resolve merge conflicts.
 
-        Starts a merge (leaving conflict markers), runs the agent to
-        resolve them, and verifies the result with ``make quality``.
+        Retries up to ``config.max_merge_conflict_fix_attempts`` times.
+        Each attempt starts a merge (leaving conflict markers), runs the
+        agent to resolve them, and verifies with ``make quality``.
         Returns *True* if the conflicts were resolved successfully.
         """
         if self._agents is None:
@@ -590,47 +591,119 @@ class ReviewPhase:
             )
             return False
 
-        # Start merge leaving conflict markers in place
-        clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
-        if clean:
-            # No conflicts after all (race / already resolved)
-            return True
+        max_attempts = self._config.max_merge_conflict_fix_attempts
+        last_error: str | None = None
 
-        try:
-            prompt = (
-                f"The branch for issue #{issue.number} ({issue.title}) has "
-                f"merge conflicts with main.\n\n"
-                "There is a `git merge` in progress with conflict markers "
-                "in the working tree.\n\n"
-                "## Instructions\n\n"
-                "1. Run `git diff --name-only --diff-filter=U` to list "
-                "conflicted files.\n"
-                "2. Open each conflicted file, understand both sides of the "
-                "conflict, and resolve the markers.\n"
-                "3. Stage all resolved files with `git add`.\n"
-                "4. Complete the merge with "
-                "`git commit --no-edit`.\n"
-                "5. Run `make quality` to ensure everything passes.\n"
-                "6. If quality fails, fix the issues and commit again.\n\n"
-                "## Rules\n\n"
-                "- Keep the intent of the original PR changes.\n"
-                "- Incorporate upstream (main) changes correctly.\n"
-                "- Do NOT push to remote. Do NOT create pull requests.\n"
-                "- Ensure `make quality` passes before finishing.\n"
-            )
+        for attempt in range(1, max_attempts + 1):
+            # Abort any prior failed merge before retrying
+            if attempt > 1:
+                await self._worktrees.abort_merge(wt_path)
 
-            cmd = self._agents._build_command(wt_path)
-            await self._agents._execute(cmd, prompt, wt_path, issue.number)
+            # Start merge leaving conflict markers in place
+            clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
+            if clean:
+                return True
 
-            # Verify quality passes
-            success, _ = await self._agents._verify_result(wt_path, pr.branch)
-            return success
-        except Exception as exc:
-            logger.error(
-                "Conflict resolution agent failed for PR #%d: %s",
+            logger.info(
+                "Conflict resolution attempt %d/%d for PR #%d",
+                attempt,
+                max_attempts,
                 pr.number,
-                exc,
             )
-            # Abort the merge to leave a clean state
-            await self._worktrees.abort_merge(wt_path)
-            return False
+            await self._publish_review_status(pr, worker_id, "conflict_resolution")
+
+            try:
+                prompt = self._build_conflict_prompt(issue, last_error, attempt)
+                cmd = self._agents._build_command(wt_path)
+                transcript = await self._agents._execute(
+                    cmd, prompt, wt_path, issue.number
+                )
+
+                self._save_conflict_transcript(
+                    pr.number, issue.number, attempt, transcript
+                )
+
+                success, error_msg = await self._agents._verify_result(
+                    wt_path, pr.branch
+                )
+                if success:
+                    return True
+
+                last_error = error_msg
+                logger.warning(
+                    "Conflict resolution attempt %d/%d failed for PR #%d: %s",
+                    attempt,
+                    max_attempts,
+                    pr.number,
+                    error_msg[:200] if error_msg else "",
+                )
+            except Exception as exc:
+                logger.error(
+                    "Conflict resolution agent failed for PR #%d (attempt %d/%d): %s",
+                    pr.number,
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+                last_error = str(exc)
+
+        # All attempts exhausted — abort and let caller escalate
+        await self._worktrees.abort_merge(wt_path)
+        return False
+
+    def _build_conflict_prompt(
+        self,
+        issue: GitHubIssue,
+        last_error: str | None,
+        attempt: int,
+    ) -> str:
+        """Build the conflict resolution prompt, adding error context on retries."""
+        prompt = (
+            f"The branch for issue #{issue.number} ({issue.title}) has "
+            f"merge conflicts with main.\n\n"
+            "There is a `git merge` in progress with conflict markers "
+            "in the working tree.\n\n"
+            "## Instructions\n\n"
+            "1. Run `git diff --name-only --diff-filter=U` to list "
+            "conflicted files.\n"
+            "2. Open each conflicted file, understand both sides of the "
+            "conflict, and resolve the markers.\n"
+            "3. Stage all resolved files with `git add`.\n"
+            "4. Complete the merge with "
+            "`git commit --no-edit`.\n"
+            "5. Run `make quality` to ensure everything passes.\n"
+            "6. If quality fails, fix the issues and commit again.\n\n"
+            "## Rules\n\n"
+            "- Keep the intent of the original PR changes.\n"
+            "- Incorporate upstream (main) changes correctly.\n"
+            "- Do NOT push to remote. Do NOT create pull requests.\n"
+            "- Ensure `make quality` passes before finishing.\n"
+        )
+        if last_error and attempt > 1:
+            prompt += (
+                f"\n## Previous Attempt Failed\n\n"
+                f"Attempt {attempt - 1} resolved the conflicts but "
+                f"failed verification:\n"
+                f"```\n{last_error[-3000:]}\n```\n"
+                f"Please resolve the conflicts again, paying attention "
+                f"to the above errors.\n"
+            )
+        return prompt
+
+    def _save_conflict_transcript(
+        self,
+        pr_number: int,
+        issue_number: int,
+        attempt: int,
+        transcript: str,
+    ) -> None:
+        """Save a conflict resolution transcript to ``.hydra/logs/``."""
+        log_dir = self._config.repo_root / ".hydra" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = log_dir / f"conflict-pr-{pr_number}-attempt-{attempt}.txt"
+        path.write_text(transcript)
+        logger.info(
+            "Conflict resolution transcript saved to %s",
+            path,
+            extra={"issue": issue_number},
+        )

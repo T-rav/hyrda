@@ -75,6 +75,8 @@ class HydraOrchestrator:
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
+        # Background worker last-known status: {worker_name: status dict}
+        self._bg_worker_states: dict[str, dict[str, Any]] = {}
 
         # Delegate phases to focused modules
         self._fetcher = IssueFetcher(config)
@@ -200,6 +202,23 @@ class HydraOrchestrator:
         self._active_review_issues.clear()
         self._active_hitl_issues.clear()
 
+    def update_bg_worker_status(
+        self, name: str, status: str, details: dict[str, Any] | None = None
+    ) -> None:
+        """Record the latest heartbeat from a background worker."""
+        from datetime import UTC, datetime
+
+        self._bg_worker_states[name] = {
+            "name": name,
+            "status": status,
+            "last_run": datetime.now(UTC).isoformat(),
+            "details": details or {},
+        }
+
+    def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
+        """Return a copy of all background worker states."""
+        return dict(self._bg_worker_states)
+
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
         await self._bus.publish(
@@ -232,11 +251,12 @@ class HydraOrchestrator:
         try:
             await self._supervise_loops()
         finally:
-            self._running = False
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
             self._hitl_runner.terminate()
+            await asyncio.sleep(0)
+            self._running = False
             await self._publish_status()
             logger.info("Hydra stopped")
 
@@ -302,7 +322,6 @@ class HydraOrchestrator:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
             try:
-                await self._triage_find_issues()
                 await self._plan_issues()
             except Exception:
                 logger.exception("Plan loop iteration failed — will retry next cycle")

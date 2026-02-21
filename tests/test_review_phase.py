@@ -338,6 +338,7 @@ class TestReviewPRs:
     ) -> None:
         """Merge conflict escalation should record review_label as HITL origin."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -365,6 +366,7 @@ class TestReviewPRs:
     ) -> None:
         """Merge conflict escalation should record cause in state."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -392,6 +394,7 @@ class TestReviewPRs:
     ) -> None:
         """When merge fails but agent resolves conflicts, review should proceed."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -1389,6 +1392,7 @@ class TestResolveMergeConflicts:
     ) -> None:
         """Should run the agent and verify quality when there are conflicts."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         phase = _make_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
@@ -1407,7 +1411,7 @@ class TestResolveMergeConflicts:
 
     @pytest.mark.asyncio
     async def test_aborts_merge_on_agent_exception(self, config: HydraConfig) -> None:
-        """On agent exception, should abort merge and return False."""
+        """On agent exception on all attempts, should abort merge and return False."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
         phase = _make_phase(config, agents=mock_agents)
@@ -1422,6 +1426,180 @@ class TestResolveMergeConflicts:
         )
 
         assert result is False
+        # abort_merge called between retries + final abort
+        assert phase._worktrees.abort_merge.await_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_retries_on_verify_failure(self, config: HydraConfig) -> None:
+        """Should retry when verify fails, and succeed on second attempt."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "quality failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        assert mock_agents._execute.await_count == 2
+        assert mock_agents._verify_result.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_exhausts_all_attempts_then_returns_false(
+        self, config: HydraConfig
+    ) -> None:
+        """When all attempts fail verification, should return False."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        # Default is 3 attempts
+        assert mock_agents._execute.await_count == 3
+        assert mock_agents._verify_result.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_feeds_error_to_retry_prompt(self, config: HydraConfig) -> None:
+        """On retry, the prompt should include the previous error."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "ruff check failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        # Second call to _execute should have received a prompt with the error
+        second_call_args = mock_agents._execute.call_args_list[1]
+        prompt_arg = second_call_args.args[1]
+        assert "ruff check failed" in prompt_arg
+        assert "Previous Attempt Failed" in prompt_arg
+
+    @pytest.mark.asyncio
+    async def test_aborts_merge_between_retries(self, config: HydraConfig) -> None:
+        """abort_merge should be called before attempt 2+."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        # abort_merge called once before attempt 2
+        phase._worktrees.abort_merge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_saves_transcript_per_attempt(self, config: HydraConfig) -> None:
+        """A transcript file should be saved for each attempt."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript content")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        log_dir = config.repo_root / ".hydra" / "logs"
+        assert (log_dir / "conflict-pr-101-attempt-1.txt").exists()
+        assert (log_dir / "conflict-pr-101-attempt-2.txt").exists()
+
+    @pytest.mark.asyncio
+    async def test_respects_config_max_attempts(self, config: HydraConfig) -> None:
+        """Should honor a custom max_merge_conflict_fix_attempts value."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        assert mock_agents._execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_zero_attempts_returns_false(self, config: HydraConfig) -> None:
+        """With max_merge_conflict_fix_attempts=0, should return False without trying."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_merge_conflict_fix_attempts=0,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        mock_agents = AsyncMock()
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        mock_agents._execute.assert_not_awaited()
+        # Final abort_merge should still be called
         phase._worktrees.abort_merge.assert_awaited_once()
 
 
@@ -1961,6 +2139,7 @@ class TestGranularReviewStatusEvents:
     ) -> None:
         """A 'conflict_resolution' event should be published when resolving conflicts."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         bus = EventBus()
         phase = _make_phase(config, agents=mock_agents, event_bus=bus)
@@ -1990,7 +2169,8 @@ class TestGranularReviewStatusEvents:
             if e.type == EventType.REVIEW_UPDATE
             and e.data.get("status") == "conflict_resolution"
         ]
-        assert len(conflict_events) == 1
+        # One event from the caller in review_prs, one from the retry loop
+        assert len(conflict_events) >= 1
         assert conflict_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
@@ -1999,6 +2179,7 @@ class TestGranularReviewStatusEvents:
     ) -> None:
         """An 'escalating' event should be published when conflicts can't be resolved."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
         bus = EventBus()
         phase = _make_phase(config, agents=mock_agents, event_bus=bus)

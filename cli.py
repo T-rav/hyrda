@@ -97,6 +97,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
     )
     parser.add_argument(
+        "--max-merge-conflict-fix-attempts",
+        type=int,
+        default=None,
+        help="Max merge conflict resolution retry cycles (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -127,6 +133,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
+        "--improve-label",
+        default=None,
+        help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+    )
+    parser.add_argument(
         "--planner-model",
         default=None,
         help="Model for planning agents (default: opus)",
@@ -147,6 +158,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--lite-plan-labels",
         default=None,
         help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
+    )
+    parser.add_argument(
+        "--test-command",
+        default=None,
+        help="Test command used in agent prompts (default: make test)",
     )
     parser.add_argument(
         "--repo",
@@ -235,9 +251,11 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ci_check_timeout",
         "ci_poll_interval",
         "max_ci_fix_attempts",
+        "max_merge_conflict_fix_attempts",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
+        "test_command",
         "repo",
         "main_branch",
         "dashboard_port",
@@ -258,6 +276,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "improve_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

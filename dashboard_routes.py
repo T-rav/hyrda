@@ -14,7 +14,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import ControlStatusConfig, ControlStatusResponse
+from models import (
+    BackgroundWorkersResponse,
+    BackgroundWorkerStatus,
+    ControlStatusConfig,
+    ControlStatusResponse,
+    LifetimeStats,
+    MetricsResponse,
+)
 from pr_manager import PRManager
 from state import StateTracker
 
@@ -84,6 +91,7 @@ def create_router(
                 *config.hitl_label,
                 *config.hitl_active_label,
                 *config.planner_label,
+                *config.improve_label,
             }
         )
         items = await pr_manager.list_open_prs(all_labels)
@@ -100,6 +108,17 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
+            if not cause:
+                origin = state.get_hitl_origin(item.issue)
+                if origin:
+                    if origin in config.improve_label:
+                        cause = "Self-improvement proposal"
+                    elif origin in config.review_label:
+                        cause = "Review escalation"
+                    elif origin in config.find_label:
+                        cause = "Triage escalation"
+                    else:
+                        cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
             enriched.append(data)
@@ -232,6 +251,7 @@ def create_router(
                 hitl_label=config.hitl_label,
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
+                improve_label=config.improve_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,
@@ -241,6 +261,48 @@ def create_router(
             ),
         )
         return JSONResponse(response.model_dump())
+
+    # Known background workers with human-friendly labels
+    _bg_worker_defs = [
+        ("memory_sync", "Memory Sync"),
+        ("retrospective", "Retrospective"),
+        ("metrics", "Metrics"),
+        ("review_insights", "Review Insights"),
+    ]
+
+    @router.get("/api/system/workers")
+    async def get_system_workers() -> JSONResponse:
+        """Return last known status of each background worker."""
+        orch = get_orchestrator()
+        bg_states = orch.get_bg_worker_states() if orch else {}
+        workers = []
+        for name, label in _bg_worker_defs:
+            if name in bg_states:
+                entry = bg_states[name]
+                workers.append(
+                    BackgroundWorkerStatus(
+                        name=name,
+                        label=label,
+                        status=entry["status"],
+                        last_run=entry.get("last_run"),
+                        details=entry.get("details", {}),
+                    )
+                )
+            else:
+                workers.append(BackgroundWorkerStatus(name=name, label=label))
+        return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
+
+    @router.get("/api/metrics")
+    async def get_metrics() -> JSONResponse:
+        """Return lifetime stats and derived rates."""
+        lifetime_data = state.get_lifetime_stats()
+        lifetime = LifetimeStats(**lifetime_data)
+        rates: dict[str, float] = {}
+        if lifetime.issues_completed > 0:
+            rates["merge_rate"] = lifetime.prs_merged / lifetime.issues_completed
+        return JSONResponse(
+            MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
+        )
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
