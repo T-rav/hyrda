@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -453,8 +454,6 @@ class ReviewPhase:
         Counts bullet points (``-`` or ``*``) and numbered items (``1.``)
         as individual findings.
         """
-        import re
-
         lines = summary.strip().splitlines()
         count = 0
         for line in lines:
