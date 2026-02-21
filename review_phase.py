@@ -73,6 +73,7 @@ class ReviewPhase:
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
                 self._active_issues.add(pr.issue_number)
+                self._state.set_active_issue_numbers(list(self._active_issues))
 
                 try:
                     # Publish a start event immediately so the dashboard
@@ -246,6 +247,7 @@ class ReviewPhase:
                                         result.ci_fix_attempts
                                     )
                                 self._state.reset_review_attempts(pr.issue_number)
+                                self._state.reset_issue_attempts(pr.issue_number)
                                 self._state.clear_review_feedback(pr.issue_number)
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
@@ -345,6 +347,7 @@ class ReviewPhase:
                 finally:
                     await self._publish_review_status(pr, idx, "done")
                     self._active_issues.discard(pr.issue_number)
+                    self._state.set_active_issue_numbers(list(self._active_issues))
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
         for task in asyncio.as_completed(tasks):

@@ -115,6 +115,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max merge conflict resolution retry cycles (default: 3)",
     )
     parser.add_argument(
+        "--max-issue-attempts",
+        type=int,
+        default=None,
+        help="Max total implementation attempts per issue (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -289,6 +295,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "max_review_fix_attempts",
         "min_review_findings",
         "max_merge_conflict_fix_attempts",
+        "max_issue_attempts",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
