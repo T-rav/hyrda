@@ -2272,8 +2272,8 @@ class TestSPACatchAll:
         client = TestClient(app)
         response = client.get("/ws")
 
-        # WebSocket endpoint responds with 403 on a regular GET (upgrade required);
-        # the catch-all must not intercept it and serve SPA HTML.
+        # The catch-all guard returns 404 for the bare /ws path,
+        # preventing SPA HTML from being served at the WebSocket endpoint.
         assert response.status_code != 200
         assert "text/html" not in response.headers.get("content-type", "")
 
@@ -2319,6 +2319,56 @@ class TestSPACatchAll:
         catchall_response = client.get("/system")
 
         assert root_response.text == catchall_response.text
+
+    def test_spa_catchall_blocks_symlink_escape(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Symlinks inside ui/dist/ pointing outside must not be served."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        # Create a fake ui/dist/ with index.html
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "index.html").write_text("<html><body>SPA</body></html>")
+
+        # Create a sensitive file outside dist_dir
+        (tmp_path / "secret.txt").write_text("sensitive data")
+
+        # Create a symlink inside dist_dir pointing outside
+        (dist_dir / "escape.txt").symlink_to(tmp_path / "secret.txt")
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with patch("dashboard._UI_DIST_DIR", dist_dir):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/escape.txt")
+
+        # The symlink target resolves outside dist_dir; the is_relative_to
+        # jail check must reject it and serve SPA HTML instead.
+        assert response.status_code == 200
+        assert "sensitive data" not in response.text
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_spa_catchall_does_not_catch_assets_prefix(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /assets/nonexistent should return 404, not SPA HTML."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/assets/nonexistent.js")
+
+        assert response.status_code == 404
 
     def test_api_state_still_works_with_catchall(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
