@@ -283,7 +283,7 @@ def create_router(
     async def get_metrics() -> JSONResponse:
         """Return lifetime stats and derived rates."""
         lifetime_data = state.get_lifetime_stats()
-        lifetime = LifetimeStats(**lifetime_data)
+        lifetime = LifetimeStats.model_validate(lifetime_data)
         rates: dict[str, float] = {}
         total_reviews = (
             lifetime.total_review_approvals + lifetime.total_review_request_changes
