@@ -1,6 +1,6 @@
-import React, { useCallback } from 'react'
+import React from 'react'
 import { theme } from '../theme'
-import { PIPELINE_STAGES, BACKGROUND_WORKERS } from '../constants'
+import { PIPELINE_STAGES } from '../constants'
 
 const BLOCK_LABELS = [
   { key: 'hydra-plan',   label: 'Plan',   stage: 'plan' },
@@ -48,36 +48,11 @@ function BlocksRow({ labelDef, count }) {
   )
 }
 
-function BgWorkerRow({ def, workerState, onToggle }) {
-  const enabled = workerState ? workerState.status !== 'disabled' : true
-  const status = workerState?.status || 'idle'
-  const dotColor = !enabled ? theme.textInactive
-    : status === 'error' ? theme.red
-    : status === 'ok' ? theme.green
-    : theme.textMuted
-
-  return (
-    <div style={styles.bgWorkerRow}>
-      <span style={{ ...styles.bgWorkerDot, background: dotColor }} />
-      <span style={styles.bgWorkerLabel}>{def.label}</span>
-      <span style={styles.bgWorkerStatus}>{enabled ? status : 'disabled'}</span>
-      <button
-        style={enabled ? styles.bgToggleOn : styles.bgToggleOff}
-        onClick={() => onToggle(def.key, !enabled)}
-      >
-        {enabled ? 'On' : 'Off'}
-      </button>
-    </div>
-  )
-}
-
-export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCounts, backgroundWorkers, onToggleBgWorker }) {
+export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCounts }) {
   const session = sessionCounts || {}
   const github = githubMetrics || {}
   const openByLabel = github.open_by_label || {}
   const lifetime = metrics?.lifetime || lifetimeStats || {}
-  const bgWorkers = backgroundWorkers || []
-  const bgMap = Object.fromEntries(bgWorkers.map(w => [w.name, w]))
 
   const hasGithub = githubMetrics !== null && githubMetrics !== undefined
   const hasSession = session.triaged > 0 || session.planned > 0 ||
@@ -141,21 +116,6 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCou
         </>
       )}
 
-      {onToggleBgWorker && (
-        <>
-          <h3 style={styles.heading}>Background Workers</h3>
-          <div style={styles.bgWorkerSection}>
-            {BACKGROUND_WORKERS.map(def => (
-              <BgWorkerRow
-                key={def.key}
-                def={def}
-                workerState={bgMap[def.key]}
-                onToggle={onToggleBgWorker}
-              />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   )
 }
@@ -254,59 +214,5 @@ const styles = {
   blocksEmpty: {
     fontSize: 11,
     color: theme.textInactive,
-  },
-  bgWorkerSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    marginBottom: 24,
-  },
-  bgWorkerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '8px 12px',
-    border: `1px solid ${theme.border}`,
-    borderRadius: 6,
-    background: theme.surfaceInset,
-  },
-  bgWorkerDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  bgWorkerLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: theme.text,
-    flex: 1,
-  },
-  bgWorkerStatus: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginRight: 8,
-  },
-  bgToggleOn: {
-    padding: '2px 10px',
-    fontSize: 10,
-    fontWeight: 600,
-    border: `1px solid ${theme.green}`,
-    borderRadius: 10,
-    background: theme.greenSubtle,
-    color: theme.green,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  },
-  bgToggleOff: {
-    padding: '2px 10px',
-    fontSize: 10,
-    fontWeight: 600,
-    border: `1px solid ${theme.border}`,
-    borderRadius: 10,
-    background: theme.surface,
-    color: theme.textMuted,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
   },
 }

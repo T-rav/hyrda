@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import { MetricsPanel } from '../MetricsPanel'
 
 describe('MetricsPanel', () => {
@@ -92,65 +92,5 @@ describe('MetricsPanel', () => {
   it('shows empty state when everything is null and session is empty', () => {
     render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={null} sessionCounts={null} />)
     expect(screen.getByText('No metrics data available yet.')).toBeInTheDocument()
-  })
-})
-
-describe('MetricsPanel background worker toggles', () => {
-  const githubMetrics = {
-    open_by_label: {},
-    total_closed: 5,
-    total_merged: 3,
-  }
-
-  it('renders Background Workers section when onToggleBgWorker is provided', () => {
-    render(
-      <MetricsPanel
-        metrics={null} lifetimeStats={null} githubMetrics={githubMetrics}
-        sessionCounts={{}} backgroundWorkers={[]} onToggleBgWorker={() => {}}
-      />
-    )
-    expect(screen.getByText('Background Workers')).toBeInTheDocument()
-    expect(screen.getByText('Memory Sync')).toBeInTheDocument()
-    expect(screen.getByText('Retrospective')).toBeInTheDocument()
-    expect(screen.getByText('Metrics')).toBeInTheDocument()
-    expect(screen.getByText('Review Insights')).toBeInTheDocument()
-  })
-
-  it('does not render Background Workers section without onToggleBgWorker', () => {
-    render(
-      <MetricsPanel
-        metrics={null} lifetimeStats={null} githubMetrics={githubMetrics}
-        sessionCounts={{}}
-      />
-    )
-    expect(screen.queryByText('Background Workers')).not.toBeInTheDocument()
-  })
-
-  it('toggle button calls onToggleBgWorker with correct worker key', () => {
-    const onToggle = vi.fn()
-    render(
-      <MetricsPanel
-        metrics={null} lifetimeStats={null} githubMetrics={githubMetrics}
-        sessionCounts={{}} backgroundWorkers={[]} onToggleBgWorker={onToggle}
-      />
-    )
-    // All workers default to enabled (On), so clicking toggles to disabled
-    const onButtons = screen.getAllByText('On')
-    fireEvent.click(onButtons[0]) // First worker = memory_sync
-    expect(onToggle).toHaveBeenCalledWith('memory_sync', false)
-  })
-
-  it('shows Off button for disabled workers', () => {
-    const bgWorkers = [
-      { name: 'memory_sync', status: 'disabled', last_run: null, details: {} },
-    ]
-    render(
-      <MetricsPanel
-        metrics={null} lifetimeStats={null} githubMetrics={githubMetrics}
-        sessionCounts={{}} backgroundWorkers={bgWorkers} onToggleBgWorker={() => {}}
-      />
-    )
-    expect(screen.getByText('Off')).toBeInTheDocument()
-    expect(screen.getByText('disabled')).toBeInTheDocument()
   })
 })

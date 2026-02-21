@@ -150,7 +150,7 @@ function AppContent() {
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'livestream' && <Livestream events={events} />}
-          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} />}
           {activeTab === 'metrics' && (
             <MetricsPanel
               metrics={metrics}
@@ -163,8 +163,6 @@ function AppContent() {
                 reviewed: sessionReviewed,
                 merged: mergedCount,
               }}
-              backgroundWorkers={backgroundWorkers}
-              onToggleBgWorker={toggleBgWorker}
             />
           )}
         </div>

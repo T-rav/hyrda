@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { SystemPanel } from '../SystemPanel'
 
@@ -135,6 +135,41 @@ describe('SystemPanel', () => {
       }
       render(<SystemPanel workers={workers} backgroundWorkers={[]} />)
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
+    })
+  })
+
+  describe('Background Worker Toggles', () => {
+    it('shows On buttons when onToggleBgWorker is provided', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={() => {}} />)
+      const onButtons = screen.getAllByText('On')
+      expect(onButtons.length).toBeGreaterThan(0)
+    })
+
+    it('does not show toggle buttons when onToggleBgWorker is not provided', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
+      expect(screen.queryByText('On')).not.toBeInTheDocument()
+      expect(screen.queryByText('Off')).not.toBeInTheDocument()
+    })
+
+    it('calls onToggleBgWorker with correct worker key when toggled', () => {
+      const onToggle = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
+      const onButtons = screen.getAllByText('On')
+      fireEvent.click(onButtons[0]) // First "On" button = memory_sync
+      expect(onToggle).toHaveBeenCalledWith('memory_sync', false)
+    })
+
+    it('shows Off button for disabled workers', () => {
+      const onToggle = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
+      expect(screen.getByText('Off')).toBeInTheDocument()
+    })
+
+    it('clicking Off toggles to enabled', () => {
+      const onToggle = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
+      fireEvent.click(screen.getByText('Off'))
+      expect(onToggle).toHaveBeenCalledWith('review_insights', true)
     })
   })
 })

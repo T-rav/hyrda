@@ -87,7 +87,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
   )
 }
 
-export function SystemPanel({ workers, backgroundWorkers }) {
+export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && w.status !== 'queued'
   )
@@ -123,15 +123,25 @@ export function SystemPanel({ workers, backgroundWorkers }) {
           const lastRun = state?.last_run || null
           const details = state?.details || {}
 
+          const enabled = status !== 'disabled'
+
           return (
             <div key={def.key} style={styles.card}>
               <div style={styles.cardHeader}>
                 <span
-                  style={{ ...styles.dot, background: statusColor(status) }}
+                  style={{ ...styles.dot, background: enabled ? statusColor(status) : theme.textInactive }}
                   data-testid={`dot-${def.key}`}
                 />
                 <span style={styles.label}>{def.label}</span>
-                <span style={styles.status}>{status}</span>
+                <span style={styles.status}>{enabled ? status : 'disabled'}</span>
+                {onToggleBgWorker && (
+                  <button
+                    style={enabled ? styles.toggleOn : styles.toggleOff}
+                    onClick={() => onToggleBgWorker(def.key, !enabled)}
+                  >
+                    {enabled ? 'On' : 'Off'}
+                  </button>
+                )}
               </div>
               <div style={styles.lastRun}>
                 Last run: {relativeTime(lastRun)}
@@ -268,5 +278,27 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  toggleOn: {
+    padding: '2px 10px',
+    fontSize: 10,
+    fontWeight: 600,
+    border: `1px solid ${theme.green}`,
+    borderRadius: 10,
+    background: theme.greenSubtle,
+    color: theme.green,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  toggleOff: {
+    padding: '2px 10px',
+    fontSize: 10,
+    fontWeight: 600,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 10,
+    background: theme.surface,
+    color: theme.textMuted,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
 }
