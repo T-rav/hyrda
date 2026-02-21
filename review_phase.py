@@ -10,7 +10,7 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
+from models import CriterionVerdict, GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
@@ -22,6 +22,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.review_phase")
@@ -41,6 +42,7 @@ class ReviewPhase:
         active_issues: set[int],
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
+        judge: VerificationJudge | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -51,6 +53,7 @@ class ReviewPhase:
         self._active_issues = active_issues
         self._agents = agents
         self._bus = event_bus or EventBus()
+        self._judge = judge
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
 
     async def review_prs(
@@ -201,6 +204,32 @@ class ReviewPhase:
                                     pr.issue_number,
                                     [self._config.fixed_label[0]],
                                 )
+
+                                # Run verification judge if available
+                                if self._judge is not None:
+                                    try:
+                                        judge_verdict = await self._judge.judge(
+                                            issue, diff, worker_id=idx
+                                        )
+                                        if judge_verdict.criteria_results:
+                                            pass_count = sum(
+                                                1
+                                                for c in judge_verdict.criteria_results
+                                                if c.verdict == CriterionVerdict.PASS
+                                            )
+                                            logger.info(
+                                                "Verification judge for issue #%d: "
+                                                "%d/%d criteria passed",
+                                                issue.number,
+                                                pass_count,
+                                                len(judge_verdict.criteria_results),
+                                            )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Verification judge failed for issue #%d",
+                                            issue.number,
+                                            exc_info=True,
+                                        )
                             else:
                                 logger.warning(
                                     "PR #%d merge failed — escalating to HITL",

@@ -18,7 +18,10 @@ if TYPE_CHECKING:
 
 from events import EventBus, EventType
 from models import (
+    CriterionResult,
+    CriterionVerdict,
     GitHubIssue,
+    JudgeVerdict,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
@@ -78,6 +81,7 @@ def _make_phase(
     *,
     agents: AsyncMock | None = None,
     event_bus: EventBus | None = None,
+    judge: AsyncMock | None = None,
 ) -> ReviewPhase:
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
@@ -100,6 +104,7 @@ def _make_phase(
         active_issues=active_issues,
         agents=agents,
         event_bus=event_bus or EventBus(),
+        judge=judge,
     )
 
     return phase
@@ -1831,3 +1836,164 @@ class TestReviewInsightIntegration:
         # Review should still succeed
         assert len(results) == 1
         assert results[0].merged is True
+
+
+# ---------------------------------------------------------------------------
+# Verification judge wiring
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationJudgeWiring:
+    """Tests that the verification judge is called after merge."""
+
+    @pytest.mark.asyncio
+    async def test_runs_judge_after_merge(self, config: HydraConfig) -> None:
+        """When judge is provided, it should be called after successful merge."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(
+            return_value=JudgeVerdict(
+                issue_number=42,
+                criteria_results=[
+                    CriterionResult(
+                        criterion_id="AC-1",
+                        verdict=CriterionVerdict.PASS,
+                        reasoning="OK",
+                    ),
+                ],
+                all_criteria_pass=True,
+            )
+        )
+
+        phase = _make_phase(config, judge=mock_judge)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        mock_judge.judge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_judge_when_none(self, config: HydraConfig) -> None:
+        """When no judge is provided, review should proceed without judge call."""
+        phase = _make_phase(config)  # No judge
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is True
+        # No exception — judge was None and was not called
+
+    @pytest.mark.asyncio
+    async def test_judge_failure_does_not_block_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """If judge raises, merge should still succeed."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(side_effect=RuntimeError("judge crashed"))
+
+        phase = _make_phase(config, judge=mock_judge)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        # Merge succeeded despite judge failure
+        assert results[0].merged is True
+        mock_judge.judge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_judge_not_called_when_merge_fails(self, config: HydraConfig) -> None:
+        """Judge should not be called when merge_pr returns False."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(return_value=JudgeVerdict(issue_number=42))
+
+        phase = _make_phase(config, judge=mock_judge)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        mock_judge.judge.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_judge_not_called_for_non_approve_verdict(
+        self, config: HydraConfig
+    ) -> None:
+        """Judge should not be called for REQUEST_CHANGES verdict."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(return_value=JudgeVerdict(issue_number=42))
+
+        phase = _make_phase(config, judge=mock_judge)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(
+                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert results[0].merged is False
+        mock_judge.judge.assert_not_awaited()

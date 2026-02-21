@@ -174,6 +174,45 @@ class ReviewResult(BaseModel):
     ci_fix_attempts: int = 0
 
 
+# --- Verification Judge ---
+
+
+class CriterionVerdict(StrEnum):
+    """Verdict for a single acceptance criterion."""
+
+    PASS = "pass"
+    FAIL = "fail"
+
+
+class CriterionResult(BaseModel):
+    """Result of evaluating a single acceptance criterion."""
+
+    criterion_id: str  # e.g., "AC-1"
+    verdict: CriterionVerdict = CriterionVerdict.FAIL
+    reasoning: str = ""
+    evidence: str = ""  # e.g., test file or code location
+
+
+class InstructionsQuality(StrEnum):
+    """Quality verdict for human verification instructions."""
+
+    READY = "ready"
+    NEEDS_REFINEMENT = "needs-refinement"
+
+
+class JudgeVerdict(BaseModel):
+    """Outcome of the verification judge evaluation."""
+
+    issue_number: int
+    criteria_results: list[CriterionResult] = Field(default_factory=list)
+    all_criteria_pass: bool = False
+    instructions_quality: InstructionsQuality = InstructionsQuality.NEEDS_REFINEMENT
+    instructions_feedback: str = ""
+    refined: bool = False  # True if instructions were refined
+    summary: str = ""
+    transcript: str = ""
+
+
 # --- Batch ---
 
 

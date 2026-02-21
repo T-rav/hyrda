@@ -25,6 +25,7 @@ from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
 from triage import TriageRunner
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
@@ -59,6 +60,7 @@ class HydraOrchestrator:
         self._planners = PlannerRunner(config, self._bus)
         self._prs = PRManager(config, self._bus)
         self._reviewers = ReviewRunner(config, self._bus)
+        self._judge = VerificationJudge(config, self._bus)
         self._hitl_runner = HITLRunner(config, self._bus)
         self._triage = TriageRunner(config, self._bus)
         self._dashboard: object | None = None
@@ -96,6 +98,7 @@ class HydraOrchestrator:
             self._active_issues,
             agents=self._agents,
             event_bus=self._bus,
+            judge=self._judge,
         )
 
     @property
@@ -169,6 +172,7 @@ class HydraOrchestrator:
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        self._judge.terminate()
         self._hitl_runner.terminate()
         await self._publish_status()
 
@@ -217,6 +221,7 @@ class HydraOrchestrator:
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
+            self._judge.terminate()
             self._hitl_runner.terminate()
             await self._publish_status()
             logger.info("Hydra stopped")

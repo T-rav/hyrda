@@ -34,6 +34,7 @@ class EventType(StrEnum):
     ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
     HITL_UPDATE = "hitl_update"
+    VERIFICATION_JUDGE = "verification_judge"
     ORCHESTRATOR_STATUS = "orchestrator_status"
     ERROR = "error"
 
