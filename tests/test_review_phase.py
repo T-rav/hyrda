@@ -1698,9 +1698,7 @@ class TestResolveMergeConflictsRetry:
             state_file=config.state_file,
         )
         mock_agents = AsyncMock()
-        mock_agents._execute = AsyncMock(
-            side_effect=[RuntimeError("crash"), AsyncMock(return_value="ok")]
-        )
+        mock_agents._execute = AsyncMock(side_effect=[RuntimeError("crash"), "ok"])
         mock_agents._verify_result = AsyncMock(return_value=(True, "OK"))
         phase = _make_phase(cfg, agents=mock_agents)
         pr = make_pr_info(101, 42)
