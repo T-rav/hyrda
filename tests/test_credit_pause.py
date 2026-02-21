@@ -75,8 +75,9 @@ class TestIsCreditExhaustion:
     def test_detects_credit_balance_too_low(self) -> None:
         assert is_credit_exhaustion("Your credit balance is too low") is True
 
-    def test_detects_rate_limit_error(self) -> None:
-        assert is_credit_exhaustion("error: rate_limit_error") is True
+    def test_does_not_detect_transient_rate_limit_as_credit_exhaustion(self) -> None:
+        # rate_limit_error is a per-minute API rate limit, not a credit exhaustion
+        assert is_credit_exhaustion("error: rate_limit_error") is False
 
     def test_returns_false_for_normal_text(self) -> None:
         assert is_credit_exhaustion("Everything is fine") is False
@@ -84,7 +85,6 @@ class TestIsCreditExhaustion:
     def test_is_case_insensitive(self) -> None:
         assert is_credit_exhaustion("USAGE LIMIT REACHED") is True
         assert is_credit_exhaustion("Credit Balance Is Too Low") is True
-        assert is_credit_exhaustion("Rate_Limit_Error") is True
 
 
 # ===========================================================================
@@ -249,7 +249,7 @@ class TestStreamClaudeProcessCreditDetection:
         mock_create = make_streaming_proc(
             returncode=1,
             stdout="",
-            stderr="rate_limit_error: too many requests",
+            stderr="credit balance is too low",
         )
 
         with (

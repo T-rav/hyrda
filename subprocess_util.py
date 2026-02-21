@@ -38,7 +38,6 @@ _AUTH_PATTERNS = ("401", "not logged in", "authentication required", "auth token
 _CREDIT_PATTERNS = (
     "usage limit reached",
     "credit balance is too low",
-    "rate_limit_error",
 )
 
 # Matches e.g. "reset at 3pm (America/New_York)" or "reset at 3am"
@@ -190,7 +189,7 @@ async def run_subprocess_with_retry(
         try:
             return await run_subprocess(*cmd, cwd=cwd, gh_token=gh_token)
         except RuntimeError as exc:
-            if isinstance(exc, AuthenticationError):
+            if isinstance(exc, (AuthenticationError, CreditExhaustedError)):
                 raise
             last_error = exc
             error_msg = str(exc)
