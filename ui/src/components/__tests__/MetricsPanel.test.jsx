@@ -86,6 +86,8 @@ describe('MetricsPanel', () => {
     expect(screen.getByText('Triaged')).toBeInTheDocument()
     expect(screen.getByText('Planned')).toBeInTheDocument()
     expect(screen.getByText('Implemented')).toBeInTheDocument()
+    expect(screen.getByText('Reviewed')).toBeInTheDocument()
+    expect(screen.getByText('Merged')).toBeInTheDocument()
   })
 
   it('does not render session section when all session counts are zero', async () => {
@@ -134,9 +136,15 @@ describe('MetricsPanel', () => {
     expect(screen.getByText('8')).toBeInTheDocument()
   })
 
-  it('shows empty state when everything is null and session is empty', async () => {
+  it('renders rates section when metricsHistory has current snapshot', async () => {
+    mockState.metricsHistory = {
+      current: { merge_rate: 0.8, first_pass_approval_rate: 0.6, quality_fix_rate: 0.1, hitl_escalation_rate: 0.05, issues_completed: 10, prs_merged: 8 },
+      snapshots: [],
+    }
     const { MetricsPanel } = await import('../MetricsPanel')
     render(<MetricsPanel />)
-    expect(screen.getByText('No metrics data available yet.')).toBeInTheDocument()
+    expect(screen.getByText('Rates')).toBeInTheDocument()
+    expect(screen.getByText('Merge Rate')).toBeInTheDocument()
+    expect(screen.getByText('First-Pass Approval')).toBeInTheDocument()
   })
 })
