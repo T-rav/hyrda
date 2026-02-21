@@ -10,6 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_memory_digest
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 
@@ -278,11 +279,17 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
         min_findings = self._config.min_review_findings
 
+        # Memory digest injection
+        memory_section = ""
+        digest = load_memory_digest(self._config)
+        if digest:
+            memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
+
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
 ## Issue: {issue.title}
 
-{issue.body}
+{issue.body}{memory_section}
 
 ## PR Diff
 
@@ -348,6 +355,18 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 Example:
 VERDICT: APPROVE
 SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
+
+## Optional: Memory Suggestion
+
+If you discover a reusable pattern or insight during this review that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: Short descriptive title
+learning: What was learned and why it matters
+context: How it was discovered (reference issue/PR numbers)
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely valuable learnings — not trivial observations.
 """
 
     def _parse_verdict(self, transcript: str) -> ReviewVerdict:

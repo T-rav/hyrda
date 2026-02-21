@@ -50,7 +50,7 @@ class IssueFetcher:
                 "--limit",
                 str(limit),
                 "--json",
-                "number,title,body,labels,comments,url",
+                "number,title,body,labels,comments,url,createdAt",
                 "--search",
                 "sort:created-asc",
             ]
@@ -122,7 +122,7 @@ class IssueFetcher:
                 "--repo",
                 self._config.repo,
                 "--json",
-                "number,title,body,labels,comments,url",
+                "number,title,body,labels,comments,url,createdAt",
                 gh_token=self._config.gh_token,
             )
             data = json.loads(raw)

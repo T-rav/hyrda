@@ -65,10 +65,10 @@ class ConfigFactory:
         hitl_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
         improve_label: list[str] | None = None,
+        memory_label: list[str] | None = None,
         dup_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
-        memory_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
         min_plan_words: int = 200,
@@ -94,6 +94,10 @@ class ConfigFactory:
         state_file: Path | None = None,
         event_log_path: Path | None = None,
         config_file: Path | None = None,
+        memory_compaction_model: str = "haiku",
+        max_memory_chars: int = 4000,
+        max_memory_prompt_chars: int = 4000,
+        memory_sync_interval: int = 120,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -123,12 +127,12 @@ class ConfigFactory:
             improve_label=improve_label
             if improve_label is not None
             else ["hydra-improve"],
+            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             dup_label=dup_label if dup_label is not None else ["hydra-dup"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],
-            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
             min_plan_words=min_plan_words,
@@ -155,4 +159,8 @@ class ConfigFactory:
             worktree_base=worktree_base or root.parent / "test-worktrees",
             state_file=state_file or root / ".hydra-state.json",
             event_log_path=event_log_path or root / ".hydra-events.jsonl",
+            memory_compaction_model=memory_compaction_model,
+            max_memory_chars=max_memory_chars,
+            max_memory_prompt_chars=max_memory_prompt_chars,
+            memory_sync_interval=memory_sync_interval,
         )

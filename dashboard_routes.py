@@ -299,6 +299,7 @@ def create_router(
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
                 improve_label=config.improve_label,
+                memory_label=config.memory_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,

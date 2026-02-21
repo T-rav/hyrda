@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 # --- GitHub ---
 
@@ -19,6 +19,10 @@ class GitHubIssue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str = ""
+    created_at: str = Field(
+        default="",
+        validation_alias=AliasChoices("createdAt", "created_at"),
+    )
 
     @field_validator("labels", mode="before")
     @classmethod
@@ -347,6 +351,9 @@ class StateData(BaseModel):
     review_feedback: dict[str, str] = Field(default_factory=dict)
     worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    memory_issue_ids: list[int] = Field(default_factory=list)
+    memory_digest_hash: str = ""
+    memory_last_synced: str | None = None
     last_updated: str | None = None
 
 
@@ -405,6 +412,7 @@ class ControlStatusConfig(BaseModel):
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
     improve_label: list[str] = Field(default_factory=list)
+    memory_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0
