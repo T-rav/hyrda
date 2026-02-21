@@ -4,19 +4,16 @@ import {
   Header,
   dotConnected, dotDisconnected,
   pillStyles, headerConnectorStyles,
-  sessionPillStyles, sessionConnectorStyles,
   countLit, countDim,
   startBtnEnabled, startBtnDisabled,
 } from '../Header'
 
 const STAGE_KEYS = ['triage', 'plan', 'implement', 'review']
-const SESSION_STAGE_KEYS = ['triage', 'plan', 'implement', 'review', 'merged']
 const STAGE_COLORS = {
   triage: 'var(--triage-green)',
   plan: 'var(--purple)',
   implement: 'var(--accent)',
   review: 'var(--orange)',
-  merged: 'var(--green)',
 }
 
 describe('Header pre-computed styles', () => {
@@ -72,41 +69,6 @@ describe('Header pre-computed styles', () => {
       }
     })
 
-    it('pill and session pill styles share the same dimensions', () => {
-      // Both pill types should use identical padding, fontSize, borderRadius
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles[key].dim.padding).toBe(sessionPillStyles[key].padding)
-        expect(pillStyles[key].dim.borderRadius).toBe(sessionPillStyles[key].borderRadius)
-        expect(pillStyles[key].dim.fontSize).toBe(sessionPillStyles[key].fontSize)
-      }
-    })
-  })
-
-  describe('session pill styles', () => {
-    it('has entries for all 5 session stages including merged', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles).toHaveProperty(key)
-      }
-    })
-
-    it('uses correct color with opacity suffix for each stage', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles[key].background).toBe(STAGE_COLORS[key] + '20')
-        expect(sessionPillStyles[key].color).toBe(STAGE_COLORS[key])
-        expect(sessionPillStyles[key].borderColor).toBe(STAGE_COLORS[key] + '44')
-      }
-    })
-
-    it('session pill styles include base sessionPill properties', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles[key]).toMatchObject({
-          padding: '2px 8px',
-          borderRadius: 10,
-          fontSize: 10,
-          fontWeight: 600,
-        })
-      }
-    })
   })
 
   describe('header connector styles', () => {
@@ -129,33 +91,6 @@ describe('Header pre-computed styles', () => {
       for (const key of STAGE_KEYS) {
         expect(headerConnectorStyles[key].lit).toMatchObject({ width: 24, height: 2, flexShrink: 0 })
       }
-    })
-  })
-
-  describe('session connector styles', () => {
-    it('has entries for all 5 session stages', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles).toHaveProperty(key)
-      }
-    })
-
-    it('uses stage color with opacity suffix for background', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles[key].background).toBe(STAGE_COLORS[key] + '55')
-      }
-    })
-
-    it('connector has compact dimensions (thinner than process connectors)', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles[key]).toMatchObject({ width: 12, height: 1, flexShrink: 0 })
-      }
-    })
-
-    it('session connectors are thinner than process connectors', () => {
-      const sessionConn = sessionConnectorStyles.plan
-      const processConn = headerConnectorStyles.plan.lit
-      expect(sessionConn.width).toBeLessThan(processConn.width)
-      expect(sessionConn.height).toBeLessThan(processConn.height)
     })
   })
 
@@ -185,13 +120,11 @@ describe('Header pre-computed styles', () => {
     expect(dotConnected).toBe(dotConnected)
     expect(pillStyles.plan.lit).toBe(pillStyles.plan.lit)
     expect(startBtnEnabled).toBe(startBtnEnabled)
-    expect(sessionPillStyles.triage).toBe(sessionPillStyles.triage)
   })
 })
 
 describe('Header component', () => {
   const defaultProps = {
-    sessionCounts: { triage: 0, plan: 0, implement: 0, review: 0, merged: 0 },
     connected: true,
     orchestratorStatus: 'idle',
     onStart: () => {},
@@ -218,38 +151,10 @@ describe('Header component', () => {
 
   it('renders pipeline stage pills', () => {
     render(<Header {...defaultProps} />)
-    // Pipeline pills render TRIAGE, PLAN, IMPLEMENT, REVIEW
-    // Session pills also render these plus MERGED
-    expect(screen.getAllByText('TRIAGE').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('PLAN').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('IMPLEMENT').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('REVIEW').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders session pills with all 5 stage labels', () => {
-    render(<Header {...defaultProps} />)
-    expect(screen.getByText('MERGED')).toBeInTheDocument()
-    // Each stage appears twice: once in session pills, once in pipeline pills (except MERGED)
-    expect(screen.getAllByText('TRIAGE')).toHaveLength(2)
-    expect(screen.getAllByText('PLAN')).toHaveLength(2)
-    expect(screen.getAllByText('IMPLEMENT')).toHaveLength(2)
-    expect(screen.getAllByText('REVIEW')).toHaveLength(2)
-    expect(screen.getAllByText('MERGED')).toHaveLength(1)
-  })
-
-  it('renders session pill counts correctly', () => {
-    const counts = { triage: 3, plan: 5, implement: 4, review: 2, merged: 7 }
-    render(<Header {...defaultProps} sessionCounts={counts} />)
-    expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()
-  })
-
-  it('renders session pill counts as 0 when all zero', () => {
-    render(<Header {...defaultProps} />)
-    // All 5 session pills show 0, plus pipeline pills show config counts
-    const zeros = screen.getAllByText('0')
-    expect(zeros.length).toBeGreaterThanOrEqual(5)
+    expect(screen.getByText('TRIAGE')).toBeInTheDocument()
+    expect(screen.getByText('PLAN')).toBeInTheDocument()
+    expect(screen.getByText('IMPLEMENT')).toBeInTheDocument()
+    expect(screen.getByText('REVIEW')).toBeInTheDocument()
   })
 
   it('renders workload summary with empty workers', () => {
@@ -283,15 +188,6 @@ describe('Header component', () => {
     render(<Header {...defaultProps} workers={workers} />)
     expect(screen.getByText('2 total')).toBeInTheDocument()
     expect(screen.getByText('1 active')).toBeInTheDocument()
-  })
-
-  it('renders connector lines between session pills instead of arrows', () => {
-    render(<Header {...defaultProps} />)
-    // No arrow characters should be rendered
-    expect(screen.queryByText('\u2192')).toBeNull()
-    // 5 session stages means 4 connectors rendered as divs with testid
-    const connectors = screen.getAllByTestId('session-connector')
-    expect(connectors.length).toBe(4)
   })
 
   it('renders Session label', () => {

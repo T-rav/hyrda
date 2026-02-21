@@ -5,10 +5,9 @@ import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 const toUpper = s => ({ ...s, label: s.label.toUpperCase() })
 
 const STAGES = PIPELINE_STAGES.filter(s => s.role != null).map(toUpper)
-const SESSION_STAGES = PIPELINE_STAGES.map(toUpper)
 
 export function Header({
-  sessionCounts, connected, orchestratorStatus,
+  connected, orchestratorStatus,
   onStart, onStop, phase, workers, config,
 }) {
   const workerList = Object.values(workers || {})
@@ -73,17 +72,6 @@ export function Header({
       <div style={styles.center}>
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
-          <div style={styles.sessionPills}>
-            {SESSION_STAGES.map((stage, i) => (
-              <React.Fragment key={stage.key}>
-                {i > 0 && <div data-testid="session-connector" style={sessionConnectorStyles[stage.key]} />}
-                <span style={sessionPillStyles[stage.key]}>
-                  {stage.label}
-                  <span style={styles.sessionCount}>{sessionCounts[stage.key] || 0}</span>
-                </span>
-              </React.Fragment>
-            ))}
-          </div>
           <div style={styles.workload}>
             <span>{workload.total} total</span>
             <span style={styles.workloadSep}>|</span>
@@ -180,36 +168,6 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
-  sessionPills: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    flexWrap: 'wrap',
-  },
-  sessionPill: {
-    padding: '2px 8px',
-    borderRadius: 10,
-    fontSize: 10,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    border: '1px solid',
-    whiteSpace: 'nowrap',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sessionCount: {
-    background: theme.overlay,
-    borderRadius: 6,
-    padding: '0px 5px',
-    fontSize: 9,
-    fontWeight: 700,
-  },
-  sessionConnector: {
-    width: 12,
-    height: 1,
-    flexShrink: 0,
-  },
   workload: {
     display: 'flex',
     alignItems: 'center',
@@ -293,24 +251,6 @@ export const headerConnectorStyles = Object.fromEntries(
   STAGES.map(s => [s.key, {
     lit: { ...styles.connector, background: s.color },
     dim: { ...styles.connector, background: s.color + '55' },
-  }])
-)
-
-// Pre-computed session pill styles per stage
-export const sessionPillStyles = Object.fromEntries(
-  SESSION_STAGES.map(s => [s.key, {
-    ...styles.sessionPill,
-    background: s.color + '20',
-    color: s.color,
-    borderColor: s.color + '44',
-  }])
-)
-
-// Pre-computed session connector styles per stage (thinner than process connectors)
-export const sessionConnectorStyles = Object.fromEntries(
-  SESSION_STAGES.map(s => [s.key, {
-    ...styles.sessionConnector,
-    background: s.color + '55',
   }])
 )
 

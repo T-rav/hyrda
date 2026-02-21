@@ -87,13 +87,6 @@ export default function App() {
   return (
     <div style={styles.layout}>
       <Header
-        sessionCounts={{
-          triage: sessionTriaged,
-          plan: sessionPlanned,
-          implement: sessionImplemented,
-          review: sessionReviewed,
-          merged: mergedCount,
-        }}
         connected={connected}
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
