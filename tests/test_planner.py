@@ -253,6 +253,52 @@ def test_truncate_text_no_truncation_when_under_limit():
 
 
 # ---------------------------------------------------------------------------
+# _build_prompt - frequently changed files
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_frequently_changed_files(config, event_bus, issue):
+    """Prompt should mention files from frequently_changed_files config."""
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "Frequently Changed Files" in prompt
+    assert "`cli.py`" in prompt
+
+
+def test_build_prompt_includes_multiple_frequently_changed_files(event_bus, tmp_path):
+    """Prompt should list all configured frequently changed files."""
+    cfg = ConfigFactory.create(
+        frequently_changed_files=["cli.py", "config.py", "models.py"],
+        repo_root=tmp_path,
+    )
+    runner = _make_runner(cfg, event_bus)
+    from models import GitHubIssue
+
+    issue = GitHubIssue(number=1, title="Add new feature", body="Details here.")
+    prompt = runner._build_prompt(issue)
+
+    assert "`cli.py`" in prompt
+    assert "`config.py`" in prompt
+    assert "`models.py`" in prompt
+
+
+def test_build_prompt_omits_frequently_changed_when_empty(event_bus, tmp_path):
+    """When frequently_changed_files is empty, the section should not appear."""
+    cfg = ConfigFactory.create(
+        frequently_changed_files=[],
+        repo_root=tmp_path,
+    )
+    runner = _make_runner(cfg, event_bus)
+    from models import GitHubIssue
+
+    issue = GitHubIssue(number=1, title="Add new feature", body="Details here.")
+    prompt = runner._build_prompt(issue)
+
+    assert "Frequently Changed Files" not in prompt
+
+
+# ---------------------------------------------------------------------------
 # _build_prompt - image handling
 # ---------------------------------------------------------------------------
 

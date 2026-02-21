@@ -336,6 +336,16 @@ class TestBuildConfig:
         assert args.git_user_name is None
         assert args.git_user_email is None
 
+    def test_frequently_changed_files_passed_through(self) -> None:
+        args = parse_args(["--frequently-changed-files", "cli.py,config.py"])
+        cfg = build_config(args)
+        assert cfg.frequently_changed_files == ["cli.py", "config.py"]
+
+    def test_frequently_changed_files_defaults(self) -> None:
+        args = parse_args([])
+        cfg = build_config(args)
+        assert cfg.frequently_changed_files == ["cli.py"]
+
 
 # ---------------------------------------------------------------------------
 # _run_main — signal handler registration

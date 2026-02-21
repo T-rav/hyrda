@@ -74,6 +74,7 @@ class ConfigFactory:
         min_plan_words: int = 200,
         max_new_files_warning: int = 5,
         lite_plan_labels: list[str] | None = None,
+        frequently_changed_files: list[str] | None = None,
         repo: str = "test-org/test-repo",
         dry_run: bool = False,
         gh_token: str = "",
@@ -134,6 +135,9 @@ class ConfigFactory:
             lite_plan_labels=lite_plan_labels
             if lite_plan_labels is not None
             else ["bug", "typo", "docs"],
+            frequently_changed_files=frequently_changed_files
+            if frequently_changed_files is not None
+            else ["cli.py"],
             repo=repo,
             dry_run=dry_run,
             gh_token=gh_token,

@@ -294,6 +294,18 @@ class PlannerRunner:
                 "`## Key Considerations` section."
             )
 
+        frequently_changed_hint = ""
+        if self._config.frequently_changed_files:
+            file_list = ", ".join(
+                f"`{f}`" for f in self._config.frequently_changed_files
+            )
+            frequently_changed_hint = (
+                "\n\n## Frequently Changed Files\n\n"
+                "The following files commonly need changes and are often missed during planning. "
+                "Consider whether this issue requires modifications to any of them:\n\n"
+                f"{file_list}\n"
+            )
+
         return f"""You are a planning agent for GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -305,7 +317,7 @@ class PlannerRunner:
 {mode_note}You are in READ-ONLY mode. Do NOT create, modify, or delete any files.
 Do NOT run any commands that change state (no git commit, no file writes, no installs).
 
-Your job is to explore the codebase and create a detailed implementation plan.
+Your job is to explore the codebase and create a detailed implementation plan.{frequently_changed_hint}
 
 ## Exploration Strategy — USE SEMANTIC TOOLS
 

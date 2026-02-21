@@ -155,6 +155,10 @@ class HydraConfig(BaseModel):
         default=["bug", "typo", "docs"],
         description="Issue labels that trigger a lite plan (fewer required sections)",
     )
+    frequently_changed_files: list[str] = Field(
+        default=["cli.py"],
+        description="Files that commonly need changes; the planner is reminded to consider them",
+    )
     # Metric thresholds for improvement proposals
     quality_fix_rate_threshold: float = Field(
         default=0.5,

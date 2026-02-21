@@ -172,6 +172,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
     )
     parser.add_argument(
+        "--frequently-changed-files",
+        default=None,
+        help="Comma-separated files the planner should always consider (default: cli.py)",
+    )
+    parser.add_argument(
         "--test-command",
         default=None,
         help="Test command used in agent prompts (default: make test)",
@@ -315,6 +320,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "planner_label",
         "improve_label",
         "lite_plan_labels",
+        "frequently_changed_files",
     ):
         val = getattr(args, field)
         if val is not None:
