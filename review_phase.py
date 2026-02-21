@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -200,14 +201,24 @@ class ReviewPhase:
                                 pr.number,
                             )
 
+                    # Adversarial review: if APPROVE with too few findings
+                    # and no THOROUGH_REVIEW_COMPLETE block, re-review once
+                    if result.verdict == ReviewVerdict.APPROVE:
+                        result = await self._check_adversarial_threshold(
+                            pr, issue, wt_path, diff, result, idx
+                        )
+
                     self._state.mark_pr(pr.number, result.verdict.value)
                     self._state.mark_issue(pr.issue_number, "reviewed")
 
                     # Record review insight (non-blocking)
                     await self._record_review_insight(result)
 
-                    # Merge immediately if approved (with optional CI gate)
+                    # Handle verdict-specific logic
+                    skip_worktree_cleanup = False
+
                     if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
+                        # Merge immediately if approved (with optional CI gate)
                         should_merge = True
                         if self._config.max_ci_fix_attempts > 0:
                             should_merge = await self.wait_and_fix_ci(
@@ -221,13 +232,15 @@ class ReviewPhase:
                                 self._state.mark_issue(pr.issue_number, "merged")
                                 self._state.record_pr_merged()
                                 self._state.record_issue_completed()
+                                self._state.reset_review_attempts(pr.issue_number)
+                                self._state.clear_review_feedback(pr.issue_number)
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                 await self._prs.add_labels(
                                     pr.issue_number,
                                     [self._config.fixed_label[0]],
                                 )
-                                # Run post-merge retrospective (best-effort)
+                                # Run post-merge retrospective (non-blocking)
                                 if self._retrospective:
                                     try:
                                         await self._retrospective.record(
@@ -235,10 +248,10 @@ class ReviewPhase:
                                             pr_number=pr.number,
                                             review_result=result,
                                         )
-                                    except Exception:
+                                    except Exception:  # noqa: BLE001
                                         logger.warning(
-                                            "Retrospective record failed for PR #%d",
-                                            pr.number,
+                                            "Retrospective failed for issue #%d",
+                                            pr.issue_number,
                                             exc_info=True,
                                         )
                             else:
@@ -271,16 +284,25 @@ class ReviewPhase:
                                     [self._config.hitl_label[0]],
                                 )
 
-                    # Cleanup worktree after review
-                    try:
-                        await self._worktrees.destroy(pr.issue_number)
-                        self._state.remove_worktree(pr.issue_number)
-                    except RuntimeError as exc:
-                        logger.warning(
-                            "Could not destroy worktree for issue #%d: %s",
-                            pr.issue_number,
-                            exc,
+                    elif result.verdict in (
+                        ReviewVerdict.REQUEST_CHANGES,
+                        ReviewVerdict.COMMENT,
+                    ):
+                        skip_worktree_cleanup = await self._handle_rejected_review(
+                            pr, result, idx
                         )
+
+                    # Cleanup worktree after review (skip for retry cases)
+                    if not skip_worktree_cleanup:
+                        try:
+                            await self._worktrees.destroy(pr.issue_number)
+                            self._state.remove_worktree(pr.issue_number)
+                        except RuntimeError as exc:
+                            logger.warning(
+                                "Could not destroy worktree for issue #%d: %s",
+                                pr.issue_number,
+                                exc,
+                            )
 
                     return result
                 except Exception:
@@ -433,6 +455,145 @@ class ReviewPhase:
                 },
             )
         )
+
+    @staticmethod
+    def _count_review_findings(summary: str) -> int:
+        """Count the number of findings in a review summary.
+
+        Counts bullet points (``-`` or ``*``) and numbered items (``1.``)
+        as individual findings.
+        """
+        lines = summary.strip().splitlines()
+        count = 0
+        for line in lines:
+            stripped = line.strip()
+            # Bullet points ("- text", "* text") or numbered items ("1. text")
+            if re.match(r"^[-*]\s+\S", stripped) or re.match(r"^\d+\.\s+\S", stripped):
+                count += 1
+        return count
+
+    async def _check_adversarial_threshold(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        diff: str,
+        result: ReviewResult,
+        worker_id: int,
+    ) -> ReviewResult:
+        """Re-review if APPROVE has too few findings and no justification.
+
+        Returns the (possibly updated) review result.
+        """
+        min_findings = self._config.min_review_findings
+        if min_findings <= 0:
+            return result
+
+        findings_count = self._count_review_findings(result.summary)
+        has_justification = "THOROUGH_REVIEW_COMPLETE" in result.transcript
+
+        if findings_count >= min_findings or has_justification:
+            return result
+
+        # Under threshold with no justification — re-review once
+        logger.info(
+            "PR #%d: APPROVE with only %d findings (min %d) and no "
+            "THOROUGH_REVIEW_COMPLETE — re-reviewing",
+            pr.number,
+            findings_count,
+            min_findings,
+        )
+        await self._publish_review_status(pr, worker_id, "re_reviewing")
+
+        re_result = await self._reviewers.review(
+            pr, issue, wt_path, diff, worker_id=worker_id
+        )
+
+        # If re-review still under threshold without justification, accept
+        # but log a warning (don't loop forever)
+        re_count = self._count_review_findings(re_result.summary)
+        re_justified = "THOROUGH_REVIEW_COMPLETE" in re_result.transcript
+        if re_count < min_findings and not re_justified:
+            logger.warning(
+                "PR #%d: re-review still under threshold (%d/%d) "
+                "with no justification — accepting anyway",
+                pr.number,
+                re_count,
+                min_findings,
+            )
+
+        # If reviewer made fixes during re-review, push them
+        if re_result.fixes_made:
+            await self._prs.push_branch(wt_path, pr.branch)
+
+        return re_result
+
+    async def _handle_rejected_review(
+        self,
+        pr: PRInfo,
+        result: ReviewResult,
+        worker_id: int,
+    ) -> bool:
+        """Handle REQUEST_CHANGES or COMMENT verdict with retry logic.
+
+        Returns *True* if the worktree should be preserved (retry case),
+        *False* if the worktree should be destroyed (HITL escalation).
+        """
+        max_attempts = self._config.max_review_fix_attempts
+        attempts = self._state.get_review_attempts(pr.issue_number)
+
+        if attempts < max_attempts:
+            # Under cap: re-queue for implementation with feedback
+            new_count = self._state.increment_review_attempts(pr.issue_number)
+            self._state.set_review_feedback(pr.issue_number, result.summary)
+
+            # Swap labels: review → ready (issue and PR)
+            for lbl in self._config.review_label:
+                await self._prs.remove_label(pr.issue_number, lbl)
+                await self._prs.remove_pr_label(pr.number, lbl)
+            await self._prs.add_labels(pr.issue_number, [self._config.ready_label[0]])
+            await self._prs.add_pr_labels(pr.number, [self._config.ready_label[0]])
+
+            await self._prs.post_comment(
+                pr.issue_number,
+                f"**Review requested changes** (attempt {new_count}/{max_attempts}). "
+                f"Re-queuing for implementation with feedback.",
+            )
+
+            logger.info(
+                "PR #%d: %s verdict — retry %d/%d, re-queuing issue #%d",
+                pr.number,
+                result.verdict.value,
+                new_count,
+                max_attempts,
+                pr.issue_number,
+            )
+            return True  # Preserve worktree
+        else:
+            # Cap exceeded: escalate to HITL
+            logger.warning(
+                "PR #%d: review fix cap (%d) exceeded — escalating issue #%d to HITL",
+                pr.number,
+                max_attempts,
+                pr.issue_number,
+            )
+            await self._publish_review_status(pr, worker_id, "escalating")
+            await self._prs.post_comment(
+                pr.issue_number,
+                f"**Review fix cap exceeded** — {max_attempts} review fix "
+                f"attempt(s) exhausted. Escalating to human review.",
+            )
+            self._state.set_hitl_origin(pr.issue_number, self._config.review_label[0])
+            self._state.set_hitl_cause(
+                pr.issue_number,
+                f"Review fix cap exceeded after {max_attempts} attempt(s)",
+            )
+            for lbl in self._config.review_label:
+                await self._prs.remove_label(pr.issue_number, lbl)
+                await self._prs.remove_pr_label(pr.number, lbl)
+            await self._prs.add_labels(pr.issue_number, [self._config.hitl_label[0]])
+            await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
+            return False  # Destroy worktree
 
     async def _resolve_merge_conflicts(
         self,

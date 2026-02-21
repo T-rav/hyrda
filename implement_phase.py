@@ -97,9 +97,23 @@ class ImplementPhase:
                         f"Implementation in progress.",
                     )
 
-                    result = await self._agents.run(
-                        issue, wt_path, branch, worker_id=idx
+                    # Check for review feedback from a previous
+                    # REQUEST_CHANGES cycle
+                    review_feedback = (
+                        self._state.get_review_feedback(issue.number) or ""
                     )
+
+                    result = await self._agents.run(
+                        issue,
+                        wt_path,
+                        branch,
+                        worker_id=idx,
+                        review_feedback=review_feedback,
+                    )
+
+                    # Clear review feedback after implementation run
+                    if review_feedback:
+                        self._state.clear_review_feedback(issue.number)
 
                     await self._prs.post_transcript_comment(
                         issue.number,
@@ -126,11 +140,16 @@ class ImplementPhase:
                             Path(result.worktree_path), result.branch
                         )
                         if pushed:
-                            draft = not result.success
-                            pr = await self._prs.create_pr(
-                                issue, result.branch, draft=draft
-                            )
-                            result.pr_info = pr
+                            # On retry cycles a PR already exists for this
+                            # branch — skip creation to avoid gh CLI errors.
+                            pr = None
+                            is_retry = bool(review_feedback)
+                            if not is_retry:
+                                draft = not result.success
+                                pr = await self._prs.create_pr(
+                                    issue, result.branch, draft=draft
+                                )
+                                result.pr_info = pr
 
                             if result.success:
                                 # Success: move to review pipeline
