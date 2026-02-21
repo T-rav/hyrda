@@ -88,7 +88,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
   )
 }
 
-function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker }) {
+function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog }) {
   const isPipelinePoller = def.key === 'pipeline_poller'
   const isSystem = def.system === true
   const orchRunning = orchestratorStatus === 'running'
@@ -191,11 +191,22 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
           ))}
         </div>
       )}
+      {onViewLog && (
+        <div style={styles.cardActions}>
+          <span
+            style={styles.viewLogLink}
+            onClick={() => onViewLog(`bg-${def.key}`)}
+            data-testid={`view-log-${def.key}`}
+          >
+            View Log
+          </span>
+        </div>
+      )}
     </div>
   )
 }
 
-export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
+export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog }) {
   const { pipelinePollerLastRun, hitlItems, pipelineIssues, orchestratorStatus } = useHydra()
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && w.status !== 'queued'
@@ -278,6 +289,7 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
               pipelinePollerLastRun={pipelinePollerLastRun}
               orchestratorStatus={orchestratorStatus}
               onToggleBgWorker={onToggleBgWorker}
+              onViewLog={onViewLog}
             />
           )
         })}
@@ -528,5 +540,23 @@ const styles = {
     borderRadius: 10,
     padding: '2px 10px',
     marginBottom: 12,
+  },
+  cardActions: {
+    display: 'flex',
+    gap: 8,
+    paddingTop: 8,
+    borderTop: `1px solid ${theme.border}`,
+    marginTop: 8,
+  },
+  viewLogLink: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: theme.accent,
+    cursor: 'pointer',
+    padding: '3px 8px',
+    borderRadius: 4,
+    border: `1px solid ${theme.border}`,
+    background: 'transparent',
+    transition: 'background 0.15s',
   },
 }
