@@ -29,6 +29,7 @@ const { mockState } = vi.hoisted(() => ({
     githubMetrics: null,
     intents: [],
     submitIntent: () => {},
+    toggleBgWorker: () => {},
     systemAlert: null,
   },
 }))
@@ -187,12 +188,12 @@ describe('System and Metrics tabs', () => {
   })
 })
 
-describe('Livestream and Issue Stream tab labels', () => {
-  it('both Livestream and Issue Stream labels are present', async () => {
+describe('Livestream and Work Stream tab labels', () => {
+  it('both Livestream and Work Stream labels are present', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
     expect(screen.getByText('Livestream')).toBeInTheDocument()
-    expect(screen.getByText('Issue Stream')).toBeInTheDocument()
+    expect(screen.getByText('Work Stream')).toBeInTheDocument()
   })
 
   it('Livestream tab renders Livestream component', async () => {
@@ -202,11 +203,11 @@ describe('Livestream and Issue Stream tab labels', () => {
     expect(screen.getByText('Waiting for events...')).toBeInTheDocument()
   })
 
-  it('Issue Stream is the default tab', async () => {
+  it('Work Stream is the default tab', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    // Issue Stream tab should be active by default (has active tab styling)
-    const issueStreamTab = screen.getByText('Issue Stream')
+    // Work Stream tab should be active by default (has active tab styling)
+    const issueStreamTab = screen.getByText('Work Stream')
     expect(issueStreamTab.style.color).toBe('var(--accent)')
   })
 })

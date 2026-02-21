@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -86,6 +86,7 @@ class TestCreateRouter:
             "/api/control/stop",
             "/api/control/status",
             "/api/control/config",
+            "/api/control/bg-worker",
             "/api/system/workers",
             "/api/hitl/{issue_number}/correct",
             "/api/hitl/{issue_number}/skip",
@@ -696,3 +697,96 @@ class TestGitHubMetricsEndpoint:
         assert data["open_by_label"]["hydra-plan"] == 3
         assert data["total_closed"] == 10
         assert data["total_merged"] == 8
+
+
+class TestBgWorkerToggleEndpoint:
+    """Tests for POST /api/control/bg-worker endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=get_orch or (lambda: None),
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path, method="POST"):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_returns_error_without_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync", "enabled": False})
+        data = json.loads(response.body)
+        assert response.status_code == 400
+        assert data["error"] == "no orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_requires_name_and_enabled(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        state = make_state(tmp_path)
+        mock_orch = AsyncMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync"})
+        assert response.status_code == 400
+
+        response = await toggle({"enabled": True})
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_calls_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        mock_orch = MagicMock()
+        mock_orch.set_bg_worker_enabled = MagicMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync", "enabled": False})
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        assert data["name"] == "memory_sync"
+        assert data["enabled"] is False
+        mock_orch.set_bg_worker_enabled.assert_called_once_with("memory_sync", False)
+
+    def test_route_is_registered(self, config, event_bus, tmp_path) -> None:
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/control/bg-worker" in paths

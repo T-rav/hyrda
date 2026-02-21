@@ -12,15 +12,15 @@ import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'hitl', 'issues', 'livestream', 'system', 'metrics']
+const TABS = ['issues', 'transcript', 'hitl', 'livestream', 'metrics', 'system']
 
 const TAB_LABELS = {
+  issues: 'Work Stream',
   transcript: 'Transcript',
   hitl: 'HITL',
-  issues: 'Issue Stream',
   livestream: 'Livestream',
-  system: 'System',
   metrics: 'Metrics',
+  system: 'System',
 }
 
 function SystemAlertBanner({ alert }) {
@@ -41,7 +41,7 @@ function AppContent() {
     sessionImplemented, sessionReviewed, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
-    lifetimeStats, githubMetrics, phase,
+    lifetimeStats, githubMetrics, phase, toggleBgWorker,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -163,6 +163,8 @@ function AppContent() {
                 reviewed: sessionReviewed,
                 merged: mergedCount,
               }}
+              backgroundWorkers={backgroundWorkers}
+              onToggleBgWorker={toggleBgWorker}
             />
           )}
         </div>

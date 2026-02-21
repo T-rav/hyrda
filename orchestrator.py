@@ -86,6 +86,8 @@ class HydraOrchestrator:
         self._running = False
         # Background worker last-known status: {worker_name: status dict}
         self._bg_worker_states: dict[str, dict[str, Any]] = {}
+        # Background worker enabled flags: {worker_name: bool}
+        self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
         self._auth_failed = False
 
@@ -243,9 +245,20 @@ class HydraOrchestrator:
             "details": details or {},
         }
 
+    def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
+        """Enable or disable a background worker by name."""
+        self._bg_worker_enabled[name] = enabled
+
+    def is_bg_worker_enabled(self, name: str) -> bool:
+        """Return whether a background worker is enabled (defaults to True)."""
+        return self._bg_worker_enabled.get(name, True)
+
     def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
-        """Return a copy of all background worker states."""
-        return dict(self._bg_worker_states)
+        """Return a copy of all background worker states with enabled flag."""
+        result: dict[str, dict[str, Any]] = {}
+        for name, state_dict in self._bg_worker_states.items():
+            result[name] = {**state_dict, "enabled": self.is_bg_worker_enabled(name)}
+        return result
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -490,6 +503,9 @@ class HydraOrchestrator:
     async def _memory_sync_loop(self) -> None:
         """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("memory_sync"):
+                await self._sleep_or_stop(self._config.memory_sync_interval)
+                continue
             try:
                 issues = await self._fetcher.fetch_issues_by_labels(
                     self._config.memory_label, limit=100

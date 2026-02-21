@@ -414,6 +414,16 @@ export function HydraProvider({ children }) {
     }
   }, [])
 
+  const toggleBgWorker = useCallback(async (name, enabled) => {
+    try {
+      await fetch('/api/control/bg-worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, enabled }),
+      })
+    } catch { /* ignore */ }
+  }, [])
+
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
     try {
       await fetch(`/api/human-input/${issueNumber}`, {
@@ -520,6 +530,7 @@ export function HydraProvider({ children }) {
     ...state,
     submitIntent,
     submitHumanInput,
+    toggleBgWorker,
     refreshHitl: fetchHitlItems,
   }
 

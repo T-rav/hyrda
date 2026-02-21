@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { theme } from '../theme'
 import { useTimeline } from '../hooks/useTimeline'
 import { StreamCard } from './StreamCard'
+import { PIPELINE_STAGES } from '../constants'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -11,6 +12,37 @@ function PendingIntentCard({ intent }) {
       <span style={styles.pendingStatus}>
         {intent.status === 'pending' ? 'Creating issue...' : 'Failed'}
       </span>
+    </div>
+  )
+}
+
+function StageSection({ stage, issues, intentMap, onViewTranscript, onRequestChanges, defaultOpen }) {
+  const [open, setOpen] = useState(defaultOpen)
+  const activeCount = issues.filter(i => i.overallStatus === 'active').length
+
+  return (
+    <div style={styles.section}>
+      <div
+        style={sectionHeaderStyles[stage.key]}
+        onClick={() => setOpen(!open)}
+      >
+        <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
+        <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
+        <span style={sectionCountStyles[stage.key]}>
+          {activeCount > 0 && <span style={styles.activeBadge}>{activeCount} active · </span>}
+          {issues.length}
+        </span>
+      </div>
+      {open && issues.map(issue => (
+        <StreamCard
+          key={issue.issueNumber}
+          issue={issue}
+          intent={intentMap.get(issue.issueNumber)}
+          defaultExpanded={issue.overallStatus === 'active'}
+          onViewTranscript={onViewTranscript}
+          onRequestChanges={onRequestChanges}
+        />
+      ))}
     </div>
   )
 }
@@ -35,19 +67,28 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
     [intents]
   )
 
-  // Sort: active first, then by recency
-  const sorted = useMemo(() => {
-    return [...issues].sort((a, b) => {
-      const aActive = a.overallStatus === 'active' ? 1 : 0
-      const bActive = b.overallStatus === 'active' ? 1 : 0
-      if (aActive !== bActive) return bActive - aActive
-      const aTime = a.endTime || a.startTime || ''
-      const bTime = b.endTime || b.startTime || ''
-      return bTime.localeCompare(aTime)
-    })
+  // Group issues by currentStage, sorted active-first within each group
+  const stageGroups = useMemo(() => {
+    const groups = []
+    for (const stage of PIPELINE_STAGES) {
+      const stageIssues = issues
+        .filter(i => i.currentStage === stage.key)
+        .sort((a, b) => {
+          const aActive = a.overallStatus === 'active' ? 1 : 0
+          const bActive = b.overallStatus === 'active' ? 1 : 0
+          if (aActive !== bActive) return bActive - aActive
+          const aTime = a.endTime || a.startTime || ''
+          const bTime = b.endTime || b.startTime || ''
+          return bTime.localeCompare(aTime)
+        })
+      if (stageIssues.length > 0) {
+        groups.push({ stage, issues: stageIssues })
+      }
+    }
+    return groups
   }, [issues])
 
-  const isEmpty = sorted.length === 0 && pendingIntents.length === 0
+  const isEmpty = stageGroups.length === 0 && pendingIntents.length === 0
 
   return (
     <div style={styles.container}>
@@ -61,19 +102,69 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
 
-      {sorted.map(issue => (
-        <StreamCard
-          key={issue.issueNumber}
-          issue={issue}
-          intent={intentMap.get(issue.issueNumber)}
-          defaultExpanded={issue.overallStatus === 'active'}
+      {stageGroups.map(({ stage, issues: stageIssues }) => (
+        <StageSection
+          key={stage.key}
+          stage={stage}
+          issues={stageIssues}
+          intentMap={intentMap}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
+          defaultOpen={stageIssues.some(i => i.overallStatus === 'active')}
         />
       ))}
     </div>
   )
 }
+
+// Pre-computed per-stage section header styles (avoids object spread in .map())
+const sectionHeaderBase = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '8px 12px',
+  margin: '8px 8px 4px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  borderRadius: 6,
+  transition: 'background 0.15s',
+}
+
+const sectionLabelBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+}
+
+const sectionCountBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  marginLeft: 'auto',
+}
+
+const sectionHeaderStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionHeaderBase,
+    background: s.subtleColor,
+    border: `1px solid ${s.color}33`,
+    borderLeft: `3px solid ${s.color}`,
+  }])
+)
+
+const sectionLabelStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionLabelBase,
+    color: s.color,
+  }])
+)
+
+const sectionCountStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionCountBase,
+    color: s.color,
+  }])
+)
 
 const styles = {
   container: {
@@ -88,6 +179,12 @@ const styles = {
     height: 200,
     color: theme.textMuted,
     fontSize: 13,
+  },
+  section: {
+    marginBottom: 4,
+  },
+  activeBadge: {
+    fontWeight: 700,
   },
   pendingCard: {
     display: 'flex',

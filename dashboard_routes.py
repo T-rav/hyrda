@@ -406,6 +406,21 @@ def create_router(
                 workers.append(BackgroundWorkerStatus(name=name, label=label))
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
 
+    @router.post("/api/control/bg-worker")
+    async def toggle_bg_worker(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Enable or disable a background worker."""
+        name = body.get("name")
+        enabled = body.get("enabled")
+        if not name or enabled is None:
+            return JSONResponse(
+                {"error": "name and enabled are required"}, status_code=400
+            )
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+        orch.set_bg_worker_enabled(name, bool(enabled))
+        return JSONResponse({"status": "ok", "name": name, "enabled": bool(enabled)})
+
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:
         """Return lifetime stats and derived rates."""
