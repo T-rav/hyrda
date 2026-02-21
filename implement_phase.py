@@ -101,6 +101,15 @@ class ImplementPhase:
                         issue, wt_path, branch, worker_id=idx
                     )
 
+                    await self._prs.post_transcript_comment(
+                        issue.number,
+                        role="implementer",
+                        identifier=f"issue #{issue.number}",
+                        duration_seconds=result.duration_seconds,
+                        success=result.success,
+                        transcript=result.transcript,
+                    )
+
                     # Push final commits and create PR
                     if result.worktree_path:
                         pushed = await self._prs.push_branch(

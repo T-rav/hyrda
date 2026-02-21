@@ -321,6 +321,111 @@ class PRManager:
                     exc,
                 )
 
+    # --- transcript posting helpers ---
+
+    _ROLE_EMOJIS: dict[str, str] = {
+        "planner": "\U0001f50d",
+        "implementer": "\U0001f528",
+        "reviewer": "\U0001f4cb",
+    }
+    _TRANSCRIPT_WRAPPER_RESERVE = 1_500
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format *seconds* as a human-readable ``Xm Ys`` string."""
+        minutes = int(seconds) // 60
+        secs = int(seconds) % 60
+        if minutes > 0:
+            return f"{minutes}m {secs}s"
+        return f"{secs}s"
+
+    @classmethod
+    def _format_transcript_comment(
+        cls,
+        role: str,
+        identifier: str,
+        duration_seconds: float,
+        success: bool,
+        transcript: str,
+    ) -> str:
+        """Build a collapsible ``<details>/<summary>`` comment for a transcript."""
+        emoji = cls._ROLE_EMOJIS.get(role, "\U0001f4dd")
+        status = "\u2705" if success else "\u274c"
+        duration = cls._format_duration(duration_seconds)
+        title = role.capitalize()
+
+        max_transcript = cls._GITHUB_COMMENT_LIMIT - cls._TRANSCRIPT_WRAPPER_RESERVE
+        if len(transcript) > max_transcript:
+            transcript = (
+                transcript[:max_transcript]
+                + "\n\n...truncated to fit GitHub comment limit"
+            )
+
+        # Escape </details>, </pre>, </code> sequences in the transcript
+        safe_transcript = transcript.replace("</details>", "&lt;/details&gt;")
+        safe_transcript = safe_transcript.replace("</pre>", "&lt;/pre&gt;")
+        safe_transcript = safe_transcript.replace("</code>", "&lt;/code&gt;")
+
+        return (
+            f"<details>\n"
+            f"<summary>{emoji} {title} Transcript ({identifier}) "
+            f"— {duration} {status}</summary>\n\n"
+            f"<pre><code>{safe_transcript}</code></pre>\n\n"
+            f"</details>"
+        )
+
+    async def post_transcript_comment(
+        self,
+        issue_number: int,
+        role: str,
+        identifier: str,
+        duration_seconds: float,
+        success: bool,
+        transcript: str,
+    ) -> None:
+        """Post an agent transcript as a collapsible comment on a GitHub issue."""
+        if not self._config.post_transcripts:
+            return
+        if not transcript:
+            return
+        body = self._format_transcript_comment(
+            role, identifier, duration_seconds, success, transcript
+        )
+        try:
+            await self.post_comment(issue_number, body)
+        except Exception:
+            logger.warning(
+                "Could not post transcript comment on issue #%d",
+                issue_number,
+                exc_info=True,
+            )
+
+    async def post_pr_transcript_comment(
+        self,
+        pr_number: int,
+        role: str,
+        identifier: str,
+        duration_seconds: float,
+        success: bool,
+        transcript: str,
+    ) -> None:
+        """Post an agent transcript as a collapsible comment on a GitHub PR."""
+        if not self._config.post_transcripts:
+            return
+        if not transcript:
+            return
+        body = self._format_transcript_comment(
+            role, identifier, duration_seconds, success, transcript
+        )
+        try:
+            await self.post_pr_comment(pr_number, body)
+        except Exception:
+            logger.warning(
+                "Could not post transcript comment on PR #%d",
+                pr_number,
+                exc_info=True,
+            )
+
     async def submit_review(
         self, pr_number: int, verdict: ReviewVerdict, body: str
     ) -> bool:

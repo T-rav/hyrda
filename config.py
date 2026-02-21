@@ -192,6 +192,10 @@ class HydraConfig(BaseModel):
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
     )
+    post_transcripts: bool = Field(
+        default=True,
+        description="Post agent transcripts as collapsible comments on GitHub issues/PRs",
+    )
 
     # GitHub authentication
     gh_token: str = Field(
@@ -274,6 +278,11 @@ class HydraConfig(BaseModel):
             parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
+
+        # Transcript posting env var override
+        env_transcripts = os.environ.get("HYDRA_POST_TRANSCRIPTS")
+        if env_transcripts is not None and env_transcripts.lower() in ("false", "0"):
+            object.__setattr__(self, "post_transcripts", False)
 
         # gh retry override
         if self.gh_max_retries == 3:  # still at default

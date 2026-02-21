@@ -164,6 +164,15 @@ class ReviewPhase:
                         pr, issue, wt_path, diff, worker_id=idx
                     )
 
+                    await self._prs.post_pr_transcript_comment(
+                        pr.number,
+                        role="reviewer",
+                        identifier=f"PR #{pr.number}",
+                        duration_seconds=result.duration_seconds,
+                        success=(result.verdict == ReviewVerdict.APPROVE),
+                        transcript=result.transcript,
+                    )
+
                     # If reviewer made fixes, push them
                     if result.fixes_made:
                         await self._prs.push_branch(wt_path, pr.branch)

@@ -633,6 +633,15 @@ class HydraOrchestrator:
 
                 result = await self._planners.plan(issue, worker_id=idx)
 
+                await self._prs.post_transcript_comment(
+                    issue.number,
+                    role="planner",
+                    identifier=f"issue #{issue.number}",
+                    duration_seconds=result.duration_seconds,
+                    success=result.success,
+                    transcript=result.transcript,
+                )
+
                 if result.success and result.plan:
                     # Post plan + branch as comment on the issue
                     branch = self._config.branch_for_issue(issue.number)
