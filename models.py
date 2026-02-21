@@ -225,6 +225,8 @@ class StateData(BaseModel):
     reviewed_prs: dict[str, str] = Field(default_factory=dict)
     hitl_origins: dict[str, str] = Field(default_factory=dict)
     hitl_causes: dict[str, str] = Field(default_factory=dict)
+    review_attempts: dict[str, int] = Field(default_factory=dict)
+    review_feedback: dict[str, str] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
     last_updated: str | None = None
 

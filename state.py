@@ -150,6 +150,41 @@ class StateTracker:
         self._data.hitl_causes.pop(str(issue_number), None)
         self.save()
 
+    # --- review attempt tracking ---
+
+    def get_review_attempts(self, issue_number: int) -> int:
+        """Return the current review attempt count for *issue_number* (default 0)."""
+        return self._data.review_attempts.get(str(issue_number), 0)
+
+    def increment_review_attempts(self, issue_number: int) -> int:
+        """Increment and return the new review attempt count for *issue_number*."""
+        key = str(issue_number)
+        current = self._data.review_attempts.get(key, 0)
+        self._data.review_attempts[key] = current + 1
+        self.save()
+        return current + 1
+
+    def reset_review_attempts(self, issue_number: int) -> None:
+        """Clear the review attempt counter for *issue_number*."""
+        self._data.review_attempts.pop(str(issue_number), None)
+        self.save()
+
+    # --- review feedback storage ---
+
+    def set_review_feedback(self, issue_number: int, feedback: str) -> None:
+        """Store review feedback for *issue_number*."""
+        self._data.review_feedback[str(issue_number)] = feedback
+        self.save()
+
+    def get_review_feedback(self, issue_number: int) -> str | None:
+        """Return stored review feedback for *issue_number*, or *None*."""
+        return self._data.review_feedback.get(str(issue_number))
+
+    def clear_review_feedback(self, issue_number: int) -> None:
+        """Clear stored review feedback for *issue_number*."""
+        self._data.review_feedback.pop(str(issue_number), None)
+        self.save()
+
     # --- batch tracking ---
 
     def get_current_batch(self) -> int:

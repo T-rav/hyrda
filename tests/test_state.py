@@ -633,6 +633,8 @@ class TestToDict:
             "reviewed_prs",
             "hitl_origins",
             "hitl_causes",
+            "review_attempts",
+            "review_feedback",
             "lifetime_stats",
             "last_updated",
         }
@@ -840,6 +842,104 @@ class TestAtomicSave:
 
 
 # ---------------------------------------------------------------------------
+# Review attempt tracking
+# ---------------------------------------------------------------------------
+
+
+class TestReviewAttemptTracking:
+    def test_get_review_attempts_defaults_to_zero(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_review_attempts(42) == 0
+
+    def test_increment_review_attempts_returns_new_count(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.increment_review_attempts(42) == 1
+        assert tracker.increment_review_attempts(42) == 2
+
+    def test_reset_review_attempts_clears_counter(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_review_attempts(42)
+        tracker.increment_review_attempts(42)
+        tracker.reset_review_attempts(42)
+        assert tracker.get_review_attempts(42) == 0
+
+    def test_reset_review_attempts_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.reset_review_attempts(999)
+        assert tracker.get_review_attempts(999) == 0
+
+    def test_multiple_issues_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_review_attempts(1)
+        tracker.increment_review_attempts(1)
+        tracker.increment_review_attempts(2)
+        assert tracker.get_review_attempts(1) == 2
+        assert tracker.get_review_attempts(2) == 1
+
+    def test_review_attempts_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.increment_review_attempts(42)
+        tracker.increment_review_attempts(42)
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_review_attempts(42) == 2
+
+    def test_reset_clears_review_attempts(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_review_attempts(42)
+        tracker.reset()
+        assert tracker.get_review_attempts(42) == 0
+
+
+# ---------------------------------------------------------------------------
+# Review feedback storage
+# ---------------------------------------------------------------------------
+
+
+class TestReviewFeedbackStorage:
+    def test_set_and_get_review_feedback(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_review_feedback(42, "Fix the error handling")
+        assert tracker.get_review_feedback(42) == "Fix the error handling"
+
+    def test_get_review_feedback_returns_none_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_review_feedback(999) is None
+
+    def test_clear_review_feedback(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_review_feedback(42, "Some feedback")
+        tracker.clear_review_feedback(42)
+        assert tracker.get_review_feedback(42) is None
+
+    def test_clear_review_feedback_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.clear_review_feedback(999)
+        assert tracker.get_review_feedback(999) is None
+
+    def test_review_feedback_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_review_feedback(42, "Needs more tests")
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_review_feedback(42) == "Needs more tests"
+
+    def test_set_review_feedback_overwrites(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_review_feedback(42, "First feedback")
+        tracker.set_review_feedback(42, "Updated feedback")
+        assert tracker.get_review_feedback(42) == "Updated feedback"
+
+    def test_reset_clears_review_feedback(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_review_feedback(42, "Some feedback")
+        tracker.reset()
+        assert tracker.get_review_feedback(42) is None
+
+
+# ---------------------------------------------------------------------------
 # StateData / LifetimeStats Pydantic models
 # ---------------------------------------------------------------------------
 
@@ -855,6 +955,8 @@ class TestStateDataModel:
         assert data.reviewed_prs == {}
         assert data.hitl_origins == {}
         assert data.hitl_causes == {}
+        assert data.review_attempts == {}
+        assert data.review_feedback == {}
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
