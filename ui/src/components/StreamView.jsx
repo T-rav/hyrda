@@ -17,23 +17,41 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle }) {
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor, activeWorkerCount }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const queuedCount = issues.length - activeCount
+  const hasRole = !!stage.role
 
   return (
-    <div style={styles.section}>
+    <div
+      style={hasRole ? (enabled ? sectionEnabledStyle : sectionDisabledStyle) : styles.section}
+      data-testid={`stage-section-${stage.key}`}
+    >
       <div
         style={sectionHeaderStyles[stage.key]}
         onClick={onToggle}
       >
         <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
         <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
+        {hasRole && !enabled && (
+          <span style={styles.disabledBadge} data-testid={`stage-disabled-${stage.key}`}>Disabled</span>
+        )}
         <span style={sectionCountStyles[stage.key]}>
           <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
           <span> · {queuedCount} queued</span>
           <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
         </span>
+        {hasRole && (
+          <span
+            style={{ ...styles.statusDot, background: dotColor }}
+            data-testid={`stage-dot-${stage.key}`}
+          />
+        )}
+        {hasRole && activeWorkerCount > 0 && (
+          <span style={styles.workerCountText} data-testid={`stage-workers-${stage.key}`}>
+            {activeWorkerCount}
+          </span>
+        )}
       </div>
       {open && issues.map(issue => (
         <StreamCard
@@ -89,7 +107,7 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
 }
 
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, workers, prs } = useHydra()
+  const { pipelineIssues, workers, prs, backgroundWorkers } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -118,9 +136,6 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         'merged',
         prs,
       ))
-    // Dedupe by issue number (pipeline may also have merged entries)
-    const mergedSet = new Set(mergedFromPrs.map(i => i.issueNumber))
-
     return PIPELINE_STAGES.map(stage => {
       let stageIssues
       if (stage.key === 'merged') {
@@ -158,6 +173,28 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     return counts
   }, [workers])
 
+  // Compute per-stage enabled state and dot color from backgroundWorkers
+  const stageStatusInfo = useMemo(() => {
+    const bgMap = Object.fromEntries((backgroundWorkers || []).map(w => [w.name, w]))
+    const info = {}
+    for (const stage of PIPELINE_STAGES) {
+      if (!stage.role) continue
+      const bgWorker = bgMap[stage.key]
+      const enabled = bgWorker ? bgWorker.enabled !== false : true
+      const activeCount = workerCounts[stage.key] || 0
+      let dotColor
+      if (!enabled) {
+        dotColor = theme.red
+      } else if (activeCount > 0) {
+        dotColor = theme.green
+      } else {
+        dotColor = theme.yellow
+      }
+      info[stage.key] = { enabled, dotColor, activeCount }
+    }
+    return info
+  }, [backgroundWorkers, workerCounts])
+
   const handleToggleStage = useCallback((key) => {
     onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
   }, [onToggleStage])
@@ -171,19 +208,25 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
 
-      {stageGroups.map(({ stage, issues: stageIssues }) => (
-        <StageSection
-          key={stage.key}
-          stage={stage}
-          issues={stageIssues}
-          workerCount={workerCounts[stage.key] || 0}
-          intentMap={intentMap}
-          onViewTranscript={onViewTranscript}
-          onRequestChanges={onRequestChanges}
-          open={!!expandedStages[stage.key]}
-          onToggle={() => handleToggleStage(stage.key)}
-        />
-      ))}
+      {stageGroups.map(({ stage, issues: stageIssues }) => {
+        const status = stageStatusInfo[stage.key]
+        return (
+          <StageSection
+            key={stage.key}
+            stage={stage}
+            issues={stageIssues}
+            workerCount={workerCounts[stage.key] || 0}
+            intentMap={intentMap}
+            onViewTranscript={onViewTranscript}
+            onRequestChanges={onRequestChanges}
+            open={!!expandedStages[stage.key]}
+            onToggle={() => handleToggleStage(stage.key)}
+            enabled={status?.enabled ?? true}
+            dotColor={status?.dotColor}
+            activeWorkerCount={status?.activeCount ?? 0}
+          />
+        )
+      })}
 
       {!hasAnyIssues && (
         <div style={styles.empty}>
@@ -263,6 +306,28 @@ const styles = {
   activeBadge: {
     fontWeight: 700,
   },
+  statusDot: {
+    display: 'inline-block',
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  workerCountText: {
+    fontSize: 10,
+    color: theme.textMuted,
+    fontWeight: 600,
+  },
+  disabledBadge: {
+    fontSize: 9,
+    fontWeight: 600,
+    color: theme.red,
+    background: theme.redSubtle,
+    border: `1px solid ${theme.red}`,
+    borderRadius: 10,
+    padding: '1px 6px',
+    textTransform: 'uppercase',
+  },
   pendingCard: {
     display: 'flex',
     alignItems: 'center',
@@ -296,3 +361,7 @@ const styles = {
     flexShrink: 0,
   },
 }
+
+// Pre-computed section opacity variants (avoids object spread in StageSection render)
+const sectionEnabledStyle = { ...styles.section, opacity: 1, transition: 'opacity 0.2s' }
+const sectionDisabledStyle = { ...styles.section, opacity: 0.5, transition: 'opacity 0.2s' }
