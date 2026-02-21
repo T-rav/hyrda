@@ -2260,7 +2260,7 @@ class TestSPACatchAll:
     def test_spa_catchall_does_not_catch_ws_path(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        """GET /ws should return 404, not SPA HTML."""
+        """GET /ws should not return SPA HTML."""
         from fastapi.testclient import TestClient
 
         from dashboard import HydraDashboard
@@ -2272,10 +2272,10 @@ class TestSPACatchAll:
         client = TestClient(app)
         response = client.get("/ws")
 
-        # WebSocket endpoint responds with 403 on a regular GET (upgrade required)
-        assert response.status_code != 200 or "text/html" not in response.headers.get(
-            "content-type", ""
-        )
+        # WebSocket endpoint responds with 403 on a regular GET (upgrade required);
+        # the catch-all must not intercept it and serve SPA HTML.
+        assert response.status_code != 200
+        assert "text/html" not in response.headers.get("content-type", "")
 
     def test_spa_catchall_serves_root_level_static_file(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
