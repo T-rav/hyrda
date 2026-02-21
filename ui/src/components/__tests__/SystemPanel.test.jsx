@@ -416,6 +416,8 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: null,
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }, { issue_number: 2, title: 'Issue 2' }],
+        orchestratorStatus: 'running',
+        events: [],
       })
       render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
       expect(screen.getByText('4 active')).toBeInTheDocument()
@@ -426,6 +428,8 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: null,
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }],
+        orchestratorStatus: 'idle',
+        events: [],
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       expect(screen.queryByText(/\d+ active/)).not.toBeInTheDocument()
@@ -517,7 +521,6 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: null,
         hitlItems: [],
-        pipelineIssues: {},
         orchestratorStatus: 'idle',
         events: [
           { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1, status: 'running' } },
