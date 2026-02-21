@@ -235,6 +235,130 @@ class StateTracker:
         self._data.lifetime_stats.issues_created += 1
         self.save()
 
-    def get_lifetime_stats(self) -> dict[str, int]:
+    def record_quality_fix_rounds(self, count: int) -> None:
+        """Accumulate quality fix rounds from an implementation run."""
+        self._data.lifetime_stats.total_quality_fix_rounds += count
+        self.save()
+
+    def record_ci_fix_rounds(self, count: int) -> None:
+        """Accumulate CI fix rounds from a review run."""
+        self._data.lifetime_stats.total_ci_fix_rounds += count
+        self.save()
+
+    def record_hitl_escalation(self) -> None:
+        """Increment the all-time HITL escalation counter."""
+        self._data.lifetime_stats.total_hitl_escalations += 1
+        self.save()
+
+    def record_review_verdict(self, verdict: str, fixes_made: bool) -> None:
+        """Record a review verdict in lifetime stats."""
+        if verdict == "approve":
+            self._data.lifetime_stats.total_review_approvals += 1
+        elif verdict == "request-changes":
+            self._data.lifetime_stats.total_review_request_changes += 1
+        if fixes_made:
+            self._data.lifetime_stats.total_reviewer_fixes += 1
+        self.save()
+
+    def record_implementation_duration(self, seconds: float) -> None:
+        """Accumulate implementation agent duration."""
+        self._data.lifetime_stats.total_implementation_seconds += seconds
+        self.save()
+
+    def record_review_duration(self, seconds: float) -> None:
+        """Accumulate review agent duration."""
+        self._data.lifetime_stats.total_review_seconds += seconds
+        self.save()
+
+    def get_lifetime_stats(self) -> dict[str, int | float]:
         """Return a copy of the lifetime stats counters."""
         return self._data.lifetime_stats.model_dump()
+
+    # --- threshold tracking ---
+
+    def get_fired_thresholds(self) -> list[str]:
+        """Return list of threshold names that have already been fired."""
+        return list(self._data.lifetime_stats.fired_thresholds)
+
+    def mark_threshold_fired(self, name: str) -> None:
+        """Record that a threshold proposal has been filed."""
+        if name not in self._data.lifetime_stats.fired_thresholds:
+            self._data.lifetime_stats.fired_thresholds.append(name)
+            self.save()
+
+    def clear_threshold_fired(self, name: str) -> None:
+        """Clear a fired threshold when the metric recovers."""
+        if name in self._data.lifetime_stats.fired_thresholds:
+            self._data.lifetime_stats.fired_thresholds.remove(name)
+            self.save()
+
+    def check_thresholds(
+        self,
+        quality_fix_rate_threshold: float,
+        approval_rate_threshold: float,
+        hitl_rate_threshold: float,
+    ) -> list[dict[str, str | float]]:
+        """Check metrics against thresholds, return list of crossed thresholds.
+
+        Returns a list of dicts with keys: name, metric, threshold, value, action.
+        Only returns thresholds not already fired.  Clears fired flags for
+        thresholds that have recovered.
+        """
+        stats = self._data.lifetime_stats
+        total_issues = stats.issues_completed
+        total_reviews = (
+            stats.total_review_approvals + stats.total_review_request_changes
+        )
+        proposals: list[dict[str, str | float]] = []
+
+        # Quality fix rate
+        qf_rate = stats.total_quality_fix_rounds / total_issues if total_issues else 0.0
+        if qf_rate > quality_fix_rate_threshold and total_issues >= 5:
+            if "quality_fix_rate" not in stats.fired_thresholds:
+                proposals.append(
+                    {
+                        "name": "quality_fix_rate",
+                        "metric": "quality fix rate",
+                        "threshold": quality_fix_rate_threshold,
+                        "value": qf_rate,
+                        "action": "Review implementation prompts — too many quality fixes needed",
+                    }
+                )
+        elif "quality_fix_rate" in stats.fired_thresholds:
+            self.clear_threshold_fired("quality_fix_rate")
+
+        # First-pass approval rate
+        approval_rate = (
+            stats.total_review_approvals / total_reviews if total_reviews else 1.0
+        )
+        if approval_rate < approval_rate_threshold and total_reviews >= 5:
+            if "approval_rate" not in stats.fired_thresholds:
+                proposals.append(
+                    {
+                        "name": "approval_rate",
+                        "metric": "first-pass approval rate",
+                        "threshold": approval_rate_threshold,
+                        "value": approval_rate,
+                        "action": "Review code quality — approval rate is below threshold",
+                    }
+                )
+        elif "approval_rate" in stats.fired_thresholds:
+            self.clear_threshold_fired("approval_rate")
+
+        # HITL escalation rate
+        hitl_rate = stats.total_hitl_escalations / total_issues if total_issues else 0.0
+        if hitl_rate > hitl_rate_threshold and total_issues >= 5:
+            if "hitl_rate" not in stats.fired_thresholds:
+                proposals.append(
+                    {
+                        "name": "hitl_rate",
+                        "metric": "HITL escalation rate",
+                        "threshold": hitl_rate_threshold,
+                        "value": hitl_rate,
+                        "action": "Investigate HITL escalation causes — too many issues need human intervention",
+                    }
+                )
+        elif "hitl_rate" in stats.fired_thresholds:
+            self.clear_threshold_fired("hitl_rate")
+
+        return proposals

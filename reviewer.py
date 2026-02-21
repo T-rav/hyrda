@@ -88,6 +88,8 @@ class ReviewRunner:
             result.summary = f"Review failed: {exc}"
             logger.error("Review failed for PR #%d: %s", pr.number, exc)
 
+        result.duration_seconds = time.monotonic() - start
+
         await self._bus.publish(
             HydraEvent(
                 type=EventType.REVIEW_UPDATE,
@@ -97,13 +99,12 @@ class ReviewRunner:
                     "worker": worker_id,
                     "status": ReviewerStatus.DONE.value,
                     "verdict": result.verdict.value,
-                    "duration": time.monotonic() - start,
+                    "duration": result.duration_seconds,
                     "role": "reviewer",
                 },
             )
         )
 
-        result.duration_seconds = time.monotonic() - start
         return result
 
     async def fix_ci(

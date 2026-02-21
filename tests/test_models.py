@@ -11,6 +11,7 @@ from models import (
     ControlStatusResponse,
     GitHubIssue,
     HITLItem,
+    LifetimeStats,
     NewIssueSpec,
     Phase,
     PlannerStatus,
@@ -725,6 +726,19 @@ class TestReviewResult:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.ci_fix_attempts == 0
 
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=45.5)
+        assert review.duration_seconds == pytest.approx(45.5)
+
+    def test_duration_seconds_in_serialization(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=30.0)
+        data = review.model_dump()
+        assert data["duration_seconds"] == pytest.approx(30.0)
+
     def test_ci_passed_can_be_set_true(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1, ci_passed=True)
         assert review.ci_passed is True
@@ -1170,3 +1184,56 @@ class TestControlStatusResponse:
         assert data["config"]["max_workers"] == 2
         assert data["config"]["batch_size"] == 15
         assert data["config"]["model"] == "sonnet"
+
+
+# ---------------------------------------------------------------------------
+# LifetimeStats
+# ---------------------------------------------------------------------------
+
+
+class TestLifetimeStats:
+    """Tests for the LifetimeStats model."""
+
+    def test_new_volume_counter_defaults(self) -> None:
+        stats = LifetimeStats()
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_ci_fix_rounds == 0
+        assert stats.total_hitl_escalations == 0
+        assert stats.total_review_request_changes == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_reviewer_fixes == 0
+
+    def test_new_timing_defaults(self) -> None:
+        stats = LifetimeStats()
+        assert stats.total_implementation_seconds == pytest.approx(0.0)
+        assert stats.total_review_seconds == pytest.approx(0.0)
+
+    def test_fired_thresholds_default(self) -> None:
+        stats = LifetimeStats()
+        assert stats.fired_thresholds == []
+
+    def test_fired_thresholds_are_independent_between_instances(self) -> None:
+        a = LifetimeStats()
+        b = LifetimeStats()
+        a.fired_thresholds.append("test")
+        assert b.fired_thresholds == []
+
+    def test_serialization_roundtrip_with_new_fields(self) -> None:
+        stats = LifetimeStats(
+            issues_completed=10,
+            total_quality_fix_rounds=5,
+            total_implementation_seconds=120.5,
+            fired_thresholds=["quality_fix_rate"],
+        )
+        json_str = stats.model_dump_json()
+        restored = LifetimeStats.model_validate_json(json_str)
+        assert restored == stats
+
+    def test_backward_compat_missing_new_fields(self) -> None:
+        """Old data without new fields should get zero defaults."""
+        old_data = {"issues_completed": 3, "prs_merged": 1, "issues_created": 0}
+        stats = LifetimeStats.model_validate(old_data)
+        assert stats.issues_completed == 3
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_implementation_seconds == 0.0
+        assert stats.fired_thresholds == []

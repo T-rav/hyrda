@@ -1781,6 +1781,102 @@ class TestWorktreePathForIssue:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – threshold configuration
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigThresholds:
+    """Tests for the threshold configuration fields."""
+
+    def test_quality_fix_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.5)
+
+    def test_approval_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.approval_rate_threshold == pytest.approx(0.5)
+
+    def test_hitl_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_rate_threshold == pytest.approx(0.2)
+
+    def test_custom_quality_fix_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=0.8,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.8)
+
+    def test_custom_approval_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            approval_rate_threshold=0.7,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.approval_rate_threshold == pytest.approx(0.7)
+
+    def test_custom_hitl_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            hitl_rate_threshold=0.1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_rate_threshold == pytest.approx(0.1)
+
+    def test_threshold_below_zero_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                quality_fix_rate_threshold=-0.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_threshold_above_one_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                quality_fix_rate_threshold=1.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_threshold_boundary_zero(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.0)
+
+    def test_threshold_boundary_one(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=1.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – test_command field
 # ---------------------------------------------------------------------------
 

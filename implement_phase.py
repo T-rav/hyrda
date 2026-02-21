@@ -135,6 +135,15 @@ class ImplementPhase:
                     if review_feedback:
                         self._state.clear_review_feedback(issue.number)
 
+                    if result.duration_seconds > 0:
+                        self._state.record_implementation_duration(
+                            result.duration_seconds
+                        )
+                    if result.quality_fix_attempts > 0:
+                        self._state.record_quality_fix_rounds(
+                            result.quality_fix_attempts
+                        )
+
                     # Persist worker metrics for retrospective analysis
                     self._state.set_worker_result_meta(
                         issue.number,

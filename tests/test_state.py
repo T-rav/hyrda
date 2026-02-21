@@ -672,7 +672,17 @@ class TestLifetimeStats:
         """A fresh tracker should include zeroed lifetime_stats."""
         tracker = make_tracker(tmp_path)
         stats = tracker.get_lifetime_stats()
-        assert stats == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+        assert stats["issues_completed"] == 0
+        assert stats["prs_merged"] == 0
+        assert stats["issues_created"] == 0
+        assert stats["total_quality_fix_rounds"] == 0
+        assert stats["total_ci_fix_rounds"] == 0
+        assert stats["total_hitl_escalations"] == 0
+        assert stats["total_review_request_changes"] == 0
+        assert stats["total_review_approvals"] == 0
+        assert stats["total_reviewer_fixes"] == 0
+        assert stats["total_implementation_seconds"] == 0.0
+        assert stats["total_review_seconds"] == 0.0
 
     def test_record_issue_completed_increments(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
@@ -749,7 +759,11 @@ class TestLifetimeStats:
 
         tracker = StateTracker(state_file)
         stats = tracker.get_lifetime_stats()
-        assert stats == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+        assert stats["issues_completed"] == 0
+        assert stats["prs_merged"] == 0
+        assert stats["issues_created"] == 0
+        assert stats["total_quality_fix_rounds"] == 0
+        assert stats["total_hitl_escalations"] == 0
         # Existing data is preserved
         assert tracker.get_current_batch() == 5
         assert tracker.get_issue_status(1) == "success"
@@ -1087,6 +1101,15 @@ class TestLifetimeStatsModel:
         assert stats.issues_completed == 0
         assert stats.prs_merged == 0
         assert stats.issues_created == 0
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_ci_fix_rounds == 0
+        assert stats.total_hitl_escalations == 0
+        assert stats.total_review_request_changes == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_reviewer_fixes == 0
+        assert stats.total_implementation_seconds == 0.0
+        assert stats.total_review_seconds == 0.0
+        assert stats.fired_thresholds == []
 
     def test_model_copy_is_independent(self) -> None:
         """model_copy should produce an independent instance."""
@@ -1094,3 +1117,268 @@ class TestLifetimeStatsModel:
         copy = stats.model_copy()
         copy.issues_completed = 99
         assert stats.issues_completed == 5
+
+
+# ---------------------------------------------------------------------------
+# New recording methods
+# ---------------------------------------------------------------------------
+
+
+class TestRecordingMethods:
+    """Tests for the new lifetime stats recording methods."""
+
+    def test_record_quality_fix_rounds(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_quality_fix_rounds(3)
+        assert tracker.get_lifetime_stats()["total_quality_fix_rounds"] == 3
+
+    def test_record_quality_fix_rounds_accumulates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_quality_fix_rounds(2)
+        tracker.record_quality_fix_rounds(1)
+        assert tracker.get_lifetime_stats()["total_quality_fix_rounds"] == 3
+
+    def test_record_ci_fix_rounds(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_ci_fix_rounds(2)
+        assert tracker.get_lifetime_stats()["total_ci_fix_rounds"] == 2
+
+    def test_record_ci_fix_rounds_accumulates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_ci_fix_rounds(1)
+        tracker.record_ci_fix_rounds(3)
+        assert tracker.get_lifetime_stats()["total_ci_fix_rounds"] == 4
+
+    def test_record_hitl_escalation(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_hitl_escalation()
+        assert tracker.get_lifetime_stats()["total_hitl_escalations"] == 1
+
+    def test_record_hitl_escalation_increments(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_hitl_escalation()
+        tracker.record_hitl_escalation()
+        assert tracker.get_lifetime_stats()["total_hitl_escalations"] == 2
+
+    def test_record_review_verdict_approve(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_verdict("approve", fixes_made=False)
+        stats = tracker.get_lifetime_stats()
+        assert stats["total_review_approvals"] == 1
+        assert stats["total_review_request_changes"] == 0
+        assert stats["total_reviewer_fixes"] == 0
+
+    def test_record_review_verdict_request_changes(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_verdict("request-changes", fixes_made=False)
+        stats = tracker.get_lifetime_stats()
+        assert stats["total_review_approvals"] == 0
+        assert stats["total_review_request_changes"] == 1
+        assert stats["total_reviewer_fixes"] == 0
+
+    def test_record_review_verdict_with_fixes(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_verdict("approve", fixes_made=True)
+        stats = tracker.get_lifetime_stats()
+        assert stats["total_review_approvals"] == 1
+        assert stats["total_reviewer_fixes"] == 1
+
+    def test_record_review_verdict_comment_does_not_affect_counts(
+        self, tmp_path: Path
+    ) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_verdict("comment", fixes_made=False)
+        stats = tracker.get_lifetime_stats()
+        assert stats["total_review_approvals"] == 0
+        assert stats["total_review_request_changes"] == 0
+
+    def test_record_implementation_duration(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_implementation_duration(45.5)
+        assert tracker.get_lifetime_stats()[
+            "total_implementation_seconds"
+        ] == pytest.approx(45.5)
+
+    def test_record_implementation_duration_accumulates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_implementation_duration(10.0)
+        tracker.record_implementation_duration(20.5)
+        assert tracker.get_lifetime_stats()[
+            "total_implementation_seconds"
+        ] == pytest.approx(30.5)
+
+    def test_record_review_duration(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_duration(30.0)
+        assert tracker.get_lifetime_stats()["total_review_seconds"] == pytest.approx(
+            30.0
+        )
+
+    def test_record_review_duration_accumulates(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_review_duration(15.0)
+        tracker.record_review_duration(25.0)
+        assert tracker.get_lifetime_stats()["total_review_seconds"] == pytest.approx(
+            40.0
+        )
+
+    def test_new_stats_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.record_quality_fix_rounds(2)
+        tracker.record_ci_fix_rounds(1)
+        tracker.record_hitl_escalation()
+        tracker.record_review_verdict("approve", fixes_made=True)
+        tracker.record_implementation_duration(60.0)
+        tracker.record_review_duration(30.0)
+
+        tracker2 = StateTracker(state_file)
+        stats = tracker2.get_lifetime_stats()
+        assert stats["total_quality_fix_rounds"] == 2
+        assert stats["total_ci_fix_rounds"] == 1
+        assert stats["total_hitl_escalations"] == 1
+        assert stats["total_review_approvals"] == 1
+        assert stats["total_reviewer_fixes"] == 1
+        assert stats["total_implementation_seconds"] == pytest.approx(60.0)
+        assert stats["total_review_seconds"] == pytest.approx(30.0)
+
+    def test_new_stats_preserved_across_reset(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_quality_fix_rounds(3)
+        tracker.record_hitl_escalation()
+        tracker.record_implementation_duration(100.0)
+        tracker.mark_issue(1, "success")
+
+        tracker.reset()
+
+        assert tracker.get_issue_status(1) is None
+        stats = tracker.get_lifetime_stats()
+        assert stats["total_quality_fix_rounds"] == 3
+        assert stats["total_hitl_escalations"] == 1
+        assert stats["total_implementation_seconds"] == pytest.approx(100.0)
+
+
+# ---------------------------------------------------------------------------
+# Threshold tracking
+# ---------------------------------------------------------------------------
+
+
+class TestThresholdTracking:
+    """Tests for threshold-based improvement proposal logic."""
+
+    def test_mark_threshold_fired(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.mark_threshold_fired("quality_fix_rate")
+        assert "quality_fix_rate" in tracker.get_fired_thresholds()
+
+    def test_mark_threshold_fired_idempotent(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.mark_threshold_fired("quality_fix_rate")
+        tracker.mark_threshold_fired("quality_fix_rate")
+        assert tracker.get_fired_thresholds().count("quality_fix_rate") == 1
+
+    def test_clear_threshold_fired(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.mark_threshold_fired("quality_fix_rate")
+        tracker.clear_threshold_fired("quality_fix_rate")
+        assert "quality_fix_rate" not in tracker.get_fired_thresholds()
+
+    def test_clear_threshold_fired_noop_if_not_present(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.clear_threshold_fired("nonexistent")
+        assert tracker.get_fired_thresholds() == []
+
+    def test_fired_thresholds_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.mark_threshold_fired("quality_fix_rate")
+        tracker.mark_threshold_fired("hitl_rate")
+
+        tracker2 = StateTracker(state_file)
+        fired = tracker2.get_fired_thresholds()
+        assert "quality_fix_rate" in fired
+        assert "hitl_rate" in fired
+
+    def test_fired_thresholds_preserved_across_reset(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.mark_threshold_fired("approval_rate")
+        tracker.reset()
+        assert "approval_rate" in tracker.get_fired_thresholds()
+
+    def test_check_thresholds_returns_empty_below_minimum_issues(
+        self, tmp_path: Path
+    ) -> None:
+        """Thresholds require at least 5 completed issues to activate."""
+        tracker = make_tracker(tmp_path)
+        for _ in range(4):
+            tracker.record_issue_completed()
+        tracker.record_quality_fix_rounds(10)  # high rate
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        assert proposals == []
+
+    def test_check_thresholds_quality_fix_rate_crossed(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(5):
+            tracker.record_issue_completed()
+        tracker.record_quality_fix_rounds(4)  # rate = 4/5 = 0.8 > 0.5
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        names = [p["name"] for p in proposals]
+        assert "quality_fix_rate" in names
+
+    def test_check_thresholds_approval_rate_crossed(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(5):
+            tracker.record_issue_completed()
+        # 1 approval, 4 request-changes → rate = 1/5 = 0.2 < 0.5
+        tracker.record_review_verdict("approve", fixes_made=False)
+        for _ in range(4):
+            tracker.record_review_verdict("request-changes", fixes_made=False)
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        names = [p["name"] for p in proposals]
+        assert "approval_rate" in names
+
+    def test_check_thresholds_hitl_rate_crossed(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(5):
+            tracker.record_issue_completed()
+        for _ in range(2):
+            tracker.record_hitl_escalation()  # rate = 2/5 = 0.4 > 0.2
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        names = [p["name"] for p in proposals]
+        assert "hitl_rate" in names
+
+    def test_check_thresholds_does_not_re_fire(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(5):
+            tracker.record_issue_completed()
+        tracker.record_quality_fix_rounds(4)
+        proposals1 = tracker.check_thresholds(0.5, 0.5, 0.2)
+        assert len(proposals1) == 1
+        tracker.mark_threshold_fired("quality_fix_rate")
+        proposals2 = tracker.check_thresholds(0.5, 0.5, 0.2)
+        assert not any(p["name"] == "quality_fix_rate" for p in proposals2)
+
+    def test_check_thresholds_clears_recovered(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.mark_threshold_fired("quality_fix_rate")
+        for _ in range(5):
+            tracker.record_issue_completed()
+        # rate = 0/5 = 0.0 < 0.5 → recovered
+        tracker.check_thresholds(0.5, 0.5, 0.2)
+        assert "quality_fix_rate" not in tracker.get_fired_thresholds()
+
+    def test_check_thresholds_no_issues_returns_empty(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        assert proposals == []
+
+    def test_check_thresholds_returns_correct_values(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        for _ in range(10):
+            tracker.record_issue_completed()
+        tracker.record_quality_fix_rounds(8)  # rate = 0.8
+        proposals = tracker.check_thresholds(0.5, 0.5, 0.2)
+        qf_proposal = next(p for p in proposals if p["name"] == "quality_fix_rate")
+        assert qf_proposal["threshold"] == 0.5
+        assert qf_proposal["value"] == pytest.approx(0.8)
+        assert "action" in qf_proposal

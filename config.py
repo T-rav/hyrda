@@ -153,6 +153,26 @@ class HydraConfig(BaseModel):
         description="Max files overlapping between concurrent plans before BLOCK",
     )
 
+    # Metric thresholds for improvement proposals
+    quality_fix_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if quality fix rate exceeds this (0.0-1.0)",
+    )
+    approval_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if first-pass approval rate drops below this (0.0-1.0)",
+    )
+    hitl_rate_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Alert if HITL escalation rate exceeds this (0.0-1.0)",
+    )
+
     # Review insight aggregation
     review_insight_window: int = Field(
         default=10,
