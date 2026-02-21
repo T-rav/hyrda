@@ -3661,6 +3661,51 @@ class TestPollingLoop:
         assert call_count == 0
 
     @pytest.mark.asyncio
+    async def test_polling_loop_runs_when_enabled_name_is_none(
+        self, config: HydraConfig
+    ) -> None:
+        """Work function always runs when enabled_name is None (no enable check)."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            orch._stop_event.set()
+
+        orch.set_bg_worker_enabled("some_worker", False)
+        await orch._polling_loop("test", work_fn, 0, enabled_name=None)
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_error_message_formats_underscores(
+        self, config: HydraConfig
+    ) -> None:
+        """Error event message should replace underscores with spaces in loop name."""
+        orch = HydraOrchestrator(config)
+        queue = orch._bus.subscribe()
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("boom")
+            orch._stop_event.set()
+
+        await orch._polling_loop("memory_sync", work_fn, 0)
+
+        error_events: list[HydraEvent] = []
+        while not queue.empty():
+            event = queue.get_nowait()
+            if event.type == EventType.ERROR:
+                error_events.append(event)
+
+        assert len(error_events) == 1
+        assert "Memory sync" in error_events[0].data["message"]
+        assert "memory_sync" not in error_events[0].data["message"]
+
+    @pytest.mark.asyncio
     async def test_polling_loop_skips_when_disabled(self, config: HydraConfig) -> None:
         """Work function should not be called when worker is disabled."""
         orch = HydraOrchestrator(config)

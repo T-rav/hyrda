@@ -2275,3 +2275,28 @@ class TestEnvVarOverrideTable:
         config_fields = set(HydraConfig.model_fields.keys())
         invalid = all_fields - config_fields
         assert not invalid, f"Invalid field names in override tables: {invalid}"
+
+    def test_override_table_defaults_match_field_defaults(self) -> None:
+        """Default values in the override tables must match HydraConfig field defaults.
+
+        This prevents silent drift when a field default is changed without updating
+        the corresponding entry in _ENV_INT_OVERRIDES or _ENV_STR_OVERRIDES.
+        """
+        # Arrange
+        model_fields = HydraConfig.model_fields
+
+        # Act / Assert — int overrides
+        for field, _env_key, table_default in _ENV_INT_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_INT_OVERRIDES entry for '{field}' has default={table_default}, "
+                f"but HydraConfig.{field} default is {pydantic_default}"
+            )
+
+        # Act / Assert — str overrides
+        for field, _env_key, table_default in _ENV_STR_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_STR_OVERRIDES entry for '{field}' has default={table_default!r}, "
+                f"but HydraConfig.{field} default is {pydantic_default!r}"
+            )

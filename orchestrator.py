@@ -428,15 +428,16 @@ class HydraOrchestrator:
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
+                display = name.replace("_", " ").capitalize()
                 logger.exception(
                     "%s loop iteration failed — will retry next cycle",
-                    name.capitalize(),
+                    display,
                 )
                 await self._bus.publish(
                     HydraEvent(
                         type=EventType.ERROR,
                         data={
-                            "message": f"{name.capitalize()} loop error",
+                            "message": f"{display} loop error",
                             "source": name,
                         },
                     )
