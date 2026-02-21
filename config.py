@@ -212,6 +212,14 @@ class HydraConfig(BaseModel):
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
 
+    # Retrospective
+    retrospective_window: int = Field(
+        default=10,
+        ge=3,
+        le=100,
+        description="Number of recent retrospective entries to scan for patterns",
+    )
+
     # Execution mode
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
