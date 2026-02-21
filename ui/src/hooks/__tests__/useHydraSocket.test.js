@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reducer } from '../useHydraSocket'
+import { reducer, SESSION_RESET } from '../useHydraSocket'
 import { MAX_EVENTS } from '../../constants'
 
 const initialState = {
@@ -518,6 +518,23 @@ describe('useHydraSocket reducer', () => {
     })
   })
 
+  describe('SESSION_RESET constant', () => {
+    it('contains all session-scoped fields', () => {
+      expect(SESSION_RESET).toEqual({
+        workers: {},
+        prs: [],
+        reviews: [],
+        hitlItems: [],
+        sessionTriaged: 0,
+        sessionPlanned: 0,
+        sessionImplemented: 0,
+        sessionReviewed: 0,
+        mergedCount: 0,
+        sessionPrsCount: 0,
+      })
+    })
+  })
+
   describe('orchestrator_status clears stale session state', () => {
     const staleState = {
       ...initialState,
@@ -526,6 +543,9 @@ describe('useHydraSocket reducer', () => {
         1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
         'plan-2': { status: 'planning', worker: 2, role: 'planner', title: 'Plan Issue #2', branch: '', transcript: [], pr: null },
       },
+      prs: [{ pr: 10, issue: 1, url: 'http://example.com/pr/10' }],
+      reviews: [{ pr: 10, issue: 1, status: 'approved' }],
+      hitlItems: [{ issue: 5, title: 'Stuck', pr: 15 }],
       sessionTriaged: 3,
       sessionPlanned: 2,
       sessionImplemented: 5,
@@ -561,7 +581,7 @@ describe('useHydraSocket reducer', () => {
       expect(next.sessionImplemented).toBe(0)
     })
 
-    it('preserves workers and session stats when status is running', () => {
+    it('does not clear state when already running (redundant running event)', () => {
       const next = reducer(staleState, {
         type: 'orchestrator_status',
         data: { status: 'running' },
@@ -570,6 +590,49 @@ describe('useHydraSocket reducer', () => {
       expect(next.orchestratorStatus).toBe('running')
       expect(Object.keys(next.workers)).toHaveLength(2)
       expect(next.sessionImplemented).toBe(5)
+      expect(next.prs).toHaveLength(1)
+      expect(next.reviews).toHaveLength(1)
+      expect(next.hitlItems).toHaveLength(1)
+    })
+
+    it('clears all session state when transitioning from idle to running', () => {
+      const idleState = { ...staleState, orchestratorStatus: 'idle' }
+      const next = reducer(idleState, {
+        type: 'orchestrator_status',
+        data: { status: 'running' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('running')
+      expect(next.workers).toEqual({})
+      expect(next.prs).toEqual([])
+      expect(next.reviews).toEqual([])
+      expect(next.hitlItems).toEqual([])
+      expect(next.sessionTriaged).toBe(0)
+      expect(next.sessionPlanned).toBe(0)
+      expect(next.sessionImplemented).toBe(0)
+      expect(next.sessionReviewed).toBe(0)
+      expect(next.mergedCount).toBe(0)
+      expect(next.sessionPrsCount).toBe(0)
+    })
+
+    it('clears all session state when transitioning from done to running', () => {
+      const doneState = { ...staleState, orchestratorStatus: 'done' }
+      const next = reducer(doneState, {
+        type: 'orchestrator_status',
+        data: { status: 'running' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('running')
+      expect(next.workers).toEqual({})
+      expect(next.prs).toEqual([])
+      expect(next.reviews).toEqual([])
+      expect(next.hitlItems).toEqual([])
+      expect(next.sessionTriaged).toBe(0)
+      expect(next.sessionPlanned).toBe(0)
+      expect(next.sessionImplemented).toBe(0)
+      expect(next.sessionReviewed).toBe(0)
+      expect(next.mergedCount).toBe(0)
+      expect(next.sessionPrsCount).toBe(0)
     })
 
     it('clears workers and session stats when status is stopping', () => {

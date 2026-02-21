@@ -24,6 +24,19 @@ const initialState = {
   metrics: null,  // MetricsData | null
 }
 
+export const SESSION_RESET = {
+  workers: {},
+  prs: [],
+  reviews: [],
+  hitlItems: [],
+  sessionTriaged: 0,
+  sessionPlanned: 0,
+  sessionImplemented: 0,
+  sessionReviewed: 0,
+  mergedCount: 0,
+  sessionPrsCount: 0,
+}
+
 export function reducer(state, action) {
   switch (action.type) {
     case 'CONNECTED':
@@ -43,16 +56,7 @@ export function reducer(state, action) {
         return {
           ...addEvent(state, action),
           phase: newPhase,
-          workers: {},
-          prs: [],
-          reviews: [],
-          mergedCount: 0,
-          sessionPrsCount: 0,
-          sessionTriaged: 0,
-          sessionPlanned: 0,
-          sessionImplemented: 0,
-          sessionReviewed: 0,
-          hitlItems: [],
+          ...SESSION_RESET,
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -61,9 +65,11 @@ export function reducer(state, action) {
     case 'orchestrator_status': {
       const newStatus = action.data.status
       const isStopped = newStatus === 'idle' || newStatus === 'done' || newStatus === 'stopping'
+      const isStarting = newStatus === 'running' && state.orchestratorStatus !== 'running'
       return {
         ...addEvent(state, action),
         orchestratorStatus: newStatus,
+        ...(isStarting ? SESSION_RESET : {}),
         ...(isStopped ? {
           workers: {},
           sessionTriaged: 0,
