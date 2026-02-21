@@ -89,6 +89,36 @@ def create_router(
         items = await pr_manager.list_open_prs(all_labels)
         return JSONResponse([item.model_dump() for item in items])
 
+    @router.get("/api/issues")
+    async def get_issues() -> JSONResponse:
+        """Fetch all Hydra-labeled issues with pipeline status."""
+        all_labels = list(
+            {
+                *config.find_label,
+                *config.planner_label,
+                *config.ready_label,
+                *config.review_label,
+                *config.fixed_label,
+                *config.hitl_label,
+                *config.hitl_active_label,
+            }
+        )
+        items = await pr_manager.list_issues_by_labels(all_labels)
+        # Override status from state tracker for completed/failed issues
+        processed = state.to_dict().get("processed_issues", {})
+        result = []
+        for item in items:
+            data = item.model_dump()
+            issue_key = str(item.issue)
+            if issue_key in processed:
+                proc_status = processed[issue_key]
+                if proc_status == "success":
+                    data["status"] = "merged"
+                elif proc_status == "failed":
+                    data["status"] = "failed"
+            result.append(data)
+        return JSONResponse(result)
+
     @router.get("/api/hitl")
     async def get_hitl() -> JSONResponse:
         """Fetch issues/PRs labeled for human-in-the-loop (stuck on CI)."""

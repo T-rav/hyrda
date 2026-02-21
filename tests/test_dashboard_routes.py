@@ -76,6 +76,7 @@ class TestCreateRouter:
             "/api/stats",
             "/api/events",
             "/api/prs",
+            "/api/issues",
             "/api/hitl",
             "/api/human-input",
             "/api/human-input/{issue_number}",

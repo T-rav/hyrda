@@ -3,18 +3,18 @@ import { useHydraSocket } from './hooks/useHydraSocket'
 import { Header } from './components/Header'
 import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
-import { PRTable } from './components/PRTable'
+import { IssueTable } from './components/IssueTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { Livestream } from './components/Livestream'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'prs', 'hitl', 'livestream', 'timeline']
+const TABS = ['transcript', 'issues', 'hitl', 'livestream', 'timeline']
 
 export default function App() {
   const {
-    connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
+    connected, batchNum, phase, orchestratorStatus, workers, prs, issues, reviews,
     mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
     sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
@@ -86,8 +86,8 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'prs'
-                ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
+              {tab === 'issues'
+                ? <>Issues{issues.length > 0 && <span style={styles.tabBadge}>{issues.length}</span>}</>
                 : tab === 'hitl' ? (
                 <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
               ) : tab === 'livestream' ? 'Timeline' : tab === 'timeline' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -99,7 +99,7 @@ export default function App() {
           {activeTab === 'transcript' && (
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable />}
+          {activeTab === 'issues' && <IssueTable workers={workers} />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'livestream' && <Livestream events={events} />}
           {activeTab === 'timeline' && (

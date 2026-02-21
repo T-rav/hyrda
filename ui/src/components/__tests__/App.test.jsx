@@ -8,6 +8,7 @@ const { mockSocketState } = vi.hoisted(() => ({
       1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
     },
     prs: [],
+    issues: [],
     events: [],
     connected: true,
     orchestratorStatus: 'running',
@@ -30,6 +31,7 @@ vi.mock('../../hooks/useHydraSocket', () => ({
 beforeEach(() => {
   mockSocketState.hitlItems = []
   mockSocketState.prs = []
+  mockSocketState.issues = []
   cleanup()
 })
 
@@ -38,11 +40,12 @@ describe('App worker select tab switching', () => {
     const { default: App } = await import('../../App')
     render(<App />)
 
-    // Switch to Pull Requests tab first
-    fireEvent.click(screen.getByText('Pull Requests'))
+    // Switch to Issues tab first
+    fireEvent.click(screen.getByText('Issues'))
 
-    // Click the worker card
-    fireEvent.click(screen.getByText('#1'))
+    // Click the worker card in the sidebar (first match)
+    const matches = screen.getAllByText('#1')
+    fireEvent.click(matches[0])
 
     // Transcript tab should now be active and transcript content visible
     expect(screen.getByText('line 1')).toBeInTheDocument()
@@ -164,40 +167,40 @@ describe('tabBadgeStyle', () => {
   })
 })
 
-describe('PR tab badge rendering', () => {
-  it('shows Pull Requests label without badge when no PRs exist', async () => {
-    mockSocketState.prs = []
+describe('Issues tab badge rendering', () => {
+  it('shows Issues label without badge when no issues exist', async () => {
+    mockSocketState.issues = []
     const { default: App } = await import('../../App')
     render(<App />)
-    const tab = screen.getByText('Pull Requests').closest('div')
+    const tab = screen.getByText('Issues').closest('div')
     expect(tab).toBeInTheDocument()
     expect(tab.querySelector('span')).toBeNull()
   })
 
-  it('shows badge with count when PRs exist', async () => {
-    mockSocketState.prs = [
-      { pr: 1, title: 'PR 1' },
-      { pr: 2, title: 'PR 2' },
-      { pr: 3, title: 'PR 3' },
+  it('shows badge with count when issues exist', async () => {
+    mockSocketState.issues = [
+      { issue: 1, title: 'Issue 1', status: 'plan' },
+      { issue: 2, title: 'Issue 2', status: 'implement' },
+      { issue: 3, title: 'Issue 3', status: 'review' },
     ]
     const { default: App } = await import('../../App')
     render(<App />)
-    const tab = screen.getByText('Pull Requests').closest('div')
+    const tab = screen.getByText('Issues').closest('div')
     expect(tab.querySelector('span')).not.toBeNull()
     expect(tab.querySelector('span').textContent).toBe('3')
   })
 
-  it('shows no badge when prs is empty after having items', async () => {
-    mockSocketState.prs = [{ pr: 1, title: 'PR 1' }]
+  it('shows no badge when issues is empty after having items', async () => {
+    mockSocketState.issues = [{ issue: 1, title: 'Issue 1', status: 'plan' }]
     const { default: App } = await import('../../App')
     const { unmount } = render(<App />)
-    const tab = screen.getByText('Pull Requests').closest('div')
+    const tab = screen.getByText('Issues').closest('div')
     expect(tab.querySelector('span')).not.toBeNull()
 
     unmount()
-    mockSocketState.prs = []
+    mockSocketState.issues = []
     render(<App />)
-    const tab2 = screen.getByText('Pull Requests').closest('div')
+    const tab2 = screen.getByText('Issues').closest('div')
     expect(tab2.querySelector('span')).toBeNull()
   })
 })

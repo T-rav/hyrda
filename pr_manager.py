@@ -13,7 +13,14 @@ from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, HITLItem, PRInfo, PRListItem, ReviewVerdict
+from models import (
+    GitHubIssue,
+    HITLItem,
+    IssueListItem,
+    PRInfo,
+    PRListItem,
+    ReviewVerdict,
+)
 from subprocess_util import run_subprocess, run_subprocess_with_retry
 
 logger = logging.getLogger("hydra.pr_manager")
@@ -821,6 +828,114 @@ class PRManager:
                         pr=pr_number,
                         prUrl=pr_url,
                         branch=branch,
+                    )
+                )
+
+            return items
+        except Exception:
+            return []
+
+    # Label → pipeline stage mapping (priority order: higher index wins)
+    _LABEL_STATUS_PRIORITY: list[tuple[str, str]] = [
+        ("hydra-find", "triage"),
+        ("hydra-plan", "plan"),
+        ("hydra-ready", "implement"),
+        ("hydra-review", "review"),
+        ("hydra-hitl", "hitl"),
+        ("hydra-hitl-active", "hitl"),
+        ("hydra-fixed", "merged"),
+    ]
+
+    def _status_from_labels(self, labels: list[str]) -> str:
+        """Derive pipeline status from issue labels using priority ordering."""
+        status = "backlog"
+        for label_prefix, stage in self._LABEL_STATUS_PRIORITY:
+            if any(
+                lbl == label_prefix or lbl.startswith(label_prefix) for lbl in labels
+            ):
+                status = stage
+        return status
+
+    async def list_issues_by_labels(self, labels: list[str]) -> list[IssueListItem]:
+        """Fetch open issues across *labels*, deduplicate, and derive pipeline status.
+
+        For each issue, looks up the associated PR via the ``agent/issue-N``
+        branch convention.  Returns ``[]`` in dry-run mode or on failure.
+        """
+        if self._config.dry_run:
+            return []
+
+        try:
+            seen: set[int] = set()
+            raw_issues: list[dict[str, Any]] = []
+
+            for label in labels:
+                try:
+                    raw = await self._run_gh(
+                        "gh",
+                        "issue",
+                        "list",
+                        "--repo",
+                        self._repo,
+                        "--label",
+                        label,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number,title,url,labels",
+                        "--limit",
+                        "50",
+                    )
+                    for issue in json.loads(raw):
+                        if issue["number"] not in seen:
+                            seen.add(issue["number"])
+                            raw_issues.append(issue)
+                except Exception:
+                    continue
+
+            items: list[IssueListItem] = []
+            for issue in raw_issues:
+                issue_labels = [
+                    lbl["name"] if isinstance(lbl, dict) else str(lbl)
+                    for lbl in issue.get("labels", [])
+                ]
+                status = self._status_from_labels(issue_labels)
+
+                branch = self._config.branch_for_issue(issue["number"])
+                pr_number = 0
+                pr_url = ""
+                try:
+                    pr_raw = await self._run_gh(
+                        "gh",
+                        "pr",
+                        "list",
+                        "--repo",
+                        self._repo,
+                        "--head",
+                        branch,
+                        "--state",
+                        "all",
+                        "--json",
+                        "number,url",
+                        "--limit",
+                        "1",
+                    )
+                    pr_data = json.loads(pr_raw)
+                    if pr_data:
+                        pr_number = pr_data[0]["number"]
+                        pr_url = pr_data[0].get("url", "")
+                except Exception:
+                    pass
+
+                items.append(
+                    IssueListItem(
+                        issue=issue["number"],
+                        title=issue.get("title", ""),
+                        url=issue.get("url", ""),
+                        status=status,
+                        pr=pr_number,
+                        prUrl=pr_url,
+                        labels=issue_labels,
                     )
                 )
 

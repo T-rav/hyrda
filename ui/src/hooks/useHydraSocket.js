@@ -18,6 +18,7 @@ const initialState = {
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
+  issues: [],     // IssueListItem[]
   hitlItems: [],  // HITLItem[]
   humanInputRequests: {},  // Record<string, string>
 }
@@ -234,6 +235,9 @@ export function reducer(state, action) {
     case 'EXISTING_PRS':
       return { ...state, prs: [...action.data, ...state.prs] }
 
+    case 'EXISTING_ISSUES':
+      return { ...state, issues: action.data }
+
     case 'HITL_ITEMS':
       return { ...state, hitlItems: action.data }
 
@@ -341,6 +345,11 @@ export function useHydraSocket() {
       fetch('/api/prs')
         .then(r => r.json())
         .then(data => dispatch({ type: 'EXISTING_PRS', data }))
+        .catch(() => {})
+      // Fetch issues for the Issues tab
+      fetch('/api/issues')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'EXISTING_ISSUES', data }))
         .catch(() => {})
       // Fetch HITL items on connect
       fetchHitlItems()

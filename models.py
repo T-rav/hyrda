@@ -256,6 +256,18 @@ class HITLItem(BaseModel):
     status: str = "pending"  # pending | processing | resolved
 
 
+class IssueListItem(BaseModel):
+    """An issue entry returned by GET /api/issues."""
+
+    issue: int
+    title: str = ""
+    url: str = ""
+    status: str = "backlog"
+    pr: int = 0
+    prUrl: str = ""  # camelCase to match existing frontend contract
+    labels: list[str] = Field(default_factory=list)
+
+
 class ControlStatusConfig(BaseModel):
     """Config subset returned by GET /api/control/status."""
 

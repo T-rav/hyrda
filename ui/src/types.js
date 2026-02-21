@@ -14,6 +14,8 @@
  * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string }} HITLItem
  *
  * @typedef {Record<string, string>} HumanInputRequests
+ *
+ * @typedef {{ issue: number, title: string, url: string, status: string, pr: number, prUrl: string, labels: string[] }} IssueListItem
  */
 
 export {}
