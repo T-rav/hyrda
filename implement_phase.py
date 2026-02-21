@@ -101,140 +101,8 @@ class ImplementPhase:
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
 
-                # Check per-issue attempt cap
-                attempts = self._state.increment_issue_attempts(issue.number)
-                if attempts > self._config.max_issue_attempts:
-                    last_meta = self._state.get_worker_result_meta(issue.number)
-                    last_error = (
-                        last_meta.get("error", "No error details available")
-                        or "No error details available"
-                    )
-                    await Escalator(
-                        self._config, self._state, self._prs
-                    ).escalate_to_hitl(
-                        issue_number=issue.number,
-                        cause=(
-                            f"Implementation attempt cap exceeded "
-                            f"after {attempts - 1} attempt(s)"
-                        ),
-                        origin_label=self._config.ready_label[0],
-                        current_labels=self._config.ready_label,
-                        comment=(
-                            f"**Implementation attempt cap exceeded** — "
-                            f"{attempts - 1} attempt(s) exhausted "
-                            f"(max {self._config.max_issue_attempts}).\n\n"
-                            f"Last error: {last_error}\n\n"
-                            f"Escalating to human review."
-                        ),
-                    )
-                    self._state.mark_issue(issue.number, "failed")
-                    return WorkerResult(
-                        issue_number=issue.number,
-                        branch=branch,
-                        error=f"Implementation attempt cap exceeded ({attempts - 1} attempts)",
-                    )
-
                 try:
-                    # Resume: reuse existing worktree if present
-                    wt_path = self._config.worktree_base / f"issue-{issue.number}"
-                    if wt_path.is_dir():
-                        logger.info(
-                            "Resuming existing worktree for issue #%d", issue.number
-                        )
-                    else:
-                        wt_path = await self._worktrees.create(issue.number, branch)
-                    self._state.set_worktree(issue.number, str(wt_path))
-
-                    # Push branch immediately so it appears on the GitHub issue
-                    await self._prs.push_branch(wt_path, branch)
-                    await self._prs.post_comment(
-                        issue.number,
-                        f"**Branch:** [`{branch}`](https://github.com/"
-                        f"{self._config.repo}/tree/{branch})\n\n"
-                        f"Implementation in progress.",
-                    )
-
-                    # Check for review feedback from a previous
-                    # REQUEST_CHANGES cycle
-                    review_feedback = (
-                        self._state.get_review_feedback(issue.number) or ""
-                    )
-
-                    result = await self._agents.run(
-                        issue,
-                        wt_path,
-                        branch,
-                        worker_id=idx,
-                        review_feedback=review_feedback,
-                    )
-
-                    # Clear review feedback after implementation run
-                    if review_feedback:
-                        self._state.clear_review_feedback(issue.number)
-
-                    if result.duration_seconds > 0:
-                        self._state.record_implementation_duration(
-                            result.duration_seconds
-                        )
-                    if result.quality_fix_attempts > 0:
-                        self._state.record_quality_fix_rounds(
-                            result.quality_fix_attempts
-                        )
-
-                    # Persist worker metrics for retrospective analysis
-                    self._state.set_worker_result_meta(
-                        issue.number,
-                        {
-                            "quality_fix_attempts": result.quality_fix_attempts,
-                            "duration_seconds": result.duration_seconds,
-                            "error": result.error,
-                            "commits": result.commits,
-                        },
-                    )
-
-                    # Zero-commit: issue is already satisfied
-                    if (
-                        not result.success
-                        and result.error == "No commits found on branch"
-                        and result.commits == 0
-                    ):
-                        await self._close_as_already_satisfied(issue)
-                        self._state.mark_issue(issue.number, "already_satisfied")
-                        return result
-
-                    # Push final commits and create PR
-                    if result.worktree_path:
-                        pushed = await self._prs.push_branch(
-                            Path(result.worktree_path), result.branch
-                        )
-                        if pushed:
-                            # On retry cycles a PR already exists for this
-                            # branch — skip creation to avoid gh CLI errors.
-                            pr = None
-                            is_retry = bool(review_feedback)
-                            if not is_retry:
-                                draft = not result.success
-                                pr = await self._prs.create_pr(
-                                    issue, result.branch, draft=draft
-                                )
-                                result.pr_info = pr
-
-                            if result.success:
-                                # Success: move to review pipeline
-                                for lbl in self._config.ready_label:
-                                    await self._prs.remove_label(issue.number, lbl)
-                                await self._prs.add_labels(
-                                    issue.number, [self._config.review_label[0]]
-                                )
-                                if pr and pr.number > 0:
-                                    await self._prs.add_pr_labels(
-                                        pr.number, [self._config.review_label[0]]
-                                    )
-                            # Failure: keep implementation label so issue can be retried
-
-                    status = "success" if result.success else "failed"
-                    self._state.mark_issue(issue.number, status)
-                    return result
+                    return await self._worker_inner(idx, issue, branch)
                 except Exception:
                     logger.exception("Worker failed for issue #%d", issue.number)
                     self._state.mark_issue(issue.number, "failed")
@@ -260,3 +128,144 @@ class ImplementPhase:
                 break
 
         return results, issues
+
+    async def _worker_inner(
+        self, idx: int, issue: GitHubIssue, branch: str
+    ) -> WorkerResult:
+        """Core implementation logic — called inside the semaphore."""
+        cap_result = await self._check_attempt_cap(issue, branch)
+        if cap_result is not None:
+            return cap_result
+
+        review_feedback = self._state.get_review_feedback(issue.number) or ""
+        result = await self._run_implementation(issue, branch, idx, review_feedback)
+
+        is_retry = bool(review_feedback)
+        return await self._handle_implementation_result(issue, result, is_retry)
+
+    async def _check_attempt_cap(
+        self, issue: GitHubIssue, branch: str
+    ) -> WorkerResult | None:
+        """Check per-issue attempt cap.  Returns a WorkerResult on cap exceeded, else None."""
+        attempts = self._state.increment_issue_attempts(issue.number)
+        if attempts <= self._config.max_issue_attempts:
+            return None
+
+        last_meta = self._state.get_worker_result_meta(issue.number)
+        last_error = (
+            last_meta.get("error", "No error details available")
+            or "No error details available"
+        )
+        await Escalator(self._config, self._state, self._prs).escalate_to_hitl(
+            issue_number=issue.number,
+            cause=(
+                f"Implementation attempt cap exceeded after {attempts - 1} attempt(s)"
+            ),
+            origin_label=self._config.ready_label[0],
+            current_labels=self._config.ready_label,
+            comment=(
+                f"**Implementation attempt cap exceeded** — "
+                f"{attempts - 1} attempt(s) exhausted "
+                f"(max {self._config.max_issue_attempts}).\n\n"
+                f"Last error: {last_error}\n\n"
+                f"Escalating to human review."
+            ),
+        )
+        self._state.mark_issue(issue.number, "failed")
+        return WorkerResult(
+            issue_number=issue.number,
+            branch=branch,
+            error=f"Implementation attempt cap exceeded ({attempts - 1} attempts)",
+        )
+
+    async def _run_implementation(
+        self,
+        issue: GitHubIssue,
+        branch: str,
+        worker_id: int,
+        review_feedback: str,
+    ) -> WorkerResult:
+        """Set up worktree, push branch, run agent, record metrics."""
+        wt_path = self._config.worktree_base / f"issue-{issue.number}"
+        if wt_path.is_dir():
+            logger.info("Resuming existing worktree for issue #%d", issue.number)
+        else:
+            wt_path = await self._worktrees.create(issue.number, branch)
+        self._state.set_worktree(issue.number, str(wt_path))
+
+        await self._prs.push_branch(wt_path, branch)
+        await self._prs.post_comment(
+            issue.number,
+            f"**Branch:** [`{branch}`](https://github.com/"
+            f"{self._config.repo}/tree/{branch})\n\n"
+            f"Implementation in progress.",
+        )
+
+        result = await self._agents.run(
+            issue,
+            wt_path,
+            branch,
+            worker_id=worker_id,
+            review_feedback=review_feedback,
+        )
+
+        if review_feedback:
+            self._state.clear_review_feedback(issue.number)
+
+        if result.duration_seconds > 0:
+            self._state.record_implementation_duration(result.duration_seconds)
+        if result.quality_fix_attempts > 0:
+            self._state.record_quality_fix_rounds(result.quality_fix_attempts)
+
+        self._state.set_worker_result_meta(
+            issue.number,
+            {
+                "quality_fix_attempts": result.quality_fix_attempts,
+                "duration_seconds": result.duration_seconds,
+                "error": result.error,
+                "commits": result.commits,
+            },
+        )
+
+        return result
+
+    async def _handle_implementation_result(
+        self, issue: GitHubIssue, result: WorkerResult, is_retry: bool
+    ) -> WorkerResult:
+        """Handle the result of an agent run: close, create PR, swap labels."""
+        # Zero-commit: issue is already satisfied
+        if (
+            not result.success
+            and result.error == "No commits found on branch"
+            and result.commits == 0
+        ):
+            await self._close_as_already_satisfied(issue)
+            self._state.mark_issue(issue.number, "already_satisfied")
+            return result
+
+        # Push final commits and create PR
+        if result.worktree_path:
+            pushed = await self._prs.push_branch(
+                Path(result.worktree_path), result.branch
+            )
+            if pushed:
+                pr = None
+                if not is_retry:
+                    draft = not result.success
+                    pr = await self._prs.create_pr(issue, result.branch, draft=draft)
+                    result.pr_info = pr
+
+                if result.success:
+                    for lbl in self._config.ready_label:
+                        await self._prs.remove_label(issue.number, lbl)
+                    await self._prs.add_labels(
+                        issue.number, [self._config.review_label[0]]
+                    )
+                    if pr and pr.number > 0:
+                        await self._prs.add_pr_labels(
+                            pr.number, [self._config.review_label[0]]
+                        )
+
+        status = "success" if result.success else "failed"
+        self._state.mark_issue(issue.number, status)
+        return result
