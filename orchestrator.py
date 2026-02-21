@@ -454,6 +454,8 @@ class HydraOrchestrator:
                 stats = await self._memory_sync.sync(issue_dicts)
                 await self._memory_sync.publish_sync_event(stats)
                 self.update_bg_worker_status("memory_sync", "ok", details=stats)
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception(
                     "Memory sync loop iteration failed — will retry next cycle"

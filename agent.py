@@ -313,6 +313,7 @@ class AgentRunner:
 - Do NOT push to remote. Do NOT create pull requests.
 - Do NOT run `git push` or `gh pr create`.
 - Ensure `make quality` passes before committing.
+- If you encounter issues, commit what works with a descriptive message.
 
 ## Optional: Memory Suggestion
 
