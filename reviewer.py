@@ -187,6 +187,7 @@ class ReviewRunner:
         attempt: int,
     ) -> str:
         """Build a focused prompt for fixing CI failures."""
+        test_cmd = self._config.test_command
         return f"""You are fixing CI failures on PR #{pr.number} (issue #{issue.number}: {issue.title}).
 
 ## CI Failure Summary
@@ -197,7 +198,7 @@ class ReviewRunner:
 
 1. Read the failing CI output above.
 2. Fix the root causes — do NOT skip or disable tests.
-3. Run `make lint` and `make test` to verify locally.
+3. Run `make lint` and `{test_cmd}` to verify locally.
 4. Commit fixes with message: "ci-fix: <description> (PR #{pr.number})"
 
 ## Required Output
