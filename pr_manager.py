@@ -205,7 +205,7 @@ class PRManager:
 
             return pr_info
 
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             logger.error("PR creation failed for issue #%d: %s", issue.number, exc)
             return PRInfo(
                 number=0,
