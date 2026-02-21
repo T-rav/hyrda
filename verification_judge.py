@@ -60,12 +60,13 @@ class VerificationJudge:
 
         verdict = JudgeVerdict(issue_number=issue_number)
 
+        cmd = self._build_command()
+
         # --- Code validation ---
         try:
             code_prompt = self._build_code_validation_prompt(
                 criteria_list, diff, issue_number
             )
-            cmd = self._build_command()
             transcript = await self._execute(cmd, code_prompt, issue_number)
             verdict.criteria_results = self._parse_criteria_results(transcript)
             verdict.all_criteria_pass = (
@@ -88,7 +89,6 @@ class VerificationJudge:
                 instr_prompt = self._build_instructions_validation_prompt(
                     instructions_text, issue_number
                 )
-                cmd = self._build_command()
                 transcript = await self._execute(cmd, instr_prompt, issue_number)
                 quality, feedback = self._parse_instructions_quality(transcript)
                 verdict.instructions_quality = quality
@@ -99,7 +99,6 @@ class VerificationJudge:
                     refine_prompt = self._build_refinement_prompt(
                         instructions_text, feedback, issue_number
                     )
-                    cmd = self._build_command()
                     refine_transcript = await self._execute(
                         cmd, refine_prompt, issue_number
                     )
@@ -112,7 +111,6 @@ class VerificationJudge:
                     revalidate_prompt = self._build_instructions_validation_prompt(
                         revalidate_text, issue_number
                     )
-                    cmd = self._build_command()
                     revalidate_transcript = await self._execute(
                         cmd, revalidate_prompt, issue_number
                     )
@@ -315,13 +313,16 @@ REFINED_INSTRUCTIONS_END
         """Parse criterion results from the transcript."""
         results: list[CriterionResult] = []
 
-        # Extract block between markers
+        # Extract block between markers — return empty if markers are absent
+        # to avoid parsing random LLM commentary as results
         block_match = re.search(
             r"CRITERIA_RESULTS_START\s*\n(.*?)\nCRITERIA_RESULTS_END",
             transcript,
             re.DOTALL,
         )
-        text = block_match.group(1) if block_match else transcript
+        if not block_match:
+            return results
+        text = block_match.group(1)
 
         pattern = re.compile(r"(AC-\d+):\s*(PASS|FAIL)\s*[—\-]+\s*(.*)", re.IGNORECASE)
         for match in pattern.finditer(text):

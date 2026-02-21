@@ -123,7 +123,6 @@ class TestModels:
         cr = CriterionResult(criterion="AC-1")
         assert cr.verdict == CriterionVerdict.FAIL
         assert cr.reasoning == ""
-        assert cr.evidence == ""
 
 
 # ---------------------------------------------------------------------------
@@ -862,6 +861,33 @@ class TestJudgeIntegration:
         # Should still return a verdict (with empty results)
         assert result is not None
         assert result.criteria_results == []
+        assert result.all_criteria_pass is False
+
+    @pytest.mark.asyncio
+    async def test_summary_format(self, tmp_path):
+        """verdict.summary should follow the expected format."""
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        bus = EventBus()
+        judge = VerificationJudge(cfg, bus)
+
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
+
+        call_count = 0
+
+        async def mock_execute(_cmd, _prompt, _issue_number):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return SAMPLE_CODE_VALIDATION_TRANSCRIPT
+            return SAMPLE_INSTRUCTIONS_READY_TRANSCRIPT
+
+        with patch.object(judge, "_execute", side_effect=mock_execute):
+            result = await judge.judge(issue_number=42, pr_number=101, diff="diff")
+
+        assert result is not None
+        assert result.summary == "2/3 criteria passed, instructions: ready"
 
     @pytest.mark.asyncio
     async def test_criteria_file_with_no_instructions(self, tmp_path):

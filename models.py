@@ -250,7 +250,6 @@ class CriterionResult(BaseModel):
     criterion: str
     verdict: CriterionVerdict = CriterionVerdict.FAIL
     reasoning: str = ""
-    evidence: str = ""
 
 
 class InstructionsQuality(StrEnum):
