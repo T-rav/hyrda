@@ -1160,6 +1160,38 @@ class TestTriageFindIssues:
 
         mock_prs.remove_label.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_triage_marks_active_during_processing(
+        self, config: HydraConfig
+    ) -> None:
+        """Triage should mark issues active to prevent re-queuing by refresh."""
+        from models import TriageResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(1, title="Triage test", body="A" * 100)
+
+        was_active_during_evaluate = False
+
+        async def check_active(issue_obj: object) -> TriageResult:
+            nonlocal was_active_during_evaluate
+            was_active_during_evaluate = orch._store.is_active(1)
+            return TriageResult(issue_number=1, ready=True)
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_triage = AsyncMock()
+        mock_triage.evaluate = AsyncMock(side_effect=check_active)
+        orch._triage = mock_triage
+
+        orch._store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        await orch._triage_find_issues()
+
+        assert was_active_during_evaluate, "Issue should be marked active during triage"
+        assert not orch._store.is_active(1), "Issue should be released after triage"
+
 
 # ---------------------------------------------------------------------------
 # Plan phase
@@ -1432,6 +1464,39 @@ class TestPlanPhase:
         await orch._plan_issues()
 
         assert concurrency_counter["peak"] <= config.max_planners
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_marks_active_during_processing(
+        self, config: HydraConfig
+    ) -> None:
+        """Plan should mark issues active to prevent re-queuing by refresh."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+
+        was_active_during_plan = False
+
+        async def check_active_plan(
+            issue_obj: object, worker_id: int = 0
+        ) -> PlanResult:
+            nonlocal was_active_during_plan
+            was_active_during_plan = orch._store.is_active(42)
+            return PlanResult(
+                issue_number=42, success=True, plan="Plan", summary="Done"
+            )
+
+        orch._planners.plan = AsyncMock(side_effect=check_active_plan)  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        assert was_active_during_plan, "Issue should be marked active during planning"
+        assert not orch._store.is_active(42), "Issue should be released after planning"
 
     @pytest.mark.asyncio
     async def test_plan_issues_failure_returns_result_with_error(
