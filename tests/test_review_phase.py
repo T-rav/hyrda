@@ -70,6 +70,7 @@ def make_review_result(
         verdict=verdict,
         summary="Looks good.",
         fixes_made=False,
+        transcript="THOROUGH_REVIEW_COMPLETE",
     )
 
 
@@ -2902,3 +2903,349 @@ class TestGranularReviewStatusEvents:
         assert review_statuses.index("start") < review_statuses.index("merge_main")
         assert review_statuses.index("merge_main") < review_statuses.index("merging")
         assert review_statuses[-1] == "done"
+
+
+# ---------------------------------------------------------------------------
+# REQUEST_CHANGES retry logic
+# ---------------------------------------------------------------------------
+
+
+class TestRequestChangesRetry:
+    """Tests for the REQUEST_CHANGES → retry → HITL escalation flow."""
+
+    def _setup_phase_for_retry(
+        self, config: HydraConfig
+    ) -> tuple[ReviewPhase, PRInfo, GitHubIssue]:
+        """Helper to set up a ReviewPhase ready for retry tests."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(
+                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        return phase, pr, issue
+
+    @pytest.mark.asyncio
+    async def test_request_changes_under_cap_swaps_label_to_ready(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES under cap should swap labels from review to ready."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+
+        await phase.review_prs([pr], [issue])
+
+        phase._prs.add_labels.assert_any_await(42, ["test-label"])
+
+    @pytest.mark.asyncio
+    async def test_request_changes_under_cap_preserves_worktree(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES under cap should NOT destroy the worktree."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+
+        await phase.review_prs([pr], [issue])
+
+        phase._worktrees.destroy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_request_changes_under_cap_stores_feedback(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES under cap should store review feedback in state."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+
+        await phase.review_prs([pr], [issue])
+
+        feedback = phase._state.get_review_feedback(42)
+        assert feedback is not None
+        assert feedback == "Looks good."
+
+    @pytest.mark.asyncio
+    async def test_request_changes_under_cap_increments_attempt_counter(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES under cap should increment the attempt counter."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_review_attempts(42) == 1
+
+    @pytest.mark.asyncio
+    async def test_request_changes_at_cap_escalates_to_hitl(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES at cap should escalate to HITL."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+        # Set attempts to max
+        phase._state.increment_review_attempts(42)
+        phase._state.increment_review_attempts(42)
+
+        await phase.review_prs([pr], [issue])
+
+        phase._prs.add_labels.assert_any_await(42, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_request_changes_at_cap_posts_escalation_comment(
+        self, config: HydraConfig
+    ) -> None:
+        """REQUEST_CHANGES at cap should post an escalation comment."""
+        phase, pr, issue = self._setup_phase_for_retry(config)
+        phase._state.increment_review_attempts(42)
+        phase._state.increment_review_attempts(42)
+
+        await phase.review_prs([pr], [issue])
+
+        phase._prs.post_comment.assert_awaited()
+        comment_arg = phase._prs.post_comment.call_args[0][1]
+        assert "cap exceeded" in comment_arg.lower()
+
+    @pytest.mark.asyncio
+    async def test_comment_verdict_treated_as_soft_rejection(
+        self, config: HydraConfig
+    ) -> None:
+        """COMMENT verdict should trigger the same retry flow as REQUEST_CHANGES."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.COMMENT)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should swap to ready label (same as REQUEST_CHANGES)
+        phase._prs.add_labels.assert_any_await(42, ["test-label"])
+        # Worktree should be preserved
+        phase._worktrees.destroy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_approve_resets_review_attempts(self, config: HydraConfig) -> None:
+        """APPROVE should reset review attempt counter on successful merge."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Simulate previous review attempts
+        phase._state.increment_review_attempts(42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_review_attempts(42) == 0
+
+    @pytest.mark.asyncio
+    async def test_approve_clears_review_feedback(self, config: HydraConfig) -> None:
+        """APPROVE should clear stored review feedback on successful merge."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Simulate stored feedback from a previous review
+        phase._state.set_review_feedback(42, "Old feedback")
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_review_feedback(42) is None
+
+
+# ---------------------------------------------------------------------------
+# Adversarial review threshold
+# ---------------------------------------------------------------------------
+
+
+class TestAdversarialReview:
+    """Tests for the adversarial review re-check logic."""
+
+    @pytest.mark.asyncio
+    async def test_approve_with_enough_findings_is_accepted(
+        self, config: HydraConfig
+    ) -> None:
+        """APPROVE with >= min_review_findings should be accepted without re-review."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Summary with 3+ findings (bullets)
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="- Fix A\n- Fix B\n- Fix C",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should only call review once (no re-review)
+        assert phase._reviewers.review.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_approve_with_thorough_review_complete_accepted(
+        self, config: HydraConfig
+    ) -> None:
+        """APPROVE with THOROUGH_REVIEW_COMPLETE block should be accepted."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="All good",
+            fixes_made=False,
+            transcript="...THOROUGH_REVIEW_COMPLETE\nCorrectness: No issues...",
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should only call review once (no re-review)
+        assert phase._reviewers.review.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_approve_under_threshold_triggers_re_review(
+        self, config: HydraConfig
+    ) -> None:
+        """APPROVE with too few findings and no justification should trigger re-review."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # First review: few findings, no THOROUGH_REVIEW_COMPLETE
+        first_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="Looks good",
+            fixes_made=False,
+            transcript="VERDICT: APPROVE\nSUMMARY: Looks good",
+        )
+        # Second review: has enough findings
+        second_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="- Fix A\n- Fix B\n- Fix C",
+            fixes_made=False,
+            transcript="VERDICT: APPROVE\nSUMMARY: - Fix A",
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should call review twice (initial + re-review)
+        assert phase._reviewers.review.await_count == 2
+
+
+# ---------------------------------------------------------------------------
+# _count_review_findings
+# ---------------------------------------------------------------------------
+
+
+class TestCountReviewFindings:
+    """Tests for ReviewPhase._count_review_findings."""
+
+    def test_counts_bullet_points(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        assert phase._count_review_findings("- Fix A\n- Fix B\n- Fix C") == 3
+
+    def test_counts_numbered_items(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        assert phase._count_review_findings("1. Fix A\n2. Fix B") == 2
+
+    def test_counts_asterisk_bullets(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        assert phase._count_review_findings("* Fix A\n* Fix B") == 2
+
+    def test_counts_mixed_formats(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        summary = "- Bullet item\n1. Numbered item\n* Star item"
+        assert phase._count_review_findings(summary) == 3
+
+    def test_returns_zero_for_no_findings(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        assert phase._count_review_findings("All looks good.") == 0
+
+    def test_returns_zero_for_empty_string(self, config: HydraConfig) -> None:
+        phase = _make_phase(config)
+        assert phase._count_review_findings("") == 0

@@ -99,6 +99,7 @@ def _make_phase(
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return make_worker_result(
                 issue_number=issue.number,
@@ -175,6 +176,7 @@ class TestImplementBatch:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return next(r for r in expected if r.issue_number == issue.number)
 
@@ -196,6 +198,7 @@ class TestImplementBatch:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             concurrency_counter["current"] += 1
             concurrency_counter["peak"] = max(
@@ -349,6 +352,7 @@ class TestImplementIncludesPush:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             call_order.append("agent")
             return make_worker_result(
@@ -408,6 +412,7 @@ class TestWorkerExceptionIsolation:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             raise RuntimeError("agent crashed")
 
@@ -432,6 +437,7 @@ class TestWorkerExceptionIsolation:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             raise RuntimeError("agent crashed")
 
@@ -453,6 +459,7 @@ class TestWorkerExceptionIsolation:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             raise RuntimeError("agent crashed")
 
@@ -476,6 +483,7 @@ class TestWorkerExceptionIsolation:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             nonlocal call_count
             call_count += 1
@@ -520,6 +528,7 @@ class TestImplementLifecycleMetrics:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -545,6 +554,7 @@ class TestImplementLifecycleMetrics:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -570,6 +580,7 @@ class TestImplementLifecycleMetrics:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -610,6 +621,7 @@ class TestImplementLifecycleMetrics:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -626,6 +638,184 @@ class TestImplementLifecycleMetrics:
         stats = phase._state.get_lifetime_stats()
         assert stats["total_implementation_seconds"] == pytest.approx(60.0)
         assert stats["total_quality_fix_rounds"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Review feedback passing
+# ---------------------------------------------------------------------------
+
+
+class TestReviewFeedbackPassing:
+    """Tests that review feedback is fetched, passed to agent, and cleared."""
+
+    @pytest.mark.asyncio
+    async def test_passes_review_feedback_to_agent(self, config: HydraConfig) -> None:
+        """When review feedback exists in state, it should be passed to agent.run."""
+        issue = make_issue(42)
+        captured_feedback: list[str] = []
+
+        async def capturing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            captured_feedback.append(review_feedback)
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, _ = _make_phase(
+            config,
+            [issue],
+            agent_run=capturing_agent,
+            create_pr_return=make_pr_info(101, 42),
+        )
+        # Set review feedback in state before running
+        phase._state.set_review_feedback(42, "Fix the error handling")
+
+        await phase.run_batch()
+
+        assert len(captured_feedback) == 1
+        assert captured_feedback[0] == "Fix the error handling"
+
+    @pytest.mark.asyncio
+    async def test_clears_review_feedback_after_implementation(
+        self, config: HydraConfig
+    ) -> None:
+        """Review feedback should be cleared from state after agent run."""
+        issue = make_issue(42)
+
+        async def simple_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, _ = _make_phase(
+            config,
+            [issue],
+            agent_run=simple_agent,
+            create_pr_return=make_pr_info(101, 42),
+        )
+        phase._state.set_review_feedback(42, "Fix the tests")
+
+        await phase.run_batch()
+
+        # Feedback should be cleared
+        assert phase._state.get_review_feedback(42) is None
+
+    @pytest.mark.asyncio
+    async def test_no_feedback_passes_empty_string(self, config: HydraConfig) -> None:
+        """When no review feedback exists, agent should receive empty string."""
+        issue = make_issue(42)
+        captured_feedback: list[str] = []
+
+        async def capturing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            captured_feedback.append(review_feedback)
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, _ = _make_phase(
+            config,
+            [issue],
+            agent_run=capturing_agent,
+            create_pr_return=make_pr_info(101, 42),
+        )
+        # Do NOT set any feedback
+
+        await phase.run_batch()
+
+        assert len(captured_feedback) == 1
+        assert captured_feedback[0] == ""
+
+    @pytest.mark.asyncio
+    async def test_skips_pr_creation_on_retry(self, config: HydraConfig) -> None:
+        """When review_feedback is present (retry), PR creation should be skipped."""
+        issue = make_issue(42)
+
+        async def simple_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(
+            config,
+            [issue],
+            agent_run=simple_agent,
+            create_pr_return=make_pr_info(101, 42),
+        )
+        # Set review feedback to simulate a retry cycle
+        phase._state.set_review_feedback(42, "Fix error handling")
+
+        results, _ = await phase.run_batch()
+
+        # PR creation should be skipped on retry
+        mock_prs.create_pr.assert_not_awaited()
+        # But result should still be successful
+        assert results[0].success is True
+        # pr_info should be None since PR creation was skipped
+        assert results[0].pr_info is None
+
+    @pytest.mark.asyncio
+    async def test_creates_pr_on_first_run(self, config: HydraConfig) -> None:
+        """Without review feedback (first run), PR should be created normally."""
+        issue = make_issue(42)
+
+        async def simple_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(
+            config,
+            [issue],
+            agent_run=simple_agent,
+            create_pr_return=make_pr_info(101, 42),
+        )
+        # No review feedback — first run
+
+        results, _ = await phase.run_batch()
+
+        # PR creation should happen
+        mock_prs.create_pr.assert_awaited_once()
+        assert results[0].pr_info is not None
+        assert results[0].pr_info.number == 101
 
 
 # ---------------------------------------------------------------------------
@@ -648,6 +838,7 @@ class TestWorkerResultMetaPersistence:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -678,6 +869,7 @@ class TestWorkerResultMetaPersistence:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
