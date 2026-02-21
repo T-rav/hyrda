@@ -261,6 +261,12 @@ class HydraConfig(BaseModel):
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
+    data_poll_interval: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="Seconds between centralized GitHub issue store polls",
+    )
 
     # Acceptance criteria generation
     ac_model: str = Field(
@@ -417,6 +423,13 @@ class HydraConfig(BaseModel):
                     object.__setattr__(
                         self, "max_merge_conflict_fix_attempts", int(env_attempts)
                     )
+
+        # Data poll interval override
+        if self.data_poll_interval == 60:  # still at default
+            env_data_poll = os.environ.get("HYDRA_DATA_POLL_INTERVAL")
+            if env_data_poll is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "data_poll_interval", int(env_data_poll))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
