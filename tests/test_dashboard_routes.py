@@ -76,6 +76,7 @@ class TestCreateRouter:
             "/api/stats",
             "/api/queue",
             "/api/metrics",
+            "/api/metrics/github",
             "/api/events",
             "/api/prs",
             "/api/hitl",
@@ -632,3 +633,66 @@ class TestMetricsEndpoint:
 
         assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
         assert data["rates"].get("reviewer_fix_rate", 0.0) == pytest.approx(0.0)
+
+
+class TestGitHubMetricsEndpoint:
+    """Tests for the GET /api/metrics/github endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        ), pr_mgr
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_github_metrics_returns_label_counts(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
+
+        mock_counts = {
+            "open_by_label": {
+                "hydra-plan": 3,
+                "hydra-ready": 1,
+                "hydra-review": 2,
+                "hydra-hitl": 0,
+                "hydra-fixed": 0,
+            },
+            "total_closed": 10,
+            "total_merged": 8,
+        }
+        pr_mgr.get_label_counts = AsyncMock(return_value=mock_counts)
+
+        get_github_metrics = self._find_endpoint(router, "/api/metrics/github")
+        assert get_github_metrics is not None
+
+        response = await get_github_metrics()
+        data = json.loads(response.body)
+
+        assert data["open_by_label"]["hydra-plan"] == 3
+        assert data["total_closed"] == 10
+        assert data["total_merged"] == 8

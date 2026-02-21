@@ -847,6 +847,110 @@ class PRManager:
         except Exception:
             return []
 
+    # --- GitHub metrics helpers ---
+
+    _label_counts_cache: dict[str, object] = {}
+    _label_counts_ts: float = 0.0
+
+    async def get_label_counts(self, config: HydraConfig) -> dict[str, object]:
+        """Query GitHub for issue/PR counts by Hydra label.
+
+        Returns a dict with ``open_by_label``, ``total_closed``, and
+        ``total_merged`` keys.  Results are cached for 30 seconds.
+        """
+        import time
+
+        now = time.monotonic()
+        if self._label_counts_cache and now - self._label_counts_ts < 30:
+            return self._label_counts_cache
+
+        labels_to_check = {
+            "hydra-plan": config.planner_label,
+            "hydra-ready": config.ready_label,
+            "hydra-review": config.review_label,
+            "hydra-hitl": config.hitl_label,
+            "hydra-fixed": config.fixed_label,
+        }
+
+        open_by_label: dict[str, int] = {}
+        for display_key, label_names in labels_to_check.items():
+            count = 0
+            for label in label_names:
+                try:
+                    raw = await self._run_gh(
+                        "gh",
+                        "issue",
+                        "list",
+                        "--repo",
+                        self._repo,
+                        "--label",
+                        label,
+                        "--state",
+                        "open",
+                        "--json",
+                        "number",
+                        "--jq",
+                        "length",
+                    )
+                    count += int(raw.strip() or "0")
+                except (RuntimeError, ValueError):
+                    pass
+            open_by_label[display_key] = count
+
+        # Closed issues with hydra-fixed label
+        total_closed = 0
+        for label in config.fixed_label:
+            try:
+                raw = await self._run_gh(
+                    "gh",
+                    "issue",
+                    "list",
+                    "--repo",
+                    self._repo,
+                    "--label",
+                    label,
+                    "--state",
+                    "closed",
+                    "--json",
+                    "number",
+                    "--jq",
+                    "length",
+                )
+                total_closed += int(raw.strip() or "0")
+            except (RuntimeError, ValueError):
+                pass
+
+        # Merged PRs
+        total_merged = 0
+        try:
+            raw = await self._run_gh(
+                "gh",
+                "pr",
+                "list",
+                "--repo",
+                self._repo,
+                "--state",
+                "merged",
+                "--label",
+                config.fixed_label[0] if config.fixed_label else "hydra-fixed",
+                "--json",
+                "number",
+                "--jq",
+                "length",
+            )
+            total_merged = int(raw.strip() or "0")
+        except (RuntimeError, ValueError):
+            pass
+
+        result: dict[str, object] = {
+            "open_by_label": open_by_label,
+            "total_closed": total_closed,
+            "total_merged": total_merged,
+        }
+        self._label_counts_cache = result
+        self._label_counts_ts = now
+        return result
+
     # --- body-file helpers ---
 
     _TRUNCATION_MARKER = "\n\n*...truncated to fit GitHub comment limit*"

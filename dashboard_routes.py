@@ -435,6 +435,12 @@ def create_router(
             MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
         )
 
+    @router.get("/api/metrics/github")
+    async def get_github_metrics() -> JSONResponse:
+        """Query GitHub for issue/PR counts by label state."""
+        counts = await pr_manager.get_label_counts(config)
+        return JSONResponse(counts)
+
     @router.get("/api/timeline")
     async def get_timeline() -> JSONResponse:
         builder = TimelineBuilder(event_bus)
