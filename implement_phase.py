@@ -97,6 +97,7 @@ class ImplementPhase:
                             f"Exceeded max implementation attempts "
                             f"({attempts - 1}/{self._config.max_issue_attempts})",
                         )
+                        self._state.remove_impl_stats(issue.number)
                         await self._prs.post_comment(
                             issue.number,
                             f"## HITL Escalation\n\n"
@@ -139,6 +140,16 @@ class ImplementPhase:
 
                     result = await self._agents.run(
                         issue, wt_path, branch, worker_id=idx
+                    )
+
+                    # Persist implementation metrics for cross-phase access
+                    self._state.set_impl_stats(
+                        issue.number,
+                        {
+                            "quality_fix_attempts": result.quality_fix_attempts,
+                            "duration_seconds": result.duration_seconds,
+                            "commits": result.commits,
+                        },
                     )
 
                     # Push final commits and create PR

@@ -168,6 +168,22 @@ class StateTracker:
         self._data.issue_attempts.pop(str(issue_number), None)
         self.save()
 
+    # --- implementation stats persistence ---
+
+    def set_impl_stats(self, issue_number: int, stats: dict[str, Any]) -> None:
+        """Persist implementation metrics for *issue_number* (cross-phase access)."""
+        self._data.issue_impl_stats[str(issue_number)] = stats
+        self.save()
+
+    def get_impl_stats(self, issue_number: int) -> dict[str, Any] | None:
+        """Return persisted implementation metrics for *issue_number*, or *None*."""
+        return self._data.issue_impl_stats.get(str(issue_number))
+
+    def remove_impl_stats(self, issue_number: int) -> None:
+        """Clear persisted implementation metrics for *issue_number*."""
+        self._data.issue_impl_stats.pop(str(issue_number), None)
+        self.save()
+
     # --- active issue persistence ---
 
     def add_active_issue(self, issue_number: int) -> None:

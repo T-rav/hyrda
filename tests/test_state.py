@@ -552,6 +552,7 @@ class TestReset:
         tracker.set_hitl_origin(1, "hydra-review")
         tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
         tracker.increment_issue_attempts(1)
+        tracker.set_impl_stats(1, {"commits": 3})
         tracker.add_active_issue(1)
         tracker.increment_batch()
 
@@ -565,6 +566,7 @@ class TestReset:
         assert tracker.get_hitl_origin(1) is None
         assert tracker.get_hitl_cause(1) is None
         assert tracker.get_issue_attempts(1) == 0
+        assert tracker.get_impl_stats(1) is None
         assert tracker.get_active_issue_numbers() == []
 
 
@@ -638,6 +640,7 @@ class TestToDict:
             "hitl_origins",
             "hitl_causes",
             "issue_attempts",
+            "issue_impl_stats",
             "active_issue_numbers",
             "lifetime_stats",
             "last_updated",
@@ -862,6 +865,7 @@ class TestStateDataModel:
         assert data.hitl_origins == {}
         assert data.hitl_causes == {}
         assert data.issue_attempts == {}
+        assert data.issue_impl_stats == {}
         assert data.active_issue_numbers == []
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
@@ -1083,3 +1087,66 @@ class TestActiveIssueNumbersPersistence:
         result = tracker.get_active_issue_numbers()
         result.append(99)
         assert 99 not in tracker.get_active_issue_numbers()
+
+
+# ---------------------------------------------------------------------------
+# Implementation stats persistence
+# ---------------------------------------------------------------------------
+
+
+class TestImplStatsPersistence:
+    def test_set_impl_stats_stores_dict(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        stats = {"quality_fix_attempts": 1, "duration_seconds": 45.0, "commits": 3}
+        tracker.set_impl_stats(42, stats)
+        assert tracker.get_impl_stats(42) == stats
+
+    def test_get_impl_stats_returns_none_for_unknown(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_impl_stats(999) is None
+
+    def test_set_impl_stats_triggers_save(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_impl_stats(42, {"commits": 1})
+        assert state_file.exists()
+
+    def test_set_impl_stats_overwrites(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_impl_stats(42, {"commits": 1})
+        tracker.set_impl_stats(42, {"commits": 5})
+        assert tracker.get_impl_stats(42) == {"commits": 5}
+
+    def test_remove_impl_stats_deletes_entry(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_impl_stats(42, {"commits": 1})
+        tracker.remove_impl_stats(42)
+        assert tracker.get_impl_stats(42) is None
+
+    def test_remove_impl_stats_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        # Should not raise
+        tracker.remove_impl_stats(999)
+        assert tracker.get_impl_stats(999) is None
+
+    def test_impl_stats_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        stats = {"quality_fix_attempts": 2, "duration_seconds": 60.0, "commits": 4}
+        tracker.set_impl_stats(42, stats)
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_impl_stats(42) == stats
+
+    def test_reset_clears_impl_stats(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_impl_stats(42, {"commits": 1})
+        tracker.reset()
+        assert tracker.get_impl_stats(42) is None
+
+    def test_multiple_issues_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_impl_stats(1, {"commits": 1})
+        tracker.set_impl_stats(2, {"commits": 5})
+        assert tracker.get_impl_stats(1) == {"commits": 1}
+        assert tracker.get_impl_stats(2) == {"commits": 5}

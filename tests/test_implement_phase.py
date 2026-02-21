@@ -648,6 +648,64 @@ class TestAttemptCapEscalation:
         assert "Exceeded max implementation attempts" in cause
 
     @pytest.mark.asyncio
+    async def test_impl_stats_persisted_after_agent_run(
+        self, config: HydraConfig
+    ) -> None:
+        """After implementation, quality_fix_attempts/duration/commits should be persisted."""
+        issue = make_issue(42)
+
+        async def stats_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                quality_fix_attempts=2,
+                duration_seconds=45.5,
+                commits=3,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=stats_agent)
+
+        await phase.run_batch()
+
+        stats = phase._state.get_impl_stats(42)
+        assert stats is not None
+        assert stats["quality_fix_attempts"] == 2
+        assert stats["duration_seconds"] == 45.5
+        assert stats["commits"] == 3
+
+    @pytest.mark.asyncio
+    async def test_impl_stats_cleared_on_hitl_escalation(
+        self, config: HydraConfig
+    ) -> None:
+        """Impl stats should be cleared when issue is escalated to HITL."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_issue_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(cfg, [issue])
+
+        # Pre-set some stats and max out attempts
+        phase._state.set_impl_stats(42, {"commits": 1})
+        phase._state.increment_issue_attempts(42)
+
+        await phase.run_batch()
+
+        # Stats should be cleared after escalation
+        assert phase._state.get_impl_stats(42) is None
+
+    @pytest.mark.asyncio
     async def test_escalation_cleans_up_active_issues(
         self, config: HydraConfig
     ) -> None:

@@ -646,6 +646,101 @@ class TestReviewPRs:
         assert phase._state.get_issue_status(42) == "merged"
 
     @pytest.mark.asyncio
+    async def test_review_merge_clears_impl_stats(self, config: HydraConfig) -> None:
+        """Merging a PR should clear persisted implementation stats."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-set impl stats
+        phase._state.set_impl_stats(
+            42,
+            {
+                "quality_fix_attempts": 1,
+                "duration_seconds": 30.0,
+                "commits": 2,
+            },
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_impl_stats(42) is None
+
+    @pytest.mark.asyncio
+    async def test_review_merge_failure_clears_impl_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge failure escalation should clear persisted implementation stats."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-set impl stats
+        phase._state.set_impl_stats(42, {"commits": 2})
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_impl_stats(42) is None
+
+    @pytest.mark.asyncio
+    async def test_review_conflict_escalation_clears_impl_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict escalation should clear persisted implementation stats."""
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-set impl stats
+        phase._state.set_impl_stats(42, {"commits": 2})
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_impl_stats(42) is None
+
+    @pytest.mark.asyncio
     async def test_review_merge_failure_keeps_reviewed_status(
         self, config: HydraConfig
     ) -> None:
@@ -1214,6 +1309,50 @@ class TestWaitAndFixCI:
         await phase.review_prs([pr], [issue])
 
         assert phase._state.get_hitl_cause(42) == "CI failed after 1 fix attempt(s)"
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_clears_impl_stats(self, config: HydraConfig) -> None:
+        """CI failure escalation should clear persisted implementation stats."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = _make_phase(cfg)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        # Pre-set impl stats
+        phase._state.set_impl_stats(42, {"commits": 2})
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_impl_stats(42) is None
 
     @pytest.mark.asyncio
     async def test_ci_failure_escalation_records_hitl_origin(

@@ -128,6 +128,7 @@ class ReviewPhase:
                             pr.issue_number,
                             "Merge conflict with main branch",
                         )
+                        self._state.remove_impl_stats(pr.issue_number)
                         for lbl in self._config.review_label:
                             await self._prs.remove_label(pr.issue_number, lbl)
                             await self._prs.remove_pr_label(pr.number, lbl)
@@ -183,6 +184,7 @@ class ReviewPhase:
                                 self._state.mark_issue(pr.issue_number, "merged")
                                 self._state.record_pr_merged()
                                 self._state.record_issue_completed()
+                                self._state.remove_impl_stats(pr.issue_number)
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                 await self._prs.add_labels(
@@ -206,6 +208,7 @@ class ReviewPhase:
                                     pr.issue_number,
                                     "PR merge failed on GitHub",
                                 )
+                                self._state.remove_impl_stats(pr.issue_number)
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                     await self._prs.remove_pr_label(pr.number, lbl)
@@ -317,6 +320,7 @@ class ReviewPhase:
             issue.number,
             f"CI failed after {result.ci_fix_attempts} fix attempt(s)",
         )
+        self._state.remove_impl_stats(issue.number)
         for lbl in self._config.review_label:
             await self._prs.remove_label(issue.number, lbl)
             await self._prs.remove_pr_label(pr.number, lbl)
