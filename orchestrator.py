@@ -15,6 +15,7 @@ from events import EventBus, EventType, HydraEvent
 from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
+from issue_store import IssueStore
 from memory import MemorySyncWorker, build_memory_issue_body, parse_memory_suggestion
 from models import (
     GitHubIssue,
@@ -70,9 +71,7 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of issues active per phase (avoids double-processing)
-        self._active_impl_issues: set[int] = set()
-        self._active_review_issues: set[int] = set()
+        # In-memory tracking of HITL-active issues (avoids double-processing)
         self._active_hitl_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
@@ -84,17 +83,19 @@ class HydraOrchestrator:
         # Auth failure flag — set when a loop crashes due to AuthenticationError
         self._auth_failed = False
 
-        # Delegate phases to focused modules
+        # Centralized issue store and fetcher
         self._fetcher = IssueFetcher(config)
+        self._store = IssueStore(config, self._fetcher, self._bus)
+
+        # Delegate phases to focused modules
         self._implementer = ImplementPhase(
             config,
             self._state,
             self._worktrees,
             self._agents,
             self._prs,
-            self._fetcher,
+            self._store,
             self._stop_event,
-            self._active_impl_issues,
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
@@ -105,7 +106,7 @@ class HydraOrchestrator:
             self._reviewers,
             self._prs,
             self._stop_event,
-            self._active_review_issues,
+            self._store,
             agents=self._agents,
             event_bus=self._bus,
             retrospective=self._retrospective,
@@ -115,6 +116,11 @@ class HydraOrchestrator:
     def event_bus(self) -> EventBus:
         """Expose event bus for dashboard integration."""
         return self._bus
+
+    @property
+    def issue_store(self) -> IssueStore:
+        """Expose the centralized issue store for dashboard integration."""
+        return self._store
 
     @property
     def state(self) -> StateTracker:
@@ -178,8 +184,7 @@ class HydraOrchestrator:
         origin data is available.
         """
         if (
-            issue_number in self._active_impl_issues
-            or issue_number in self._active_review_issues
+            self._store.is_active(issue_number)
             or issue_number in self._active_hitl_issues
         ):
             return "processing"
@@ -210,8 +215,7 @@ class HydraOrchestrator:
         self._stop_event.clear()
         self._running = False
         self._auth_failed = False
-        self._active_impl_issues.clear()
-        self._active_review_issues.clear()
+        self._store.clear_active()
         self._active_hitl_issues.clear()
 
     def update_bg_worker_status(
@@ -273,8 +277,13 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _supervise_loops(self) -> None:
-        """Run all six loops, restarting any that crash unexpectedly."""
+        """Run all loops plus the IssueStore poller, restarting any that crash."""
+
+        async def _store_loop() -> None:
+            await self._store.start(self._stop_event)
+
         loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = [
+            ("store", _store_loop),
             ("triage", self._triage_loop),
             ("plan", self._plan_loop),
             ("implement", self._implement_loop),
@@ -393,18 +402,26 @@ class HydraOrchestrator:
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _review_loop(self) -> None:
-        """Continuously poll for ``hydra-review`` issues and review their PRs."""
+        """Continuously consume reviewable issues from the store and review their PRs."""
         while not self._stop_event.is_set():
             try:
-                prs, issues = await self._fetcher.fetch_reviewable_prs(
-                    self._active_review_issues
+                review_issues = self._store.get_reviewable(
+                    self._config.batch_size,
                 )
-                if prs:
-                    review_results = await self._reviewer.review_prs(prs, issues)
-                    any_merged = any(r.merged for r in review_results)
-                    if any_merged:
-                        await asyncio.sleep(5)
-                        await self._prs.pull_main()
+                if review_issues:
+                    # Resolve PRs for the issues obtained from the store.
+                    # We still need per-issue gh pr list calls for PR metadata,
+                    # but issue discovery is centralized via the store.
+                    active_in_store = set(self._store.get_active_issues().keys())
+                    prs, issues = await self._fetcher.fetch_reviewable_prs(
+                        active_in_store, prefetched_issues=review_issues
+                    )
+                    if prs:
+                        review_results = await self._reviewer.review_prs(prs, issues)
+                        any_merged = any(r.merged for r in review_results)
+                        if any_merged:
+                            await asyncio.sleep(5)
+                            await self._prs.pull_main()
             except AuthenticationError:
                 raise
             except Exception:
@@ -658,9 +675,7 @@ class HydraOrchestrator:
         if not self._config.find_label:
             return
 
-        issues = await self._fetcher.fetch_issues_by_labels(
-            self._config.find_label, self._config.batch_size
-        )
+        issues = self._store.get_triageable(self._config.batch_size)
         if not issues:
             return
 
@@ -670,63 +685,71 @@ class HydraOrchestrator:
                 logger.info("Stop requested — aborting triage loop")
                 return
 
-            result = await self._triage.evaluate(issue)
+            self._store.mark_active(issue.number, "find")
+            try:
+                result = await self._triage.evaluate(issue)
 
-            if self._config.dry_run:
-                continue
+                if self._config.dry_run:
+                    continue
 
-            # Remove find label regardless of outcome
-            for lbl in self._config.find_label:
-                await self._prs.remove_label(issue.number, lbl)
+                # Remove find label regardless of outcome
+                for lbl in self._config.find_label:
+                    await self._prs.remove_label(issue.number, lbl)
 
-            if result.ready:
-                await self._prs.add_labels(
-                    issue.number, [self._config.planner_label[0]]
-                )
-                logger.info(
-                    "Issue #%d triaged → %s (ready for planning)",
-                    issue.number,
-                    self._config.planner_label[0],
-                )
-            else:
-                self._state.set_hitl_origin(issue.number, self._config.find_label[0])
-                self._state.set_hitl_cause(
-                    issue.number,
-                    "Insufficient issue detail for triage",
-                )
-                self._state.record_hitl_escalation()
-                await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
-                note = (
-                    "## Needs More Information\n\n"
-                    "This issue was picked up by Hydra but doesn't have "
-                    "enough detail to begin planning.\n\n"
-                    "**Missing:**\n"
-                    + "\n".join(f"- {r}" for r in result.reasons)
-                    + "\n\n"
-                    "Please update the issue with more context and re-apply "
-                    f"the `{self._config.find_label[0]}` label when ready.\n\n"
-                    "---\n*Generated by Hydra Triage*"
-                )
-                await self._prs.post_comment(issue.number, note)
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.HITL_UPDATE,
-                        data={
-                            "issue": issue.number,
-                            "action": "escalated",
-                        },
+                if result.ready:
+                    await self._prs.add_labels(
+                        issue.number, [self._config.planner_label[0]]
                     )
-                )
-                logger.info(
-                    "Issue #%d triaged → %s (needs attention: %s)",
-                    issue.number,
-                    self._config.hitl_label[0],
-                    "; ".join(result.reasons),
-                )
+                    logger.info(
+                        "Issue #%d triaged → %s (ready for planning)",
+                        issue.number,
+                        self._config.planner_label[0],
+                    )
+                else:
+                    self._state.set_hitl_origin(
+                        issue.number, self._config.find_label[0]
+                    )
+                    self._state.set_hitl_cause(
+                        issue.number,
+                        "Insufficient issue detail for triage",
+                    )
+                    self._state.record_hitl_escalation()
+                    await self._prs.add_labels(
+                        issue.number, [self._config.hitl_label[0]]
+                    )
+                    note = (
+                        "## Needs More Information\n\n"
+                        "This issue was picked up by Hydra but doesn't have "
+                        "enough detail to begin planning.\n\n"
+                        "**Missing:**\n"
+                        + "\n".join(f"- {r}" for r in result.reasons)
+                        + "\n\n"
+                        "Please update the issue with more context and re-apply "
+                        f"the `{self._config.find_label[0]}` label when ready.\n\n"
+                        "---\n*Generated by Hydra Triage*"
+                    )
+                    await self._prs.post_comment(issue.number, note)
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.HITL_UPDATE,
+                            data={
+                                "issue": issue.number,
+                                "action": "escalated",
+                            },
+                        )
+                    )
+                    logger.info(
+                        "Issue #%d triaged → %s (needs attention: %s)",
+                        issue.number,
+                        self._config.hitl_label[0],
+                        "; ".join(result.reasons),
+                    )
+            finally:
+                self._store.mark_complete(issue.number)
 
     async def _plan_issues(self) -> list[PlanResult]:
-        """Run planning agents on issues labeled with the planner label."""
-        issues = await self._fetcher.fetch_plan_issues()
+        """Run planning agents on issues from the plan queue."""
+        issues = self._store.get_plannable(self._config.batch_size)
         if not issues:
             return []
 
@@ -741,128 +764,134 @@ class HydraOrchestrator:
                 if self._stop_event.is_set():
                     return PlanResult(issue_number=issue.number, error="stopped")
 
-                result = await self._planners.plan(issue, worker_id=idx)
+                self._store.mark_active(issue.number, "plan")
+                try:
+                    result = await self._planners.plan(issue, worker_id=idx)
 
-                if result.already_satisfied:
-                    # Issue is already satisfied — close with dup label
-                    for lbl in self._config.planner_label:
-                        await self._prs.remove_label(issue.number, lbl)
-                    await self._prs.add_labels(issue.number, self._config.dup_label)
-                    await self._prs.post_comment(
-                        issue.number,
-                        f"## Already Satisfied\n\n"
-                        f"The planner determined that this issue's requirements "
-                        f"are already met by the existing codebase.\n\n"
-                        f"{result.summary}\n\n"
-                        f"---\n"
-                        f"*Generated by Hydra Planner*",
-                    )
-                    await self._prs.close_issue(issue.number)
-                    logger.info(
-                        "Issue #%d closed as already satisfied",
-                        issue.number,
-                    )
-                    return result
+                    if result.already_satisfied:
+                        # Issue is already satisfied — close with dup label
+                        for lbl in self._config.planner_label:
+                            await self._prs.remove_label(issue.number, lbl)
+                        await self._prs.add_labels(issue.number, self._config.dup_label)
+                        await self._prs.post_comment(
+                            issue.number,
+                            f"## Already Satisfied\n\n"
+                            f"The planner determined that this issue's requirements "
+                            f"are already met by the existing codebase.\n\n"
+                            f"{result.summary}\n\n"
+                            f"---\n"
+                            f"*Generated by Hydra Planner*",
+                        )
+                        await self._prs.close_issue(issue.number)
+                        logger.info(
+                            "Issue #%d closed as already satisfied",
+                            issue.number,
+                        )
+                        return result
 
-                if result.success and result.plan:
-                    # Post plan + branch as comment on the issue
-                    branch = self._config.branch_for_issue(issue.number)
-                    comment_body = (
-                        f"## Implementation Plan\n\n"
-                        f"{result.plan}\n\n"
-                        f"**Branch:** `{branch}`\n\n"
-                        f"---\n"
-                        f"*Generated by Hydra Planner*"
-                    )
-                    await self._prs.post_comment(issue.number, comment_body)
+                    if result.success and result.plan:
+                        # Post plan + branch as comment on the issue
+                        branch = self._config.branch_for_issue(issue.number)
+                        comment_body = (
+                            f"## Implementation Plan\n\n"
+                            f"{result.plan}\n\n"
+                            f"**Branch:** `{branch}`\n\n"
+                            f"---\n"
+                            f"*Generated by Hydra Planner*"
+                        )
+                        await self._prs.post_comment(issue.number, comment_body)
 
-                    # Run pre-implementation analysis
-                    analyzer = PlanAnalyzer(
-                        repo_root=self._config.repo_root,
-                    )
-                    analysis = analyzer.analyze(result.plan, issue.number)
+                        # Run pre-implementation analysis
+                        analyzer = PlanAnalyzer(
+                            repo_root=self._config.repo_root,
+                        )
+                        analysis = analyzer.analyze(result.plan, issue.number)
 
-                    # Post analysis comment
-                    await self._prs.post_comment(
-                        issue.number, analysis.format_comment()
-                    )
+                        # Post analysis comment
+                        await self._prs.post_comment(
+                            issue.number, analysis.format_comment()
+                        )
 
-                    # Swap labels: remove planner label(s), add implementation label
-                    for lbl in self._config.planner_label:
-                        await self._prs.remove_label(issue.number, lbl)
-                    await self._prs.add_labels(
-                        issue.number, [self._config.ready_label[0]]
-                    )
+                        # Swap labels: remove planner label(s), add implementation label
+                        for lbl in self._config.planner_label:
+                            await self._prs.remove_label(issue.number, lbl)
+                        await self._prs.add_labels(
+                            issue.number, [self._config.ready_label[0]]
+                        )
 
-                    # File new issues discovered during planning
-                    for new_issue in result.new_issues:
-                        if len(new_issue.body) < 50:
-                            logger.warning(
-                                "Skipping discovered issue %r — body too short "
-                                "(%d chars, need ≥50)",
-                                new_issue.title,
-                                len(new_issue.body),
+                        # File new issues discovered during planning
+                        for new_issue in result.new_issues:
+                            if len(new_issue.body) < 50:
+                                logger.warning(
+                                    "Skipping discovered issue %r — body too short "
+                                    "(%d chars, need ≥50)",
+                                    new_issue.title,
+                                    len(new_issue.body),
+                                )
+                                continue
+                            labels = new_issue.labels or (
+                                [self._config.planner_label[0]]
+                                if self._config.planner_label
+                                else []
                             )
-                            continue
-                        labels = new_issue.labels or (
-                            [self._config.planner_label[0]]
-                            if self._config.planner_label
-                            else []
+                            await self._prs.create_issue(
+                                new_issue.title, new_issue.body, labels
+                            )
+                            self._state.record_issue_created()
+
+                        logger.info(
+                            "Plan posted and labels swapped for issue #%d",
+                            issue.number,
                         )
-                        await self._prs.create_issue(
-                            new_issue.title, new_issue.body, labels
+                    elif result.retry_attempted:
+                        # Both plan attempts failed validation — escalate to HITL
+                        error_list = "\n".join(
+                            f"- {e}" for e in result.validation_errors
                         )
-                        self._state.record_issue_created()
+                        hitl_comment = (
+                            f"## Plan Validation Failed\n\n"
+                            f"The planner was unable to produce a valid plan "
+                            f"after two attempts for issue #{issue.number}.\n\n"
+                            f"**Validation errors:**\n{error_list}\n\n"
+                            f"---\n"
+                            f"*Generated by Hydra Planner*"
+                        )
+                        await self._prs.post_comment(issue.number, hitl_comment)
+                        for lbl in self._config.planner_label:
+                            await self._prs.remove_label(issue.number, lbl)
+                        self._state.set_hitl_origin(
+                            issue.number, self._config.planner_label[0]
+                        )
+                        self._state.set_hitl_cause(
+                            issue.number,
+                            "Plan validation failed after retry",
+                        )
+                        self._state.record_hitl_escalation()
+                        await self._prs.add_labels(
+                            issue.number, [self._config.hitl_label[0]]
+                        )
+                        logger.warning(
+                            "Planning failed validation for issue #%d after retry — "
+                            "escalated to HITL",
+                            issue.number,
+                        )
+                    else:
+                        logger.warning(
+                            "Planning failed for issue #%d — skipping label swap",
+                            issue.number,
+                        )
 
-                    logger.info(
-                        "Plan posted and labels swapped for issue #%d",
-                        issue.number,
-                    )
-                elif result.retry_attempted:
-                    # Both plan attempts failed validation — escalate to HITL
-                    error_list = "\n".join(f"- {e}" for e in result.validation_errors)
-                    hitl_comment = (
-                        f"## Plan Validation Failed\n\n"
-                        f"The planner was unable to produce a valid plan "
-                        f"after two attempts for issue #{issue.number}.\n\n"
-                        f"**Validation errors:**\n{error_list}\n\n"
-                        f"---\n"
-                        f"*Generated by Hydra Planner*"
-                    )
-                    await self._prs.post_comment(issue.number, hitl_comment)
-                    for lbl in self._config.planner_label:
-                        await self._prs.remove_label(issue.number, lbl)
-                    self._state.set_hitl_origin(
-                        issue.number, self._config.planner_label[0]
-                    )
-                    self._state.set_hitl_cause(
-                        issue.number,
-                        "Plan validation failed after retry",
-                    )
-                    self._state.record_hitl_escalation()
-                    await self._prs.add_labels(
-                        issue.number, [self._config.hitl_label[0]]
-                    )
-                    logger.warning(
-                        "Planning failed validation for issue #%d after retry — "
-                        "escalated to HITL",
-                        issue.number,
-                    )
-                else:
-                    logger.warning(
-                        "Planning failed for issue #%d — skipping label swap",
-                        issue.number,
-                    )
+                    # File memory suggestion if present in transcript
+                    if result.transcript:
+                        await self._file_memory_suggestion(
+                            result.transcript,
+                            "planner",
+                            f"issue #{issue.number}",
+                        )
 
-                # File memory suggestion if present in transcript
-                if result.transcript:
-                    await self._file_memory_suggestion(
-                        result.transcript,
-                        "planner",
-                        f"issue #{issue.number}",
-                    )
-
-                return result
+                    return result
+                finally:
+                    self._store.mark_complete(issue.number)
 
         all_tasks = [
             asyncio.create_task(_plan_one(i, issue)) for i, issue in enumerate(issues)

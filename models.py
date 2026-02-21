@@ -270,6 +270,15 @@ class Phase(StrEnum):
 # --- State Persistence ---
 
 
+class QueueStats(BaseModel):
+    """Snapshot of IssueStore queue depths and throughput."""
+
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    active_count: dict[str, int] = Field(default_factory=dict)
+    total_processed: dict[str, int] = Field(default_factory=dict)
+    last_poll_timestamp: str | None = None
+
+
 class LifetimeStats(BaseModel):
     """All-time counters preserved across resets."""
 
