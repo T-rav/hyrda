@@ -48,7 +48,7 @@ function AppContent() {
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
-    if (selectedWorker !== null && workers[selectedWorker]) return
+    if (selectedWorker !== null && (workers[selectedWorker] || (typeof selectedWorker === 'string' && selectedWorker.startsWith('bg-')))) return
     const active = Object.entries(workers).find(
       ([, w]) => ACTIVE_STATUSES.includes(w.status)
     )
