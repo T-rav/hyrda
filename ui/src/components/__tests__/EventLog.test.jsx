@@ -77,8 +77,8 @@ describe('eventSummary', () => {
   })
 
   it('formats transcript_line', () => {
-    expect(eventSummary('transcript_line', { issue: 3 })).toBe('#3')
-    expect(eventSummary('transcript_line', { pr: 7 })).toBe('#7')
+    expect(eventSummary('transcript_line', { issue: 3, line: 'Writing tests...' })).toBe('#3 Writing tests...')
+    expect(eventSummary('transcript_line', { pr: 7 })).toBe('#7 ')
   })
 
   it('formats pr_created', () => {

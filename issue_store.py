@@ -70,6 +70,9 @@ class IssueStore:
         # HITL issues are tracked as a set (display only, not consumed)
         self._hitl_numbers: set[int] = set()
 
+        # Issue cache: retains title/url for issues seen during routing
+        self._issue_cache: dict[int, GitHubIssue] = {}
+
         # Active issue tracking: issue_number → stage
         self._active: dict[int, str] = {}
 
@@ -157,6 +160,9 @@ class IssueStore:
         incoming: dict[int, tuple[str, GitHubIssue]] = {}
 
         for issue in issues:
+            # Cache every issue for pipeline snapshot lookups
+            self._issue_cache[issue.number] = issue
+
             best_stage: str | None = None
             best_priority = -1
             for label in issue.labels:
@@ -322,6 +328,58 @@ class IssueStore:
     # ------------------------------------------------------------------
     # Stats
     # ------------------------------------------------------------------
+
+    def get_pipeline_snapshot(self) -> dict[str, list[dict[str, object]]]:
+        """Return a snapshot of all pipeline stages with their issues.
+
+        Each stage maps to a list of dicts with keys:
+        ``issue_number``, ``title``, ``url``, ``status``.
+        """
+        snapshot: dict[str, list[dict[str, object]]] = {}
+
+        # Queued issues from stage queues
+        for stage, q in self._queues.items():
+            stage_issues: list[dict[str, object]] = []
+            for issue in q:
+                stage_issues.append(
+                    {
+                        "issue_number": issue.number,
+                        "title": issue.title,
+                        "url": issue.url,
+                        "status": "queued",
+                    }
+                )
+            snapshot[stage] = stage_issues
+
+        # Active issues (look up details from cache)
+        for issue_number, stage in self._active.items():
+            cached = self._issue_cache.get(issue_number)
+            entry: dict[str, object] = {
+                "issue_number": issue_number,
+                "title": cached.title if cached else f"Issue #{issue_number}",
+                "url": cached.url if cached else "",
+                "status": "active",
+            }
+            if stage in snapshot:
+                snapshot[stage].append(entry)
+            else:
+                snapshot[stage] = [entry]
+
+        # HITL issues
+        hitl_list: list[dict[str, object]] = []
+        for issue_number in self._hitl_numbers:
+            cached = self._issue_cache.get(issue_number)
+            hitl_list.append(
+                {
+                    "issue_number": issue_number,
+                    "title": cached.title if cached else f"Issue #{issue_number}",
+                    "url": cached.url if cached else "",
+                    "status": "hitl",
+                }
+            )
+        snapshot[STAGE_HITL] = hitl_list
+
+        return snapshot
 
     def get_queue_stats(self) -> QueueStats:
         """Return a snapshot of queue depths, active counts, and throughput."""

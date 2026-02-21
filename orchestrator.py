@@ -86,6 +86,8 @@ class HydraOrchestrator:
         self._running = False
         # Background worker last-known status: {worker_name: status dict}
         self._bg_worker_states: dict[str, dict[str, Any]] = {}
+        # Background worker enabled flags: {worker_name: bool}
+        self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
         self._auth_failed = False
 
@@ -102,6 +104,11 @@ class HydraOrchestrator:
             self._prs,
             self._store,
             self._stop_event,
+        )
+        from metrics_manager import MetricsManager
+
+        self._metrics_manager = MetricsManager(
+            config, self._state, self._prs, self._bus
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
@@ -136,6 +143,11 @@ class HydraOrchestrator:
     def state(self) -> StateTracker:
         """Expose state for dashboard integration."""
         return self._state
+
+    @property
+    def metrics_manager(self) -> Any:
+        """Expose metrics manager for dashboard API."""
+        return self._metrics_manager
 
     @property
     def running(self) -> bool:
@@ -243,9 +255,20 @@ class HydraOrchestrator:
             "details": details or {},
         }
 
+    def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
+        """Enable or disable a background worker by name."""
+        self._bg_worker_enabled[name] = enabled
+
+    def is_bg_worker_enabled(self, name: str) -> bool:
+        """Return whether a background worker is enabled (defaults to True)."""
+        return self._bg_worker_enabled.get(name, True)
+
     def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
-        """Return a copy of all background worker states."""
-        return dict(self._bg_worker_states)
+        """Return a copy of all background worker states with enabled flag."""
+        result: dict[str, dict[str, Any]] = {}
+        for name, state_dict in self._bg_worker_states.items():
+            result[name] = {**state_dict, "enabled": self.is_bg_worker_enabled(name)}
+        return result
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -315,6 +338,7 @@ class HydraOrchestrator:
             ("review", self._review_loop),
             ("hitl", self._hitl_loop),
             ("memory_sync", self._memory_sync_loop),
+            ("metrics", self._metrics_sync_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -376,6 +400,9 @@ class HydraOrchestrator:
     async def _triage_loop(self) -> None:
         """Continuously poll for find-labeled issues and triage them."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("triage"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 await self._triage_find_issues()
             except AuthenticationError:
@@ -393,6 +420,9 @@ class HydraOrchestrator:
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("plan"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 await self._plan_issues()
             except AuthenticationError:
@@ -410,6 +440,9 @@ class HydraOrchestrator:
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("implement"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             # After one poll cycle, release crash-recovered issues
             if self._recovered_issues:
                 self._active_impl_issues -= self._recovered_issues
@@ -440,6 +473,9 @@ class HydraOrchestrator:
     async def _review_loop(self) -> None:
         """Continuously consume reviewable issues from the store and review their PRs."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("review"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 review_issues = self._store.get_reviewable(
                     self._config.batch_size,
@@ -490,6 +526,9 @@ class HydraOrchestrator:
     async def _memory_sync_loop(self) -> None:
         """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("memory_sync"):
+                await self._sleep_or_stop(self._config.memory_sync_interval)
+                continue
             try:
                 issues = await self._fetcher.fetch_issues_by_labels(
                     self._config.memory_label, limit=100
@@ -524,6 +563,34 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.memory_sync_interval)
+
+    async def _metrics_sync_loop(self) -> None:
+        """Continuously aggregate and persist metrics snapshots."""
+        while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("metrics"):
+                await self._sleep_or_stop(self._config.metrics_sync_interval)
+                continue
+            try:
+                queue_stats = self._store.get_queue_stats()
+                stats = await self._metrics_manager.sync(queue_stats)
+                self.update_bg_worker_status("metrics", "ok", details=stats)
+            except AuthenticationError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Metrics sync loop iteration failed — will retry next cycle"
+                )
+                self.update_bg_worker_status("metrics", "error")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={
+                            "message": "Metrics sync loop error",
+                            "source": "metrics",
+                        },
+                    )
+                )
+            await self._sleep_or_stop(self._config.metrics_sync_interval)
 
     async def _file_memory_suggestion(
         self, transcript: str, source: str, reference: str

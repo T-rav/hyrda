@@ -1741,6 +1741,53 @@ class TestHydraConfigImproveLabelAndMemoryLabel:
         )
         assert cfg.memory_label == ["explicit-memory"]
 
+    def test_metrics_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_label == ["hydra-metrics"]
+
+    def test_metrics_label_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            metrics_label=["custom-metrics"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_label == ["custom-metrics"]
+
+    def test_metrics_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_METRICS", "env-metrics")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_label == ["env-metrics"]
+
+    def test_metrics_sync_interval_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_sync_interval == 300
+
+    def test_metrics_sync_interval_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_METRICS_SYNC_INTERVAL", "120")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_sync_interval == 120
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers

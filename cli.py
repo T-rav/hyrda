@@ -167,6 +167,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Seconds between memory sync polls (default: 120)",
     )
     parser.add_argument(
+        "--metrics-label",
+        default=None,
+        help="Labels for the metrics persistence issue, comma-separated (default: hydra-metrics)",
+    )
+    parser.add_argument(
+        "--metrics-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between metrics snapshot syncs (default: 300)",
+    )
+    parser.add_argument(
         "--planner-model",
         default=None,
         help="Model for planning agents (default: opus)",
@@ -318,6 +329,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "git_user_name",
         "git_user_email",
         "memory_sync_interval",
+        "metrics_sync_interval",
     ):
         val = getattr(args, field)
         if val is not None:
@@ -334,6 +346,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "planner_label",
         "improve_label",
         "memory_label",
+        "metrics_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

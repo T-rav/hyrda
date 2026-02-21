@@ -30,11 +30,23 @@ export const PIPELINE_STAGES = [
 export const STREAM_CARD_STATUSES = ['active', 'done', 'failed', 'hitl']
 
 /**
- * Background worker definitions — system maintenance loops that run independently of the pipeline.
+ * Pipeline loop definitions — core processing loops that can be toggled on/off.
+ */
+export const PIPELINE_LOOPS = [
+  { key: 'triage',    label: 'Triage',    color: theme.triageGreen, dimColor: theme.greenSubtle },
+  { key: 'plan',      label: 'Plan',      color: theme.purple,      dimColor: theme.purpleSubtle },
+  { key: 'implement', label: 'Implement', color: theme.accent,      dimColor: theme.accentSubtle },
+  { key: 'review',    label: 'Review',    color: theme.orange,      dimColor: theme.orangeSubtle },
+]
+
+/**
+ * Background worker definitions — maintenance and system loops that can be toggled on/off.
+ * Workers with `system: true` are internal services shown with a "system" badge.
  */
 export const BACKGROUND_WORKERS = [
-  { key: 'memory_sync',     label: 'Memory Manager',  color: theme.accent },
   { key: 'retrospective',   label: 'Retrospective',   color: theme.purple },
-  { key: 'metrics',         label: 'Metrics',          color: theme.yellow },
   { key: 'review_insights', label: 'Review Insights',  color: theme.orange },
+  { key: 'pipeline_poller', label: 'Pipeline Poller',  color: theme.textMuted, system: true },
+  { key: 'memory_sync',     label: 'Memory Manager',    color: theme.accent,    system: true },
+  { key: 'metrics',         label: 'Metrics',           color: theme.yellow,    system: true },
 ]
