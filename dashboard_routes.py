@@ -9,8 +9,8 @@ from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
 from config import HydraConfig, save_config_file
@@ -47,8 +47,8 @@ def create_router(
     """Create an APIRouter with all dashboard route handlers."""
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
-    async def index() -> HTMLResponse:
+    def _serve_spa_index() -> HTMLResponse:
+        """Serve the SPA index.html, falling back to template or placeholder."""
         react_index = ui_dist_dir / "index.html"
         if react_index.exists():
             return HTMLResponse(react_index.read_text())
@@ -56,6 +56,10 @@ def create_router(
         if template_path.exists():
             return HTMLResponse(template_path.read_text())
         return HTMLResponse("<h1>Hydra Dashboard</h1><p>Run 'make ui' to build.</p>")
+
+    @router.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return _serve_spa_index()
 
     @router.get("/api/state")
     async def get_state() -> JSONResponse:
@@ -110,19 +114,20 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
-            if not cause:
-                origin = state.get_hitl_origin(item.issue)
-                if origin:
-                    if origin in config.improve_label:
-                        cause = "Self-improvement proposal"
-                    elif origin in config.review_label:
-                        cause = "Review escalation"
-                    elif origin in config.find_label:
-                        cause = "Triage escalation"
-                    else:
-                        cause = "Escalation (reason not recorded)"
+            origin = state.get_hitl_origin(item.issue)
+            if not cause and origin:
+                if origin in config.improve_label:
+                    cause = "Self-improvement proposal"
+                elif origin in config.review_label:
+                    cause = "Review escalation"
+                elif origin in config.find_label:
+                    cause = "Triage escalation"
+                else:
+                    cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
+            if origin and origin in config.improve_label:
+                data["isMemorySuggestion"] = True
             enriched.append(data)
         return JSONResponse(enriched)
 
@@ -190,6 +195,31 @@ def create_router(
                     "issue": issue_number,
                     "status": "resolved",
                     "action": "close",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
+
+    @router.post("/api/hitl/{issue_number}/approve-memory")
+    async def hitl_approve_memory(issue_number: int) -> JSONResponse:
+        """Approve a HITL item as a memory suggestion, relabeling for sync."""
+        for lbl in config.improve_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.memory_label)
+        orch = get_orchestrator()
+        if orch:
+            orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
+        state.remove_hitl_cause(issue_number)
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "status": "resolved",
+                    "action": "approved_as_memory",
                 },
             )
         )
@@ -433,5 +463,20 @@ def create_router(
                 pass
             except Exception:
                 logger.warning("WebSocket error during live streaming", exc_info=True)
+
+    # SPA catch-all: serve index.html for any path not matched above.
+    # This must be registered LAST so it doesn't shadow API/WS routes.
+    @router.get("/{path:path}", response_model=None)
+    async def spa_catchall(path: str) -> Response:
+        # Don't catch API, WebSocket, or static-asset paths
+        if path.startswith(("api/", "ws/", "assets/", "static/")) or path == "ws":
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        # Serve root-level static files from ui/dist/ (e.g. logos, favicon)
+        static_file = (ui_dist_dir / path).resolve()
+        if static_file.is_relative_to(ui_dist_dir.resolve()) and static_file.is_file():
+            return FileResponse(static_file)
+
+        return _serve_spa_index()
 
     return router

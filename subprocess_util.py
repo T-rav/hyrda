@@ -11,6 +11,19 @@ from pathlib import Path
 logger = logging.getLogger("hydra.subprocess")
 
 
+class AuthenticationError(RuntimeError):
+    """Raised when a subprocess fails due to GitHub authentication issues."""
+
+
+_AUTH_PATTERNS = ("401", "not logged in", "authentication required", "auth token")
+
+
+def _is_auth_error(stderr: str) -> bool:
+    """Check if stderr indicates a GitHub authentication failure."""
+    stderr_lower = stderr.lower()
+    return any(p in stderr_lower for p in _AUTH_PATTERNS)
+
+
 def make_clean_env(gh_token: str = "") -> dict[str, str]:
     """Build a subprocess env dict with ``CLAUDECODE`` stripped.
 
@@ -47,9 +60,11 @@ async def run_subprocess(
     )
     stdout, stderr = await proc.communicate()
     if proc.returncode != 0:
-        raise RuntimeError(
-            f"Command {cmd!r} failed (rc={proc.returncode}): {stderr.decode().strip()}"
-        )
+        stderr_text = stderr.decode().strip()
+        msg = f"Command {cmd!r} failed (rc={proc.returncode}): {stderr_text}"
+        if _is_auth_error(stderr_text):
+            raise AuthenticationError(msg)
+        raise RuntimeError(msg)
     return stdout.decode().strip()
 
 
@@ -89,6 +104,8 @@ async def run_subprocess_with_retry(
         try:
             return await run_subprocess(*cmd, cwd=cwd, gh_token=gh_token)
         except RuntimeError as exc:
+            if isinstance(exc, AuthenticationError):
+                raise
             last_error = exc
             error_msg = str(exc)
             if attempt >= max_retries or not _is_retryable_error(error_msg):
