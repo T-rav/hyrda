@@ -150,6 +150,17 @@ class StateTracker:
         self._data.hitl_causes.pop(str(issue_number), None)
         self.save()
 
+    # --- worker result metadata ---
+
+    def set_worker_result_meta(self, issue_number: int, meta: dict[str, Any]) -> None:
+        """Persist worker result metadata for *issue_number*."""
+        self._data.worker_result_meta[str(issue_number)] = meta
+        self.save()
+
+    def get_worker_result_meta(self, issue_number: int) -> dict[str, Any]:
+        """Return worker result metadata for *issue_number*, or empty dict."""
+        return self._data.worker_result_meta.get(str(issue_number), {})
+
     # --- batch tracking ---
 
     def get_current_batch(self) -> int:
