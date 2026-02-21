@@ -165,6 +165,24 @@ class HydraConfig(BaseModel):
         description="Minimum category frequency to trigger improvement proposal",
     )
 
+    # Agent prompt configuration
+    test_command: str = Field(
+        default="make test",
+        description="Quick test command for agent prompts",
+    )
+    max_issue_body_chars: int = Field(
+        default=10_000,
+        ge=1_000,
+        le=100_000,
+        description="Max characters for issue body in agent prompts before truncation",
+    )
+    max_review_diff_chars: int = Field(
+        default=15_000,
+        ge=1_000,
+        le=200_000,
+        description="Max characters for PR diff in reviewer prompts before truncation",
+    )
+
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
     git_user_name: str = Field(
@@ -214,6 +232,14 @@ class HydraConfig(BaseModel):
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
 
+    # Retrospective
+    retrospective_window: int = Field(
+        default=10,
+        ge=3,
+        le=100,
+        description="Number of recent retrospective entries to scan for patterns",
+    )
+
     # Execution mode
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
@@ -253,6 +279,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL        → hitl_label
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
+            HYDRA_LABEL_IMPROVE     → improve_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -301,6 +328,21 @@ class HydraConfig(BaseModel):
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
 
+        # Agent prompt config overrides
+        env_test_cmd = os.environ.get("HYDRA_TEST_COMMAND")
+        if env_test_cmd is not None and self.test_command == "make test":
+            object.__setattr__(self, "test_command", env_test_cmd)
+
+        env_max_body = os.environ.get("HYDRA_MAX_ISSUE_BODY_CHARS")
+        if env_max_body is not None and self.max_issue_body_chars == 10_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_issue_body_chars", int(env_max_body))
+
+        env_max_diff = os.environ.get("HYDRA_MAX_REVIEW_DIFF_CHARS")
+        if env_max_diff is not None and self.max_review_diff_chars == 15_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_review_diff_chars", int(env_max_diff))
+
         # gh retry override
         if self.gh_max_retries == 3:  # still at default
             env_retries = os.environ.get("HYDRA_GH_MAX_RETRIES")
@@ -326,6 +368,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
+            "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)

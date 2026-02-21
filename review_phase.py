@@ -12,6 +12,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager, SelfReviewError
+from retrospective import RetrospectiveCollector
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
     ReviewInsightStore,
@@ -41,6 +42,7 @@ class ReviewPhase:
         active_issues: set[int],
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
+        retrospective: RetrospectiveCollector | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -51,6 +53,7 @@ class ReviewPhase:
         self._active_issues = active_issues
         self._agents = agents
         self._bus = event_bus or EventBus()
+        self._retrospective = retrospective
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
 
     async def review_prs(
@@ -225,6 +228,14 @@ class ReviewPhase:
                                     pr.issue_number,
                                     [self._config.fixed_label[0]],
                                 )
+                                # Run post-merge retrospective (non-blocking;
+                                # record() catches all exceptions internally)
+                                if self._retrospective:
+                                    await self._retrospective.record(
+                                        issue_number=pr.issue_number,
+                                        pr_number=pr.number,
+                                        review_result=result,
+                                    )
                             else:
                                 logger.warning(
                                     "PR #%d merge failed — escalating to HITL",

@@ -133,6 +133,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
+        "--improve-label",
+        default=None,
+        help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+    )
+    parser.add_argument(
         "--planner-model",
         default=None,
         help="Model for planning agents (default: opus)",
@@ -153,6 +158,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--lite-plan-labels",
         default=None,
         help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
+    )
+    parser.add_argument(
+        "--test-command",
+        default=None,
+        help="Test command used in agent prompts (default: make test)",
     )
     parser.add_argument(
         "--repo",
@@ -245,6 +255,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
+        "test_command",
         "repo",
         "main_branch",
         "dashboard_port",
@@ -265,6 +276,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "improve_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)
