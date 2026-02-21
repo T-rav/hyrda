@@ -3645,6 +3645,131 @@ class TestPollingLoop:
         await orch._polling_loop("test", work_fn, 0)
         assert call_count >= 2
 
+
+# ---------------------------------------------------------------------------
+# _do_memory_sync_work
+# ---------------------------------------------------------------------------
+
+
+class TestDoMemorySyncWork:
+    """Tests for the _do_memory_sync_work() extracted work method."""
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_updates_bg_status_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """Successful sync should update bg worker status to 'ok'."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        stats = {"synced": 5}
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._memory_sync.sync = AsyncMock(return_value=stats)  # type: ignore[method-assign]
+        orch._memory_sync.publish_sync_event = AsyncMock()  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_memory_sync_work()
+
+        # Assert
+        status = orch.get_bg_worker_states().get("memory_sync", {})
+        assert status.get("status") == "ok"
+        assert status.get("details") == stats
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_updates_bg_status_on_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed sync should update bg worker status to 'error' and re-raise."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("gh failed")
+        )
+
+        # Act / Assert
+        with pytest.raises(RuntimeError, match="gh failed"):
+            await orch._do_memory_sync_work()
+
+        status = orch.get_bg_worker_states().get("memory_sync", {})
+        assert status.get("status") == "error"
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_calls_sync_with_formatted_issue_dicts(
+        self, config: HydraConfig
+    ) -> None:
+        """Should pass correctly formatted issue dicts to memory_sync.sync()."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        from models import GitHubIssue
+
+        mock_issue = GitHubIssue(
+            number=7,
+            title="Memory issue",
+            body="Some learning",
+            labels=["hydra-memory"],
+            comments=[],
+            url="https://github.com/test/repo/issues/7",
+            created_at="2024-01-01T00:00:00Z",
+        )
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[mock_issue])  # type: ignore[method-assign]
+        orch._memory_sync.sync = AsyncMock(return_value={})  # type: ignore[method-assign]
+        orch._memory_sync.publish_sync_event = AsyncMock()  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_memory_sync_work()
+
+        # Assert — sync was called with the formatted dict
+        call_args = orch._memory_sync.sync.call_args[0][0]
+        assert len(call_args) == 1
+        assert call_args[0]["number"] == 7
+        assert call_args[0]["title"] == "Memory issue"
+
+
+# ---------------------------------------------------------------------------
+# _do_metrics_sync_work
+# ---------------------------------------------------------------------------
+
+
+class TestDoMetricsSyncWork:
+    """Tests for the _do_metrics_sync_work() extracted work method."""
+
+    @pytest.mark.asyncio
+    async def test_metrics_sync_work_updates_bg_status_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """Successful metrics sync should update bg worker status to 'ok'."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        stats = {"snapshots": 3}
+        orch._store.get_queue_stats = lambda: {}  # type: ignore[method-assign]
+        orch._metrics_manager.sync = AsyncMock(return_value=stats)  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_metrics_sync_work()
+
+        # Assert
+        status = orch.get_bg_worker_states().get("metrics", {})
+        assert status.get("status") == "ok"
+        assert status.get("details") == stats
+
+    @pytest.mark.asyncio
+    async def test_metrics_sync_work_updates_bg_status_on_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed metrics sync should update bg worker status to 'error' and re-raise."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        orch._store.get_queue_stats = lambda: {}  # type: ignore[method-assign]
+        orch._metrics_manager.sync = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("metrics failed")
+        )
+
+        # Act / Assert
+        with pytest.raises(RuntimeError, match="metrics failed"):
+            await orch._do_metrics_sync_work()
+
+        status = orch.get_bg_worker_states().get("metrics", {})
+        assert status.get("status") == "error"
+
     @pytest.mark.asyncio
     async def test_polling_loop_stops_on_stop_event(self, config: HydraConfig) -> None:
         """Loop should exit when stop event is set."""

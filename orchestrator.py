@@ -420,7 +420,7 @@ class HydraOrchestrator:
     ) -> None:
         """Generic polling loop: check enabled -> try work -> except -> sleep."""
         while not self._stop_event.is_set():
-            if enabled_name and not self.is_bg_worker_enabled(enabled_name):
+            if enabled_name is not None and not self.is_bg_worker_enabled(enabled_name):
                 await self._sleep_or_stop(interval)
                 continue
             try:
