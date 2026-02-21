@@ -181,6 +181,45 @@ class TestLabelOperations:
         # HITL label should still be added
         mock_prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
 
+    @pytest.mark.asyncio
+    async def test_escalate_removes_all_current_labels_from_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """All labels in current_labels are removed one-by-one from the issue."""
+        escalator, _, mock_prs, _ = _make_escalator(config)
+
+        await escalator.escalate_to_hitl(
+            issue_number=42,
+            cause="Test",
+            origin_label="hydra-review",
+            current_labels=["hydra-review", "hydra-extra"],
+        )
+
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        assert (42, "hydra-extra") in remove_calls
+        assert mock_prs.remove_label.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_escalate_removes_all_current_labels_from_pr(
+        self, config: HydraConfig
+    ) -> None:
+        """All labels in current_labels are removed one-by-one from the PR."""
+        escalator, _, mock_prs, _ = _make_escalator(config)
+
+        await escalator.escalate_to_hitl(
+            issue_number=42,
+            cause="Test",
+            origin_label="hydra-review",
+            current_labels=["hydra-review", "hydra-extra"],
+            pr_number=101,
+        )
+
+        pr_remove_calls = [c.args for c in mock_prs.remove_pr_label.call_args_list]
+        assert (101, "hydra-review") in pr_remove_calls
+        assert (101, "hydra-extra") in pr_remove_calls
+        assert mock_prs.remove_pr_label.await_count == 2
+
 
 # ---------------------------------------------------------------------------
 # Event publishing
