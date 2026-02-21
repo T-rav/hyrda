@@ -17,6 +17,7 @@ from models import (
     PlanResult,
     PRInfo,
     PRListItem,
+    ReviewerStatus,
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
@@ -573,6 +574,38 @@ class TestPRInfo:
 
 
 # ---------------------------------------------------------------------------
+# ReviewerStatus
+# ---------------------------------------------------------------------------
+
+
+class TestReviewerStatus:
+    """Tests for the ReviewerStatus enum."""
+
+    @pytest.mark.parametrize(
+        "member, expected_value",
+        [
+            (ReviewerStatus.REVIEWING, "reviewing"),
+            (ReviewerStatus.DONE, "done"),
+            (ReviewerStatus.FAILED, "failed"),
+            (ReviewerStatus.FIXING, "fixing"),
+            (ReviewerStatus.FIX_DONE, "fix_done"),
+        ],
+    )
+    def test_enum_values(self, member: ReviewerStatus, expected_value: str) -> None:
+        assert member.value == expected_value
+
+    def test_enum_is_string_subclass(self) -> None:
+        assert isinstance(ReviewerStatus.DONE, str)
+
+    def test_all_members_present(self) -> None:
+        assert len(ReviewerStatus) == 5
+
+    def test_lookup_by_value(self) -> None:
+        status = ReviewerStatus("reviewing")
+        assert status is ReviewerStatus.REVIEWING
+
+
+# ---------------------------------------------------------------------------
 # ReviewVerdict
 # ---------------------------------------------------------------------------
 
@@ -656,6 +689,7 @@ class TestReviewResult:
             summary="Looks great!",
             fixes_made=True,
             transcript="Reviewed 5 files.",
+            duration_seconds=12.3,
         )
 
         # Assert
@@ -665,6 +699,15 @@ class TestReviewResult:
         assert review.summary == "Looks great!"
         assert review.fixes_made is True
         assert review.transcript == "Reviewed 5 files."
+        assert review.duration_seconds == pytest.approx(12.3)
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=42.5)
+        assert review.duration_seconds == pytest.approx(42.5)
 
     def test_ci_passed_defaults_to_none(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)

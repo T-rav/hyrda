@@ -327,6 +327,13 @@ Use these tools to build a deep understanding of the code:
 - Use `get_incoming_calls` / `get_outgoing_calls` to understand call graphs
 - Only fall back to Grep for simple text pattern matching
 
+### UI Exploration (when the issue involves UI changes)
+
+- Search `ui/src/components/` to inventory existing components and their patterns
+- Check `ui/src/constants.js`, `ui/src/types.js`, and `ui/src/theme.js` for shared definitions
+- Examine existing component styles for spacing, color palette (theme tokens), and layout approach
+- Note whether existing components handle responsive behavior
+
 ## Planning Steps
 
 1. Read the issue carefully and understand what needs to be done.
@@ -335,6 +342,7 @@ Use these tools to build a deep understanding of the code:
 4. Identify what needs to change and where.
 5. Consider testing strategy (what tests to write, what to mock).
 6. Consider edge cases and potential pitfalls.
+7. If the issue involves UI changes, list existing components and shared code (`constants.js`, `types.js`, `theme.js`) that should be reused or extended.
 
 ## Required Output
 

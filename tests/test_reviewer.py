@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from events import EventType
-from models import ReviewVerdict
+from models import ReviewerStatus, ReviewVerdict
 from reviewer import ReviewRunner
 from tests.helpers import ConfigFactory, make_streaming_proc
 
@@ -143,6 +143,46 @@ def test_build_review_prompt_excludes_ui_criteria_when_no_ui_files(
 
     assert "DRY" not in prompt
     assert "theme.js" not in prompt
+
+
+def test_build_review_prompt_skips_local_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=2)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run `make lint`, `make test`, or `make quality`" in prompt
+    assert "CI will verify" in prompt
+
+
+def test_build_review_prompt_runs_local_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Run `make lint` and `make test`" in prompt
+    assert "Do NOT run" not in prompt
+
+
+def test_build_review_prompt_fix_section_skips_tests_when_ci_enabled(
+    event_bus, pr_info, issue
+):
+    ci_config = ConfigFactory.create(max_ci_fix_attempts=1)
+    runner = _make_runner(ci_config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "Do NOT run tests locally" in prompt
+
+
+def test_build_review_prompt_fix_section_runs_tests_when_ci_disabled(
+    config, event_bus, pr_info, issue
+):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_review_prompt(pr_info, issue, "diff")
+
+    assert "make test-fast" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -426,8 +466,8 @@ async def test_review_publishes_review_update_events(
     assert len(review_events) >= 2
 
     statuses = [e.data["status"] for e in review_events]
-    assert "reviewing" in statuses
-    assert "done" in statuses
+    assert ReviewerStatus.REVIEWING.value in statuses
+    assert ReviewerStatus.DONE.value in statuses
 
 
 @pytest.mark.asyncio
@@ -449,7 +489,8 @@ async def test_review_start_event_includes_worker_id(
     reviewing_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "reviewing"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.REVIEWING.value
     )
     assert reviewing_event.data["worker"] == 3
     assert reviewing_event.data["pr"] == pr_info.number
@@ -475,7 +516,8 @@ async def test_review_done_event_includes_verdict_and_duration(
     done_event = next(
         e
         for e in events
-        if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "done"
+        if e.type == EventType.REVIEW_UPDATE
+        and e.data.get("status") == ReviewerStatus.DONE.value
     )
     assert done_event.data["verdict"] == ReviewVerdict.REQUEST_CHANGES.value
     assert "duration" in done_event.data
@@ -492,7 +534,9 @@ async def test_review_dry_run_still_publishes_review_update_event(
     events = event_bus.get_history()
     review_events = [e for e in events if e.type == EventType.REVIEW_UPDATE]
     # The "reviewing" event is published before the dry-run check
-    assert any(e.data.get("status") == "reviewing" for e in review_events)
+    assert any(
+        e.data.get("status") == ReviewerStatus.REVIEWING.value for e in review_events
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -867,8 +911,8 @@ async def test_fix_ci_publishes_ci_check_events(
     ci_events = [e for e in events if e.type == EventType.CI_CHECK]
     assert len(ci_events) >= 2
     statuses = [e.data["status"] for e in ci_events]
-    assert "fixing" in statuses
-    assert "fix_done" in statuses
+    assert ReviewerStatus.FIXING.value in statuses
+    assert ReviewerStatus.FIX_DONE.value in statuses
 
 
 # ---------------------------------------------------------------------------
@@ -920,3 +964,94 @@ class TestBuildReviewPromptMemory:
         issue = GitHubIssue(number=1, title="Test", body="Body")
         prompt = runner._build_review_prompt(pr, issue, "diff content")
         assert "MEMORY_SUGGESTION_START" in prompt
+
+
+# ---------------------------------------------------------------------------
+# duration_seconds recording
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_review_success_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+    transcript = "VERDICT: APPROVE\nSUMMARY: looks good"
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=False)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_review_dry_run_records_duration(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(dry_config, event_bus)
+
+    result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds >= 0
+
+
+@pytest.mark.asyncio
+async def test_review_failure_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(side_effect=RuntimeError("boom"))),
+    ):
+        result = await runner.review(pr_info, issue, tmp_path, "diff")
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_records_duration(config, event_bus, pr_info, issue, tmp_path):
+    runner = _make_runner(config, event_bus)
+    transcript = "VERDICT: APPROVE\nSUMMARY: Fixed"
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_has_changes", AsyncMock(return_value=True)),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds > 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_dry_run_records_duration(
+    dry_config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(dry_config, event_bus)
+
+    result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds >= 0
+
+
+@pytest.mark.asyncio
+async def test_fix_ci_failure_records_duration(
+    config, event_bus, pr_info, issue, tmp_path
+):
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch.object(runner, "_execute", AsyncMock(side_effect=RuntimeError("boom"))),
+    ):
+        result = await runner.fix_ci(pr_info, issue, tmp_path, "Failed: ci", attempt=1)
+
+    assert result.duration_seconds > 0

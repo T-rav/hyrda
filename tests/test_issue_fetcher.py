@@ -226,6 +226,26 @@ class TestFetchReadyIssues:
         assert issues == []
         mock_exec.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_query_label_includes_created_asc_sort(
+        self, config: HydraConfig
+    ) -> None:
+        """_query_label passes --search sort:created-asc to gh issue list."""
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=mock_proc
+        ) as mock_exec:
+            await fetcher.fetch_ready_issues(set())
+
+        cmd = list(mock_exec.call_args_list[0].args)
+        assert "--search" in cmd
+        search_idx = cmd.index("--search")
+        assert cmd[search_idx + 1] == "sort:created-asc"
+
 
 # ---------------------------------------------------------------------------
 # fetch_reviewable_prs

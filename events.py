@@ -37,6 +37,11 @@ class EventType(StrEnum):
     MEMORY_UPDATE = "memory_update"
     ORCHESTRATOR_STATUS = "orchestrator_status"
     ERROR = "error"
+    MEMORY_SYNC = "memory_sync"
+    RETROSPECTIVE = "retrospective"
+    METRICS_UPDATE = "metrics_update"
+    REVIEW_INSIGHT = "review_insight"
+    BACKGROUND_WORKER_STATUS = "background_worker_status"
 
 
 class HydraEvent(BaseModel):
