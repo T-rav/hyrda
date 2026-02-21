@@ -2,7 +2,7 @@ import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
 import { useHydra } from '../context/HydraContext'
 import { StreamCard } from './StreamCard'
-import { PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { PIPELINE_STAGES } from '../constants'
 import { STAGE_KEYS } from '../hooks/useTimeline'
 
 function PendingIntentCard({ intent }) {
@@ -89,7 +89,7 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
 }
 
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, workers, prs } = useHydra()
+  const { pipelineIssues, prs, stageStatus } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -146,18 +146,6 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     })
   }, [pipelineIssues, prs])
 
-  // Count active pipeline workers per stage role
-  const workerCounts = useMemo(() => {
-    const counts = {}
-    for (const stage of PIPELINE_STAGES) {
-      if (!stage.role) continue
-      counts[stage.key] = Object.values(workers || {}).filter(
-        w => w.role === stage.role && ACTIVE_STATUSES.includes(w.status)
-      ).length
-    }
-    return counts
-  }, [workers])
-
   const handleToggleStage = useCallback((key) => {
     onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
   }, [onToggleStage])
@@ -176,7 +164,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
           key={stage.key}
           stage={stage}
           issues={stageIssues}
-          workerCount={workerCounts[stage.key] || 0}
+          workerCount={stageStatus[stage.key]?.workerCount || 0}
           intentMap={intentMap}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}

@@ -207,33 +207,24 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
 }
 
 export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog }) {
-  const { pipelinePollerLastRun, hitlItems, pipelineIssues, orchestratorStatus } = useHydra()
+  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus } = useHydra()
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && w.status !== 'queued'
   )
 
-  // Group by role
-  const grouped = {}
-  for (const stage of PIPELINE_STAGES) {
-    if (!stage.role) continue
-    grouped[stage.role] = pipelineWorkers.filter(([, w]) => w.role === stage.role)
-  }
-
   const hasPipelineWorkers = pipelineWorkers.length > 0
   const bgMap = Object.fromEntries((backgroundWorkers || []).map(w => [w.name, w]))
   const hitlCount = hitlItems?.length || 0
-  const issues = pipelineIssues || {}
 
   return (
     <div style={styles.container}>
       <h3 style={styles.heading}>Pipeline</h3>
       <div style={styles.loopRow}>
         {PIPELINE_LOOPS.map((loop) => {
-          const state = bgMap[loop.key]
-          const enabled = state?.enabled !== false
-          const stage = PIPELINE_STAGES.find(s => s.key === loop.key)
-          const activeCount = stage?.role ? (grouped[stage.role] || []).length : 0
-          const issueCount = (issues[loop.key] || []).length
+          const status = stageStatus[loop.key] || {}
+          const enabled = status.enabled !== false
+          const activeCount = status.workerCount || 0
+          const issueCount = status.issueCount || 0
           return (
             <div key={loop.key} style={styles.loopChip}>
               <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />

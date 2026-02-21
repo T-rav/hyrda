@@ -1,6 +1,7 @@
 import React from 'react'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
+import { useHydra } from '../context/HydraContext'
 
 const BLOCK_LABELS = [
   { key: 'hydra-plan',   label: 'Plan',   stage: 'plan' },
@@ -111,8 +112,15 @@ function SnapshotTimeline({ snapshots }) {
   )
 }
 
-export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, metricsHistory, sessionCounts }) {
-  const session = sessionCounts || {}
+export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, metricsHistory }) {
+  const { stageStatus } = useHydra()
+  const session = {
+    triaged: stageStatus.triage?.sessionCount || 0,
+    planned: stageStatus.plan?.sessionCount || 0,
+    implemented: stageStatus.implement?.sessionCount || 0,
+    reviewed: stageStatus.review?.sessionCount || 0,
+    merged: stageStatus.merged?.sessionCount || 0,
+  }
   const github = githubMetrics || {}
   const openByLabel = github.open_by_label || {}
   const lifetime = metrics?.lifetime || lifetimeStats || {}

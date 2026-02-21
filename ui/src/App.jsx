@@ -35,9 +35,8 @@ function SystemAlertBanner({ alert }) {
 
 function AppContent() {
   const {
-    connected, orchestratorStatus, workers, prs,
-    mergedCount, sessionTriaged, sessionPlanned,
-    sessionImplemented, sessionReviewed, events,
+    connected, orchestratorStatus, workers,
+    events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
     lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker,
@@ -97,7 +96,6 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        workers={workers}
       />
 
       <div style={styles.main}>
@@ -140,13 +138,6 @@ function AppContent() {
               lifetimeStats={lifetimeStats}
               githubMetrics={githubMetrics}
               metricsHistory={metricsHistory}
-              sessionCounts={{
-                triaged: sessionTriaged,
-                planned: sessionPlanned,
-                implemented: sessionImplemented,
-                reviewed: sessionReviewed,
-                merged: mergedCount,
-              }}
             />
           )}
         </div>

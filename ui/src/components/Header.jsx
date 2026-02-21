@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
 import { ACTIVE_STATUSES } from '../constants'
+import { useHydra } from '../context/HydraContext'
 
 export function Header({
   connected, orchestratorStatus,
-  onStart, onStop, workers,
+  onStart, onStop,
 }) {
-  const workerList = Object.values(workers || {})
-  const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))
+  const { stageStatus } = useHydra()
+  const workload = stageStatus.workload
+  const hasActiveWorkers = workload.active > 0
 
   // Track minimum stopping duration to prevent flicker
   const [stoppingHeld, setStoppingHeld] = useState(false)
@@ -39,12 +41,6 @@ export function Header({
   const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done' || orchestratorStatus === 'auth_failed') &&
     !stoppingHeld
   const isRunning = orchestratorStatus === 'running'
-  const workload = {
-    total: workerList.length,
-    active: workerList.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
-    done: workerList.filter(w => w.status === 'done').length,
-    failed: workerList.filter(w => w.status === 'failed').length,
-  }
 
   return (
     <header style={styles.header}>
