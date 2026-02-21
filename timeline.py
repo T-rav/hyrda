@@ -15,8 +15,10 @@ EVENT_TYPE_TO_STAGE: dict[EventType, str] = {
     EventType.PLANNER_UPDATE: "plan",
     EventType.WORKER_UPDATE: "implement",
     EventType.PR_CREATED: "implement",
+    EventType.HITL_UPDATE: "implement",
     EventType.REVIEW_UPDATE: "review",
     EventType.CI_CHECK: "review",
+    EventType.HITL_ESCALATION: "review",
     EventType.MERGE_UPDATE: "merge",
 }
 
@@ -183,6 +185,10 @@ class TimelineBuilder:
             commits = event.data.get("commits")
             if commits is not None:
                 metadata["commits"] = commits
+            if event.type == EventType.HITL_ESCALATION:
+                cause = event.data.get("cause")
+                if cause:
+                    metadata["hitl_cause"] = cause
 
         # Calculate duration
         duration_seconds: float | None = None

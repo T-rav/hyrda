@@ -534,6 +534,80 @@ class TestEdgeCases:
         stage_names = [s.stage for s in timeline.stages]
         assert "review" in stage_names
 
+    def test_build_stage_empty_events_returns_pending(
+        self, event_bus: EventBus
+    ) -> None:
+        builder = TimelineBuilder(event_bus)
+        stage = builder._build_stage("triage", [])
+        assert stage.stage == "triage"
+        assert stage.status == "pending"
+        assert stage.started_at is None
+        assert stage.completed_at is None
+
+    def test_unknown_transcript_source_defaults_to_implement(
+        self, event_bus: EventBus
+    ) -> None:
+        builder = TimelineBuilder(event_bus)
+        event = _event(
+            EventType.TRANSCRIPT_LINE, 0, issue=42, line="output", source="unknown_src"
+        )
+        stage_name = builder._event_to_stage(event)
+        assert stage_name == "implement"
+
+    @pytest.mark.asyncio
+    async def test_hitl_escalation_grouped_by_issue(self, event_bus: EventBus) -> None:
+        await event_bus.publish(
+            _event(EventType.REVIEW_UPDATE, 0, issue=42, pr=101, status="reviewing")
+        )
+        await event_bus.publish(
+            _event(
+                EventType.HITL_ESCALATION,
+                10,
+                issue=42,
+                pr=101,
+                status="escalated",
+                cause="ci_failed",
+            )
+        )
+
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(42)
+        assert timeline is not None
+        # HITL_ESCALATION should appear in the review stage
+        review_stages = [s for s in timeline.stages if s.stage == "review"]
+        assert len(review_stages) == 1
+        assert review_stages[0].metadata.get("hitl_cause") == "ci_failed"
+
+    @pytest.mark.asyncio
+    async def test_hitl_update_grouped_by_issue(self, event_bus: EventBus) -> None:
+        await event_bus.publish(
+            _event(EventType.WORKER_UPDATE, 0, issue=42, status="running")
+        )
+        await event_bus.publish(
+            _event(
+                EventType.HITL_UPDATE,
+                10,
+                issue=42,
+                status="running",
+                action="hitl_run",
+            )
+        )
+        await event_bus.publish(
+            _event(
+                EventType.HITL_UPDATE,
+                30,
+                issue=42,
+                status="done",
+                action="hitl_run",
+            )
+        )
+
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(42)
+        assert timeline is not None
+        stage_names = [s.stage for s in timeline.stages]
+        assert "implement" in stage_names
+
 
 # ---------------------------------------------------------------------------
 # API endpoint integration
