@@ -133,7 +133,7 @@ export function reducer(state, action) {
 
     case 'triage_update': {
       const triageKey = `triage-${action.data.issue}`
-      const triageStatus = action.data.status === 'done' ? 'done' : 'running'
+      const triageStatus = action.data.status
       const triageWorker = {
         status: triageStatus,
         worker: action.data.worker,
