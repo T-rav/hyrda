@@ -241,7 +241,7 @@ class ReviewPhase:
                                         )
                                     except Exception:  # noqa: BLE001
                                         logger.warning(
-                                            "Retrospective failed for issue #%d",
+                                            "Retrospective record failed for issue #%d",
                                             pr.issue_number,
                                             exc_info=True,
                                         )
