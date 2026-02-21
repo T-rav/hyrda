@@ -12,7 +12,7 @@ const statusColors = {
   reviewing:           { bg: theme.orangeSubtle, fg: theme.orange },
   start:               { bg: theme.orangeSubtle, fg: theme.orange },
   merge_main:          { bg: theme.accentSubtle, fg: theme.accent },
-  conflict_resolution: { bg: theme.yellowSubtle, fg: theme.yellow },
+  merge_fix:           { bg: theme.orangeSubtle, fg: theme.orange },
   ci_wait:             { bg: theme.purpleSubtle, fg: theme.purple },
   ci_fix:              { bg: theme.yellowSubtle, fg: theme.yellow },
   merging:             { bg: theme.greenSubtle,  fg: theme.green },
