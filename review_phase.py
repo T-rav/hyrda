@@ -592,6 +592,7 @@ class ReviewPhase:
                 pr.issue_number,
                 f"Review fix cap exceeded after {max_attempts} attempt(s)",
             )
+            self._state.record_hitl_escalation()
             for lbl in self._config.review_label:
                 await self._prs.remove_label(pr.issue_number, lbl)
                 await self._prs.remove_pr_label(pr.number, lbl)
