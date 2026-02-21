@@ -9,7 +9,7 @@ import signal
 import sys
 from typing import Any
 
-from config import HydraConfig
+from config import HydraConfig, load_config_file
 from log import setup_logging
 from orchestrator import HydraOrchestrator
 
@@ -218,6 +218,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Git user.email for worktree commits; uses global git config if unset",
     )
     parser.add_argument(
+        "--config-file",
+        default=None,
+        help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -244,12 +249,35 @@ def _parse_label_arg(value: str) -> list[str]:
 def build_config(args: argparse.Namespace) -> HydraConfig:
     """Convert parsed CLI args into a :class:`HydraConfig`.
 
+    Merge priority: defaults → config file → env vars → CLI args.
     Only explicitly-provided CLI values are passed through;
     HydraConfig supplies all defaults.
     """
+    # 0) Load config file values (lowest priority after defaults)
+    config_file_path = getattr(args, "config_file", None)
+    file_kwargs: dict[str, Any] = {}
+    if config_file_path is not None:
+        from pathlib import Path  # noqa: PLC0415
+
+        file_kwargs = load_config_file(Path(config_file_path))
+
     kwargs: dict[str, Any] = {}
 
+    # Start from config file values, then overlay CLI args
+    # Filter config file values to known HydraConfig fields
+    _known_fields = set(HydraConfig.model_fields.keys())
+    for key, val in file_kwargs.items():
+        if key in _known_fields:
+            kwargs[key] = val
+
+    # Store config_file path
+    if config_file_path is not None:
+        from pathlib import Path as _P  # noqa: PLC0415
+
+        kwargs["config_file"] = _P(config_file_path)
+
     # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
+    # CLI args override config file values
     for field in (
         "batch_size",
         "max_workers",

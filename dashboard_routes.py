@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from config import HydraConfig
+from config import HydraConfig, save_config_file
 from events import EventBus, EventType, HydraEvent
 from models import (
     BackgroundWorkersResponse,
@@ -261,6 +261,51 @@ def create_router(
             ),
         )
         return JSONResponse(response.model_dump())
+
+    # Mutable fields that can be changed at runtime via PATCH
+    _MUTABLE_FIELDS = {
+        "max_workers",
+        "max_planners",
+        "max_reviewers",
+        "max_hitl_workers",
+        "max_budget_usd",
+        "model",
+        "review_model",
+        "review_budget_usd",
+        "planner_model",
+        "planner_budget_usd",
+        "batch_size",
+        "max_ci_fix_attempts",
+        "max_quality_fix_attempts",
+        "max_review_fix_attempts",
+        "min_review_findings",
+        "max_merge_conflict_fix_attempts",
+        "ci_check_timeout",
+        "ci_poll_interval",
+        "poll_interval",
+    }
+
+    @router.patch("/api/control/config")
+    async def patch_config(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Update runtime config fields. Pass ``persist: true`` to save to disk."""
+        persist = body.pop("persist", False)
+        updated: dict[str, object] = {}
+
+        for key, value in body.items():
+            if key not in _MUTABLE_FIELDS:
+                continue
+            if not hasattr(config, key):
+                continue
+            try:
+                object.__setattr__(config, key, value)
+                updated[key] = value
+            except (TypeError, ValueError):
+                logger.warning("Invalid value for config field %s: %r", key, value)
+
+        if persist and updated:
+            save_config_file(config.config_file, updated)
+
+        return JSONResponse({"status": "ok", "updated": updated})
 
     # Known background workers with human-friendly labels
     _bg_worker_defs = [
