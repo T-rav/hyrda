@@ -67,8 +67,12 @@ class TestBuildConfigWithConfigFile:
         assert cfg.max_workers == 3
         assert cfg.model == "sonnet"
 
-    def test_no_config_file_uses_defaults(self) -> None:
+    def test_no_config_file_uses_defaults(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Without --config-file, build_config should use HydraConfig defaults."""
+        # Use tmp_path as CWD to avoid picking up a local .hydra/config.json
+        monkeypatch.chdir(tmp_path)
         args = parse_args([])
         cfg = build_config(args)
 

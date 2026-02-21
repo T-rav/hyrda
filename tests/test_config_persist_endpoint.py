@@ -9,6 +9,7 @@ import pytest
 
 from events import EventBus
 from state import StateTracker
+from tests.helpers import ConfigFactory
 
 
 def make_state(tmp_path: Path) -> StateTracker:
@@ -86,8 +87,6 @@ class TestPatchConfigEndpoint:
         self, event_bus: EventBus, tmp_path: Path
     ) -> None:
         """PATCH with persist=true should write changes to config file."""
-        from tests.helpers import ConfigFactory
-
         config_path = tmp_path / ".hydra" / "config.json"
         cfg = ConfigFactory.create(
             repo_root=tmp_path / "repo",
@@ -168,8 +167,6 @@ class TestPatchConfigEndpoint:
         self, event_bus: EventBus, tmp_path: Path
     ) -> None:
         """The 'persist' flag itself should not be saved to the config file."""
-        from tests.helpers import ConfigFactory
-
         config_path = tmp_path / ".hydra" / "config.json"
         cfg = ConfigFactory.create(
             repo_root=tmp_path / "repo",

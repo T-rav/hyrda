@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -291,7 +291,7 @@ def create_router(
     async def patch_config(body: dict) -> JSONResponse:  # type: ignore[type-arg]
         """Update runtime config fields. Pass ``persist: true`` to save to disk."""
         persist = body.pop("persist", False)
-        updates: dict[str, object] = {}
+        updates: dict[str, Any] = {}
 
         for key, value in body.items():
             if key not in _MUTABLE_FIELDS:
@@ -319,7 +319,7 @@ def create_router(
             )
 
         # Apply validated values to the live config
-        applied: dict[str, object] = {}
+        applied: dict[str, Any] = {}
         for key in updates:
             validated_value = getattr(validated, key)
             object.__setattr__(config, key, validated_value)

@@ -122,7 +122,8 @@ class TestSaveConfigFile:
 
     def test_does_nothing_when_path_is_none(self) -> None:
         """Should not raise when path is None."""
-        save_config_file(None, {"model": "opus"})  # Should not raise
+        result = save_config_file(None, {"model": "opus"})
+        assert result is None
 
     def test_writes_human_readable_json(self, tmp_path: Path) -> None:
         """Config file should be formatted with indentation for readability."""

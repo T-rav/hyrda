@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -469,7 +470,7 @@ def _detect_repo_slug(repo_root: Path) -> str:
         return ""
 
 
-def load_config_file(path: Path | None) -> dict[str, object]:
+def load_config_file(path: Path | None) -> dict[str, Any]:
     """Load a JSON config file and return its contents as a dict.
 
     Returns an empty dict if the file is missing, unreadable, or invalid.
@@ -485,11 +486,11 @@ def load_config_file(path: Path | None) -> dict[str, object]:
         return {}
 
 
-def save_config_file(path: Path | None, values: dict[str, object]) -> None:
+def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
     """Save config values to a JSON file, merging with existing contents."""
     if path is None:
         return
-    existing: dict[str, object] = {}
+    existing: dict[str, Any] = {}
     try:
         existing = json.loads(path.read_text())
         if not isinstance(existing, dict):
