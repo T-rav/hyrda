@@ -250,27 +250,39 @@ export function deriveIssueTimelines(events, workers, prs) {
 
   // Compute currentStage and overallStatus for each issue
   for (const entry of issueMap.values()) {
-    // Find the latest non-pending stage as the current stage
-    let latestActiveStage = null
+    let activeStage = null
+    let lastDoneIndex = -1
     let hasFailed = false
     let hasHitl = false
     let hasActive = false
     let latestEndTime = null
 
-    for (const stageKey of STAGE_KEYS) {
+    for (let i = 0; i < STAGE_KEYS.length; i++) {
+      const stageKey = STAGE_KEYS[i]
       const s = entry.stages[stageKey]
-      if (s.status !== 'pending') {
-        latestActiveStage = stageKey
+      if (s.status === 'active') {
+        activeStage = stageKey
+        hasActive = true
       }
+      if (s.status === 'done') lastDoneIndex = i
       if (s.status === 'failed') hasFailed = true
       if (s.status === 'hitl') hasHitl = true
-      if (s.status === 'active') hasActive = true
       if (s.endTime && (!latestEndTime || s.endTime > latestEndTime)) {
         latestEndTime = s.endTime
       }
     }
 
-    entry.currentStage = latestActiveStage || 'triage'
+    // Current stage: prefer the actively running stage, otherwise
+    // advance to the next stage after the last completed one
+    if (activeStage) {
+      entry.currentStage = activeStage
+    } else if (lastDoneIndex >= 0 && lastDoneIndex < STAGE_KEYS.length - 1) {
+      entry.currentStage = STAGE_KEYS[lastDoneIndex + 1]
+    } else if (lastDoneIndex === STAGE_KEYS.length - 1) {
+      entry.currentStage = STAGE_KEYS[lastDoneIndex] // merged
+    } else {
+      entry.currentStage = 'triage'
+    }
 
     if (hasFailed) {
       entry.overallStatus = 'failed'
