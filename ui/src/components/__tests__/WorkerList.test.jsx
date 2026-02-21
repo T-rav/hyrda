@@ -18,6 +18,7 @@ const statusColors = {
   testing:    { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
   committing:  { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
   quality_fix: { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  merge_fix:   { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
   reviewing:   { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
   done:        { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
   failed:     { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
@@ -198,6 +199,23 @@ describe('WorkerList component', () => {
     }
     render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
     expect(screen.getByText('quality_fix')).toBeInTheDocument()
+  })
+
+  it('renders merge_fix worker with correct badge text', () => {
+    const workers = {
+      1: { status: 'merge_fix', title: 'Resolve conflicts', branch: 'fix-branch', worker: 0, role: 'reviewer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('merge_fix')).toBeInTheDocument()
+  })
+
+  it('counts merge_fix workers as active in RoleSection', () => {
+    const workers = {
+      1: { status: 'merge_fix', title: 'Resolve conflicts', branch: 'fix-branch', worker: 0, role: 'reviewer' },
+      2: { status: 'queued', title: 'Queued review', branch: '', worker: 1, role: 'reviewer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('1/2')).toBeInTheDocument()
   })
 
   it('counts quality_fix workers as active in RoleSection', () => {

@@ -11,7 +11,7 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
+from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict, WorkerStatus
 from pr_manager import PRManager, SelfReviewError
 from retrospective import RetrospectiveCollector
 from review_insights import (
@@ -120,7 +120,7 @@ class ReviewPhase:
                             self._config.main_branch,
                         )
                         await self._publish_review_status(
-                            pr, idx, "conflict_resolution"
+                            pr, idx, WorkerStatus.MERGE_FIX.value
                         )
                         merged_main = await self._resolve_merge_conflicts(
                             pr, issue, wt_path, worker_id=idx
@@ -692,7 +692,9 @@ class ReviewPhase:
                 max_attempts,
                 pr.number,
             )
-            await self._publish_review_status(pr, worker_id, "conflict_resolution")
+            await self._publish_review_status(
+                pr, worker_id, WorkerStatus.MERGE_FIX.value
+            )
 
             try:
                 prompt = self._build_conflict_prompt(issue, last_error, attempt)
