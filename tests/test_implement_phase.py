@@ -757,3 +757,145 @@ class TestWorkerResultMetaPersistence:
 
         meta = phase._state.get_worker_result_meta(42)
         assert meta["error"] == "make quality failed"
+
+
+# ---------------------------------------------------------------------------
+# Zero-commit already-satisfied handling
+# ---------------------------------------------------------------------------
+
+
+class TestAlreadySatisfiedZeroCommit:
+    """Tests that zero-commit failures close the issue as already satisfied."""
+
+    @pytest.mark.asyncio
+    async def test_zero_commit_closes_issue_with_dup_label(
+        self, config: HydraConfig
+    ) -> None:
+        """When agent returns zero commits, issue should be closed with dup label."""
+        issue = make_issue(42)
+
+        async def zero_commit_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=False,
+                error="No commits found on branch",
+                commits=0,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(config, [issue], agent_run=zero_commit_agent)
+        mock_prs.close_issue = AsyncMock()
+
+        results, _ = await phase.run_batch()
+
+        # dup labels should be added
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert any(config.dup_label == c[1] for c in add_calls)
+
+        # Comment should be posted with "Already Satisfied"
+        comment_calls = [c.args for c in mock_prs.post_comment.call_args_list]
+        assert any("Already Satisfied" in c[1] for c in comment_calls)
+
+        # Issue should be closed
+        mock_prs.close_issue.assert_awaited_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_zero_commit_marks_issue_already_satisfied(
+        self, config: HydraConfig
+    ) -> None:
+        """When zero-commit detected, issue state should be 'already_satisfied'."""
+        issue = make_issue(42)
+
+        async def zero_commit_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=False,
+                error="No commits found on branch",
+                commits=0,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(config, [issue], agent_run=zero_commit_agent)
+        mock_prs.close_issue = AsyncMock()
+
+        await phase.run_batch()
+
+        assert phase._state.get_issue_status(42) == "already_satisfied"
+
+    @pytest.mark.asyncio
+    async def test_zero_commit_removes_ready_labels(self, config: HydraConfig) -> None:
+        """When zero-commit detected, ready labels should be removed."""
+        issue = make_issue(42)
+
+        async def zero_commit_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=False,
+                error="No commits found on branch",
+                commits=0,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(config, [issue], agent_run=zero_commit_agent)
+        mock_prs.close_issue = AsyncMock()
+
+        await phase.run_batch()
+
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        for lbl in config.ready_label:
+            assert (42, lbl) in remove_calls
+
+    @pytest.mark.asyncio
+    async def test_nonzero_commits_not_treated_as_already_satisfied(
+        self, config: HydraConfig
+    ) -> None:
+        """A failed result with commits > 0 should NOT be treated as already satisfied."""
+        issue = make_issue(42)
+
+        async def failing_with_commits(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=False,
+                error="make quality failed",
+                commits=2,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(
+            config, [issue], agent_run=failing_with_commits
+        )
+        mock_prs.close_issue = AsyncMock()
+
+        await phase.run_batch()
+
+        # Should NOT close the issue
+        mock_prs.close_issue.assert_not_awaited()
+        assert phase._state.get_issue_status(42) == "failed"

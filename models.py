@@ -91,6 +91,7 @@ class PlanResult(BaseModel):
     new_issues: list[NewIssueSpec] = Field(default_factory=list)
     validation_errors: list[str] = Field(default_factory=list)
     retry_attempted: bool = False
+    already_satisfied: bool = False
 
 
 # --- Worker ---

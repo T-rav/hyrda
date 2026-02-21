@@ -335,6 +335,14 @@ class TestPlanResult:
         result = PlanResult(issue_number=1, retry_attempted=True)
         assert result.retry_attempted is True
 
+    def test_already_satisfied_defaults_to_false(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.already_satisfied is False
+
+    def test_already_satisfied_can_be_set(self) -> None:
+        result = PlanResult(issue_number=1, already_satisfied=True)
+        assert result.already_satisfied is True
+
     def test_all_fields_set(self) -> None:
         result = PlanResult(
             issue_number=7,

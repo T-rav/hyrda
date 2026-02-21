@@ -112,6 +112,10 @@ class HydraConfig(BaseModel):
         default=["hydra-improve"],
         description="Labels for review insight improvement proposals (OR logic)",
     )
+    dup_label: list[str] = Field(
+        default=["hydra-dup"],
+        description="Labels applied when issue is already satisfied (no changes needed)",
+    )
 
     # Discovery / planner configuration
     find_label: list[str] = Field(
@@ -379,6 +383,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
+            "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)

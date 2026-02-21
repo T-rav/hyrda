@@ -12,7 +12,7 @@ import { MetricsPanel } from './components/MetricsPanel'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'prs', 'hitl', 'livestream', 'timeline', 'system', 'metrics']
+const TABS = ['transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
 
 export default function App() {
   const {
@@ -93,7 +93,7 @@ export default function App() {
                 ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
                 : tab === 'hitl' ? (
                 <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab === 'livestream' ? 'Timeline' : tab === 'timeline' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              ) : tab === 'timeline' ? 'Timeline' : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
@@ -104,8 +104,8 @@ export default function App() {
           )}
           {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'livestream' && <Livestream events={events} />}
-          {activeTab === 'timeline' && (
+          {activeTab === 'timeline' && <Livestream events={events} />}
+          {activeTab === 'livestream' && (
             <div style={styles.timeline}>
               {events.map((e, i) => (
                 <div key={i} style={styles.timelineItem}>

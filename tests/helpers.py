@@ -65,6 +65,7 @@ class ConfigFactory:
         hitl_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
         improve_label: list[str] | None = None,
+        dup_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
         planner_model: str = "opus",
@@ -117,6 +118,7 @@ class ConfigFactory:
             improve_label=improve_label
             if improve_label is not None
             else ["hydra-improve"],
+            dup_label=dup_label if dup_label is not None else ["hydra-dup"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
