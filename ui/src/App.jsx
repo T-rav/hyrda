@@ -8,7 +8,6 @@ import { HITLTable } from './components/HITLTable'
 import { Livestream } from './components/Livestream'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
-import { IntentInput } from './components/IntentInput'
 import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
@@ -41,7 +40,7 @@ function AppContent() {
     mergedCount, sessionTriaged, sessionPlanned,
     sessionImplemented, sessionReviewed, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics, systemAlert, intents, submitIntent,
+    backgroundWorkers, metrics, systemAlert, intents,
     lifetimeStats, githubMetrics, phase,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
@@ -120,11 +119,6 @@ function AppContent() {
       <div style={styles.main}>
         <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
-        <IntentInput
-          connected={connected}
-          orchestratorStatus={orchestratorStatus}
-          onSubmit={submitIntent}
-        />
 
         <div style={styles.tabs}>
           {TABS.map((tab) => (
