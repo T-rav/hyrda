@@ -50,14 +50,14 @@ class TestBackgroundWorkerStatusModel:
     def test_full_model_serializes_correctly(self) -> None:
         status = BackgroundWorkerStatus(
             name="memory_sync",
-            label="Memory Sync",
+            label="Memory Manager",
             status="ok",
             last_run="2026-02-20T10:30:00Z",
             details={"item_count": 12, "digest_chars": 2400},
         )
         data = status.model_dump()
         assert data["name"] == "memory_sync"
-        assert data["label"] == "Memory Sync"
+        assert data["label"] == "Memory Manager"
         assert data["status"] == "ok"
         assert data["last_run"] == "2026-02-20T10:30:00Z"
         assert data["details"]["item_count"] == 12
