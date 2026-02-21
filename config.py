@@ -117,6 +117,10 @@ class HydraConfig(BaseModel):
         default=["hydra-improve"],
         description="Labels for review insight improvement proposals (OR logic)",
     )
+    memory_label: list[str] = Field(
+        default=["hydra-memory"],
+        description="Labels for accepted agent learnings (OR logic)",
+    )
     dup_label: list[str] = Field(
         default=["hydra-dup"],
         description="Labels applied when issue is already satisfied (no changes needed)",
@@ -202,6 +206,18 @@ class HydraConfig(BaseModel):
         le=200_000,
         description="Max characters for PR diff in reviewer prompts before truncation",
     )
+    max_memory_chars: int = Field(
+        default=4000,
+        ge=500,
+        le=50_000,
+        description="Max characters for memory digest before compaction",
+    )
+    max_memory_prompt_chars: int = Field(
+        default=4000,
+        ge=500,
+        le=50_000,
+        description="Max characters for memory digest injected into agent prompts",
+    )
 
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
@@ -256,6 +272,12 @@ class HydraConfig(BaseModel):
     # Polling
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
+    )
+    memory_sync_interval: int = Field(
+        default=120,
+        ge=10,
+        le=1200,
+        description="Seconds between memory sync polls (default: poll_interval * 4)",
     )
 
     # Retrospective
@@ -394,6 +416,13 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
 
+        # Memory sync interval override
+        if self.memory_sync_interval == 120:  # still at default
+            env_mem_sync = os.environ.get("HYDRA_MEMORY_SYNC_INTERVAL")
+            if env_mem_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "memory_sync_interval", int(env_mem_sync))
+
         # merge conflict fix attempts override
         if self.max_merge_conflict_fix_attempts == 3:  # still at default
             env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
@@ -413,6 +442,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
+            "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
