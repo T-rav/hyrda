@@ -547,7 +547,7 @@ class TestImplementLifecycleMetrics:
         await phase.run_batch()
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_implementation_seconds"] == pytest.approx(60.5)
+        assert stats.total_implementation_seconds == pytest.approx(60.5)
 
     @pytest.mark.asyncio
     async def test_does_not_record_zero_duration(self, config: HydraConfig) -> None:
@@ -573,7 +573,7 @@ class TestImplementLifecycleMetrics:
         await phase.run_batch()
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_implementation_seconds"] == pytest.approx(0.0)
+        assert stats.total_implementation_seconds == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     async def test_records_quality_fix_rounds(self, config: HydraConfig) -> None:
@@ -599,7 +599,7 @@ class TestImplementLifecycleMetrics:
         await phase.run_batch()
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_quality_fix_rounds"] == 2
+        assert stats.total_quality_fix_rounds == 2
 
     @pytest.mark.asyncio
     async def test_does_not_record_zero_quality_fix_rounds(
@@ -612,7 +612,7 @@ class TestImplementLifecycleMetrics:
         await phase.run_batch()
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_quality_fix_rounds"] == 0
+        assert stats.total_quality_fix_rounds == 0
 
     @pytest.mark.asyncio
     async def test_accumulates_across_multiple_issues(
@@ -641,8 +641,8 @@ class TestImplementLifecycleMetrics:
         await phase.run_batch()
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_implementation_seconds"] == pytest.approx(60.0)
-        assert stats["total_quality_fix_rounds"] == 2
+        assert stats.total_implementation_seconds == pytest.approx(60.0)
+        assert stats.total_quality_fix_rounds == 2
 
 
 # ---------------------------------------------------------------------------

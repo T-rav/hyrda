@@ -576,8 +576,8 @@ class TestReviewPRs:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["prs_merged"] == 1
-        assert stats["issues_completed"] == 1
+        assert stats.prs_merged == 1
+        assert stats.issues_completed == 1
 
     @pytest.mark.asyncio
     async def test_review_merge_labels_issue_hydra_fixed(
@@ -630,8 +630,8 @@ class TestReviewPRs:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["prs_merged"] == 0
-        assert stats["issues_completed"] == 0
+        assert stats.prs_merged == 0
+        assert stats.issues_completed == 0
 
     @pytest.mark.asyncio
     async def test_review_merge_marks_issue_as_merged(
@@ -1962,8 +1962,8 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_review_approvals"] == 1
-        assert stats["total_review_request_changes"] == 0
+        assert stats.total_review_approvals == 1
+        assert stats.total_review_request_changes == 0
 
     @pytest.mark.asyncio
     async def test_records_review_verdict_request_changes(
@@ -1991,8 +1991,8 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_review_request_changes"] == 1
-        assert stats["total_review_approvals"] == 0
+        assert stats.total_review_request_changes == 1
+        assert stats.total_review_approvals == 0
 
     @pytest.mark.asyncio
     async def test_records_reviewer_fixes(self, config: HydraConfig) -> None:
@@ -2021,7 +2021,7 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_reviewer_fixes"] == 1
+        assert stats.total_reviewer_fixes == 1
 
     @pytest.mark.asyncio
     async def test_records_review_duration(self, config: HydraConfig) -> None:
@@ -2050,7 +2050,7 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_review_seconds"] == pytest.approx(45.5)
+        assert stats.total_review_seconds == pytest.approx(45.5)
 
     @pytest.mark.asyncio
     async def test_does_not_record_zero_review_duration(
@@ -2081,7 +2081,7 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_review_seconds"] == pytest.approx(0.0)
+        assert stats.total_review_seconds == pytest.approx(0.0)
 
     @pytest.mark.asyncio
     async def test_merge_conflict_records_hitl_escalation(
@@ -2109,7 +2109,7 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_hitl_escalations"] == 1
+        assert stats.total_hitl_escalations == 1
 
     @pytest.mark.asyncio
     async def test_merge_failure_records_hitl_escalation(
@@ -2139,7 +2139,7 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_hitl_escalations"] == 1
+        assert stats.total_hitl_escalations == 1
 
     @pytest.mark.asyncio
     async def test_ci_failure_records_ci_fix_rounds_and_hitl(
@@ -2183,8 +2183,8 @@ class TestLifecycleMetricRecording:
         await phase.review_prs([pr], [issue])
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_ci_fix_rounds"] == 1
-        assert stats["total_hitl_escalations"] == 1
+        assert stats.total_ci_fix_rounds == 1
+        assert stats.total_hitl_escalations == 1
 
     @pytest.mark.asyncio
     async def test_successful_merge_with_ci_fixes_records_rounds(
@@ -2240,7 +2240,7 @@ class TestLifecycleMetricRecording:
 
         assert results[0].merged is True
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_ci_fix_rounds"] == 1  # 1 fix attempt before success
+        assert stats.total_ci_fix_rounds == 1  # 1 fix attempt before success
 
 
 # ---------------------------------------------------------------------------

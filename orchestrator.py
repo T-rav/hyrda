@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
@@ -19,12 +19,18 @@ from issue_fetcher import IssueFetcher
 from issue_store import IssueStore
 from memory import MemorySyncWorker, build_memory_issue_body, parse_memory_suggestion
 from models import (
+    BackgroundWorkerState,
     GitHubIssue,
+    MemoryIssueData,
     Phase,
     PlanResult,
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
+
+if TYPE_CHECKING:
+    from metrics_manager import MetricsManager
+
 from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
@@ -85,7 +91,7 @@ class HydraOrchestrator:
         self._stop_event = asyncio.Event()
         self._running = False
         # Background worker last-known status: {worker_name: status dict}
-        self._bg_worker_states: dict[str, dict[str, Any]] = {}
+        self._bg_worker_states: dict[str, BackgroundWorkerState] = {}
         # Background worker enabled flags: {worker_name: bool}
         self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
@@ -145,7 +151,7 @@ class HydraOrchestrator:
         return self._state
 
     @property
-    def metrics_manager(self) -> Any:
+    def metrics_manager(self) -> MetricsManager:
         """Expose metrics manager for dashboard API."""
         return self._metrics_manager
 
@@ -248,12 +254,12 @@ class HydraOrchestrator:
         """Record the latest heartbeat from a background worker."""
         from datetime import UTC, datetime
 
-        self._bg_worker_states[name] = {
-            "name": name,
-            "status": status,
-            "last_run": datetime.now(UTC).isoformat(),
-            "details": details or {},
-        }
+        self._bg_worker_states[name] = BackgroundWorkerState(
+            name=name,
+            status=status,
+            last_run=datetime.now(UTC).isoformat(),
+            details=dict(details) if details else {},
+        )
 
     def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
         """Enable or disable a background worker by name."""
@@ -263,9 +269,9 @@ class HydraOrchestrator:
         """Return whether a background worker is enabled (defaults to True)."""
         return self._bg_worker_enabled.get(name, True)
 
-    def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
+    def get_bg_worker_states(self) -> dict[str, BackgroundWorkerState]:
         """Return a copy of all background worker states with enabled flag."""
-        result: dict[str, dict[str, Any]] = {}
+        result: dict[str, BackgroundWorkerState] = {}
         for name, state_dict in self._bg_worker_states.items():
             result[name] = {**state_dict, "enabled": self.is_bg_worker_enabled(name)}
         return result
@@ -560,18 +566,18 @@ class HydraOrchestrator:
                     self._config.memory_label, limit=100
                 )
                 # Convert to dicts for the sync worker
-                issue_dicts = [
-                    {
-                        "number": i.number,
-                        "title": i.title,
-                        "body": i.body,
-                        "createdAt": i.created_at,
-                    }
+                issue_dicts: list[MemoryIssueData] = [
+                    MemoryIssueData(
+                        number=i.number,
+                        title=i.title,
+                        body=i.body,
+                        createdAt=i.created_at,
+                    )
                     for i in issues
                 ]
                 stats = await self._memory_sync.sync(issue_dicts)
                 await self._memory_sync.publish_sync_event(stats)
-                self.update_bg_worker_status("memory_sync", "ok", details=stats)
+                self.update_bg_worker_status("memory_sync", "ok", details=dict(stats))
             except AuthenticationError:
                 raise
             except Exception:
@@ -599,7 +605,7 @@ class HydraOrchestrator:
             try:
                 queue_stats = self._store.get_queue_stats()
                 stats = await self._metrics_manager.sync(queue_stats)
-                self.update_bg_worker_status("metrics", "ok", details=stats)
+                self.update_bg_worker_status("metrics", "ok", details=dict(stats))
             except AuthenticationError:
                 raise
             except Exception:

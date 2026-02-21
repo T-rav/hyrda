@@ -7,11 +7,10 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
-from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import MetricsSnapshot, QueueStats
+from models import MetricsSnapshot, MetricsSyncResult, QueueStats
 from pr_manager import PRManager
 from state import StateTracker
 
@@ -44,7 +43,7 @@ class MetricsManager:
         """Return the most recent in-memory snapshot."""
         return self._latest_snapshot
 
-    async def sync(self, queue_stats: QueueStats | None = None) -> dict[str, Any]:
+    async def sync(self, queue_stats: QueueStats | None = None) -> MetricsSyncResult:
         """Aggregate, snapshot, and persist metrics. Returns status details."""
         snapshot = await self._build_snapshot(queue_stats)
         self._latest_snapshot = snapshot
@@ -109,21 +108,21 @@ class MetricsManager:
         stats = self._state.get_lifetime_stats()
         now = datetime.now(UTC).isoformat()
 
-        issues_completed = int(stats.get("issues_completed", 0))
-        prs_merged = int(stats.get("prs_merged", 0))
-        total_approvals = int(stats.get("total_review_approvals", 0))
-        total_request_changes = int(stats.get("total_review_request_changes", 0))
+        issues_completed = stats.issues_completed
+        prs_merged = stats.prs_merged
+        total_approvals = stats.total_review_approvals
+        total_request_changes = stats.total_review_request_changes
         total_reviews = total_approvals + total_request_changes
 
         # Compute derived rates
         merge_rate = prs_merged / issues_completed if issues_completed > 0 else 0.0
         quality_fix_rate = (
-            int(stats.get("total_quality_fix_rounds", 0)) / issues_completed
+            stats.total_quality_fix_rounds / issues_completed
             if issues_completed > 0
             else 0.0
         )
         hitl_escalation_rate = (
-            int(stats.get("total_hitl_escalations", 0)) / issues_completed
+            stats.total_hitl_escalations / issues_completed
             if issues_completed > 0
             else 0.0
         )
@@ -131,7 +130,7 @@ class MetricsManager:
             total_approvals / total_reviews if total_reviews > 0 else 0.0
         )
         avg_impl_seconds = (
-            float(stats.get("total_implementation_seconds", 0.0)) / issues_completed
+            stats.total_implementation_seconds / issues_completed
             if issues_completed > 0
             else 0.0
         )
@@ -169,17 +168,15 @@ class MetricsManager:
             timestamp=now,
             issues_completed=issues_completed,
             prs_merged=prs_merged,
-            issues_created=int(stats.get("issues_created", 0)),
-            total_quality_fix_rounds=int(stats.get("total_quality_fix_rounds", 0)),
-            total_ci_fix_rounds=int(stats.get("total_ci_fix_rounds", 0)),
-            total_hitl_escalations=int(stats.get("total_hitl_escalations", 0)),
+            issues_created=stats.issues_created,
+            total_quality_fix_rounds=stats.total_quality_fix_rounds,
+            total_ci_fix_rounds=stats.total_ci_fix_rounds,
+            total_hitl_escalations=stats.total_hitl_escalations,
             total_review_approvals=total_approvals,
             total_review_request_changes=total_request_changes,
-            total_reviewer_fixes=int(stats.get("total_reviewer_fixes", 0)),
-            total_implementation_seconds=float(
-                stats.get("total_implementation_seconds", 0.0)
-            ),
-            total_review_seconds=float(stats.get("total_review_seconds", 0.0)),
+            total_reviewer_fixes=stats.total_reviewer_fixes,
+            total_implementation_seconds=stats.total_implementation_seconds,
+            total_review_seconds=stats.total_review_seconds,
             merge_rate=merge_rate,
             quality_fix_rate=quality_fix_rate,
             hitl_escalation_rate=hitl_escalation_rate,

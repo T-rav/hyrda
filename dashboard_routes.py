@@ -22,7 +22,6 @@ from models import (
     ControlStatusResponse,
     IntentRequest,
     IntentResponse,
-    LifetimeStats,
     MetricsHistoryResponse,
     MetricsResponse,
     PipelineIssue,
@@ -73,7 +72,7 @@ def create_router(
 
     @router.get("/api/stats")
     async def get_stats() -> JSONResponse:
-        data: dict[str, Any] = state.get_lifetime_stats()
+        data: dict[str, Any] = state.get_lifetime_stats().model_dump()
         orch = get_orchestrator()
         if orch:
             data["queue"] = orch.issue_store.get_queue_stats().model_dump()
@@ -463,8 +462,7 @@ def create_router(
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:
         """Return lifetime stats and derived rates."""
-        lifetime_data = state.get_lifetime_stats()
-        lifetime = LifetimeStats.model_validate(lifetime_data)
+        lifetime = state.get_lifetime_stats()
         rates: dict[str, float] = {}
         total_reviews = (
             lifetime.total_review_approvals + lifetime.total_review_request_changes

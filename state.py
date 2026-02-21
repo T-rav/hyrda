@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from models import StateData
+from models import LifetimeStats, StateData, ThresholdProposal
 
 logger = logging.getLogger("hydra.state")
 
@@ -313,9 +313,9 @@ class StateTracker:
         self._data.lifetime_stats.total_review_seconds += seconds
         self.save()
 
-    def get_lifetime_stats(self) -> dict[str, int | float]:
+    def get_lifetime_stats(self) -> LifetimeStats:
         """Return a copy of the lifetime stats counters."""
-        return self._data.lifetime_stats.model_dump()
+        return self._data.lifetime_stats.model_copy()
 
     # --- memory state ---
 
@@ -382,7 +382,7 @@ class StateTracker:
         quality_fix_rate_threshold: float,
         approval_rate_threshold: float,
         hitl_rate_threshold: float,
-    ) -> list[dict[str, str | float]]:
+    ) -> list[ThresholdProposal]:
         """Check metrics against thresholds, return list of crossed thresholds.
 
         Returns a list of dicts with keys: name, metric, threshold, value, action.
@@ -394,7 +394,7 @@ class StateTracker:
         total_reviews = (
             stats.total_review_approvals + stats.total_review_request_changes
         )
-        proposals: list[dict[str, str | float]] = []
+        proposals: list[ThresholdProposal] = []
 
         # Quality fix rate
         qf_rate = stats.total_quality_fix_rounds / total_issues if total_issues else 0.0

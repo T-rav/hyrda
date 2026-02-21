@@ -9,10 +9,10 @@ import os
 import re
 import tempfile
 from datetime import UTC, datetime
-from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from models import MemoryIssueData, MemorySyncResult
 from state import StateTracker
 from subprocess_util import make_clean_env
 
@@ -95,7 +95,7 @@ class MemorySyncWorker:
         self._state = state
         self._bus = event_bus
 
-    async def sync(self, issues: list[dict[str, Any]]) -> dict[str, Any]:
+    async def sync(self, issues: list[MemoryIssueData]) -> MemorySyncResult:
         """Main sync entry point.
 
         *issues* is a list of dicts with ``number``, ``title``, ``body``,
@@ -332,11 +332,11 @@ class MemorySyncWorker:
                 os.unlink(tmp)
             raise
 
-    async def publish_sync_event(self, stats: dict[str, Any]) -> None:
+    async def publish_sync_event(self, stats: MemorySyncResult) -> None:
         """Publish a MEMORY_SYNC event with *stats*."""
         await self._bus.publish(
             HydraEvent(
                 type=EventType.MEMORY_SYNC,
-                data=stats,
+                data=dict(stats),
             )
         )
