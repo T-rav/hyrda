@@ -1899,6 +1899,206 @@ class TestHITLCloseEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/hitl/{issue}/approve-memory
+# ---------------------------------------------------------------------------
+
+
+class TestHITLApproveMemoryEndpoint:
+    """Tests for the POST /api/hitl/{issue}/approve-memory route."""
+
+    def test_approve_memory_returns_ok_with_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            response = client.post("/api/hitl/42/approve-memory")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_approve_memory_calls_orchestrator_skip(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        orch.skip_hitl_issue.assert_called_once_with(42)
+
+    def test_approve_memory_works_without_orchestrator(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=None)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            response = client.post("/api/hitl/42/approve-memory")
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok"}
+
+    def test_approve_memory_publishes_hitl_update_event(
+        self, config: HydraConfig, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        bus = EventBus()
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type.value == "hitl_update"]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["status"] == "resolved"
+        assert hitl_events[0].data["action"] == "approved_as_memory"
+
+    def test_approve_memory_removes_hitl_origin(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-improve")
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        assert state.get_hitl_origin(42) is None
+
+    def test_approve_memory_removes_hitl_cause(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        state.set_hitl_cause(42, "Memory suggestion")
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        assert state.get_hitl_cause(42) is None
+
+    def test_approve_memory_adds_memory_label(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
+            patch(
+                "pr_manager.PRManager.add_labels", new_callable=AsyncMock
+            ) as mock_add,
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        mock_add.assert_called_once_with(42, ["hydra-memory"])
+
+    def test_approve_memory_removes_improve_and_hitl_labels(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch(
+                "pr_manager.PRManager.remove_label", new_callable=AsyncMock
+            ) as mock_remove,
+            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-memory")
+
+        # Should remove both improve and hitl labels
+        removed_labels = [call.args[1] for call in mock_remove.call_args_list]
+        assert "hydra-improve" in removed_labels
+        assert "hydra-hitl" in removed_labels
+
+
+# ---------------------------------------------------------------------------
 # GET /api/hitl enriched with status
 # ---------------------------------------------------------------------------
 
@@ -2194,3 +2394,197 @@ class TestFallbackTemplateExternalJS:
         # The template should not have inline JS with WebSocket logic
         assert "new WebSocket" not in body
         assert "function handleEvent" not in body
+
+
+# ---------------------------------------------------------------------------
+# SPA catch-all route (issue #298)
+# ---------------------------------------------------------------------------
+
+
+class TestSPACatchAll:
+    """Tests for the SPA catch-all route that serves index.html for non-API paths."""
+
+    def test_spa_catchall_returns_html_for_system_path(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /system should return 200 with HTML (SPA fallback)."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/system")
+
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_spa_catchall_returns_html_for_arbitrary_path(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /foo/bar should return 200 with HTML (SPA fallback)."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/foo/bar")
+
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_spa_catchall_does_not_catch_api_routes(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /api/nonexistent should return 404, not SPA HTML."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/nonexistent")
+
+        assert response.status_code == 404
+
+    def test_spa_catchall_does_not_catch_ws_path(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /ws should not return SPA HTML."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/ws")
+
+        # The catch-all guard returns 404 for the bare /ws path,
+        # preventing SPA HTML from being served at the WebSocket endpoint.
+        assert response.status_code != 200
+        assert "text/html" not in response.headers.get("content-type", "")
+
+    def test_spa_catchall_serves_root_level_static_file(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /logo.png should serve the file from ui/dist/ if it exists."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        # Create a fake ui/dist/ with a static file and index.html
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "index.html").write_text("<html><body>SPA</body></html>")
+        (dist_dir / "logo.png").write_bytes(b"fake-png-data")
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with patch("dashboard._UI_DIST_DIR", dist_dir):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/logo.png")
+
+        assert response.status_code == 200
+        assert response.content == b"fake-png-data"
+
+    def test_spa_catchall_html_contains_expected_content(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The SPA catch-all should serve the same index.html as GET /."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        root_response = client.get("/")
+        catchall_response = client.get("/system")
+
+        assert root_response.text == catchall_response.text
+
+    def test_spa_catchall_blocks_symlink_escape(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Symlinks inside ui/dist/ pointing outside must not be served."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        # Create a fake ui/dist/ with index.html
+        dist_dir = tmp_path / "dist"
+        dist_dir.mkdir()
+        (dist_dir / "index.html").write_text("<html><body>SPA</body></html>")
+
+        # Create a sensitive file outside dist_dir
+        (tmp_path / "secret.txt").write_text("sensitive data")
+
+        # Create a symlink inside dist_dir pointing outside
+        (dist_dir / "escape.txt").symlink_to(tmp_path / "secret.txt")
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+
+        with patch("dashboard._UI_DIST_DIR", dist_dir):
+            app = dashboard.create_app()
+            client = TestClient(app)
+            response = client.get("/escape.txt")
+
+        # The symlink target resolves outside dist_dir; the is_relative_to
+        # jail check must reject it and serve SPA HTML instead.
+        assert response.status_code == 200
+        assert "sensitive data" not in response.text
+        assert "text/html" in response.headers.get("content-type", "")
+
+    def test_spa_catchall_does_not_catch_assets_prefix(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /assets/nonexistent should return 404, not SPA HTML."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/assets/nonexistent.js")
+
+        assert response.status_code == 404
+
+    def test_api_state_still_works_with_catchall(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Existing API routes must not be affected by the catch-all."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        dashboard = HydraDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/api/state")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert isinstance(body, dict)

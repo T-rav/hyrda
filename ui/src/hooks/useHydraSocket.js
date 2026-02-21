@@ -23,6 +23,7 @@ const initialState = {
   humanInputRequests: {},  // Record<string, string>
   backgroundWorkers: [],  // BackgroundWorkerState[]
   metrics: null,  // MetricsData | null
+  systemAlert: null,  // { message, source } | null
 }
 
 export function reducer(state, action) {
@@ -291,6 +292,9 @@ export function reducer(state, action) {
 
     case 'METRICS':
       return { ...state, metrics: action.data }
+
+    case 'system_alert':
+      return { ...addEvent(state, action), systemAlert: action.data }
 
     case 'error':
       return addEvent(state, action)
