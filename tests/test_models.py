@@ -17,6 +17,7 @@ from models import (
     PlanResult,
     PRInfo,
     PRListItem,
+    ReviewerStatus,
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
@@ -570,6 +571,38 @@ class TestPRInfo:
         assert data["branch"] == "agent/issue-3"
         assert data["url"] == "https://example.com/pr/5"
         assert data["draft"] is False
+
+
+# ---------------------------------------------------------------------------
+# ReviewerStatus
+# ---------------------------------------------------------------------------
+
+
+class TestReviewerStatus:
+    """Tests for the ReviewerStatus enum."""
+
+    @pytest.mark.parametrize(
+        "member, expected_value",
+        [
+            (ReviewerStatus.REVIEWING, "reviewing"),
+            (ReviewerStatus.DONE, "done"),
+            (ReviewerStatus.FAILED, "failed"),
+            (ReviewerStatus.FIXING, "fixing"),
+            (ReviewerStatus.FIX_DONE, "fix_done"),
+        ],
+    )
+    def test_enum_values(self, member: ReviewerStatus, expected_value: str) -> None:
+        assert member.value == expected_value
+
+    def test_enum_is_string_subclass(self) -> None:
+        assert isinstance(ReviewerStatus.DONE, str)
+
+    def test_all_members_present(self) -> None:
+        assert len(ReviewerStatus) == 5
+
+    def test_lookup_by_value(self) -> None:
+        status = ReviewerStatus("reviewing")
+        assert status is ReviewerStatus.REVIEWING
 
 
 # ---------------------------------------------------------------------------

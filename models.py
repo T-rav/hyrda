@@ -136,7 +136,7 @@ class PRInfo(BaseModel):
     draft: bool = False
 
 
-# --- Reviews ---
+# --- HITL ---
 
 
 class HITLResult(BaseModel):
@@ -150,6 +150,16 @@ class HITLResult(BaseModel):
 
 
 # --- Reviews ---
+
+
+class ReviewerStatus(StrEnum):
+    """Lifecycle status of a reviewer agent."""
+
+    REVIEWING = "reviewing"
+    DONE = "done"
+    FAILED = "failed"
+    FIXING = "fixing"
+    FIX_DONE = "fix_done"
 
 
 class ReviewVerdict(StrEnum):
