@@ -40,7 +40,7 @@ function AppContent() {
     sessionImplemented, sessionReviewed, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
-    lifetimeStats, githubMetrics, phase, toggleBgWorker,
+    lifetimeStats, githubMetrics, metricsHistory, phase, toggleBgWorker,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -143,6 +143,7 @@ function AppContent() {
               metrics={metrics}
               lifetimeStats={lifetimeStats}
               githubMetrics={githubMetrics}
+              metricsHistory={metricsHistory}
               sessionCounts={{
                 triaged: sessionTriaged,
                 planned: sessionPlanned,

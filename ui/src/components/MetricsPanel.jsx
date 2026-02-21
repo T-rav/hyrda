@@ -15,10 +15,30 @@ function stageColor(stageKey) {
   return stage?.color || theme.textMuted
 }
 
-function StatCard({ label, value, subtle }) {
+function TrendIndicator({ current, previous, label, format }) {
+  if (previous == null || current == null) return null
+  const diff = current - previous
+  if (Math.abs(diff) < 0.001) return null
+
+  const isUp = diff > 0
+  const arrow = isUp ? '\u2191' : '\u2193'
+  const color = isUp ? theme.green : theme.red
+  const formatted = format ? format(Math.abs(diff)) : Math.abs(diff)
+
+  return (
+    <span style={{ ...styles.trend, color }} title={`Change from previous snapshot`}>
+      {arrow} {formatted}
+    </span>
+  )
+}
+
+function StatCard({ label, value, subtle, trend }) {
   return (
     <div style={subtle ? styles.cardSubtle : styles.card}>
-      <div style={styles.value}>{value}</div>
+      <div style={styles.valueRow}>
+        <div style={styles.value}>{value}</div>
+        {trend}
+      </div>
       <div style={styles.label}>{label}</div>
     </div>
   )
@@ -48,7 +68,50 @@ function BlocksRow({ labelDef, count }) {
   )
 }
 
-export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCounts }) {
+function RateCard({ label, value, previousValue }) {
+  const pct = (value * 100).toFixed(1)
+  return (
+    <div style={styles.rateCard}>
+      <div style={styles.rateValue}>{pct}%</div>
+      <div style={styles.rateLabel}>{label}</div>
+      <TrendIndicator
+        current={value}
+        previous={previousValue}
+        format={v => `${(v * 100).toFixed(1)}%`}
+      />
+    </div>
+  )
+}
+
+function SnapshotTimeline({ snapshots }) {
+  if (!snapshots || snapshots.length === 0) return null
+  // Show last 10
+  const recent = snapshots.slice(-10)
+
+  return (
+    <div style={styles.timelineSection}>
+      <h3 style={styles.heading}>Snapshot History</h3>
+      <div style={styles.timelineStrip}>
+        {recent.map((s, i) => {
+          const ts = new Date(s.timestamp)
+          const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          const dateStr = ts.toLocaleDateString([], { month: 'short', day: 'numeric' })
+          return (
+            <div key={i} style={styles.timelineItem} title={s.timestamp}>
+              <div style={styles.timelineDot} />
+              <div style={styles.timelineDate}>{dateStr}</div>
+              <div style={styles.timelineTime}>{timeStr}</div>
+              <div style={styles.timelineStat}>{s.issues_completed} done</div>
+              <div style={styles.timelineStat}>{s.prs_merged} merged</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, metricsHistory, sessionCounts }) {
   const session = sessionCounts || {}
   const github = githubMetrics || {}
   const openByLabel = github.open_by_label || {}
@@ -60,7 +123,13 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCou
   const hasLifetime = hasGithub || lifetime.issues_completed > 0 ||
     lifetime.prs_merged > 0
 
-  if (!hasGithub && !hasSession && !hasLifetime) {
+  // Extract history data
+  const historyData = metricsHistory || {}
+  const snapshots = historyData.snapshots || []
+  const current = historyData.current
+  const prev = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
+
+  if (!hasGithub && !hasSession && !hasLifetime && !current) {
     return (
       <div style={styles.container}>
         <div style={styles.empty}>No metrics data available yet.</div>
@@ -75,10 +144,18 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCou
         <StatCard
           label="Issues Completed"
           value={github.total_closed ?? lifetime.issues_completed ?? 0}
+          trend={<TrendIndicator
+            current={current?.issues_completed}
+            previous={prev?.issues_completed}
+          />}
         />
         <StatCard
           label="PRs Merged"
           value={github.total_merged ?? lifetime.prs_merged ?? 0}
+          trend={<TrendIndicator
+            current={current?.prs_merged}
+            previous={prev?.prs_merged}
+          />}
         />
         {hasGithub && (
           <StatCard
@@ -87,6 +164,34 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCou
           />
         )}
       </div>
+
+      {(current || prev) && (
+        <>
+          <h3 style={styles.heading}>Rates</h3>
+          <div style={styles.row}>
+            <RateCard
+              label="Merge Rate"
+              value={current?.merge_rate ?? 0}
+              previousValue={prev?.merge_rate}
+            />
+            <RateCard
+              label="First-Pass Approval"
+              value={current?.first_pass_approval_rate ?? 0}
+              previousValue={prev?.first_pass_approval_rate}
+            />
+            <RateCard
+              label="Quality Fix Rate"
+              value={current?.quality_fix_rate ?? 0}
+              previousValue={prev?.quality_fix_rate}
+            />
+            <RateCard
+              label="HITL Escalation"
+              value={current?.hitl_escalation_rate ?? 0}
+              previousValue={prev?.hitl_escalation_rate}
+            />
+          </div>
+        </>
+      )}
 
       {hasSession && (
         <>
@@ -115,6 +220,8 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, sessionCou
           </div>
         </>
       )}
+
+      <SnapshotTimeline snapshots={snapshots} />
 
     </div>
   )
@@ -155,6 +262,12 @@ const styles = {
     minWidth: 100,
     textAlign: 'center',
   },
+  valueRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
   value: {
     fontSize: 32,
     fontWeight: 700,
@@ -166,10 +279,33 @@ const styles = {
     color: theme.textMuted,
     textTransform: 'capitalize',
   },
+  trend: {
+    fontSize: 12,
+    fontWeight: 600,
+  },
   empty: {
     fontSize: 13,
     color: theme.textMuted,
     padding: 20,
+  },
+  rateCard: {
+    border: `1px solid ${theme.border}`,
+    borderRadius: 8,
+    padding: 16,
+    background: theme.surface,
+    minWidth: 120,
+    textAlign: 'center',
+  },
+  rateValue: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: theme.textBright,
+    marginBottom: 4,
+  },
+  rateLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 4,
   },
   blocksSection: {
     display: 'flex',
@@ -214,5 +350,44 @@ const styles = {
   blocksEmpty: {
     fontSize: 11,
     color: theme.textInactive,
+  },
+  timelineSection: {
+    marginTop: 8,
+  },
+  timelineStrip: {
+    display: 'flex',
+    gap: 12,
+    overflowX: 'auto',
+    paddingBottom: 8,
+  },
+  timelineItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 80,
+    padding: '8px 12px',
+    background: theme.surfaceInset,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.accent,
+  },
+  timelineDate: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: theme.textMuted,
+  },
+  timelineTime: {
+    fontSize: 10,
+    color: theme.textInactive,
+  },
+  timelineStat: {
+    fontSize: 10,
+    color: theme.textMuted,
   },
 }

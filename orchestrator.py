@@ -105,6 +105,11 @@ class HydraOrchestrator:
             self._store,
             self._stop_event,
         )
+        from metrics_manager import MetricsManager
+
+        self._metrics_manager = MetricsManager(
+            config, self._state, self._prs, self._bus
+        )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
@@ -138,6 +143,11 @@ class HydraOrchestrator:
     def state(self) -> StateTracker:
         """Expose state for dashboard integration."""
         return self._state
+
+    @property
+    def metrics_manager(self) -> Any:
+        """Expose metrics manager for dashboard API."""
+        return self._metrics_manager
 
     @property
     def running(self) -> bool:
@@ -328,6 +338,7 @@ class HydraOrchestrator:
             ("review", self._review_loop),
             ("hitl", self._hitl_loop),
             ("memory_sync", self._memory_sync_loop),
+            ("metrics", self._metrics_sync_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -552,6 +563,34 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.memory_sync_interval)
+
+    async def _metrics_sync_loop(self) -> None:
+        """Continuously aggregate and persist metrics snapshots."""
+        while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("metrics"):
+                await self._sleep_or_stop(self._config.metrics_sync_interval)
+                continue
+            try:
+                queue_stats = self._store.get_queue_stats()
+                stats = await self._metrics_manager.sync(queue_stats)
+                self.update_bg_worker_status("metrics", "ok", details=stats)
+            except AuthenticationError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Metrics sync loop iteration failed — will retry next cycle"
+                )
+                self.update_bg_worker_status("metrics", "error")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={
+                            "message": "Metrics sync loop error",
+                            "source": "metrics",
+                        },
+                    )
+                )
+            await self._sleep_or_stop(self._config.metrics_sync_interval)
 
     async def _file_memory_suggestion(
         self, transcript: str, source: str, reference: str

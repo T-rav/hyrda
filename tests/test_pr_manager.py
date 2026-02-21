@@ -1489,6 +1489,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         fixed_label=["custom-fixed"],
         improve_label=["custom-improve"],
         memory_label=["custom-memory"],
+        metrics_label=["custom-metrics"],
         dup_label=["custom-dup"],
         repo=config.repo,
         repo_root=tmp_path,
@@ -1519,6 +1520,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-fixed",
         "custom-improve",
         "custom-memory",
+        "custom-metrics",
         "custom-dup",
     }
 

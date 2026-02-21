@@ -35,6 +35,7 @@ const initialState = {
   systemAlert: null,
   intents: [],
   githubMetrics: null,
+  metricsHistory: null,
   pipelineIssues: { ...emptyPipeline },
   pipelinePollerLastRun: null,
 }
@@ -349,6 +350,17 @@ export function reducer(state, action) {
     case 'GITHUB_METRICS':
       return { ...state, githubMetrics: action.data }
 
+    case 'METRICS_HISTORY':
+      return { ...state, metricsHistory: action.data }
+
+    case 'metrics_update':
+      return {
+        ...addEvent(state, action),
+        metrics: state.metrics
+          ? { ...state.metrics, lifetime: { ...state.metrics.lifetime, ...action.data } }
+          : state.metrics,
+      }
+
     case 'system_alert':
       return { ...addEvent(state, action), systemAlert: action.data }
 
@@ -485,6 +497,13 @@ export function HydraProvider({ children }) {
       .catch(() => {})
   }, [])
 
+  const fetchMetricsHistory = useCallback(() => {
+    fetch('/api/metrics/history')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'METRICS_HISTORY', data }))
+      .catch(() => {})
+  }, [])
+
   const submitIntent = useCallback(async (text) => {
     dispatch({ type: 'INTENT_SUBMITTED', data: { text } })
     try {
@@ -583,6 +602,7 @@ export function HydraProvider({ children }) {
         .then(data => dispatch({ type: 'METRICS', data }))
         .catch(() => {})
       fetchGithubMetrics()
+      fetchMetricsHistory()
       fetchPipeline()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
@@ -623,10 +643,11 @@ export function HydraProvider({ children }) {
           }
         }
 
-        if (event.type === 'batch_complete') {
+        if (event.type === 'batch_complete' || event.type === 'metrics_update') {
           fetchLifetimeStats()
           fetch('/api/metrics').then(r => r.json()).then(data => dispatch({ type: 'METRICS', data })).catch(() => {})
           fetchGithubMetrics()
+          fetchMetricsHistory()
         }
         if (event.type === 'hitl_update' || event.type === 'hitl_escalation') fetchHitlItems()
       } catch { /* ignore parse errors */ }
@@ -639,7 +660,7 @@ export function HydraProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchPipeline])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline])
 
   useEffect(() => {
     const poll = () => {

@@ -23,6 +23,7 @@ from models import (
     IntentRequest,
     IntentResponse,
     LifetimeStats,
+    MetricsHistoryResponse,
     MetricsResponse,
     PipelineIssue,
     PipelineSnapshot,
@@ -493,6 +494,22 @@ def create_router(
         """Query GitHub for issue/PR counts by label state."""
         counts = await pr_manager.get_label_counts(config)
         return JSONResponse(counts)
+
+    @router.get("/api/metrics/history")
+    async def get_metrics_history() -> JSONResponse:
+        """Historical snapshots from the metrics issue + current in-memory snapshot."""
+        orch = get_orchestrator()
+        if orch is None:
+            return JSONResponse(MetricsHistoryResponse().model_dump())
+        mgr = orch.metrics_manager
+        snapshots = await mgr.fetch_history_from_issue()
+        current = mgr.latest_snapshot
+        return JSONResponse(
+            MetricsHistoryResponse(
+                snapshots=snapshots,
+                current=current,
+            ).model_dump()
+        )
 
     @router.get("/api/timeline")
     async def get_timeline() -> JSONResponse:

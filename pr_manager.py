@@ -40,6 +40,7 @@ class PRManager:
         ("fixed_label", "0075ca", "PR merged — issue completed"),
         ("improve_label", "7057ff", "Review insight improvement proposal"),
         ("memory_label", "1d76db", "Approved memory suggestion for sync"),
+        ("metrics_label", "006b75", "Metrics persistence issue"),
         ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
     )
 
