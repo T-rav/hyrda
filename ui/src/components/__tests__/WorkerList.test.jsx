@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles } from '../WorkerList'
+import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, cardStylesByStage, sectionHeaderByRole, sectionLabelByRole } from '../WorkerList'
+import { PIPELINE_STAGES } from '../../constants'
+
+// Shared expected colors for stage-specific style tests
+const expectedStageColors = {
+  triage: 'var(--triage-green)',
+  planner: 'var(--purple)',
+  implementer: 'var(--accent)',
+  reviewer: 'var(--orange)',
+}
 
 const statusColors = {
   queued:     { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
@@ -51,6 +60,115 @@ describe('WorkerList pre-computed styles', () => {
   it('style objects are referentially stable', () => {
     expect(statusBadgeStyles.running).toBe(statusBadgeStyles.running)
     expect(cardActiveStyle).toBe(cardActiveStyle)
+  })
+})
+
+describe('cardStylesByStage pre-computed styles', () => {
+  it('has entries for all four pipeline roles', () => {
+    for (const role of ['triage', 'planner', 'implementer', 'reviewer']) {
+      expect(cardStylesByStage).toHaveProperty(role)
+    }
+  })
+
+  it('each entry has normal and active variants', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(cardStylesByStage[role]).toHaveProperty('normal')
+      expect(cardStylesByStage[role]).toHaveProperty('active')
+    }
+  })
+
+  it('normal variant uses the stage color for borderLeft', () => {
+    for (const [role, color] of Object.entries(expectedStageColors)) {
+      expect(cardStylesByStage[role].normal.borderLeft).toBe(`3px solid ${color}`)
+    }
+  })
+
+  it('active variant uses the stage color for borderLeft (not generic accent)', () => {
+    for (const [role, color] of Object.entries(expectedStageColors)) {
+      expect(cardStylesByStage[role].active.borderLeft).toBe(`3px solid ${color}`)
+    }
+  })
+
+  it('active variant has accent-hover background', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(cardStylesByStage[role].active.background).toBe('var(--accent-hover)')
+    }
+  })
+
+  it('normal variant inherits base card properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(cardStylesByStage[role].normal).toHaveProperty('padding')
+      expect(cardStylesByStage[role].normal).toHaveProperty('cursor', 'pointer')
+    }
+  })
+
+  it('active variant inherits base card properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(cardStylesByStage[role].active).toHaveProperty('padding')
+      expect(cardStylesByStage[role].active).toHaveProperty('cursor', 'pointer')
+    }
+  })
+
+  it('style objects are referentially stable', () => {
+    expect(cardStylesByStage.triage.normal).toBe(cardStylesByStage.triage.normal)
+    expect(cardStylesByStage.implementer.active).toBe(cardStylesByStage.implementer.active)
+  })
+
+  it('uses only colors from PIPELINE_STAGES (no new colors)', () => {
+    const stageColors = PIPELINE_STAGES.filter(s => s.role).map(s => s.color)
+    for (const role of Object.keys(expectedStageColors)) {
+      const borderColor = cardStylesByStage[role].normal.borderLeft.replace('3px solid ', '')
+      expect(stageColors).toContain(borderColor)
+    }
+  })
+})
+
+describe('sectionHeaderByRole pre-computed styles', () => {
+  it('has entries for all four pipeline roles', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionHeaderByRole).toHaveProperty(role)
+    }
+  })
+
+  it('each entry has a colored bottom border', () => {
+    for (const [role, color] of Object.entries(expectedStageColors)) {
+      expect(sectionHeaderByRole[role].borderBottom).toBe(`2px solid ${color}`)
+    }
+  })
+
+  it('each entry inherits base sectionHeader properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionHeaderByRole[role]).toHaveProperty('display', 'flex')
+      expect(sectionHeaderByRole[role]).toHaveProperty('cursor', 'pointer')
+      expect(sectionHeaderByRole[role]).toHaveProperty('userSelect', 'none')
+    }
+  })
+})
+
+describe('sectionLabelByRole pre-computed styles', () => {
+  it('has entries for all four pipeline roles', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionLabelByRole).toHaveProperty(role)
+    }
+  })
+
+  it('each entry uses the stage color', () => {
+    for (const [role, color] of Object.entries(expectedStageColors)) {
+      expect(sectionLabelByRole[role].color).toBe(color)
+    }
+  })
+
+  it('each entry has fontSize 12', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionLabelByRole[role].fontSize).toBe(12)
+    }
+  })
+
+  it('each entry inherits base sectionLabel properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionLabelByRole[role]).toHaveProperty('fontWeight', 600)
+      expect(sectionLabelByRole[role]).toHaveProperty('textTransform', 'uppercase')
+    }
   })
 })
 
