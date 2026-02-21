@@ -25,6 +25,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.review_phase")
@@ -45,6 +46,7 @@ class ReviewPhase:
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
         retrospective: RetrospectiveCollector | None = None,
+        verification_judge: VerificationJudge | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -56,6 +58,7 @@ class ReviewPhase:
         self._agents = agents
         self._bus = event_bus or EventBus()
         self._retrospective = retrospective
+        self._verification_judge = verification_judge
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
 
     async def review_prs(
@@ -265,6 +268,20 @@ class ReviewPhase:
                                     except Exception:  # noqa: BLE001
                                         logger.warning(
                                             "Retrospective record failed for issue #%d",
+                                            pr.issue_number,
+                                            exc_info=True,
+                                        )
+                                # Run verification judge (non-blocking)
+                                if self._verification_judge:
+                                    try:
+                                        await self._verification_judge.judge(
+                                            issue_number=pr.issue_number,
+                                            pr_number=pr.number,
+                                            diff=diff,
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Verification judge failed for issue #%d",
                                             pr.issue_number,
                                             exc_info=True,
                                         )

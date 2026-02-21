@@ -29,6 +29,7 @@ from reviewer import ReviewRunner
 from state import StateTracker
 from subprocess_util import AuthenticationError
 from triage import TriageRunner
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
@@ -97,6 +98,7 @@ class HydraOrchestrator:
             self._stop_event,
         )
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
+        self._verification_judge = VerificationJudge(config, self._bus)
         self._reviewer = ReviewPhase(
             config,
             self._state,
@@ -108,6 +110,7 @@ class HydraOrchestrator:
             agents=self._agents,
             event_bus=self._bus,
             retrospective=self._retrospective,
+            verification_judge=self._verification_judge,
         )
 
     @property
