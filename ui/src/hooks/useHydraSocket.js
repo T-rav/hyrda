@@ -126,12 +126,14 @@ export function reducer(state, action) {
       }
     }
 
-    case 'pr_created':
+    case 'pr_created': {
+      const exists = state.prs.some(p => p.pr === action.data.pr)
       return {
         ...addEvent(state, action),
-        prs: [...state.prs, action.data],
-        sessionPrsCount: state.sessionPrsCount + 1,
+        prs: exists ? state.prs : [...state.prs, action.data],
+        sessionPrsCount: exists ? state.sessionPrsCount : state.sessionPrsCount + 1,
       }
+    }
 
     case 'triage_update': {
       const triageKey = `triage-${action.data.issue}`
@@ -240,7 +242,7 @@ export function reducer(state, action) {
       return { ...state, config: action.data }
 
     case 'EXISTING_PRS':
-      return { ...state, prs: [...action.data, ...state.prs] }
+      return { ...state, prs: action.data }
 
     case 'HITL_ITEMS':
       return { ...state, hitlItems: action.data }
