@@ -275,6 +275,8 @@ Then a brief summary on the next line starting with "SUMMARY: ".
         else:
             diff_text = diff
 
+        min_findings = self._config.min_review_findings
+
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -287,12 +289,39 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 {diff_text}
 ```
 
+## Review Dimensions
+
+Review this PR across three dimensions:
+
+### 1. Correctness
+- Does the code work as intended? Are there edge cases?
+- Proper error handling? No off-by-one errors?
+- Are all branches tested?
+
+### 2. Completeness
+- Does the implementation address ALL requirements from the issue?
+- Were any requirements silently dropped or partially implemented?
+- Cross-reference the issue body's requirements list against the diff.
+- If any requirement from the issue body is not addressed, flag it as a completeness gap.
+
+### 3. Quality
+- Code style, type annotations, naming conventions?
+- Comprehensive test coverage (tests are MANDATORY per CLAUDE.md)?
+- Security concerns? Performance issues?
+- CLAUDE.md compliance: linting, formatting, no secrets committed?
+
 ## Review Instructions
 
-1. Check that the implementation correctly addresses the issue.
-2. Verify comprehensive test coverage (tests are MANDATORY per CLAUDE.md).
-3. Check code quality: type annotations, proper error handling, no security issues.
-4. Check CLAUDE.md compliance: linting, formatting, no secrets committed.
+1. Check each of the three dimensions above thoroughly.
+2. You MUST examine the code critically. Look for: correctness issues, edge cases, missing error handling, security concerns, test coverage gaps, style/convention violations, and performance issues.
+3. You MUST find at least {min_findings} issues across all categories. If you find fewer, re-examine the code more carefully.
+4. If after thorough examination you genuinely find fewer than {min_findings} issues, you MUST include a THOROUGH_REVIEW_COMPLETE block justifying why each category had no findings. Format:
+```
+THOROUGH_REVIEW_COMPLETE
+Correctness: No issues — <justification>
+Completeness: No issues — <justification>
+Quality: No issues — <justification>
+```
 {verify_step}
 6. Run the project's audit commands on the changed code:
    - Review code quality patterns (SRP, type hints, naming, complexity)

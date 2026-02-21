@@ -315,6 +315,49 @@ class TestBuildPrompt:
         assert "## Instructions" in prompt
         assert "## Rules" in prompt
 
+    def test_prompt_includes_review_feedback_when_provided(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include Review Feedback section when feedback is provided."""
+        runner = AgentRunner(config, event_bus)
+        feedback = "Missing error handling in the parse_config function"
+        prompt = runner._build_prompt(issue, review_feedback=feedback)
+        assert "## Review Feedback" in prompt
+        assert "Missing error handling in the parse_config function" in prompt
+        assert "reviewer rejected" in prompt.lower()
+
+    def test_prompt_omits_review_feedback_when_empty(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should not include Review Feedback section when feedback is empty."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue, review_feedback="")
+        assert "## Review Feedback" not in prompt
+
+    def test_prompt_review_feedback_after_plan_section(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """Review feedback should appear after the plan section."""
+        from models import GitHubIssue
+
+        issue = GitHubIssue(
+            number=10,
+            title="Add feature X",
+            body="We need feature X",
+            comments=[
+                "## Implementation Plan\n\nStep 1: Do this\nStep 2: Do that",
+            ],
+        )
+        runner = AgentRunner(config, event_bus)
+        feedback = "Tests are missing for edge cases"
+        prompt = runner._build_prompt(issue, review_feedback=feedback)
+
+        plan_pos = prompt.index("## Implementation Plan")
+        feedback_pos = prompt.index("## Review Feedback")
+        instructions_pos = prompt.index("## Instructions")
+
+        assert plan_pos < feedback_pos < instructions_pos
+
 
 # ---------------------------------------------------------------------------
 # AgentRunner.run — success path
