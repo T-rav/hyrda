@@ -424,10 +424,18 @@ Only suggest genuinely valuable learnings — not trivial observations.
     def _save_transcript(self, pr_number: int, transcript: str) -> None:
         """Write the review transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"review-pr-{pr_number}.txt"
-        path.write_text(transcript)
-        logger.info("Review transcript saved to %s", path, extra={"pr": pr_number})
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"review-pr-{pr_number}.txt"
+            path.write_text(transcript)
+            logger.info("Review transcript saved to %s", path, extra={"pr": pr_number})
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"pr": pr_number},
+            )
 
     async def _get_head_sha(self, worktree_path: Path) -> str | None:
         """Return the current HEAD commit SHA in the worktree."""

@@ -184,6 +184,11 @@ def create_router(
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         correction = body.get("correction", "")
+        if not correction.strip():
+            return JSONResponse(
+                {"status": "error", "detail": "Correction text must not be empty"},
+                status_code=400,
+            )
         orch.submit_hitl_correction(issue_number, correction)
 
         # Swap labels for immediate dashboard feedback
