@@ -51,6 +51,8 @@ class IssueFetcher:
                 str(limit),
                 "--json",
                 "number,title,body,labels,comments,url",
+                "--search",
+                "sort:created-asc",
             ]
             if label is not None:
                 cmd += ["--label", label]

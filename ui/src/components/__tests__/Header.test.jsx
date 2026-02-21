@@ -299,6 +299,12 @@ describe('Header component', () => {
     expect(screen.getByText('Session')).toBeInTheDocument()
   })
 
+  it('renders tagline as two stacked lines', () => {
+    render(<Header {...defaultProps} />)
+    expect(screen.getByText('Intent in.')).toBeInTheDocument()
+    expect(screen.getByText('Software out.')).toBeInTheDocument()
+  })
+
   it('controls section has marginLeft for spacing from pills', () => {
     render(<Header {...defaultProps} />)
     const startBtn = screen.getByText('Start')
