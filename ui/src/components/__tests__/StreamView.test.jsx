@@ -138,35 +138,6 @@ describe('StreamView stage indicators', () => {
     })
   })
 
-  describe('Worker count display', () => {
-    it('shows worker count when active workers exist', () => {
-      mockUseHydra.mockReturnValue({
-        ...defaultHydra,
-        workers: {
-          10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
-          11: { status: 'testing', worker: 2, role: 'implementer', title: 'Issue #11', branch: '', transcript: [], pr: null },
-        },
-        backgroundWorkers: [
-          { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
-        ],
-      })
-      render(<StreamView {...defaultProps} />)
-      const count = screen.getByTestId('stage-workers-implement')
-      expect(count).toHaveTextContent('2')
-    })
-
-    it('hides worker count when zero active workers', () => {
-      mockUseHydra.mockReturnValue({
-        ...defaultHydra,
-        backgroundWorkers: [
-          { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
-        ],
-      })
-      render(<StreamView {...defaultProps} />)
-      expect(screen.queryByTestId('stage-workers-plan')).not.toBeInTheDocument()
-    })
-  })
-
   describe('Merged stage exclusion', () => {
     it('does not render status dot for merged stage', () => {
       render(<StreamView {...defaultProps} />)

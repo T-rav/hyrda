@@ -13,7 +13,7 @@ UV := VIRTUAL_ENV=$(VENV) uv run --active
 READY_LABEL ?= hydra-ready
 WORKERS ?= 3
 MODEL ?= opus
-REVIEW_MODEL ?= opus
+REVIEW_MODEL ?= sonnet
 BATCH_SIZE ?= 15
 BUDGET ?= 0
 REVIEW_BUDGET ?= 0
