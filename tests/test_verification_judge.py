@@ -852,7 +852,6 @@ class TestReviewPhaseWiring:
 
         state = StateTracker(config.state_file)
         stop_event = asyncio.Event()
-        active_issues: set[int] = set()
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
@@ -893,7 +892,7 @@ class TestReviewPhaseWiring:
             reviewers=mock_reviewers,
             prs=mock_prs,
             stop_event=stop_event,
-            active_issues=active_issues,
+            store=MagicMock(),
             event_bus=EventBus(),
             verification_judge=mock_judge,
         )
@@ -927,7 +926,6 @@ class TestReviewPhaseWiring:
 
         state = StateTracker(config.state_file)
         stop_event = asyncio.Event()
-        active_issues: set[int] = set()
 
         mock_wt = AsyncMock()
         mock_wt.destroy = AsyncMock()
@@ -964,7 +962,7 @@ class TestReviewPhaseWiring:
             reviewers=mock_reviewers,
             prs=mock_prs,
             stop_event=stop_event,
-            active_issues=active_issues,
+            store=MagicMock(),
             event_bus=EventBus(),
             # No verification_judge
         )
