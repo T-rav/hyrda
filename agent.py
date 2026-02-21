@@ -36,6 +36,7 @@ class AgentRunner:
         worktree_path: Path,
         branch: str,
         worker_id: int = 0,
+        review_feedback: str = "",
     ) -> WorkerResult:
         """Run the implementation agent for *issue*.
 
@@ -60,7 +61,7 @@ class AgentRunner:
         try:
             # Build and run the claude command
             cmd = self._build_command(worktree_path)
-            prompt = self._build_prompt(issue)
+            prompt = self._build_prompt(issue, review_feedback=review_feedback)
             transcript = await self._execute(cmd, prompt, worktree_path, issue.number)
             result.transcript = transcript
 
@@ -224,7 +225,7 @@ class AgentRunner:
         except Exception:  # noqa: BLE001
             return ""
 
-    def _build_prompt(self, issue: GitHubIssue) -> str:
+    def _build_prompt(self, issue: GitHubIssue, review_feedback: str = "") -> str:
         """Build the implementation prompt for the agent."""
         plan_comment, other_comments = self._extract_plan_comment(issue.comments)
 
@@ -245,6 +246,15 @@ class AgentRunner:
                 f"Follow this plan closely. It was created by a planner agent "
                 f"that already analyzed the codebase.\n\n"
                 f"{plan_comment}"
+            )
+
+        review_feedback_section = ""
+        if review_feedback:
+            review_feedback_section = (
+                f"\n\n## Review Feedback\n\n"
+                f"A reviewer rejected the previous implementation. "
+                f"Address all feedback below:\n\n"
+                f"{review_feedback}"
             )
 
         comments_section = ""
@@ -269,7 +279,7 @@ class AgentRunner:
 
 ## Issue: {issue.title}
 
-{body}{plan_section}{comments_section}
+{body}{plan_section}{review_feedback_section}{comments_section}
 
 ## Instructions
 
