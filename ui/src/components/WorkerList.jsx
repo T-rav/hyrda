@@ -17,6 +17,12 @@ const statusColors = {
   ci_fix:              { bg: theme.yellowSubtle, fg: theme.yellow },
   merging:             { bg: theme.greenSubtle,  fg: theme.green },
   escalating:          { bg: theme.redSubtle,    fg: theme.red },
+  escalated:           { bg: theme.redSubtle,    fg: theme.red },
+  evaluating:          { bg: theme.greenSubtle,  fg: theme.triageGreen },
+  validating:          { bg: theme.purpleSubtle, fg: theme.purple },
+  retrying:            { bg: theme.yellowSubtle, fg: theme.yellow },
+  fixing:              { bg: theme.orangeSubtle, fg: theme.orange },
+  fix_done:            { bg: theme.greenSubtle,  fg: theme.green },
   done:                { bg: theme.greenSubtle,  fg: theme.green },
   failed:              { bg: theme.redSubtle,    fg: theme.red },
 }
