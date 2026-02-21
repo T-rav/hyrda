@@ -455,7 +455,14 @@ class HydraOrchestrator:
                     )
                 )
             try:
-                await self._implementer.run_batch()
+                results, _issues = await self._implementer.run_batch()
+                for result in results:
+                    if result.transcript:
+                        await self._file_memory_suggestion(
+                            result.transcript,
+                            "implementer",
+                            f"issue #{result.issue_number}",
+                        )
             except AuthenticationError:
                 raise
             except Exception:
@@ -494,6 +501,13 @@ class HydraOrchestrator:
                         if any_merged:
                             await asyncio.sleep(5)
                             await self._prs.pull_main()
+                        for result in review_results:
+                            if result.transcript:
+                                await self._file_memory_suggestion(
+                                    result.transcript,
+                                    "reviewer",
+                                    f"PR #{result.pr_number}",
+                                )
             except AuthenticationError:
                 raise
             except Exception:

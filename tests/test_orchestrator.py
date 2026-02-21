@@ -67,12 +67,13 @@ def make_worker_result(
     branch: str = "agent/issue-42",
     success: bool = True,
     worktree_path: str = "/tmp/worktrees/issue-42",
+    transcript: str = "Implemented the feature.",
 ) -> WorkerResult:
     return WorkerResult(
         issue_number=issue_number,
         branch=branch,
         success=success,
-        transcript="Implemented the feature.",
+        transcript=transcript,
         commits=1,
         worktree_path=worktree_path,
     )
@@ -97,6 +98,7 @@ def make_review_result(
     pr_number: int = 101,
     issue_number: int = 42,
     verdict: ReviewVerdict = ReviewVerdict.APPROVE,
+    transcript: str = "",
 ) -> ReviewResult:
     return ReviewResult(
         pr_number=pr_number,
@@ -104,6 +106,7 @@ def make_review_result(
         verdict=verdict,
         summary="Looks good.",
         fixes_made=False,
+        transcript=transcript,
     )
 
 
@@ -3109,3 +3112,170 @@ class TestHITLResetsAttempts:
 
         # Issue attempts should be reset
         assert orch._state.get_issue_attempts(42) == 0
+
+
+# ---------------------------------------------------------------------------
+# Memory suggestion filing from implementer and reviewer transcripts
+# ---------------------------------------------------------------------------
+
+MEMORY_TRANSCRIPT = (
+    "Some output\n"
+    "MEMORY_SUGGESTION_START\n"
+    "title: Test suggestion\n"
+    "learning: Learned something useful\n"
+    "context: During testing\n"
+    "MEMORY_SUGGESTION_END\n"
+)
+
+
+class TestMemorySuggestionFiling:
+    """Memory suggestions from implementer and reviewer transcripts are filed."""
+
+    @pytest.mark.asyncio
+    async def test_implement_loop_files_memory_suggestion(
+        self, config: HydraConfig
+    ) -> None:
+        """Implementer transcripts with MEMORY_SUGGESTION blocks trigger filing."""
+        orch = HydraOrchestrator(config)
+        result = make_worker_result(issue_number=42, transcript=MEMORY_TRANSCRIPT)
+
+        async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            orch._stop_event.set()
+            return [result], [make_issue(42)]
+
+        orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        await orch._implement_loop()
+
+        orch._file_memory_suggestion.assert_awaited_once_with(
+            MEMORY_TRANSCRIPT,
+            "implementer",
+            "issue #42",
+        )
+
+    @pytest.mark.asyncio
+    async def test_implement_loop_skips_empty_transcript(
+        self, config: HydraConfig
+    ) -> None:
+        """Implementer results with empty transcripts should not trigger filing."""
+        orch = HydraOrchestrator(config)
+        result = make_worker_result(issue_number=42, transcript="")
+
+        async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            orch._stop_event.set()
+            return [result], [make_issue(42)]
+
+        orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        await orch._implement_loop()
+
+        orch._file_memory_suggestion.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_implement_loop_multiple_results_files_each(
+        self, config: HydraConfig
+    ) -> None:
+        """Multiple implementer results: only those with transcripts trigger filing."""
+        orch = HydraOrchestrator(config)
+        r1 = make_worker_result(issue_number=10, transcript=MEMORY_TRANSCRIPT)
+        r2 = make_worker_result(issue_number=20, transcript="")
+        r3 = make_worker_result(issue_number=30, transcript=MEMORY_TRANSCRIPT)
+
+        async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            orch._stop_event.set()
+            return [r1, r2, r3], [make_issue(10), make_issue(20), make_issue(30)]
+
+        orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        await orch._implement_loop()
+
+        assert orch._file_memory_suggestion.await_count == 2
+        orch._file_memory_suggestion.assert_any_await(
+            MEMORY_TRANSCRIPT, "implementer", "issue #10"
+        )
+        orch._file_memory_suggestion.assert_any_await(
+            MEMORY_TRANSCRIPT, "implementer", "issue #30"
+        )
+
+    @pytest.mark.asyncio
+    async def test_review_loop_files_memory_suggestion(
+        self, config: HydraConfig
+    ) -> None:
+        """Reviewer transcripts with MEMORY_SUGGESTION blocks trigger filing."""
+        orch = HydraOrchestrator(config)
+        review_issue = make_issue(42)
+        pr = make_pr_info(number=101, issue_number=42)
+        review_result = make_review_result(
+            pr_number=101, issue_number=42, transcript=MEMORY_TRANSCRIPT
+        )
+
+        orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
+        orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
+            return_value=([pr], [review_issue])
+        )
+        orch._reviewer.review_prs = AsyncMock(return_value=[review_result])  # type: ignore[method-assign]
+        orch._prs.pull_main = AsyncMock()  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        # Stop after one iteration
+        original_get_reviewable = orch._store.get_reviewable
+        call_count = 0
+
+        def get_reviewable_once(_max_count: int) -> list[GitHubIssue]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return original_get_reviewable(_max_count)
+            orch._stop_event.set()
+            return []
+
+        orch._store.get_reviewable = get_reviewable_once  # type: ignore[method-assign]
+
+        await orch._review_loop()
+
+        orch._file_memory_suggestion.assert_awaited_once_with(
+            MEMORY_TRANSCRIPT,
+            "reviewer",
+            "PR #101",
+        )
+
+    @pytest.mark.asyncio
+    async def test_review_loop_skips_empty_transcript(
+        self, config: HydraConfig
+    ) -> None:
+        """Reviewer results with empty transcripts should not trigger filing."""
+        orch = HydraOrchestrator(config)
+        review_issue = make_issue(42)
+        pr = make_pr_info(number=101, issue_number=42)
+        review_result = make_review_result(
+            pr_number=101, issue_number=42, transcript=""
+        )
+
+        orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
+        orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
+            return_value=([pr], [review_issue])
+        )
+        orch._reviewer.review_prs = AsyncMock(return_value=[review_result])  # type: ignore[method-assign]
+        orch._prs.pull_main = AsyncMock()  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
+
+        call_count = 0
+
+        def get_reviewable_once(_max_count: int) -> list[GitHubIssue]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [review_issue]
+            orch._stop_event.set()
+            return []
+
+        orch._store.get_reviewable = get_reviewable_once  # type: ignore[method-assign]
+
+        await orch._review_loop()
+
+        orch._file_memory_suggestion.assert_not_awaited()
