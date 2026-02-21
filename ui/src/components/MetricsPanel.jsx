@@ -2,6 +2,7 @@ import React from 'react'
 import { theme } from '../theme'
 
 export function MetricsPanel({ metrics, lifetimeStats }) {
+  const hasData = metrics || lifetimeStats
   const lifetime = metrics?.lifetime || lifetimeStats || {}
   const rates = metrics?.rates || {}
 
@@ -15,6 +16,14 @@ export function MetricsPanel({ metrics, lifetimeStats }) {
     label: key.replace(/_/g, ' '),
     value: `${(value * 100).toFixed(0)}%`,
   }))
+
+  if (!hasData) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.empty}>No metrics data available yet.</div>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.container}>
@@ -40,10 +49,6 @@ export function MetricsPanel({ metrics, lifetimeStats }) {
             ))}
           </div>
         </>
-      )}
-
-      {!metrics && !lifetimeStats && (
-        <div style={styles.empty}>No metrics data available yet.</div>
       )}
     </div>
   )

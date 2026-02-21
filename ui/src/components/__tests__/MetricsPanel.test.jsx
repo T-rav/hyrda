@@ -17,10 +17,10 @@ describe('MetricsPanel', () => {
     expect(screen.getByText('Issues Created')).toBeInTheDocument()
   })
 
-  it('shows 0 values gracefully when no data', () => {
+  it('shows only empty message when no data', () => {
     render(<MetricsPanel metrics={null} lifetimeStats={null} />)
-    const zeros = screen.getAllByText('0')
-    expect(zeros.length).toBe(3)
+    expect(screen.getByText('No metrics data available yet.')).toBeInTheDocument()
+    expect(screen.queryByText('Lifetime Stats')).not.toBeInTheDocument()
   })
 
   it('shows rates when metrics data includes them', () => {
