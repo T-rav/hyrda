@@ -12,7 +12,7 @@ vi.mock('../../context/HydraContext', () => ({
 const { SystemPanel } = await import('../SystemPanel')
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'idle' })
+  mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'idle' })
 })
 
 const mockBgWorkers = [
@@ -43,14 +43,14 @@ describe('SystemPanel', () => {
     })
 
     it('shows correct status dot color for ok workers when orchestrator running', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
       const dot = screen.getByTestId('dot-memory_sync')
       expect(dot.style.background).toBe('var(--green)')
     })
 
     it('shows correct status dot color for error workers when orchestrator running', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
       const dot = screen.getByTestId('dot-retrospective')
       expect(dot.style.background).toBe('var(--red)')
@@ -81,7 +81,6 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: '2026-02-20T10:00:00Z',
         hitlItems: [],
-        pipelineIssues: {},
         orchestratorStatus: 'running',
       })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
@@ -123,7 +122,7 @@ describe('SystemPanel', () => {
     })
 
     it('shows system worker status as colored pill (green for ok) when orchestrator running', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
       // memory_sync has status ok — green pill
       const okPill = screen.getByTestId('status-pill-memory_sync')
@@ -148,7 +147,7 @@ describe('SystemPanel', () => {
 
   describe('Error Display', () => {
     it('shows error details with red styling when status is error', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       const errorWorkers = [
         { name: 'retrospective', status: 'error', enabled: true, last_run: '2026-02-20T10:28:00Z', details: { error: 'Connection timeout', retries: 3 } },
       ]
@@ -158,7 +157,7 @@ describe('SystemPanel', () => {
     })
 
     it('shows error key in details section', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       const errorWorkers = [
         { name: 'retrospective', status: 'error', enabled: true, last_run: null, details: { error: 'API rate limited' } },
       ]
@@ -225,6 +224,19 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={workers} backgroundWorkers={[]} />)
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
     })
+
+    it('filters out done and failed workers from pipeline cards', () => {
+      const workers = {
+        50: { status: 'done', worker: 1, role: 'implementer', title: 'Issue #50', branch: '', transcript: [], pr: null },
+        51: { status: 'failed', worker: 2, role: 'reviewer', title: 'Issue #51', branch: '', transcript: [], pr: null },
+        52: { status: 'escalated', worker: 3, role: 'planner', title: 'Issue #52', branch: '', transcript: [], pr: null },
+      }
+      render(<SystemPanel workers={workers} backgroundWorkers={[]} />)
+      expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
+      expect(screen.queryByText('#50')).not.toBeInTheDocument()
+      expect(screen.queryByText('#51')).not.toBeInTheDocument()
+      expect(screen.queryByText('#52')).not.toBeInTheDocument()
+    })
   })
 
   describe('Pipeline Loop Toggles', () => {
@@ -235,7 +247,7 @@ describe('SystemPanel', () => {
       }
     })
 
-    it('always shows issue count on pipeline loop chips (even zero)', () => {
+    it('shows worker count of 0 when no active workers', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       for (const loop of PIPELINE_LOOPS) {
         const countEl = screen.getByTestId(`loop-count-${loop.key}`)
@@ -243,34 +255,33 @@ describe('SystemPanel', () => {
       }
     })
 
-    it('shows pipeline issue counts from pipelineIssues context', () => {
-      mockUseHydra.mockReturnValue({
-        pipelinePollerLastRun: null,
-        hitlItems: [],
-        pipelineIssues: {
-          triage: [{ issue_number: 1 }, { issue_number: 2 }],
-          plan: [{ issue_number: 3 }],
-          implement: [],
-          review: [{ issue_number: 4 }, { issue_number: 5 }, { issue_number: 6 }],
-        },
-      })
-      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
-      expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('2')
+    it('shows worker counts per stage on pipeline loop chips', () => {
+      render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
+      // mockPipelineWorkers has 1 triage, 1 planner, 1 implementer, 1 reviewer
+      expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('1')
       expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1')
-      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('0')
-      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('3')
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1')
     })
 
-    it('shows active worker count on pipeline loop chips when workers are active', () => {
-      render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} onToggleBgWorker={() => {}} />)
-      // mockPipelineWorkers has 1 triage, 1 planner, 1 implementer, 1 reviewer
-      const activeLabels = screen.getAllByText('1 active')
-      expect(activeLabels.length).toBe(4)
+    it('shows "worker" singular when count is 1', () => {
+      const singleWorker = {
+        10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
+      }
+      render(<SystemPanel workers={singleWorker} backgroundWorkers={[]} />)
+      expect(screen.getByText('worker')).toBeInTheDocument()
+    })
+
+    it('shows "workers" plural when count is not 1', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      // All stages have 0 workers — should all show "workers"
+      const workerLabels = screen.getAllByText('workers')
+      expect(workerLabels.length).toBe(PIPELINE_LOOPS.length)
     })
 
     it('calls onToggleBgWorker with pipeline loop key when toggled', () => {
       const onToggle = vi.fn()
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
       const allOnButtons = screen.getAllByText('On')
       fireEvent.click(allOnButtons[0]) // First pipeline loop = triage
@@ -280,7 +291,7 @@ describe('SystemPanel', () => {
 
   describe('Background Worker Toggles', () => {
     it('shows toggle buttons for non-system workers only when onToggleBgWorker provided', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={() => {}} />)
       const onButtons = screen.getAllByText('On')
       // Pipeline loops (4) + non-system background workers that are enabled
@@ -294,7 +305,7 @@ describe('SystemPanel', () => {
     })
 
     it('system workers do not show toggle buttons', () => {
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={() => {}} />)
       expect(screen.getByText('Pipeline Poller')).toBeInTheDocument()
       expect(screen.getByText('Memory Manager')).toBeInTheDocument()
@@ -313,14 +324,14 @@ describe('SystemPanel', () => {
 
     it('shows Off button for disabled workers when orchestrator running', () => {
       const onToggle = vi.fn()
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
       expect(screen.getByText('Off')).toBeInTheDocument()
     })
 
     it('clicking Off toggles to enabled', () => {
       const onToggle = vi.fn()
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
       fireEvent.click(screen.getByText('Off'))
       expect(onToggle).toHaveBeenCalledWith('review_insights', true)
@@ -328,7 +339,7 @@ describe('SystemPanel', () => {
 
     it('non-system workers show On when orchestrator running and no state reported', () => {
       const onToggle = vi.fn()
-      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
+      mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} onToggleBgWorker={onToggle} />)
       const onButtons = screen.getAllByText('On')
       const nonSystemCount = BACKGROUND_WORKERS.filter(w => !w.system).length
@@ -372,7 +383,6 @@ describe('SystemPanel', () => {
           { issue_number: 2, title: 'Issue 2' },
           { issue_number: 3, title: 'Issue 3' },
         ],
-        pipelineIssues: {},
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       expect(screen.getByText('3 HITL issues')).toBeInTheDocument()
@@ -382,9 +392,40 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: null,
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }],
-        pipelineIssues: {},
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.getByText('1 HITL issue')).toBeInTheDocument()
+    })
+  })
+
+  describe('Total Active Pill', () => {
+    it('shows total active pill when pipeline workers are active', () => {
+      render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
+      expect(screen.getByText('4 active')).toBeInTheDocument()
+    })
+
+    it('does not show total active pill when no active workers', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.queryByText(/\d+ active/)).not.toBeInTheDocument()
+    })
+
+    it('shows total active pill alongside HITL badge', () => {
+      mockUseHydra.mockReturnValue({
+        pipelinePollerLastRun: null,
+        hitlItems: [{ issue_number: 1, title: 'Issue 1' }, { issue_number: 2, title: 'Issue 2' }],
+      })
+      render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
+      expect(screen.getByText('4 active')).toBeInTheDocument()
+      expect(screen.getByText('2 HITL issues')).toBeInTheDocument()
+    })
+
+    it('shows HITL badge without active pill when no active workers', () => {
+      mockUseHydra.mockReturnValue({
+        pipelinePollerLastRun: null,
+        hitlItems: [{ issue_number: 1, title: 'Issue 1' }],
+      })
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.queryByText(/\d+ active/)).not.toBeInTheDocument()
       expect(screen.getByText('1 HITL issue')).toBeInTheDocument()
     })
   })
@@ -394,7 +435,6 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: '2026-02-20T10:00:00Z',
         hitlItems: [],
-        pipelineIssues: {},
         orchestratorStatus: 'running',
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
@@ -406,7 +446,6 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: '2026-02-20T10:00:00Z',
         hitlItems: [],
-        pipelineIssues: {},
         orchestratorStatus: 'idle',
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
