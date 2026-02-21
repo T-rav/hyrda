@@ -329,6 +329,7 @@ class HITLItem(BaseModel):
     branch: str = ""
     cause: str = ""  # escalation reason (populated by #113)
     status: str = "pending"  # pending | processing | resolved
+    isMemorySuggestion: bool = False  # camelCase to match frontend contract
 
 
 class ControlStatusConfig(BaseModel):

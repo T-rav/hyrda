@@ -1087,14 +1087,16 @@ class TestHITLItem:
             "branch": "agent/issue-10",
             "cause": "test failure",
             "status": "processing",
+            "isMemorySuggestion": False,
         }
 
     def test_serialization_defaults_include_new_fields(self) -> None:
-        """model_dump includes cause and status even with defaults."""
+        """model_dump includes cause, status, and isMemorySuggestion even with defaults."""
         item = HITLItem(issue=1)
         data = item.model_dump()
         assert data["cause"] == ""
         assert data["status"] == "pending"
+        assert data["isMemorySuggestion"] is False
 
 
 # ---------------------------------------------------------------------------
