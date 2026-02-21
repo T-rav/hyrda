@@ -172,6 +172,7 @@ class ReviewResult(BaseModel):
     merged: bool = False
     ci_passed: bool | None = None  # None = not checked, True/False = outcome
     ci_fix_attempts: int = 0
+    duration_seconds: float = 0.0
 
 
 # --- Verification Judge ---
@@ -318,3 +319,29 @@ class ControlStatusResponse(BaseModel):
 
     status: str = "idle"
     config: ControlStatusConfig = Field(default_factory=ControlStatusConfig)
+
+
+# --- Background Worker Status ---
+
+
+class BackgroundWorkerStatus(BaseModel):
+    """Status of a single background worker."""
+
+    name: str
+    label: str
+    status: str = "disabled"  # ok | error | disabled
+    last_run: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class BackgroundWorkersResponse(BaseModel):
+    """Response for GET /api/system/workers."""
+
+    workers: list[BackgroundWorkerStatus] = Field(default_factory=list)
+
+
+class MetricsResponse(BaseModel):
+    """Response for GET /api/metrics."""
+
+    lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
+    rates: dict[str, float] = Field(default_factory=dict)
