@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { theme } from '../theme'
 import { useTimeline } from '../hooks/useTimeline'
 import { StreamCard } from './StreamCard'
-import { PIPELINE_STAGES } from '../constants'
+import { PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -16,9 +16,10 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-function StageSection({ stage, issues, intentMap, onViewTranscript, onRequestChanges, defaultOpen }) {
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen)
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
+  const queuedCount = issues.length - activeCount
 
   return (
     <div style={styles.section}>
@@ -29,8 +30,9 @@ function StageSection({ stage, issues, intentMap, onViewTranscript, onRequestCha
         <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
         <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
         <span style={sectionCountStyles[stage.key]}>
-          {activeCount > 0 && <span style={styles.activeBadge}>{activeCount} active · </span>}
-          {issues.length}
+          {activeCount > 0 && <span style={styles.activeBadge}>{activeCount} active</span>}
+          {queuedCount > 0 && <span>{activeCount > 0 ? ' · ' : ''}{queuedCount} queued</span>}
+          {workerCount > 0 && <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>}
         </span>
       </div>
       {open && issues.map(issue => (
@@ -69,8 +71,7 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
 
   // Group issues by currentStage, sorted active-first within each group
   const stageGroups = useMemo(() => {
-    const groups = []
-    for (const stage of PIPELINE_STAGES) {
+    return PIPELINE_STAGES.map(stage => {
       const stageIssues = issues
         .filter(i => i.currentStage === stage.key)
         .sort((a, b) => {
@@ -81,23 +82,26 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
           const bTime = b.endTime || b.startTime || ''
           return bTime.localeCompare(aTime)
         })
-      if (stageIssues.length > 0) {
-        groups.push({ stage, issues: stageIssues })
-      }
-    }
-    return groups
+      return { stage, issues: stageIssues }
+    })
   }, [issues])
 
-  const isEmpty = stageGroups.length === 0 && pendingIntents.length === 0
+  // Count active pipeline workers per stage role
+  const workerCounts = useMemo(() => {
+    const counts = {}
+    for (const stage of PIPELINE_STAGES) {
+      if (!stage.role) continue
+      counts[stage.key] = Object.values(workers || {}).filter(
+        w => w.role === stage.role && ACTIVE_STATUSES.includes(w.status)
+      ).length
+    }
+    return counts
+  }, [workers])
+
+  const hasAnyIssues = issues.length > 0 || pendingIntents.length > 0
 
   return (
     <div style={styles.container}>
-      {isEmpty && (
-        <div style={styles.empty}>
-          No active work. Type an intent above to get started.
-        </div>
-      )}
-
       {pendingIntents.map((intent, i) => (
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
@@ -107,12 +111,19 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
           key={stage.key}
           stage={stage}
           issues={stageIssues}
+          workerCount={workerCounts[stage.key] || 0}
           intentMap={intentMap}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
           defaultOpen={stageIssues.some(i => i.overallStatus === 'active')}
         />
       ))}
+
+      {!hasAnyIssues && (
+        <div style={styles.empty}>
+          No active work. Type an intent above to get started.
+        </div>
+      )}
     </div>
   )
 }
