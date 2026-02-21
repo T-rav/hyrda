@@ -306,6 +306,14 @@ class TestHydraConfigDefaults:
         )
         assert cfg.max_workers == 3
 
+    def test_improve_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["hydra-improve"]
+
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -538,6 +546,15 @@ class TestHydraConfigCustomValues:
             state_file=tmp_path / "s.json",
         )
         assert cfg.hitl_active_label == ["custom-active"]
+
+    def test_custom_improve_label(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            improve_label=["my-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["my-improve"]
 
     def test_custom_dry_run_true(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -1338,6 +1355,38 @@ class TestHydraConfigHitlActiveLabel:
             state_file=tmp_path / "s.json",
         )
         assert cfg.hitl_active_label == ["explicit-active"]
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – improve_label env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigImproveLabel:
+    """Tests for improve_label env var override."""
+
+    def test_improve_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "custom-improve")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["custom-improve"]
+
+    def test_improve_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "env-improve")
+        cfg = HydraConfig(
+            improve_label=["explicit-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["explicit-improve"]
 
 
 # ---------------------------------------------------------------------------
