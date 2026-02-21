@@ -923,6 +923,114 @@ class TestInstallHooks:
             await manager._install_hooks(tmp_path)
 
 
+# ---------------------------------------------------------------------------
+# WorktreeManager.start_merge_main
+# ---------------------------------------------------------------------------
+
+
+class TestStartMergeMain:
+    """Tests for WorktreeManager.start_merge_main."""
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_clean_merge_returns_true(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return True when all commands succeed."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc()
+
+        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_conflict_returns_false_without_abort(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return False on conflict and NOT call --abort."""
+        manager = WorktreeManager(config)
+
+        success_proc = _make_proc(returncode=0)
+        merge_fail_proc = _make_proc(
+            returncode=1, stderr=b"CONFLICT (content): Merge conflict"
+        )
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                return success_proc  # git fetch + ff-only merge succeed
+            return merge_fail_proc  # git merge origin/main fails
+
+        with patch(
+            "asyncio.create_subprocess_exec", side_effect=fake_exec
+        ) as mock_exec:
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is False
+        # Critical: start_merge_main must NOT call git merge --abort
+        for call in mock_exec.call_args_list:
+            assert "--abort" not in call.args, (
+                "start_merge_main must NOT abort on conflict — "
+                "caller resolves conflicts"
+            )
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_fetch_failure_returns_false(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return False if fetch fails."""
+        manager = WorktreeManager(config)
+
+        fetch_fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fetch_fail_proc):
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager.abort_merge
+# ---------------------------------------------------------------------------
+
+
+class TestAbortMerge:
+    """Tests for WorktreeManager.abort_merge."""
+
+    @pytest.mark.asyncio
+    async def test_abort_merge_calls_git_merge_abort(
+        self, config, tmp_path: Path
+    ) -> None:
+        """abort_merge should call 'git merge --abort' with correct cwd."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager.abort_merge(tmp_path)
+
+        mock_exec.assert_called_once()
+        args = mock_exec.call_args.args
+        assert args[:3] == ("git", "merge", "--abort")
+
+    @pytest.mark.asyncio
+    async def test_abort_merge_swallows_runtime_error(
+        self, config, tmp_path: Path
+    ) -> None:
+        """abort_merge should suppress RuntimeError via contextlib.suppress."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: no merge in progress")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager.abort_merge(tmp_path)
+
+
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,
 # GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
 # since the logic was extracted into subprocess_util.run_subprocess.

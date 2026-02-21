@@ -606,3 +606,277 @@ class TestFetchPlanIssues:
         # Issue #2 has ready_label ("test-label") so it should be filtered out
         assert len(issues) == 1
         assert issues[0].number == 1
+
+
+# ---------------------------------------------------------------------------
+# fetch_issue_by_number
+# ---------------------------------------------------------------------------
+
+SINGLE_ISSUE_JSON = json.dumps(
+    {
+        "number": 42,
+        "title": "Fix bug",
+        "body": "Details",
+        "labels": [{"name": "ready"}],
+        "comments": [{"body": "first comment"}],
+        "url": "https://github.com/test-org/test-repo/issues/42",
+        "createdAt": "2026-01-01T00:00:00Z",
+    }
+)
+
+
+class TestFetchIssueByNumber:
+    """Tests for IssueFetcher.fetch_issue_by_number."""
+
+    @pytest.mark.asyncio
+    async def test_returns_parsed_issue_on_success(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(SINGLE_ISSUE_JSON.encode(), b"")
+        )
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issue = await fetcher.fetch_issue_by_number(42)
+
+        assert issue is not None
+        assert issue.number == 42
+        assert issue.title == "Fix bug"
+        assert issue.body == "Details"
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_gh_failure(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issue = await fetcher.fetch_issue_by_number(999)
+
+        assert issue is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_json_decode_error(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issue = await fetcher.fetch_issue_by_number(42)
+
+        assert issue is None
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_none(self, dry_config: HydraConfig) -> None:
+        fetcher = IssueFetcher(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issue = await fetcher.fetch_issue_by_number(42)
+
+        assert issue is None
+        mock_exec.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_issue_comments
+# ---------------------------------------------------------------------------
+
+
+class TestFetchIssueComments:
+    """Tests for IssueFetcher.fetch_issue_comments."""
+
+    @pytest.mark.asyncio
+    async def test_returns_comment_bodies(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        comments_json = json.dumps({"comments": [{"body": "c1"}, {"body": "c2"}]})
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(comments_json.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await fetcher.fetch_issue_comments(42)
+
+        assert result == ["c1", "c2"]
+
+    @pytest.mark.asyncio
+    async def test_handles_string_comments(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        comments_json = json.dumps(
+            {"comments": [{"body": "dict comment"}, "plain string"]}
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(comments_json.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await fetcher.fetch_issue_comments(42)
+
+        assert result == ["dict comment", "plain string"]
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_on_failure(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            result = await fetcher.fetch_issue_comments(42)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_dry_run_returns_empty_list(self, dry_config: HydraConfig) -> None:
+        fetcher = IssueFetcher(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            result = await fetcher.fetch_issue_comments(42)
+
+        assert result == []
+        mock_exec.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# fetch_issues_by_labels
+# ---------------------------------------------------------------------------
+
+
+class TestFetchIssuesByLabels:
+    """Tests for IssueFetcher.fetch_issues_by_labels."""
+
+    @pytest.mark.asyncio
+    async def test_fetches_and_deduplicates_by_number(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        # Both labels return the same issue #42
+        raw = json.dumps(
+            [
+                {
+                    "number": 42,
+                    "title": "Fix bug",
+                    "body": "Details",
+                    "labels": [{"name": "label-a"}, {"name": "label-b"}],
+                    "comments": [],
+                    "url": "https://github.com/test-org/test-repo/issues/42",
+                }
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_issues_by_labels(
+                ["label-a", "label-b"], limit=10
+            )
+
+        # Same issue returned for both labels → deduplicated to 1
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_exclude_labels_filter_correctly(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        raw = json.dumps(
+            [
+                {
+                    "number": 1,
+                    "title": "Keep me",
+                    "body": "",
+                    "labels": [],
+                    "comments": [],
+                    "url": "",
+                },
+                {
+                    "number": 2,
+                    "title": "Exclude me",
+                    "body": "",
+                    "labels": [{"name": "hydra-review"}],
+                    "comments": [],
+                    "url": "",
+                },
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_issues_by_labels(
+                [], limit=10, exclude_labels=["hydra-review"]
+            )
+
+        assert len(issues) == 1
+        assert issues[0].number == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_labels_and_no_exclude_returns_empty(
+        self, config: HydraConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issues = await fetcher.fetch_issues_by_labels([], limit=10)
+
+        assert issues == []
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_gh_failure_returns_empty_list(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error"))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_issues_by_labels(["some-label"], limit=10)
+
+        assert issues == []
+
+
+# ---------------------------------------------------------------------------
+# fetch_all_hydra_issues
+# ---------------------------------------------------------------------------
+
+
+class TestFetchAllHydraIssues:
+    """Tests for IssueFetcher.fetch_all_hydra_issues."""
+
+    @pytest.mark.asyncio
+    async def test_collects_all_pipeline_labels(self, config: HydraConfig) -> None:
+        fetcher = IssueFetcher(config)
+        raw = json.dumps(
+            [
+                {
+                    "number": 1,
+                    "title": "Issue 1",
+                    "body": "",
+                    "labels": [{"name": "hydra-find"}],
+                    "comments": [],
+                    "url": "",
+                }
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_all_hydra_issues()
+
+        assert len(issues) >= 1
+        assert issues[0].number == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_dry_run(self, dry_config: HydraConfig) -> None:
+        fetcher = IssueFetcher(dry_config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            issues = await fetcher.fetch_all_hydra_issues()
+
+        assert issues == []
+        mock_exec.assert_not_called()
