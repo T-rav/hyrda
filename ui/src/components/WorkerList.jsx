@@ -78,7 +78,7 @@ function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputReque
       >
         <span style={styles.chevron}>{collapsed ? '\u25b6' : '\u25bc'}</span>
         <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
-        <span style={styles.sectionCount}>{active}/{total}</span>
+        <span style={sectionCountStyles[stage.key]}>{active}/{total}</span>
       </div>
       {!collapsed && sorted.map(([num, w]) => {
         const isActive = selectedWorker === num || selectedWorker === Number(num)
@@ -117,8 +117,8 @@ function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputReque
 const sectionHeaderBase = {
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '6px 12px',
+  gap: 8,
+  padding: '8px 12px',
   margin: '8px 8px 4px',
   cursor: 'pointer',
   userSelect: 'none',
@@ -129,7 +129,7 @@ const sectionLabelBase = {
   fontSize: 11,
   fontWeight: 600,
   textTransform: 'uppercase',
-  letterSpacing: 0.5,
+  letterSpacing: '0.5px',
 }
 
 export const sectionHeaderStyles = Object.fromEntries(
@@ -148,6 +148,19 @@ export const sectionLabelStyles = Object.fromEntries(
   }])
 )
 
+const sectionCountBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  marginLeft: 'auto',
+}
+
+export const sectionCountStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionCountBase,
+    color: s.color,
+  }])
+)
+
 const styles = {
   sidebar: {
     borderRight: `1px solid ${theme.border}`,
@@ -157,12 +170,6 @@ const styles = {
   chevron: {
     fontSize: 9,
     color: theme.textMuted,
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: theme.accent,
-    fontWeight: 600,
-    marginLeft: 'auto',
   },
   card: {
     padding: '10px 16px',

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, sectionHeaderStyles, sectionLabelStyles } from '../WorkerList'
+import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, sectionHeaderStyles, sectionLabelStyles, sectionCountStyles } from '../WorkerList'
 import { PIPELINE_STAGES } from '../../constants'
 
 const statusColors = {
@@ -72,8 +72,8 @@ describe('WorkerList section header styles', () => {
     for (const stage of SIDEBAR_STAGES) {
       const headerStyle = sectionHeaderStyles[stage.key]
       expect(headerStyle.background).toBe(stage.subtleColor)
-      expect(headerStyle.borderLeft).toContain(stage.color)
-      expect(headerStyle.border).toContain(stage.color)
+      expect(headerStyle.borderLeft).toBe(`3px solid ${stage.color}`)
+      expect(headerStyle.border).toBe(`1px solid ${stage.color}33`)
     }
   })
 
@@ -85,6 +85,19 @@ describe('WorkerList section header styles', () => {
         fontSize: 11,
         fontWeight: 600,
         textTransform: 'uppercase',
+        letterSpacing: '0.5px',
+      })
+    }
+  })
+
+  it('sectionCountStyles has correct color per stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const countStyle = sectionCountStyles[stage.key]
+      expect(countStyle.color).toBe(stage.color)
+      expect(countStyle).toMatchObject({
+        fontSize: 11,
+        fontWeight: 600,
+        marginLeft: 'auto',
       })
     }
   })
