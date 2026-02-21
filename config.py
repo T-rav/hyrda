@@ -115,7 +115,11 @@ class HydraConfig(BaseModel):
     )
     improve_label: list[str] = Field(
         default=["hydra-improve"],
-        description="Labels for review insight improvement proposals (OR logic)",
+        description="Labels for improvement/memory suggestion issues (OR logic)",
+    )
+    memory_label: list[str] = Field(
+        default=["hydra-memory"],
+        description="Labels for approved memory items awaiting sync (OR logic)",
     )
     dup_label: list[str] = Field(
         default=["hydra-dup"],
@@ -257,6 +261,12 @@ class HydraConfig(BaseModel):
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
+    data_poll_interval: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="Seconds between centralized GitHub issue store polls",
+    )
 
     # Retrospective
     retrospective_window: int = Field(
@@ -306,6 +316,8 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
             HYDRA_LABEL_IMPROVE     → improve_label
+            HYDRA_LABEL_MEMORY      → memory_label
+            HYDRA_LABEL_DUP         → dup_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -403,6 +415,13 @@ class HydraConfig(BaseModel):
                         self, "max_merge_conflict_fix_attempts", int(env_attempts)
                     )
 
+        # Data poll interval override
+        if self.data_poll_interval == 60:  # still at default
+            env_data_poll = os.environ.get("HYDRA_DATA_POLL_INTERVAL")
+            if env_data_poll is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "data_poll_interval", int(env_data_poll))
+
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
             "HYDRA_LABEL_FIND": ("find_label", ["hydra-find"]),
@@ -413,6 +432,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
+            "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():

@@ -152,6 +152,7 @@ class WorkerStatus(StrEnum):
     TESTING = "testing"
     COMMITTING = "committing"
     QUALITY_FIX = "quality_fix"
+    MERGE_FIX = "merge_fix"
     DONE = "done"
     FAILED = "failed"
 
@@ -265,6 +266,15 @@ class Phase(StrEnum):
 # --- State Persistence ---
 
 
+class QueueStats(BaseModel):
+    """Snapshot of IssueStore queue depths and throughput."""
+
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    active_count: dict[str, int] = Field(default_factory=dict)
+    total_processed: dict[str, int] = Field(default_factory=dict)
+    last_poll_timestamp: str | None = None
+
+
 class LifetimeStats(BaseModel):
     """All-time counters preserved across resets."""
 
@@ -328,6 +338,7 @@ class HITLItem(BaseModel):
     branch: str = ""
     cause: str = ""  # escalation reason (populated by #113)
     status: str = "pending"  # pending | processing | resolved
+    isMemorySuggestion: bool = False  # camelCase to match frontend contract
 
 
 class ControlStatusConfig(BaseModel):

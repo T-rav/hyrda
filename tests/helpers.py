@@ -68,6 +68,7 @@ class ConfigFactory:
         dup_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
+        memory_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
         min_plan_words: int = 200,
@@ -82,6 +83,7 @@ class ConfigFactory:
         dashboard_port: int = 15555,
         review_insight_window: int = 10,
         review_pattern_threshold: int = 3,
+        data_poll_interval: int = 60,
         gh_max_retries: int = 3,
         test_command: str = "make test",
         max_issue_body_chars: int = 10_000,
@@ -125,6 +127,7 @@ class ConfigFactory:
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],
+            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
             min_plan_words=min_plan_words,
@@ -141,6 +144,7 @@ class ConfigFactory:
             dashboard_port=dashboard_port,
             review_insight_window=review_insight_window,
             review_pattern_threshold=review_pattern_threshold,
+            data_poll_interval=data_poll_interval,
             gh_max_retries=gh_max_retries,
             test_command=test_command,
             max_issue_body_chars=max_issue_body_chars,

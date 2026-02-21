@@ -3,7 +3,7 @@
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
  *
- * @typedef {'queued'|'running'|'planning'|'validating'|'retrying'|'evaluating'|'testing'|'committing'|'quality_fix'|'reviewing'|'fixing'|'fix_done'|'start'|'merge_main'|'conflict_resolution'|'ci_wait'|'ci_fix'|'merging'|'escalating'|'escalated'|'done'|'failed'} WorkerStatus
+ * @typedef {'queued'|'running'|'planning'|'validating'|'retrying'|'evaluating'|'testing'|'committing'|'quality_fix'|'merge_fix'|'reviewing'|'fixing'|'fix_done'|'start'|'merge_main'|'ci_wait'|'ci_fix'|'merging'|'escalating'|'escalated'|'done'|'failed'} WorkerStatus
  *
  * @typedef {{ status: WorkerStatus, worker: number, role: string, title: string, branch: string, transcript: string[], pr: object|null }} WorkerState
  *
@@ -11,7 +11,7 @@
  *
  * @typedef {{ pr: number, verdict: string, summary: string, duration?: number }} ReviewData
  *
- * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string, status: string }} HITLItem
+ * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string, status: string, isMemorySuggestion: boolean }} HITLItem
  *
  * @typedef {Record<string, string>} HumanInputRequests
  *

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from config import HydraConfig
 
 from events import EventBus, EventType
+from issue_store import IssueStore
 from models import (
     GitHubIssue,
     PRInfo,
@@ -83,13 +84,17 @@ def _make_phase(
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
     stop_event = asyncio.Event()
-    active_issues: set[int] = set()
 
     mock_wt = AsyncMock()
     mock_wt.destroy = AsyncMock()
 
     mock_reviewers = AsyncMock()
     mock_prs = AsyncMock()
+
+    mock_store = AsyncMock(spec=IssueStore)
+    mock_store.mark_active = lambda num, stage: None
+    mock_store.mark_complete = lambda num: None
+    mock_store.is_active = lambda num: False
 
     phase = ReviewPhase(
         config=config,
@@ -98,7 +103,7 @@ def _make_phase(
         reviewers=mock_reviewers,
         prs=mock_prs,
         stop_event=stop_event,
-        active_issues=active_issues,
+        store=mock_store,
         agents=agents,
         event_bus=event_bus or EventBus(),
     )
@@ -1655,7 +1660,7 @@ class TestReviewExceptionIsolation:
 
         await phase.review_prs([pr], [issue])
 
-        assert 42 not in phase._active_issues
+        assert not phase._store.is_active(42)
 
     @pytest.mark.asyncio
     async def test_review_exception_does_not_crash_batch(
@@ -1704,18 +1709,18 @@ class TestReviewExceptionIsolation:
 
 
 # ---------------------------------------------------------------------------
-# _active_issues cleanup
+# _store active-issue cleanup
 # ---------------------------------------------------------------------------
 
 
 class TestActiveIssuesCleanup:
-    """Tests that _active_issues is cleaned up on all code paths."""
+    """Tests that _store marks issues complete on all code paths."""
 
     @pytest.mark.asyncio
     async def test_active_issues_cleaned_on_early_return_issue_not_found(
         self, config: HydraConfig
     ) -> None:
-        """When issue is not in issue_map, _active_issues must be cleaned up."""
+        """When issue is not in issue_map, store must mark_complete."""
         phase = _make_phase(config)
         pr = make_pr_info(101, 999)
 
@@ -1724,7 +1729,7 @@ class TestActiveIssuesCleanup:
 
         results = await phase.review_prs([pr], [])  # no matching issues
 
-        assert 999 not in phase._active_issues
+        assert not phase._store.is_active(999)
         assert len(results) == 1
         assert results[0].summary == "Issue not found"
 
@@ -1732,7 +1737,7 @@ class TestActiveIssuesCleanup:
     async def test_active_issues_cleaned_on_exception_during_merge_main(
         self, config: HydraConfig
     ) -> None:
-        """If merge_main raises, _active_issues must still be cleaned up."""
+        """If merge_main raises, store must still mark_complete."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
@@ -1747,7 +1752,7 @@ class TestActiveIssuesCleanup:
         # Exception isolation catches the error and returns a failed result
         results = await phase.review_prs([pr], [issue])
 
-        assert 42 not in phase._active_issues
+        assert not phase._store.is_active(42)
         assert len(results) == 1
         assert "unexpected error" in results[0].summary.lower()
 
@@ -1755,7 +1760,7 @@ class TestActiveIssuesCleanup:
     async def test_active_issues_cleaned_on_exception_during_review(
         self, config: HydraConfig
     ) -> None:
-        """If reviewers.review raises, _active_issues must still be cleaned up."""
+        """If reviewers.review raises, store must still mark_complete."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
@@ -1770,7 +1775,7 @@ class TestActiveIssuesCleanup:
         # Exception isolation catches the error and returns a failed result
         results = await phase.review_prs([pr], [issue])
 
-        assert 42 not in phase._active_issues
+        assert not phase._store.is_active(42)
         assert len(results) == 1
         assert "unexpected error" in results[0].summary.lower()
 
@@ -1778,7 +1783,7 @@ class TestActiveIssuesCleanup:
     async def test_active_issues_cleaned_on_exception_during_worktree_create(
         self, config: HydraConfig
     ) -> None:
-        """If worktrees.create raises, _active_issues must still be cleaned up."""
+        """If worktrees.create raises, store must still mark_complete."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
@@ -1791,7 +1796,7 @@ class TestActiveIssuesCleanup:
         # Exception isolation catches the error and returns a failed result
         results = await phase.review_prs([pr], [issue])
 
-        assert 42 not in phase._active_issues
+        assert not phase._store.is_active(42)
         assert len(results) == 1
         assert "unexpected error" in results[0].summary.lower()
 
@@ -1799,7 +1804,7 @@ class TestActiveIssuesCleanup:
     async def test_active_issues_cleaned_on_happy_path(
         self, config: HydraConfig
     ) -> None:
-        """On the happy path, _active_issues must be empty after review_prs."""
+        """On the happy path, store must mark_complete after review_prs."""
         phase = _make_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
@@ -1818,7 +1823,7 @@ class TestActiveIssuesCleanup:
 
         await phase.review_prs([pr], [issue])
 
-        assert 42 not in phase._active_issues
+        assert not phase._store.is_active(42)
 
 
 # ---------------------------------------------------------------------------
@@ -2576,10 +2581,8 @@ class TestGranularReviewStatusEvents:
         assert merge_main_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_conflict_resolution_status_emitted(
-        self, config: HydraConfig
-    ) -> None:
-        """A 'conflict_resolution' event should be published when resolving conflicts."""
+    async def test_merge_fix_status_emitted(self, config: HydraConfig) -> None:
+        """A 'merge_fix' event should be published when resolving conflicts."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
@@ -2608,11 +2611,10 @@ class TestGranularReviewStatusEvents:
         conflict_events = [
             e
             for e in history
-            if e.type == EventType.REVIEW_UPDATE
-            and e.data.get("status") == "conflict_resolution"
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "merge_fix"
         ]
         # One event from the caller in review_prs, one from the retry loop
-        assert len(conflict_events) >= 1
+        assert len(conflict_events) == 2
         assert conflict_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio

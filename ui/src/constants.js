@@ -6,7 +6,7 @@ import { theme } from './theme'
  */
 export const ACTIVE_STATUSES = [
   'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix',
-  'start', 'merge_main', 'conflict_resolution', 'ci_wait', 'ci_fix', 'merging',
+  'start', 'merge_main', 'merge_fix', 'ci_wait', 'ci_fix', 'merging',
   'evaluating', 'validating', 'retrying', 'fixing',
 ]
 
