@@ -2401,3 +2401,342 @@ class TestListOpenPrsEdgeCases:
         assert len(result) == 1
         assert result[0].branch == ""
         assert result[0].issue == 0
+
+
+# ---------------------------------------------------------------------------
+# Private helper: _comment
+# ---------------------------------------------------------------------------
+
+
+class TestCommentHelper:
+    """Tests for the unified _comment() helper."""
+
+    @pytest.mark.asyncio
+    async def test_comment_issue_target(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._comment("issue", 42, "test body")
+
+        cmd = mock_create.call_args[0]
+        assert "issue" in cmd
+        assert "comment" in cmd
+        assert "42" in cmd
+
+    @pytest.mark.asyncio
+    async def test_comment_pr_target(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._comment("pr", 101, "test body")
+
+        cmd = mock_create.call_args[0]
+        assert "pr" in cmd
+        assert "comment" in cmd
+        assert "101" in cmd
+
+    @pytest.mark.asyncio
+    async def test_comment_dry_run(self, dry_config, event_bus):
+        mgr = _make_manager(dry_config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._comment("issue", 42, "body")
+
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_comment_error_does_not_raise(self, config, event_bus, tmp_path):
+        """_comment should log a warning on failure without propagating the error."""
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="permission denied")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._comment("pr", 99, "body")
+
+
+# ---------------------------------------------------------------------------
+# Private helper: _add_labels
+# ---------------------------------------------------------------------------
+
+
+class TestAddLabelsHelper:
+    """Tests for the unified _add_labels() helper."""
+
+    @pytest.mark.asyncio
+    async def test_add_labels_issue_target(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._add_labels("issue", 42, ["bug"])
+
+        cmd = mock_create.call_args[0]
+        assert "issue" in cmd
+        assert "edit" in cmd
+        assert "--add-label" in cmd
+
+    @pytest.mark.asyncio
+    async def test_add_labels_pr_target(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._add_labels("pr", 101, ["enhancement"])
+
+        cmd = mock_create.call_args[0]
+        assert "pr" in cmd
+        assert "edit" in cmd
+        assert "--add-label" in cmd
+
+    @pytest.mark.asyncio
+    async def test_add_labels_dry_run(self, dry_config, event_bus):
+        mgr = _make_manager(dry_config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._add_labels("issue", 42, ["bug"])
+
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_labels_empty_list(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._add_labels("pr", 101, [])
+
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_labels_error_does_not_raise(self, config, event_bus):
+        """_add_labels should log a warning on failure without propagating the error."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="label not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._add_labels("issue", 42, ["missing-label"])
+
+
+# ---------------------------------------------------------------------------
+# Private helper: _remove_label
+# ---------------------------------------------------------------------------
+
+
+class TestRemoveLabelHelper:
+    """Tests for the unified _remove_label() helper."""
+
+    @pytest.mark.asyncio
+    async def test_remove_label_issue_target(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._remove_label("issue", 42, "ready")
+
+        cmd = mock_create.call_args[0]
+        assert "issue" in cmd
+        assert "edit" in cmd
+        assert "--remove-label" in cmd
+        assert "ready" in cmd
+
+    @pytest.mark.asyncio
+    async def test_remove_label_pr_target(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._remove_label("pr", 101, "hydra-review")
+
+        cmd = mock_create.call_args[0]
+        assert "pr" in cmd
+        assert "edit" in cmd
+        assert "--remove-label" in cmd
+        assert "hydra-review" in cmd
+
+    @pytest.mark.asyncio
+    async def test_remove_label_dry_run(self, dry_config, event_bus):
+        mgr = _make_manager(dry_config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await mgr._remove_label("pr", 101, "label")
+
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remove_label_error_does_not_raise(self, config, event_bus):
+        """_remove_label should log a warning on failure without propagating the error."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="label not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._remove_label("issue", 42, "missing-label")
+
+
+# ---------------------------------------------------------------------------
+# Decomposed get_label_counts helpers
+# ---------------------------------------------------------------------------
+
+
+class TestCountHelpers:
+    """Tests for _count_open_issues_by_label, _count_closed_issues, _count_merged_prs."""
+
+    @pytest.mark.asyncio
+    async def test_count_open_issues_by_label(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            return "5\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_open_issues_by_label(
+            {"hydra-plan": ["hydra-plan"], "hydra-ready": ["hydra-ready"]}
+        )
+        assert result == {"hydra-plan": 5, "hydra-ready": 5}
+
+    @pytest.mark.asyncio
+    async def test_count_open_issues_by_label_handles_errors(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            raise RuntimeError("network error")
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_open_issues_by_label({"hydra-plan": ["hydra-plan"]})
+        assert result == {"hydra-plan": 0}
+
+    @pytest.mark.asyncio
+    async def test_count_closed_issues(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            return "7\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_closed_issues(["hydra-fixed"])
+        assert result == 7
+
+    @pytest.mark.asyncio
+    async def test_count_closed_issues_handles_errors(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            raise RuntimeError("network error")
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_closed_issues(["hydra-fixed"])
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_count_merged_prs(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            return "12\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_merged_prs("hydra-fixed")
+        assert result == 12
+
+    @pytest.mark.asyncio
+    async def test_count_merged_prs_handles_errors(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            raise RuntimeError("network error")
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_merged_prs("hydra-fixed")
+        assert result == 0

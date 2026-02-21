@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -831,3 +831,22 @@ class TestMemorySyncLoop:
         source = inspect.getsource(HydraOrchestrator._supervise_loops)
         assert "memory_sync" in source
         assert "_memory_sync_loop" in source
+
+
+# --- _write_digest delegates to atomic_write ---
+
+
+class TestWriteDigestUsesAtomicWrite:
+    """Verify _write_digest delegates to the shared atomic_write utility."""
+
+    def test_write_digest_calls_atomic_write(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        with patch("memory.atomic_write") as mock_aw:
+            worker._write_digest("# Digest content")
+
+        mock_aw.assert_called_once()
+        call_args = mock_aw.call_args[0]
+        assert call_args[0] == tmp_path / ".hydra" / "memory" / "digest.md"
+        assert call_args[1] == "# Digest content"
