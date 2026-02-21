@@ -48,5 +48,5 @@ export const BACKGROUND_WORKERS = [
   { key: 'review_insights', label: 'Review Insights',  color: theme.orange },
   { key: 'pipeline_poller', label: 'Pipeline Poller',  color: theme.textMuted, system: true },
   { key: 'memory_sync',     label: 'Memory Manager',    color: theme.accent,    system: true },
-  { key: 'metrics',         label: 'Metrics',           color: theme.yellow,    system: true },
+  { key: 'metrics',         label: 'Metrics Manager',    color: theme.yellow,    system: true },
 ]
