@@ -306,6 +306,14 @@ class TestHydraConfigDefaults:
         )
         assert cfg.max_workers == 3
 
+    def test_improve_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["hydra-improve"]
+
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -538,6 +546,15 @@ class TestHydraConfigCustomValues:
             state_file=tmp_path / "s.json",
         )
         assert cfg.hitl_active_label == ["custom-active"]
+
+    def test_custom_improve_label(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            improve_label=["my-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["my-improve"]
 
     def test_custom_dry_run_true(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -1084,6 +1101,45 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # max_merge_conflict_fix_attempts: ge=0, le=5
+
+    def test_max_merge_conflict_fix_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 3
+
+    def test_max_merge_conflict_fix_attempts_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 1
+
+    def test_max_merge_conflict_fix_attempts_zero_allowed(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 0
+
+    def test_max_merge_conflict_fix_attempts_above_maximum_raises(
+        self, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_merge_conflict_fix_attempts=6,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     # max_new_files_warning: ge=1, le=20
 
     def test_max_new_files_warning_default(self, tmp_path: Path) -> None:
@@ -1302,6 +1358,38 @@ class TestHydraConfigHitlActiveLabel:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – improve_label env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigImproveLabel:
+    """Tests for improve_label env var override."""
+
+    def test_improve_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "custom-improve")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["custom-improve"]
+
+    def test_improve_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "env-improve")
+        cfg = HydraConfig(
+            improve_label=["explicit-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["explicit-improve"]
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – min_plan_words env var override
 # ---------------------------------------------------------------------------
 
@@ -1344,6 +1432,44 @@ class TestHydraConfigMinPlanWords:
 # ---------------------------------------------------------------------------
 # HydraConfig – lite_plan_labels env var override
 # ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxMergeConflictFixAttempts:
+    """Tests for max_merge_conflict_fix_attempts env var override."""
+
+    def test_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 5
+
+    def test_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 1
+
+    def test_env_var_invalid_value_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "not-a-number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 3
 
 
 class TestHydraConfigLitePlanLabels:

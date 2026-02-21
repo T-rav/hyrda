@@ -136,7 +136,7 @@ class PRInfo(BaseModel):
     draft: bool = False
 
 
-# --- Reviews ---
+# --- HITL ---
 
 
 class HITLResult(BaseModel):
@@ -150,6 +150,16 @@ class HITLResult(BaseModel):
 
 
 # --- Reviews ---
+
+
+class ReviewerStatus(StrEnum):
+    """Lifecycle status of a reviewer agent."""
+
+    REVIEWING = "reviewing"
+    DONE = "done"
+    FAILED = "failed"
+    FIXING = "fixing"
+    FIX_DONE = "fix_done"
 
 
 class ReviewVerdict(StrEnum):
@@ -267,6 +277,7 @@ class ControlStatusConfig(BaseModel):
     hitl_label: list[str] = Field(default_factory=list)
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
+    improve_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0

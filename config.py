@@ -66,6 +66,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_merge_conflict_fix_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=5,
+        description="Max merge conflict resolution retry cycles",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -245,6 +251,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL        → hitl_label
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
+            HYDRA_LABEL_IMPROVE     → improve_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -315,6 +322,15 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
 
+        # merge conflict fix attempts override
+        if self.max_merge_conflict_fix_attempts == 3:  # still at default
+            env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
+            if env_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_merge_conflict_fix_attempts", int(env_attempts)
+                    )
+
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
             "HYDRA_LABEL_FIND": ("find_label", ["hydra-find"]),
@@ -324,6 +340,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL": ("hitl_label", ["hydra-hitl"]),
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
+            "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)
