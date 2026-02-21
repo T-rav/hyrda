@@ -16,6 +16,7 @@ const initialState = {
   sessionImplemented: 0,
   sessionReviewed: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
+  queueStats: null,     // { queue_depth, active_count, total_processed, last_poll_timestamp }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
   hitlItems: [],  // HITLItem[]
@@ -278,6 +279,12 @@ export function reducer(state, action) {
         hitlUpdate: action.data,
       }
 
+    case 'queue_update':
+      return { ...addEvent(state, action), queueStats: action.data }
+
+    case 'QUEUE_STATS':
+      return { ...state, queueStats: action.data }
+
     case 'background_worker_status': {
       const { worker, status, last_run, details } = action.data
       const existing = state.backgroundWorkers.filter(w => w.name !== worker)
@@ -386,6 +393,11 @@ export function useHydraSocket() {
       fetch('/api/system/workers')
         .then(r => r.json())
         .then(data => dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers }))
+        .catch(() => {})
+      // Fetch queue stats on connect
+      fetch('/api/queue')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'QUEUE_STATS', data }))
         .catch(() => {})
       // Fetch metrics on connect
       fetch('/api/metrics')
