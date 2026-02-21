@@ -133,9 +133,12 @@ async def stream_claude_process(
                 stderr_text[:500],
             )
 
-        # Check for credit exhaustion in both stderr and transcript
+        # Check for credit exhaustion in both stderr and transcript.
+        # Skip when early_killed=True — the process was intentionally killed by us
+        # because it produced its expected output; credit phrases in legitimate
+        # transcript content would otherwise cause false-positive pauses.
         combined = f"{stderr_text}\n{accumulated_text}"
-        if is_credit_exhaustion(combined):
+        if not early_killed and is_credit_exhaustion(combined):
             resume_at = parse_credit_resume_time(combined)
             raise CreditExhaustedError("API credit limit reached", resume_at=resume_at)
 

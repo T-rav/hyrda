@@ -244,6 +244,32 @@ class TestStreamClaudeProcessCreditDetection:
         assert result == "All good"
 
     @pytest.mark.asyncio
+    async def test_no_false_positive_when_early_killed(self) -> None:
+        """Credit phrases in transcript should not raise when early_killed=True.
+
+        If on_output kills the process early because it got what it needed,
+        and the accumulated text happens to mention 'usage limit reached' as
+        part of legitimate content, we must NOT trigger a credit pause.
+        """
+        # Transcript contains a credit phrase as part of legitimate content
+        legitimate_output = "The API usage limit reached its maximum throughput"
+        mock_create = make_streaming_proc(
+            returncode=0,
+            stdout=legitimate_output,
+            stderr="",
+        )
+
+        # on_output returns True immediately → early_killed=True
+        def kill_immediately(_text: str) -> bool:
+            return True
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should NOT raise CreditExhaustedError
+            await stream_claude_process(
+                **_default_stream_kwargs(on_output=kill_immediately)
+            )
+
+    @pytest.mark.asyncio
     async def test_credit_exhausted_with_no_time_has_none_resume(self) -> None:
         """Credit exhaustion without reset time info should have resume_at=None."""
         mock_create = make_streaming_proc(
@@ -535,6 +561,9 @@ class TestCreditExhaustionPauseResume:
             timeout=5.0,
         )
         assert not orch.running
+        # run_status must NOT be "credits_paused" after stop — it should clear
+        # the pause state so the user can restart once the orchestrator is idle.
+        assert orch.run_status != "credits_paused"
 
 
 # ===========================================================================

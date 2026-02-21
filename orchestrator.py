@@ -889,6 +889,10 @@ class HydraOrchestrator:
         await self._sleep_or_stop(pause_seconds)
 
         if self._stop_event.is_set():
+            # Stop was requested during the pause — clear the credit hold so that
+            # run_status correctly returns "idle" rather than "credits_paused" after
+            # the orchestrator has fully shut down.
+            self._credits_paused_until = None
             return
 
         # Resume: clear pause state and restart all loops
