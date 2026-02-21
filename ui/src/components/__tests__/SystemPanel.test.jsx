@@ -460,15 +460,19 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       const workersTab = screen.getByText('Workers')
       expect(workersTab.style.color).toBe('var(--accent)')
+      expect(workersTab.style.borderLeftColor).toBe('var(--accent)')
       const livestreamTab = screen.getByText('Livestream')
       expect(livestreamTab.style.color).toBe('var(--text-muted)')
+      expect(livestreamTab.style.borderLeftColor).toBe('transparent')
     })
 
     it('sub-tab styles swap when clicking Livestream', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       fireEvent.click(screen.getByText('Livestream'))
       expect(screen.getByText('Livestream').style.color).toBe('var(--accent)')
+      expect(screen.getByText('Livestream').style.borderLeftColor).toBe('var(--accent)')
       expect(screen.getByText('Workers').style.color).toBe('var(--text-muted)')
+      expect(screen.getByText('Workers').style.borderLeftColor).toBe('transparent')
     })
 
     it('renders event data in Livestream sub-tab', () => {
@@ -478,7 +482,7 @@ describe('SystemPanel', () => {
         pipelineIssues: {},
         orchestratorStatus: 'idle',
         events: [
-          { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1 } },
+          { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1, status: 'running' } },
         ],
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
