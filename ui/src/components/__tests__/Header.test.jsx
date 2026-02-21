@@ -109,7 +109,7 @@ describe('Header component', () => {
     expect(screen.getByText('Software out.')).toBeInTheDocument()
   })
 
-  it('controls section has marginLeft for spacing from pills', () => {
+  it('controls section has marginLeft for spacing from center content', () => {
     render(<Header {...defaultProps} />)
     const startBtn = screen.getByText('Start')
     const controlsDiv = startBtn.parentElement
