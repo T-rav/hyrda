@@ -7,6 +7,7 @@ import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { Livestream } from './components/Livestream'
+import { Timeline } from './components/Timeline'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { theme } from './theme'
@@ -104,7 +105,7 @@ export default function App() {
           )}
           {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'timeline' && <Livestream events={events} />}
+          {activeTab === 'timeline' && <Timeline events={events} workers={workers} prs={prs} />}
           {activeTab === 'livestream' && (
             <div style={styles.timeline}>
               {events.map((e, i) => (
