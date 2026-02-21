@@ -7,6 +7,7 @@ const emptyPipeline = {
   implement: [],
   review: [],
   hitl: [],
+  merged: [],
 }
 
 const initialState = {
@@ -256,8 +257,14 @@ export function reducer(state, action) {
     case 'CONFIG':
       return { ...state, config: action.data }
 
-    case 'EXISTING_PRS':
-      return { ...state, prs: action.data }
+    case 'EXISTING_PRS': {
+      // /api/prs only returns open PRs — preserve merged PRs from session
+      const existingMerged = state.prs.filter(p => p.merged)
+      const openPrs = action.data || []
+      const openNumbers = new Set(openPrs.map(p => p.pr))
+      const merged = existingMerged.filter(p => !openNumbers.has(p.pr))
+      return { ...state, prs: [...openPrs, ...merged] }
+    }
 
     case 'HITL_ITEMS':
       return { ...state, hitlItems: action.data }
@@ -386,6 +393,8 @@ export function reducer(state, action) {
         pipelineIssues: {
           ...emptyPipeline,
           ...action.data,
+          // Server never sends merged — preserve session-accumulated merged items
+          merged: state.pipelineIssues.merged || [],
         },
         pipelinePollerLastRun: new Date().toISOString(),
       }
@@ -395,9 +404,11 @@ export function reducer(state, action) {
       const next = { ...state.pipelineIssues }
 
       // Remove from source stage if specified
+      let foundInFrom = false
       if (fromStage && next[fromStage]) {
         const idx = next[fromStage].findIndex(i => i.issue_number === issueNumber)
         if (idx >= 0) {
+          foundInFrom = true
           next[fromStage] = next[fromStage].filter((_, i) => i !== idx)
           // Add to target stage if specified
           if (toStage && next[toStage] !== undefined) {
@@ -405,7 +416,15 @@ export function reducer(state, action) {
             next[toStage] = [...next[toStage], moved]
           }
         }
-        // If issue wasn't found in fromStage, don't add — let poller discover it
+        // If not found in fromStage but toStage is merged, add anyway (item may have
+        // been removed by a prior event like review_update done)
+        if (!foundInFrom && toStage === 'merged') {
+          const alreadyMerged = (next.merged || []).some(i => i.issue_number === issueNumber)
+          if (!alreadyMerged) {
+            const moved = { issue_number: issueNumber, title: '', url: '', status: 'done' }
+            next.merged = [...(next.merged || []), moved]
+          }
+        }
       } else if (!fromStage && pipeStatus) {
         // Status-only update: find the issue in any stage and update its status
         for (const stageKey of Object.keys(next)) {
@@ -635,11 +654,11 @@ export function HydraProvider({ children }) {
           } else if (event.type === 'worker_update' && event.data?.status && event.data.status !== 'done') {
             dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
           } else if (event.type === 'review_update' && event.data?.status === 'done') {
-            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'review', toStage: null, status: 'done' } })
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'done' } })
           } else if (event.type === 'review_update' && event.data?.status && event.data.status !== 'done') {
             dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
           } else if (event.type === 'merge_update' && event.data?.status === 'merged') {
-            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'review', toStage: null, status: 'done' } })
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'review', toStage: 'merged', status: 'done' } })
           }
         }
 
