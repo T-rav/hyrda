@@ -89,7 +89,7 @@ class PlanAnalyzer:
         result: list[str] = []
         for path in sorted(found):
             # Strip leading ./
-            cleaned = path.removeprefix("./") if path.startswith("./") else path
+            cleaned = path.removeprefix("./")
             suffix = Path(cleaned).suffix.lower()
             if suffix in _CODE_EXTENSIONS:
                 result.append(cleaned)
@@ -256,6 +256,16 @@ class PlanAnalyzer:
         else:
             details.append("`pyproject.toml` not found.")
             warnings += 1
+
+        # Check Makefile for test target
+        makefile = self._repo_root / "Makefile"
+        if makefile.is_file():
+            mk_content = makefile.read_text()
+            if "test" in mk_content:
+                details.append("Test target found in `Makefile`.")
+            else:
+                details.append("No test target found in `Makefile`.")
+                warnings += 1
 
         verdict = AnalysisVerdict.WARN if warnings > 0 else AnalysisVerdict.PASS
         return AnalysisSection(

@@ -437,6 +437,32 @@ class TestTestPatternValidation:
         assert section.verdict == AnalysisVerdict.WARN
         assert any("No pytest configuration" in d for d in section.details)
 
+    def test_validate_test_patterns_makefile_with_test_target(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _setup_repo(tmp_path)
+        (repo / "Makefile").write_text("test:\n\tpytest tests/\n")
+        analyzer = PlanAnalyzer(repo_root=repo)
+
+        plan = "## Testing Strategy\n\nRun make test."
+        section = analyzer._validate_test_patterns(plan)
+
+        assert section.verdict == AnalysisVerdict.PASS
+        assert any("Makefile" in d for d in section.details)
+
+    def test_validate_test_patterns_makefile_without_test_target(
+        self, tmp_path: Path
+    ) -> None:
+        repo = _setup_repo(tmp_path)
+        (repo / "Makefile").write_text("build:\n\techo build\n")
+        analyzer = PlanAnalyzer(repo_root=repo)
+
+        plan = "## Testing Strategy\n\nRun make test."
+        section = analyzer._validate_test_patterns(plan)
+
+        assert section.verdict == AnalysisVerdict.WARN
+        assert any("No test target" in d for d in section.details)
+
 
 # ---------------------------------------------------------------------------
 # Full analyze() tests
