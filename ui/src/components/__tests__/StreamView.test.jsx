@@ -231,6 +231,11 @@ describe('toStreamIssue', () => {
       []
     )
     expect(result.overallStatus).toBe('hitl')
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('done')
+    expect(result.stages.implement.status).toBe('done')
+    expect(result.stages.review.status).toBe('hitl')
+    expect(result.stages.merged.status).toBe('pending')
   })
 
   it('sets overallStatus to failed for failed items', () => {
@@ -240,6 +245,11 @@ describe('toStreamIssue', () => {
       []
     )
     expect(result.overallStatus).toBe('failed')
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('done')
+    expect(result.stages.implement.status).toBe('failed')
+    expect(result.stages.review.status).toBe('pending')
+    expect(result.stages.merged.status).toBe('pending')
   })
 
   it('matches PR from prs array', () => {

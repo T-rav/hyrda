@@ -83,7 +83,12 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
     if (i < currentIdx) {
       stages[k] = { status: 'done', startTime: null, endTime: null, transcript: [] }
     } else if (i === currentIdx) {
-      stages[k] = { status: isDone ? 'done' : isActive ? 'active' : 'pending', startTime: null, endTime: null, transcript: [] }
+      const currentStageStatus = isDone ? 'done'
+        : isActive ? 'active'
+        : pipeIssue.status === 'failed' ? 'failed'
+        : pipeIssue.status === 'hitl' ? 'hitl'
+        : 'pending'
+      stages[k] = { status: currentStageStatus, startTime: null, endTime: null, transcript: [] }
     } else {
       stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
     }
