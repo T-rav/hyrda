@@ -382,3 +382,31 @@ class MetricsResponse(BaseModel):
 
     lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
     rates: dict[str, float] = Field(default_factory=dict)
+
+
+# --- Timeline ---
+
+
+class TimelineStage(BaseModel):
+    """A single stage in an issue's lifecycle timeline."""
+
+    stage: str  # "triage", "plan", "implement", "review", "merge"
+    status: str  # "pending", "in_progress", "done", "failed"
+    started_at: str | None = None
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+    transcript_preview: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class IssueTimeline(BaseModel):
+    """Full lifecycle timeline for a single issue."""
+
+    issue_number: int
+    title: str = ""
+    current_stage: str = ""
+    stages: list[TimelineStage] = Field(default_factory=list)
+    total_duration_seconds: float | None = None
+    pr_number: int | None = None
+    pr_url: str = ""
+    branch: str = ""
