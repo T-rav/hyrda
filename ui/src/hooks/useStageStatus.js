@@ -1,6 +1,4 @@
-import { useMemo } from 'react'
 import { PIPELINE_STAGES, PIPELINE_LOOPS, ACTIVE_STATUSES } from '../constants'
-import { useHydra } from '../context/HydraContext'
 
 /**
  * Mapping from stage key to the session counter property name in state.
@@ -83,22 +81,3 @@ export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, se
   return stageStatus
 }
 
-/**
- * Hook that derives the unified stageStatus model from HydraContext state.
- */
-export function useStageStatus() {
-  const {
-    pipelineIssues, workers, backgroundWorkers,
-    sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount,
-  } = useHydra()
-
-  return useMemo(
-    () => deriveStageStatus(
-      pipelineIssues,
-      workers,
-      backgroundWorkers,
-      { sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount },
-    ),
-    [pipelineIssues, workers, backgroundWorkers, sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount],
-  )
-}

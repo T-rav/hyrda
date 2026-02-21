@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
 import { useHydra } from '../context/HydraContext'
 
 export function Header({
