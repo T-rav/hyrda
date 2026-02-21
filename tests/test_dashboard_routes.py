@@ -74,6 +74,7 @@ class TestCreateRouter:
             "/",
             "/api/state",
             "/api/stats",
+            "/api/queue",
             "/api/metrics",
             "/api/events",
             "/api/prs",
