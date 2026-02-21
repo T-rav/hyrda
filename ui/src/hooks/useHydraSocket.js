@@ -19,6 +19,7 @@ const initialState = {
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
   hitlItems: [],  // HITLItem[]
+  hitlEscalation: null,  // Latest HITL escalation data (triggers refresh)
   humanInputRequests: {},  // Record<string, string>
   backgroundWorkers: [],  // BackgroundWorkerState[]
   metrics: null,  // MetricsData | null
@@ -53,6 +54,7 @@ export function reducer(state, action) {
           sessionImplemented: 0,
           sessionReviewed: 0,
           hitlItems: [],
+          hitlEscalation: null,
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -256,6 +258,19 @@ export function reducer(state, action) {
         mergedCount: action.data.merged || state.mergedCount,
       }
 
+    case 'hitl_escalation': {
+      const hitlReviewKey = `review-${action.data.pr}`
+      const hitlWorker = state.workers[hitlReviewKey]
+      const hitlWorkers = hitlWorker
+        ? { ...state.workers, [hitlReviewKey]: { ...hitlWorker, status: 'escalated' } }
+        : state.workers
+      return {
+        ...addEvent(state, action),
+        workers: hitlWorkers,
+        hitlEscalation: action.data,
+      }
+    }
+
     case 'hitl_update':
       return {
         ...addEvent(state, action),
@@ -393,7 +408,7 @@ export function useHydraSocket() {
           fetchLifetimeStats()
           fetch('/api/metrics').then(r => r.json()).then(data => dispatch({ type: 'METRICS', data })).catch(() => {})
         }
-        if (event.type === 'hitl_update') fetchHitlItems()
+        if (event.type === 'hitl_update' || event.type === 'hitl_escalation') fetchHitlItems()
       } catch { /* ignore parse errors */ }
     }
 

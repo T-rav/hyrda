@@ -155,6 +155,18 @@ class ReviewPhase:
                         await self._prs.add_pr_labels(
                             pr.number, [self._config.hitl_label[0]]
                         )
+                        await self._bus.publish(
+                            HydraEvent(
+                                type=EventType.HITL_ESCALATION,
+                                data={
+                                    "issue": pr.issue_number,
+                                    "pr": pr.number,
+                                    "status": "escalated",
+                                    "role": "reviewer",
+                                    "cause": "merge_conflict",
+                                },
+                            )
+                        )
                         return ReviewResult(
                             pr_number=pr.number,
                             issue_number=pr.issue_number,
@@ -274,6 +286,18 @@ class ReviewPhase:
                                     pr.number,
                                     [self._config.hitl_label[0]],
                                 )
+                                await self._bus.publish(
+                                    HydraEvent(
+                                        type=EventType.HITL_ESCALATION,
+                                        data={
+                                            "issue": pr.issue_number,
+                                            "pr": pr.number,
+                                            "status": "escalated",
+                                            "role": "reviewer",
+                                            "cause": "merge_failed",
+                                        },
+                                    )
+                                )
 
                     elif result.verdict in (
                         ReviewVerdict.REQUEST_CHANGES,
@@ -391,6 +415,19 @@ class ReviewPhase:
             await self._prs.remove_pr_label(pr.number, lbl)
         await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
         await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.HITL_ESCALATION,
+                data={
+                    "issue": issue.number,
+                    "pr": pr.number,
+                    "status": "escalated",
+                    "role": "reviewer",
+                    "cause": "ci_failed",
+                    "ci_fix_attempts": result.ci_fix_attempts,
+                },
+            )
+        )
         return False
 
     async def _record_review_insight(self, result: ReviewResult) -> None:
@@ -584,6 +621,18 @@ class ReviewPhase:
                 await self._prs.remove_pr_label(pr.number, lbl)
             await self._prs.add_labels(pr.issue_number, [self._config.hitl_label[0]])
             await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.HITL_ESCALATION,
+                    data={
+                        "issue": pr.issue_number,
+                        "pr": pr.number,
+                        "status": "escalated",
+                        "role": "reviewer",
+                        "cause": "review_fix_cap_exceeded",
+                    },
+                )
+            )
             return False  # Destroy worktree
 
     async def _resolve_merge_conflicts(
