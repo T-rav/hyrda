@@ -183,7 +183,7 @@ def create_router(
         orch = get_orchestrator()
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
-        correction = body.get("correction", "")
+        correction = body.get("correction") or ""
         if not correction.strip():
             return JSONResponse(
                 {"status": "error", "detail": "Correction text must not be empty"},

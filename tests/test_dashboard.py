@@ -1719,6 +1719,27 @@ class TestHITLCorrectEndpoint:
         assert response.status_code == 400
         assert "must not be empty" in response.json()["detail"]
 
+    def test_correct_rejects_null_correction(
+        self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraDashboard
+
+        state = make_state(tmp_path)
+        orch = make_orchestrator_mock()
+        dashboard = HydraDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/hitl/42/correct",
+            json={"correction": None},
+        )
+
+        assert response.status_code == 400
+        assert "must not be empty" in response.json()["detail"]
+
 
 # ---------------------------------------------------------------------------
 # POST /api/hitl/{issue}/skip
