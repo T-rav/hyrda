@@ -592,9 +592,10 @@ class TestWorktreeCreationFailure:
 
         results, _ = await phase.run_batch()
 
-        # All workers should have stopped
+        # All collected results should be stopped (stop event checked before semaphore)
         for r in results:
-            assert r.success is False or r.error == "stopped"
+            assert r.success is False
+            assert r.error == "stopped"
 
 
 # ---------------------------------------------------------------------------
