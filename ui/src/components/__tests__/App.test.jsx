@@ -45,34 +45,13 @@ beforeEach(() => {
   cleanup()
 })
 
-describe('App worker select tab switching', () => {
-  it('clicking a worker switches to transcript tab', async () => {
+describe('Transcript tab', () => {
+  it('clicking Transcript tab shows transcript content', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
 
-    // Switch to Livestream tab first (no overlapping worker elements)
-    fireEvent.click(screen.getByText('Livestream'))
-
-    // Click the worker card in sidebar (first match)
-    const workerCards = screen.getAllByText('#1')
-    fireEvent.click(workerCards[0])
-
-    // Transcript tab should now be active and transcript content visible
-    expect(screen.getByText('line 1')).toBeInTheDocument()
-  })
-
-  it('clicking a worker when already on transcript tab keeps transcript active', async () => {
-    const { default: App } = await import('../../App')
-    render(<App />)
-
-    // Click Transcript tab first
     fireEvent.click(screen.getByText('Transcript'))
-
-    // Click the worker via its card
-    const workerCards = screen.getAllByText('#1')
-    fireEvent.click(workerCards[0])
-
-    // Should still be on transcript tab with content visible
+    // Auto-selects the active worker and shows its transcript
     expect(screen.getByText('line 1')).toBeInTheDocument()
   })
 })
@@ -104,7 +83,7 @@ describe('Layout min-width', () => {
     const { default: App } = await import('../../App')
     const { container } = render(<App />)
     const layout = container.firstChild
-    expect(layout.style.minWidth).toBe('1024px')
+    expect(layout.style.minWidth).toBe('800px')
   })
 })
 

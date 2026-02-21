@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react'
 import { HydraProvider, useHydra } from './context/HydraContext'
 import { Header } from './components/Header'
-import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
@@ -46,10 +45,6 @@ function AppContent() {
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
-  const handleWorkerSelect = useCallback((worker) => {
-    setSelectedWorker(worker)
-    setActiveTab('transcript')
-  }, [])
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
@@ -108,13 +103,6 @@ function AppContent() {
         phase={phase}
         workers={workers}
         config={config}
-      />
-
-      <WorkerList
-        workers={workers}
-        selectedWorker={selectedWorker}
-        onSelect={handleWorkerSelect}
-        humanInputRequests={humanInputRequests}
       />
 
       <div style={styles.main}>
@@ -187,9 +175,9 @@ const styles = {
   layout: {
     display: 'grid',
     gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '280px 1fr',
+    gridTemplateColumns: '1fr',
     height: '100vh',
-    minWidth: '1024px',
+    minWidth: '800px',
   },
   main: {
     display: 'flex',
