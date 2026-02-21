@@ -2390,6 +2390,16 @@ class TestAddLabelsHelper:
 
         mock_create.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_add_labels_error_does_not_raise(self, config, event_bus):
+        """_add_labels should log a warning on failure without propagating the error."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="label not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._add_labels("issue", 42, ["missing-label"])
+
 
 # ---------------------------------------------------------------------------
 # Private helper: _remove_label

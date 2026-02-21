@@ -86,3 +86,14 @@ class TestAtomicWrite:
             mock_mkstemp.assert_called_once()
             kwargs = mock_mkstemp.call_args[1]
             assert str(kwargs["dir"]) == str(tmp_path)
+
+    def test_writes_empty_string(self, tmp_path: Path) -> None:
+        """atomic_write("") should create an empty file without error.
+
+        This is the code path triggered by events.py _rotate_sync when all
+        event lines are expired during log rotation.
+        """
+        target = tmp_path / "out.txt"
+        atomic_write(target, "")
+        assert target.exists()
+        assert target.read_text() == ""
