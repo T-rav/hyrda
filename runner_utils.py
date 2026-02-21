@@ -26,6 +26,7 @@ async def stream_claude_process(
     event_data: dict[str, Any],
     logger: logging.Logger,
     on_output: Callable[[str], bool] | None = None,
+    timeout: float | None = None,
 ) -> str:
     """Run a ``claude -p`` subprocess and stream its output.
 
@@ -75,6 +76,8 @@ async def stream_claude_process(
         assert proc.stdout is not None
         assert proc.stderr is not None
 
+        stdout_stream = proc.stdout  # capture for nested function
+
         proc.stdin.write(prompt.encode())
         await proc.stdin.drain()
         proc.stdin.close()
@@ -88,46 +91,57 @@ async def stream_claude_process(
         accumulated_text = ""
         early_killed = False
 
-        async for raw in proc.stdout:
-            line = raw.decode(errors="replace").rstrip("\n")
-            raw_lines.append(line)
-            if not line.strip():
-                continue
+        async def _stream_body() -> str:
+            nonlocal result_text, accumulated_text, early_killed
 
-            display, result = parser.parse(line)
-            if result is not None:
-                result_text = result
+            async for raw in stdout_stream:
+                line = raw.decode(errors="replace").rstrip("\n")
+                raw_lines.append(line)
+                if not line.strip():
+                    continue
 
-            if display.strip():
-                accumulated_text += display + "\n"
-                await event_bus.publish(
-                    HydraEvent(
-                        type=EventType.TRANSCRIPT_LINE,
-                        data={**event_data, "line": display},
+                display, result = parser.parse(line)
+                if result is not None:
+                    result_text = result
+
+                if display.strip():
+                    accumulated_text += display + "\n"
+                    await event_bus.publish(
+                        HydraEvent(
+                            type=EventType.TRANSCRIPT_LINE,
+                            data={**event_data, "line": display},
+                        )
                     )
+
+                if (
+                    on_output is not None
+                    and not early_killed
+                    and on_output(accumulated_text)
+                ):
+                    early_killed = True
+                    proc.kill()
+                    break
+
+            stderr_bytes = await stderr_task
+            await proc.wait()
+
+            if not early_killed and proc.returncode != 0:
+                stderr_text = stderr_bytes.decode(errors="replace").strip()
+                logger.warning(
+                    "Process exited with code %d: %s",
+                    proc.returncode,
+                    stderr_text[:500],
                 )
 
-            if (
-                on_output is not None
-                and not early_killed
-                and on_output(accumulated_text)
-            ):
-                early_killed = True
-                proc.kill()
-                break
+            return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
 
-        stderr_bytes = await stderr_task
+        if timeout is not None:
+            return await asyncio.wait_for(_stream_body(), timeout=timeout)
+        return await _stream_body()
+    except TimeoutError:
+        proc.kill()
         await proc.wait()
-
-        if not early_killed and proc.returncode != 0:
-            stderr_text = stderr_bytes.decode(errors="replace").strip()
-            logger.warning(
-                "Process exited with code %d: %s",
-                proc.returncode,
-                stderr_text[:500],
-            )
-
-        return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
+        raise RuntimeError(f"Claude process timed out after {timeout}s") from None
     except asyncio.CancelledError:
         proc.kill()
         raise

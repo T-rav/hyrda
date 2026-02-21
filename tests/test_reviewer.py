@@ -1091,3 +1091,54 @@ def test_build_review_prompt_no_make_test_fast(config, event_bus, pr_info, issue
     prompt = runner._build_review_prompt(pr_info, issue, "diff")
 
     assert "make test-fast" not in prompt
+
+
+# ---------------------------------------------------------------------------
+# _get_head_sha — timeout
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_head_sha_timeout_returns_none(config, event_bus, tmp_path):
+    """_get_head_sha should return None when git rev-parse times out."""
+    runner = _make_runner(config, event_bus)
+    mock_proc = AsyncMock()
+    mock_proc.returncode = None
+    mock_proc.kill = MagicMock()
+    mock_proc.wait = AsyncMock()
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with (
+        patch("asyncio.create_subprocess_exec", mock_create),
+        patch("asyncio.wait_for", side_effect=TimeoutError),
+    ):
+        result = await runner._get_head_sha(tmp_path)
+
+    assert result is None
+    mock_proc.kill.assert_called_once()
+    mock_proc.wait.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _has_changes — timeout
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_has_changes_timeout_returns_false(config, event_bus, tmp_path):
+    """_has_changes should return False when git status times out."""
+    runner = _make_runner(config, event_bus)
+    # Same SHA so it falls through to git status check
+    mock_proc = AsyncMock()
+    mock_proc.returncode = None
+    mock_proc.communicate = AsyncMock(side_effect=TimeoutError)
+    mock_create = AsyncMock(return_value=mock_proc)
+
+    with (
+        patch.object(runner, "_get_head_sha", AsyncMock(return_value="abc123")),
+        patch("asyncio.create_subprocess_exec", mock_create),
+        patch("asyncio.wait_for", side_effect=TimeoutError),
+    ):
+        result = await runner._has_changes(tmp_path, before_sha="abc123")
+
+    assert result is False

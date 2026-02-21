@@ -1739,3 +1739,106 @@ class TestBuildPromptFallbackAndTruncation:
         runner = AgentRunner(config, event_bus)
         prompt = runner._build_prompt(issue)
         assert "`make test`" in prompt
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._verify_result — timeout
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyResultTimeout:
+    """Tests for _verify_result timeout behavior."""
+
+    @pytest.mark.asyncio
+    async def test_verify_result_timeout_returns_failure(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_verify_result should return (False, ...) when make quality times out."""
+        runner = AgentRunner(config, event_bus)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                return_value=mock_proc,
+            ),
+            patch(
+                "asyncio.wait_for",
+                side_effect=TimeoutError,
+            ),
+        ):
+            success, msg = await runner._verify_result(tmp_path, "agent/issue-42")
+
+        assert success is False
+        assert "timed out" in msg
+
+    @pytest.mark.asyncio
+    async def test_verify_result_timeout_kills_process(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_verify_result should kill the process on timeout."""
+        runner = AgentRunner(config, event_bus)
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch.object(
+                runner, "_count_commits", new_callable=AsyncMock, return_value=1
+            ),
+            patch(
+                "asyncio.create_subprocess_exec",
+                return_value=mock_proc,
+            ),
+            patch(
+                "asyncio.wait_for",
+                side_effect=TimeoutError,
+            ),
+        ):
+            await runner._verify_result(tmp_path, "agent/issue-42")
+
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._count_commits — timeout
+# ---------------------------------------------------------------------------
+
+
+class TestCountCommitsTimeout:
+    """Tests for _count_commits timeout behavior."""
+
+    @pytest.mark.asyncio
+    async def test_count_commits_timeout_returns_zero(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """_count_commits should return 0 when git rev-list times out."""
+        runner = AgentRunner(config, event_bus)
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch(
+                "asyncio.create_subprocess_exec",
+                AsyncMock(return_value=mock_proc),
+            ),
+            patch(
+                "asyncio.wait_for",
+                side_effect=TimeoutError,
+            ),
+        ):
+            result = await runner._count_commits(tmp_path, "agent/issue-42")
+
+        assert result == 0

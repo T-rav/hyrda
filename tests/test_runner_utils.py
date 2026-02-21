@@ -431,3 +431,101 @@ class TestStreamClaudeProcessSessionGroup:
 
         kwargs = mock_exec.call_args[1]
         assert kwargs["start_new_session"] is True
+
+
+# ---------------------------------------------------------------------------
+# stream_claude_process — timeout behavior
+# ---------------------------------------------------------------------------
+
+
+class TestStreamClaudeProcessTimeout:
+    """Tests for stream_claude_process timeout behavior."""
+
+    @pytest.mark.asyncio
+    async def test_no_timeout_by_default(self) -> None:
+        """When timeout=None (default), no wait_for wrapping occurs."""
+        mock_create = make_streaming_proc(returncode=0, stdout="ok")
+
+        with (
+            patch("asyncio.create_subprocess_exec", mock_create),
+            patch("asyncio.wait_for") as mock_wait_for,
+        ):
+            await stream_claude_process(**_default_kwargs())
+
+        mock_wait_for.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_timeout_kills_process_and_raises(self) -> None:
+        """When timeout fires, process is killed and RuntimeError is raised."""
+
+        class HangingIter:
+            """Async iterator that hangs until cancelled."""
+
+            def __aiter__(self):  # noqa: ANN204
+                return self
+
+            async def __anext__(self) -> bytes:
+                await asyncio.sleep(3600)
+                return b""
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdout = HangingIter()
+        mock_proc.stderr = AsyncMock()
+        mock_proc.stderr.read = AsyncMock(return_value=b"")
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        mock_create = AsyncMock(return_value=mock_proc)
+        active_procs: set[asyncio.subprocess.Process] = set()
+
+        with (
+            patch("asyncio.create_subprocess_exec", mock_create),
+            pytest.raises(RuntimeError, match="timed out after 0.01s"),
+        ):
+            await stream_claude_process(
+                **_default_kwargs(active_procs=active_procs),
+                timeout=0.01,
+            )
+
+        mock_proc.kill.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_timeout_cleans_up_active_procs(self) -> None:
+        """Process should be removed from active_procs on timeout."""
+
+        class HangingIter:
+            """Async iterator that hangs."""
+
+            def __aiter__(self):  # noqa: ANN204
+                return self
+
+            async def __anext__(self) -> bytes:
+                await asyncio.sleep(3600)
+                return b""
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.stdin = MagicMock()
+        mock_proc.stdin.drain = AsyncMock()
+        mock_proc.stdout = HangingIter()
+        mock_proc.stderr = AsyncMock()
+        mock_proc.stderr.read = AsyncMock(return_value=b"")
+        mock_proc.kill = MagicMock()
+        mock_proc.wait = AsyncMock()
+
+        mock_create = AsyncMock(return_value=mock_proc)
+        active_procs: set[asyncio.subprocess.Process] = set()
+
+        with (
+            patch("asyncio.create_subprocess_exec", mock_create),
+            pytest.raises(RuntimeError),
+        ):
+            await stream_claude_process(
+                **_default_kwargs(active_procs=active_procs),
+                timeout=0.01,
+            )
+
+        assert len(active_procs) == 0
