@@ -89,7 +89,7 @@ class PlanAnalyzer:
         result: list[str] = []
         for path in sorted(found):
             # Strip leading ./
-            cleaned = path.lstrip("./") if path.startswith("./") else path
+            cleaned = path.removeprefix("./") if path.startswith("./") else path
             suffix = Path(cleaned).suffix.lower()
             if suffix in _CODE_EXTENSIONS:
                 result.append(cleaned)

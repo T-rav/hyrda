@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis import PlanAnalyzer
-from models import AnalysisVerdict
+from models import AnalysisResult, AnalysisSection, AnalysisVerdict
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,28 +31,6 @@ PLAN_ALL_EXIST = """\
 ## Testing Strategy
 
 All tests use `tmp_path` fixtures. Run with pytest.
-"""
-
-PLAN_SOME_MISSING = """\
-## Files to Modify
-
-- `models.py`: Add enum
-- `nonexistent_file.py`: Does not exist
-- `also_missing.py`: Also missing
-
-## Testing Strategy
-
-Tests go in `tests/`.
-"""
-
-PLAN_NO_SECTIONS = """\
-## Summary
-
-This plan does something.
-
-## Implementation Steps
-
-1. Do the thing.
 """
 
 
@@ -530,8 +508,6 @@ class TestFormatComment:
     """Tests for AnalysisResult.format_comment."""
 
     def test_format_comment_includes_all_sections(self) -> None:
-        from models import AnalysisResult, AnalysisSection
-
         result = AnalysisResult(
             issue_number=42,
             sections=[
@@ -560,8 +536,6 @@ class TestFormatComment:
         assert "Test Pattern Check" in comment
 
     def test_format_comment_shows_verdict_icons(self) -> None:
-        from models import AnalysisResult, AnalysisSection
-
         result = AnalysisResult(
             issue_number=42,
             sections=[
@@ -577,8 +551,6 @@ class TestFormatComment:
         assert "\U0001f6d1 BLOCK" in comment
 
     def test_format_comment_includes_details(self) -> None:
-        from models import AnalysisResult, AnalysisSection
-
         result = AnalysisResult(
             issue_number=42,
             sections=[
@@ -595,8 +567,6 @@ class TestFormatComment:
         assert "- Missing file: `bar.py`" in comment
 
     def test_format_comment_includes_footer(self) -> None:
-        from models import AnalysisResult, AnalysisSection
-
         result = AnalysisResult(
             issue_number=42,
             sections=[
