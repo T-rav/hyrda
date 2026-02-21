@@ -61,6 +61,21 @@ describe('PRTable', () => {
     await waitFor(() => {
       expect(screen.getByText('No pull requests yet')).toBeInTheDocument()
     })
+    expect(screen.getByText('Refresh')).toBeInTheDocument()
+    expect(screen.getByText('0 pull requests')).toBeInTheDocument()
+  })
+
+  it('refresh button works in empty state', async () => {
+    mockFetchWith([])
+
+    render(<PRTable />)
+    await waitFor(() => {
+      expect(screen.getByText('No pull requests yet')).toBeInTheDocument()
+    })
+
+    global.fetch.mockClear()
+    fireEvent.click(screen.getByText('Refresh'))
+    expect(global.fetch).toHaveBeenCalledWith('/api/prs')
   })
 
   it('refresh button calls fetch again', async () => {
@@ -135,6 +150,8 @@ describe('PRTable', () => {
     await waitFor(() => {
       expect(screen.getByText('No pull requests yet')).toBeInTheDocument()
     })
+    expect(screen.getByText('Refresh')).toBeInTheDocument()
+    expect(screen.getByText('0 pull requests')).toBeInTheDocument()
   })
 
   it('container has overflowX auto for horizontal scrolling', async () => {

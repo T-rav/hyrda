@@ -50,18 +50,21 @@ export function HITLTable({ items, onRefresh }) {
   const isAnyActionLoading = (issueNum) =>
     actionLoading && actionLoading.issue === issueNum
 
-  if (items.length === 0) {
-    return <div style={styles.empty}>No stuck PRs</div>
-  }
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.headerText}>
-          {items.length} issue{items.length !== 1 ? 's' : ''} stuck on CI
+        <span style={items.length === 0
+          ? { ...styles.headerText, color: theme.textMuted }
+          : styles.headerText}>
+          {items.length === 0
+            ? 'HITL'
+            : `${items.length} issue${items.length !== 1 ? 's' : ''} stuck on CI`}
         </span>
         <button onClick={onRefresh} style={styles.refresh}>Refresh</button>
       </div>
+      {items.length === 0 ? (
+        <div style={styles.empty}>No stuck PRs</div>
+      ) : (
       <table style={styles.table}>
         <thead>
           <tr>
@@ -163,6 +166,7 @@ export function HITLTable({ items, onRefresh }) {
           })}
         </tbody>
       </table>
+      )}
     </div>
   )
 }

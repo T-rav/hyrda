@@ -518,6 +518,78 @@ describe('useHydraSocket reducer', () => {
     })
   })
 
+  describe('PR deduplication', () => {
+    it('EXISTING_PRS replaces state instead of prepending', () => {
+      const state = { ...initialState, prs: [{ pr: 1 }, { pr: 2 }] }
+      const next = reducer(state, { type: 'EXISTING_PRS', data: [{ pr: 3 }, { pr: 4 }] })
+      expect(next.prs).toEqual([{ pr: 3 }, { pr: 4 }])
+    })
+
+    it('EXISTING_PRS on reconnect does not duplicate', () => {
+      const data = [{ pr: 10 }, { pr: 20 }]
+      let state = reducer(initialState, { type: 'EXISTING_PRS', data })
+      state = reducer(state, { type: 'EXISTING_PRS', data })
+      expect(state.prs).toHaveLength(2)
+      expect(state.prs).toEqual(data)
+    })
+
+    it('pr_created does not add duplicate PR', () => {
+      const state = { ...initialState, prs: [{ pr: 42, issue: 1 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 42, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(1)
+      expect(next.sessionPrsCount).toBe(1)
+    })
+
+    it('pr_created adds new PR when not a duplicate', () => {
+      const state = { ...initialState, prs: [{ pr: 42 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 43, issue: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(2)
+      expect(next.sessionPrsCount).toBe(2)
+    })
+
+    it('pr_created deduplicates after EXISTING_PRS backfill', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 10 }, { pr: 20 }],
+      })
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 10, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(state.prs).toHaveLength(2)
+      expect(state.sessionPrsCount).toBe(0)
+    })
+
+    it('WebSocket reconnect with overlapping data does not inflate count', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }],
+      })
+      // Simulate a pr_created event during the session
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 4, issue: 4 },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(state.prs).toHaveLength(4)
+      // Simulate reconnect — EXISTING_PRS replaces with fresh API data
+      state = reducer(state, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }, { pr: 4 }],
+      })
+      expect(state.prs).toHaveLength(4)
+    })
+  })
+
   describe('orchestrator_status clears stale session state', () => {
     const staleState = {
       ...initialState,
