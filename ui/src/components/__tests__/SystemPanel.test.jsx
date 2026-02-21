@@ -458,4 +458,26 @@ describe('SystemPanel', () => {
       expect(livestreamTab.style.color).toBe('var(--text-muted)')
     })
   })
+
+  describe('View Log link', () => {
+    it('shows View Log link on each background worker card when onViewLog provided', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onViewLog={() => {}} />)
+      for (const def of BACKGROUND_WORKERS) {
+        expect(screen.getByTestId(`view-log-${def.key}`)).toBeInTheDocument()
+        expect(screen.getByTestId(`view-log-${def.key}`)).toHaveTextContent('View Log')
+      }
+    })
+
+    it('does not show View Log link when onViewLog is not provided', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
+      expect(screen.queryByText('View Log')).not.toBeInTheDocument()
+    })
+
+    it('clicking View Log calls onViewLog with bg-prefixed key', () => {
+      const onViewLog = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onViewLog={onViewLog} />)
+      fireEvent.click(screen.getByTestId('view-log-memory_sync'))
+      expect(onViewLog).toHaveBeenCalledWith('bg-memory_sync')
+    })
+  })
 })

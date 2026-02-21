@@ -94,7 +94,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
   )
 }
 
-function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker }) {
+function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog }) {
   const isPipelinePoller = def.key === 'pipeline_poller'
   const isSystem = def.system === true
   const orchRunning = orchestratorStatus === 'running'
@@ -188,7 +188,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
         Last run: {relativeTime(lastRun)}
       </div>
       {hasDetails && (
-        <div style={isError ? styles.detailsError : styles.details}>
+        <div style={isError ? (onViewLog ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
             <div key={k} style={k === 'error' ? styles.errorRow : styles.detailRow}>
               <span style={isError ? styles.detailKeyError : styles.detailKey}>{k.replace(/_/g, ' ')}</span>
@@ -197,11 +197,22 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
           ))}
         </div>
       )}
+      {onViewLog && (
+        <div style={styles.cardActions}>
+          <span
+            style={styles.viewLogLink}
+            onClick={() => onViewLog(`bg-${def.key}`)}
+            data-testid={`view-log-${def.key}`}
+          >
+            View Log
+          </span>
+        </div>
+      )}
     </div>
   )
 }
 
-export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
+export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog }) {
   const { pipelinePollerLastRun, hitlItems, pipelineIssues, orchestratorStatus, events } = useHydra()
   const [activeSubTab, setActiveSubTab] = useState('workers')
   const pipelineWorkers = Object.entries(workers || {}).filter(
@@ -299,6 +310,7 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
                     pipelinePollerLastRun={pipelinePollerLastRun}
                     orchestratorStatus={orchestratorStatus}
                     onToggleBgWorker={onToggleBgWorker}
+                    onViewLog={onViewLog}
                   />
                 )
               })}
@@ -427,6 +439,13 @@ const styles = {
     margin: '0 -16px -16px',
     padding: '8px 16px 16px',
     borderRadius: '0 0 8px 8px',
+  },
+  detailsErrorCompact: {
+    borderTop: `1px solid ${theme.red}`,
+    paddingTop: 8,
+    background: theme.redSubtle,
+    margin: '0 -16px 0',
+    padding: '8px 16px',
   },
   detailRow: {
     display: 'flex',
@@ -586,6 +605,24 @@ const styles = {
     borderRadius: 10,
     padding: '2px 10px',
     marginBottom: 12,
+  },
+  cardActions: {
+    display: 'flex',
+    gap: 8,
+    paddingTop: 8,
+    borderTop: `1px solid ${theme.border}`,
+    marginTop: 8,
+  },
+  viewLogLink: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: theme.accent,
+    cursor: 'pointer',
+    padding: '3px 8px',
+    borderRadius: 4,
+    border: `1px solid ${theme.border}`,
+    background: 'transparent',
+    transition: 'background 0.15s',
   },
 }
 
