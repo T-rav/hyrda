@@ -3,18 +3,8 @@ import { render, screen } from '@testing-library/react'
 import {
   Header,
   dotConnected, dotDisconnected,
-  sessionPillStyles, sessionConnectorStyles,
   startBtnEnabled, startBtnDisabled,
 } from '../Header'
-
-const SESSION_STAGE_KEYS = ['triage', 'plan', 'implement', 'review', 'merged']
-const STAGE_COLORS = {
-  triage: 'var(--triage-green)',
-  plan: 'var(--purple)',
-  implement: 'var(--accent)',
-  review: 'var(--orange)',
-  merged: 'var(--green)',
-}
 
 describe('Header pre-computed styles', () => {
   describe('dot variants', () => {
@@ -33,54 +23,6 @@ describe('Header pre-computed styles', () => {
     })
   })
 
-  describe('session pill styles', () => {
-    it('has entries for all 5 session stages including merged', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles).toHaveProperty(key)
-      }
-    })
-
-    it('uses correct color with opacity suffix for each stage', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles[key].background).toBe(STAGE_COLORS[key] + '20')
-        expect(sessionPillStyles[key].color).toBe(STAGE_COLORS[key])
-        expect(sessionPillStyles[key].borderColor).toBe(STAGE_COLORS[key] + '44')
-      }
-    })
-
-    it('session pill styles include base sessionPill properties', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionPillStyles[key]).toMatchObject({
-          padding: '3px 10px',
-          borderRadius: 10,
-          fontSize: 12,
-          fontWeight: 600,
-        })
-      }
-    })
-  })
-
-  describe('session connector styles', () => {
-    it('has entries for all 5 session stages', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles).toHaveProperty(key)
-      }
-    })
-
-    it('uses stage color with opacity suffix for background', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles[key].background).toBe(STAGE_COLORS[key] + '55')
-      }
-    })
-
-    it('connector has compact dimensions (thinner than process connectors)', () => {
-      for (const key of SESSION_STAGE_KEYS) {
-        expect(sessionConnectorStyles[key]).toMatchObject({ width: 12, height: 1, flexShrink: 0 })
-      }
-    })
-
-  })
-
   describe('start button variants', () => {
     it('startBtnEnabled has opacity 1 and pointer cursor', () => {
       expect(startBtnEnabled).toMatchObject({ opacity: 1, cursor: 'pointer' })
@@ -95,18 +37,15 @@ describe('Header pre-computed styles', () => {
   it('style objects are referentially stable', () => {
     expect(dotConnected).toBe(dotConnected)
     expect(startBtnEnabled).toBe(startBtnEnabled)
-    expect(sessionPillStyles.triage).toBe(sessionPillStyles.triage)
   })
 })
 
 describe('Header component', () => {
   const defaultProps = {
-    sessionCounts: { triage: 0, plan: 0, implement: 0, review: 0, merged: 0 },
     connected: true,
     orchestratorStatus: 'idle',
     onStart: () => {},
     onStop: () => {},
-    phase: 'idle',
     workers: {},
   }
 
@@ -123,30 +62,6 @@ describe('Header component', () => {
   it('renders Stop button when running', () => {
     render(<Header {...defaultProps} orchestratorStatus="running" />)
     expect(screen.getByText('Stop')).toBeInTheDocument()
-  })
-
-  it('renders session pills with all 5 stage labels', () => {
-    render(<Header {...defaultProps} />)
-    expect(screen.getByText('TRIAGE')).toBeInTheDocument()
-    expect(screen.getByText('PLAN')).toBeInTheDocument()
-    expect(screen.getByText('IMPLEMENT')).toBeInTheDocument()
-    expect(screen.getByText('REVIEW')).toBeInTheDocument()
-    expect(screen.getByText('MERGED')).toBeInTheDocument()
-  })
-
-  it('renders session pill counts correctly', () => {
-    const counts = { triage: 3, plan: 5, implement: 4, review: 2, merged: 7 }
-    render(<Header {...defaultProps} sessionCounts={counts} />)
-    expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('5')).toBeInTheDocument()
-    expect(screen.getByText('7')).toBeInTheDocument()
-  })
-
-  it('renders session pill counts as 0 when all zero', () => {
-    render(<Header {...defaultProps} />)
-    // All 5 session pills show 0
-    const zeros = screen.getAllByText('0')
-    expect(zeros.length).toBe(5)
   })
 
   it('renders workload summary with empty workers', () => {
@@ -182,15 +97,6 @@ describe('Header component', () => {
     expect(screen.getByText('1 active')).toBeInTheDocument()
   })
 
-  it('renders connector lines between session pills instead of arrows', () => {
-    render(<Header {...defaultProps} />)
-    // No arrow characters should be rendered
-    expect(screen.queryByText('\u2192')).toBeNull()
-    // 5 session stages means 4 connectors rendered as divs with testid
-    const connectors = screen.getAllByTestId('session-connector')
-    expect(connectors.length).toBe(4)
-  })
-
   it('renders Session label', () => {
     render(<Header {...defaultProps} />)
     expect(screen.getByText('Session')).toBeInTheDocument()
@@ -202,7 +108,7 @@ describe('Header component', () => {
     expect(screen.getByText('Software out.')).toBeInTheDocument()
   })
 
-  it('controls section has marginLeft for spacing from pills', () => {
+  it('controls section has marginLeft for spacing from center content', () => {
     render(<Header {...defaultProps} />)
     const startBtn = screen.getByText('Start')
     const controlsDiv = startBtn.parentElement
