@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
@@ -29,7 +30,7 @@ from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
-from subprocess_util import AuthenticationError
+from subprocess_util import AuthenticationError, CreditExhaustedError
 from triage import TriageRunner
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
@@ -90,6 +91,9 @@ class HydraOrchestrator:
         self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
         self._auth_failed = False
+        # Credit pause — set when API credits are exhausted
+        self._credits_paused_until: datetime | None = None
+        self._credit_pause_lock = asyncio.Lock()
 
         # Centralized issue store and fetcher
         self._fetcher = IssueFetcher(config)
@@ -165,9 +169,14 @@ class HydraOrchestrator:
 
     @property
     def run_status(self) -> str:
-        """Return the current lifecycle status: idle, running, stopping, auth_failed, or done."""
+        """Return the current lifecycle status: idle, running, stopping, auth_failed, credits_paused, or done."""
         if self._auth_failed:
             return "auth_failed"
+        if (
+            self._credits_paused_until is not None
+            and self._credits_paused_until > datetime.now(UTC)
+        ):
+            return "credits_paused"
         if self._stop_event.is_set() and (
             self._running or self._has_active_processes()
         ):
@@ -237,6 +246,7 @@ class HydraOrchestrator:
         self._stop_event.clear()
         self._running = False
         self._auth_failed = False
+        self._credits_paused_until = None
         self._store.clear_active()
         self._active_impl_issues.clear()
         self._active_review_issues.clear()
@@ -246,8 +256,6 @@ class HydraOrchestrator:
         self, name: str, status: str, details: dict[str, Any] | None = None
     ) -> None:
         """Record the latest heartbeat from a background worker."""
-        from datetime import UTC, datetime
-
         self._bg_worker_states[name] = {
             "name": name,
             "status": status,
@@ -378,6 +386,12 @@ class HydraOrchestrator:
                             self._stop_event.set()
                             break
 
+                        if isinstance(exc, CreditExhaustedError):
+                            await self._pause_for_credits(
+                                exc, name, tasks, loop_factories
+                            )
+                            break
+
                         logger.error("Loop %r crashed — restarting: %s", name, exc)
                         await self._bus.publish(
                             HydraEvent(
@@ -405,7 +419,7 @@ class HydraOrchestrator:
                 continue
             try:
                 await self._triage_find_issues()
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception("Triage loop iteration failed — will retry next cycle")
@@ -425,7 +439,7 @@ class HydraOrchestrator:
                 continue
             try:
                 await self._plan_issues()
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception("Plan loop iteration failed — will retry next cycle")
@@ -469,7 +483,7 @@ class HydraOrchestrator:
                                 "Failed to file memory suggestion for issue #%d",
                                 result.issue_number,
                             )
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception(
@@ -520,7 +534,7 @@ class HydraOrchestrator:
                         if any_merged:
                             await asyncio.sleep(5)
                             await self._prs.pull_main()
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception("Review loop iteration failed — will retry next cycle")
@@ -537,7 +551,7 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 await self._process_hitl_corrections()
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception("HITL loop iteration failed — will retry next cycle")
@@ -572,7 +586,7 @@ class HydraOrchestrator:
                 stats = await self._memory_sync.sync(issue_dicts)
                 await self._memory_sync.publish_sync_event(stats)
                 self.update_bg_worker_status("memory_sync", "ok", details=stats)
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception(
@@ -600,7 +614,7 @@ class HydraOrchestrator:
                 queue_stats = self._store.get_queue_stats()
                 stats = await self._metrics_manager.sync(queue_stats)
                 self.update_bg_worker_status("metrics", "ok", details=stats)
-            except AuthenticationError:
+            except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
                 logger.exception(
@@ -801,10 +815,101 @@ class HydraOrchestrator:
                     )
                 )
 
-    async def _sleep_or_stop(self, seconds: int) -> None:
+    async def _sleep_or_stop(self, seconds: int | float) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(self._stop_event.wait(), timeout=seconds)
+
+    async def _pause_for_credits(
+        self,
+        exc: CreditExhaustedError,
+        source: str,
+        tasks: dict[str, asyncio.Task[None]],
+        loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]],
+    ) -> None:
+        """Pause all loops until API credits reset, then restart them.
+
+        Uses ``asyncio.Lock`` to prevent multiple loops from racing into
+        the pause logic simultaneously.
+        """
+        async with self._credit_pause_lock:
+            # If another loop already triggered a pause, skip
+            if (
+                self._credits_paused_until is not None
+                and self._credits_paused_until > datetime.now(UTC)
+            ):
+                return
+
+            buffer = timedelta(minutes=self._config.credit_pause_buffer_minutes)
+            now = datetime.now(UTC)
+
+            if exc.resume_at is not None:
+                resume_at = exc.resume_at + buffer
+            else:
+                # Default: 5 hours if no reset time is parseable
+                resume_at = now + timedelta(hours=5) + buffer
+
+            self._credits_paused_until = resume_at
+            pause_seconds = max((resume_at - now).total_seconds(), 0)
+
+            logger.warning(
+                "Credit limit reached (detected in %r). "
+                "Pausing all loops until %s (%.0f minutes).",
+                source,
+                resume_at.isoformat(),
+                pause_seconds / 60,
+            )
+
+            await self._bus.publish(
+                HydraEvent(
+                    type=EventType.SYSTEM_ALERT,
+                    data={
+                        "message": (
+                            f"Credit limit reached. Pausing all loops until "
+                            f"{resume_at.strftime('%H:%M UTC')}. "
+                            f"Will resume automatically."
+                        ),
+                        "source": source,
+                    },
+                )
+            )
+
+            # Cancel all running loop tasks
+            for task in tasks.values():
+                task.cancel()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+
+            # Terminate active subprocesses — no point running them
+            self._planners.terminate()
+            self._agents.terminate()
+            self._reviewers.terminate()
+            self._hitl_runner.terminate()
+
+        # Sleep until resume (interruptible by stop)
+        await self._sleep_or_stop(pause_seconds)
+
+        if self._stop_event.is_set():
+            # Stop was requested during the pause — clear the credit hold so that
+            # run_status correctly returns "idle" rather than "credits_paused" after
+            # the orchestrator has fully shut down.
+            self._credits_paused_until = None
+            return
+
+        # Resume: clear pause state and restart all loops
+        self._credits_paused_until = None
+        logger.info("Credit pause ended — restarting all loops")
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.SYSTEM_ALERT,
+                data={
+                    "message": "Credit pause ended. Resuming all loops.",
+                    "source": source,
+                },
+            )
+        )
+
+        for loop_name, factory in loop_factories:
+            tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
 
     # --- Phase implementations (triage + plan remain here) ---
 

@@ -6,7 +6,10 @@ import asyncio
 import logging
 import os
 import random
+import re
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger("hydra.subprocess")
 
@@ -15,7 +18,89 @@ class AuthenticationError(RuntimeError):
     """Raised when a subprocess fails due to GitHub authentication issues."""
 
 
+class CreditExhaustedError(RuntimeError):
+    """Raised when a subprocess fails because API credits are exhausted.
+
+    Attributes
+    ----------
+    resume_at:
+        The datetime (UTC) when credits are expected to reset, or ``None``
+        if no reset time could be parsed from the error output.
+    """
+
+    def __init__(self, message: str = "", *, resume_at: datetime | None = None) -> None:
+        super().__init__(message)
+        self.resume_at = resume_at
+
+
 _AUTH_PATTERNS = ("401", "not logged in", "authentication required", "auth token")
+
+_CREDIT_PATTERNS = (
+    "usage limit reached",
+    "credit balance is too low",
+)
+
+# Matches e.g. "reset at 3pm (America/New_York)" or "reset at 3am"
+_RESET_TIME_RE = re.compile(
+    r"reset\s+at\s+(\d{1,2})\s*(am|pm)"
+    r"(?:\s*\(([^)]+)\))?",
+    re.IGNORECASE,
+)
+
+
+def is_credit_exhaustion(text: str) -> bool:
+    """Check if *text* indicates an API credit exhaustion condition."""
+    text_lower = text.lower()
+    return any(p in text_lower for p in _CREDIT_PATTERNS)
+
+
+def parse_credit_resume_time(text: str) -> datetime | None:
+    """Extract the credit reset time from an error message.
+
+    Looks for patterns like ``"reset at 3pm (America/New_York)"`` or
+    ``"reset at 3am"``. Returns a timezone-aware UTC datetime, or
+    ``None`` if no parseable time is found.
+
+    When the parsed time is already past, we assume the reset is
+    tomorrow at the same time.
+    """
+    match = _RESET_TIME_RE.search(text)
+    if not match:
+        return None
+
+    hour = int(match.group(1))
+    ampm = match.group(2).lower()
+    tz_name = match.group(3)
+
+    # Validate 12-hour clock range (1–12)
+    if hour < 1 or hour > 12:
+        return None
+
+    # Convert 12-hour to 24-hour
+    if ampm == "am":
+        hour_24 = 0 if hour == 12 else hour
+    else:
+        hour_24 = hour if hour == 12 else hour + 12
+
+    # Resolve timezone
+    tz = UTC
+    if tz_name:
+        try:
+            tz = ZoneInfo(tz_name.strip())
+        except (KeyError, ValueError):
+            logger.warning(
+                "Could not parse timezone %r — falling back to local time", tz_name
+            )
+            tz = datetime.now().astimezone().tzinfo or UTC
+
+    now = datetime.now(tz=tz)
+    reset = now.replace(hour=hour_24, minute=0, second=0, microsecond=0)
+
+    # If the reset time is already past, assume it means tomorrow
+    if reset <= now:
+        reset += timedelta(days=1)
+
+    return reset.astimezone(UTC)
 
 
 def _is_auth_error(stderr: str) -> bool:
@@ -104,7 +189,7 @@ async def run_subprocess_with_retry(
         try:
             return await run_subprocess(*cmd, cwd=cwd, gh_token=gh_token)
         except RuntimeError as exc:
-            if isinstance(exc, AuthenticationError):
+            if isinstance(exc, (AuthenticationError, CreditExhaustedError)):
                 raise
             last_error = exc
             error_msg = str(exc)

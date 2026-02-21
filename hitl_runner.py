@@ -11,6 +11,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, HITLResult
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.hitl_runner")
 
@@ -124,6 +125,8 @@ class HITLRunner:
 
             self._save_transcript(issue.number, transcript)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.success = False
             result.error = str(exc)

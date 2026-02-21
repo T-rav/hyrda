@@ -186,6 +186,13 @@ describe('Header component', () => {
       expect(screen.getByText('Start')).toBeInTheDocument()
       expect(screen.queryByText('Stopping\u2026')).toBeNull()
     })
+
+    it('shows Credits Paused badge and Stop button when credits_paused', () => {
+      render(<Header {...defaultProps} orchestratorStatus="credits_paused" />)
+      expect(screen.getByText('Credits Paused')).toBeInTheDocument()
+      expect(screen.getByText('Stop')).toBeInTheDocument()
+      expect(screen.queryByText('Start')).toBeNull()
+    })
   })
 
   describe('minimum stopping hold timer', () => {
