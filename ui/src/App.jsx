@@ -118,19 +118,7 @@ export default function App() {
           {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'timeline' && <Timeline events={events} workers={workers} prs={prs} />}
-          {activeTab === 'livestream' && (
-            <div style={styles.timeline}>
-              {events.map((e, i) => (
-                <div key={i} style={styles.timelineItem}>
-                  <span style={styles.timelineTime}>
-                    {new Date(e.timestamp).toLocaleTimeString()}
-                  </span>
-                  <span style={styles.timelineType}>{e.type.replace(/_/g, ' ')}</span>
-                  <span>{JSON.stringify(e.data).slice(0, 120)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {activeTab === 'livestream' && <Livestream events={events} />}
           {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} />}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} lifetimeStats={lifetimeStats} />}
         </div>
@@ -177,18 +165,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
   },
-  timeline: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: 8,
-  },
-  timelineItem: {
-    padding: '6px 8px',
-    borderBottom: `1px solid ${theme.border}`,
-    fontSize: 11,
-  },
-  timelineTime: { color: theme.textMuted, marginRight: 8 },
-  timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
   tabBadge: {
     marginLeft: 6,
     padding: '1px 6px',
