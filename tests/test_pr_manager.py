@@ -2316,6 +2316,25 @@ class TestCommentHelper:
 
         mock_create.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_comment_error_does_not_raise(self, config, event_bus, tmp_path):
+        """_comment should log a warning on failure without propagating the error."""
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="permission denied")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._comment("pr", 99, "body")
+
 
 # ---------------------------------------------------------------------------
 # Private helper: _add_labels
@@ -2417,6 +2436,16 @@ class TestRemoveLabelHelper:
             await mgr._remove_label("pr", 101, "label")
 
         mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_remove_label_error_does_not_raise(self, config, event_bus):
+        """_remove_label should log a warning on failure without propagating the error."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="label not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise even on subprocess failure
+            await mgr._remove_label("issue", 42, "missing-label")
 
 
 # ---------------------------------------------------------------------------

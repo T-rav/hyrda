@@ -777,7 +777,7 @@ class TestWriteDigestUsesAtomicWrite:
         config = ConfigFactory.create(repo_root=tmp_path)
         worker = MemorySyncWorker(config, MagicMock(), MagicMock())
 
-        with patch("file_util.atomic_write") as mock_aw:
+        with patch("memory.atomic_write") as mock_aw:
             worker._write_digest("# Digest content")
 
         mock_aw.assert_called_once()

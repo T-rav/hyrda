@@ -9,7 +9,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
@@ -248,11 +248,10 @@ class PRManager:
             logger.error("Merge failed for PR #%d: %s", pr_number, exc)
             return False
 
-    async def _comment(self, target: str, number: int, body: str) -> None:
-        """Post a comment on a GitHub issue or PR.
-
-        *target* must be ``"issue"`` or ``"pr"``.
-        """
+    async def _comment(
+        self, target: Literal["issue", "pr"], number: int, body: str
+    ) -> None:
+        """Post a comment on a GitHub issue or PR."""
         if self._config.dry_run:
             logger.info("[dry-run] Would post comment on %s #%d", target, number)
             return
@@ -348,11 +347,10 @@ class PRManager:
             )
             return False
 
-    async def _add_labels(self, target: str, number: int, labels: list[str]) -> None:
-        """Add *labels* to a GitHub issue or PR.
-
-        *target* must be ``"issue"`` or ``"pr"``.
-        """
+    async def _add_labels(
+        self, target: Literal["issue", "pr"], number: int, labels: list[str]
+    ) -> None:
+        """Add *labels* to a GitHub issue or PR."""
         if self._config.dry_run or not labels:
             return
         for label in labels:
@@ -380,11 +378,10 @@ class PRManager:
         """Add *labels* to a GitHub issue."""
         await self._add_labels("issue", issue_number, labels)
 
-    async def _remove_label(self, target: str, number: int, label: str) -> None:
-        """Remove *label* from a GitHub issue or PR.
-
-        *target* must be ``"issue"`` or ``"pr"``.
-        """
+    async def _remove_label(
+        self, target: Literal["issue", "pr"], number: int, label: str
+    ) -> None:
+        """Remove *label* from a GitHub issue or PR."""
         if self._config.dry_run:
             return
         try:

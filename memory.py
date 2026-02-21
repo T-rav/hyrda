@@ -11,6 +11,7 @@ from typing import Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from file_util import atomic_write
 from state import StateTracker
 from subprocess_util import make_clean_env
 
@@ -308,8 +309,6 @@ class MemorySyncWorker:
 
     def _write_digest(self, content: str) -> None:
         """Write digest to disk atomically."""
-        from file_util import atomic_write
-
         digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
         atomic_write(digest_path, content)
 
