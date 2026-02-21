@@ -253,3 +253,34 @@ describe('Livestream and Timeline tab labels', () => {
     expect(screen.getByText('No issues processed yet')).toBeInTheDocument()
   })
 })
+
+describe('Tab label correctness', () => {
+  it('Timeline tab label matches the Timeline component', async () => {
+    mockSocketState.events = [
+      { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1 } },
+    ]
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    // Click the tab labeled "Timeline"
+    fireEvent.click(screen.getByText('Timeline'))
+
+    // The Timeline component renders — it should NOT show the raw event livestream
+    // The Timeline component uses issue-based grouping, not raw event rendering
+    expect(screen.queryByText('worker update')).toBeNull()
+  })
+
+  it('Livestream tab label matches the Livestream component', async () => {
+    mockSocketState.events = [
+      { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1 } },
+    ]
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    // Click the tab labeled "Livestream"
+    fireEvent.click(screen.getByText('Livestream'))
+
+    // The inline event livestream renders — shows raw event types
+    expect(screen.getByText('worker update')).toBeInTheDocument()
+  })
+})

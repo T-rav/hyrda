@@ -68,6 +68,7 @@ class ConfigFactory:
         dup_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
+        memory_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
         min_plan_words: int = 200,
@@ -90,12 +91,14 @@ class ConfigFactory:
         worktree_base: Path | None = None,
         state_file: Path | None = None,
         event_log_path: Path | None = None,
+        config_file: Path | None = None,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
 
         root = repo_root or Path("/tmp/hydra-test-repo")
         return HydraConfig(
+            config_file=config_file,
             ready_label=ready_label if ready_label is not None else ["test-label"],
             batch_size=batch_size,
             max_workers=max_workers,
@@ -123,6 +126,7 @@ class ConfigFactory:
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],
+            memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
             min_plan_words=min_plan_words,
