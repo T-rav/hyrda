@@ -9,8 +9,8 @@ from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
@@ -365,5 +365,27 @@ def create_router(
                 pass
             except Exception:
                 logger.warning("WebSocket error during live streaming", exc_info=True)
+
+    # SPA catch-all: serve index.html for any path not matched above.
+    # This must be registered LAST so it doesn't shadow API/WS routes.
+    @router.get("/{path:path}", response_model=None)
+    async def spa_catchall(path: str) -> Response:
+        # Don't catch API or WebSocket paths
+        if path.startswith(("api/", "ws", "assets/", "static/")):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        # Serve root-level static files from ui/dist/ (e.g. logos, favicon)
+        static_file = (ui_dist_dir / path).resolve()
+        if static_file.is_relative_to(ui_dist_dir.resolve()) and static_file.is_file():
+            return FileResponse(static_file)
+
+        # Fall back to serving the SPA index.html
+        react_index = ui_dist_dir / "index.html"
+        if react_index.exists():
+            return HTMLResponse(react_index.read_text())
+        fallback = template_dir / "index.html"
+        if fallback.exists():
+            return HTMLResponse(fallback.read_text())
+        return HTMLResponse("<h1>Hydra Dashboard</h1><p>Run 'make ui' to build.</p>")
 
     return router
