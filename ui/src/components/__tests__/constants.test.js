@@ -18,6 +18,10 @@ describe('ACTIVE_STATUSES', () => {
     expect(ACTIVE_STATUSES).toContain('quality_fix')
   })
 
+  it('includes merge_fix status', () => {
+    expect(ACTIVE_STATUSES).toContain('merge_fix')
+  })
+
   it('does not include terminal statuses', () => {
     const terminalStatuses = ['queued', 'done', 'failed']
     for (const status of terminalStatuses) {
