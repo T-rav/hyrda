@@ -17,7 +17,7 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor, activeWorkerCount }) {
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const queuedCount = issues.length - activeCount
   const hasRole = !!stage.role
@@ -46,11 +46,6 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
             style={{ ...styles.statusDot, background: dotColor }}
             data-testid={`stage-dot-${stage.key}`}
           />
-        )}
-        {hasRole && activeWorkerCount > 0 && (
-          <span style={styles.workerCountText} data-testid={`stage-workers-${stage.key}`}>
-            {activeWorkerCount}
-          </span>
         )}
       </div>
       {open && issues.map(issue => (
@@ -223,7 +218,6 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
             onToggle={() => handleToggleStage(stage.key)}
             enabled={status?.enabled ?? true}
             dotColor={status?.dotColor}
-            activeWorkerCount={status?.activeCount ?? 0}
           />
         )
       })}
@@ -312,11 +306,6 @@ const styles = {
     height: 8,
     borderRadius: '50%',
     flexShrink: 0,
-  },
-  workerCountText: {
-    fontSize: 10,
-    color: theme.textMuted,
-    fontWeight: 600,
   },
   disabledBadge: {
     fontSize: 9,
