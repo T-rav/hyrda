@@ -308,9 +308,11 @@ export function reducer(state, action) {
       const rest = state.backgroundWorkers.filter(w => w.name !== worker)
       // Preserve local enabled flag if backend doesn't send one
       const enabled = action.data.enabled !== undefined ? action.data.enabled : (prev?.enabled ?? true)
+      // Heartbeat events don't carry interval_seconds — preserve from prior state
+      const interval_seconds = action.data.interval_seconds ?? prev?.interval_seconds ?? null
       return {
         ...addEvent(state, action),
-        backgroundWorkers: [...rest, { name: worker, status, last_run, details, enabled }],
+        backgroundWorkers: [...rest, { name: worker, status, last_run, details, enabled, interval_seconds }],
       }
     }
 

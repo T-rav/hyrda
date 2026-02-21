@@ -228,6 +228,51 @@ describe('HydraProvider', () => {
   })
 })
 
+describe('background_worker_status action', () => {
+  it('preserves interval_seconds from prior state on heartbeat', () => {
+    const state = {
+      ...initialState,
+      backgroundWorkers: [
+        { name: 'memory_sync', status: 'ok', enabled: true, last_run: '2026-01-01T00:00:00Z', interval_seconds: 3600, details: {} },
+      ],
+    }
+    const result = reducer(state, {
+      type: 'background_worker_status',
+      data: { worker: 'memory_sync', status: 'ok', last_run: '2026-01-01T01:00:00Z', details: {} },
+      timestamp: '2026-01-01T01:00:00Z',
+    })
+    const worker = result.backgroundWorkers.find(w => w.name === 'memory_sync')
+    // interval_seconds not in heartbeat payload — should be preserved from prev
+    expect(worker.interval_seconds).toBe(3600)
+  })
+
+  it('uses interval_seconds from event data when provided', () => {
+    const state = {
+      ...initialState,
+      backgroundWorkers: [
+        { name: 'metrics', status: 'ok', enabled: true, last_run: null, interval_seconds: 7200, details: {} },
+      ],
+    }
+    const result = reducer(state, {
+      type: 'background_worker_status',
+      data: { worker: 'metrics', status: 'ok', last_run: '2026-01-01T01:00:00Z', details: {}, interval_seconds: 1800 },
+      timestamp: '2026-01-01T01:00:00Z',
+    })
+    const worker = result.backgroundWorkers.find(w => w.name === 'metrics')
+    expect(worker.interval_seconds).toBe(1800)
+  })
+
+  it('defaults interval_seconds to null for new worker with no prior state', () => {
+    const result = reducer(initialState, {
+      type: 'background_worker_status',
+      data: { worker: 'memory_sync', status: 'ok', last_run: '2026-01-01T01:00:00Z', details: {} },
+      timestamp: '2026-01-01T01:00:00Z',
+    })
+    const worker = result.backgroundWorkers.find(w => w.name === 'memory_sync')
+    expect(worker.interval_seconds).toBeNull()
+  })
+})
+
 describe('UPDATE_BG_WORKER_INTERVAL action', () => {
   it('updates interval_seconds for existing worker', () => {
     const state = {
