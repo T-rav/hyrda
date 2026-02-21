@@ -73,7 +73,6 @@ class ConfigFactory:
         min_plan_words: int = 200,
         max_new_files_warning: int = 5,
         lite_plan_labels: list[str] | None = None,
-        max_plan_file_overlap: int = 3,
         repo: str = "test-org/test-repo",
         dry_run: bool = False,
         gh_token: str = "",
@@ -128,7 +127,6 @@ class ConfigFactory:
             planner_budget_usd=planner_budget_usd,
             min_plan_words=min_plan_words,
             max_new_files_warning=max_new_files_warning,
-            max_plan_file_overlap=max_plan_file_overlap,
             lite_plan_labels=lite_plan_labels
             if lite_plan_labels is not None
             else ["bug", "typo", "docs"],
