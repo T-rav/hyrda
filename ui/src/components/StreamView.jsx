@@ -24,7 +24,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
 
   return (
     <div
-      style={{ ...styles.section, opacity: hasRole ? (enabled ? 1 : 0.5) : 1, transition: 'opacity 0.2s' }}
+      style={hasRole ? (enabled ? sectionEnabledStyle : sectionDisabledStyle) : styles.section}
       data-testid={`stage-section-${stage.key}`}
     >
       <div
@@ -136,9 +136,6 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         'merged',
         prs,
       ))
-    // Dedupe by issue number (pipeline may also have merged entries)
-    const mergedSet = new Set(mergedFromPrs.map(i => i.issueNumber))
-
     return PIPELINE_STAGES.map(stage => {
       let stageIssues
       if (stage.key === 'merged') {
@@ -364,3 +361,7 @@ const styles = {
     flexShrink: 0,
   },
 }
+
+// Pre-computed section opacity variants (avoids object spread in StageSection render)
+const sectionEnabledStyle = { ...styles.section, opacity: 1, transition: 'opacity 0.2s' }
+const sectionDisabledStyle = { ...styles.section, opacity: 0.5, transition: 'opacity 0.2s' }
