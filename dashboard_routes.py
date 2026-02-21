@@ -24,6 +24,7 @@ from models import (
 )
 from pr_manager import PRManager
 from state import StateTracker
+from timeline import TimelineBuilder
 
 if TYPE_CHECKING:
     from orchestrator import HydraOrchestrator
@@ -365,6 +366,20 @@ def create_router(
         return JSONResponse(
             MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
         )
+
+    @router.get("/api/timeline")
+    async def get_timeline() -> JSONResponse:
+        builder = TimelineBuilder(event_bus)
+        timelines = builder.build_all()
+        return JSONResponse([t.model_dump() for t in timelines])
+
+    @router.get("/api/timeline/issue/{issue_num}")
+    async def get_timeline_issue(issue_num: int) -> JSONResponse:
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(issue_num)
+        if timeline is None:
+            return JSONResponse({"error": "Issue not found"}, status_code=404)
+        return JSONResponse(timeline.model_dump())
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
