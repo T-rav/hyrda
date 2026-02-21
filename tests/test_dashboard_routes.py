@@ -96,6 +96,9 @@ class TestCreateRouter:
 
         assert expected_paths.issubset(paths)
 
+        # Verify approve-memory route is registered
+        assert "/api/hitl/{issue_number}/approve-memory" in paths
+
 
 class TestControlStatusImproveLabel:
     """Tests that /api/control/status includes improve_label."""
@@ -241,6 +244,140 @@ class TestHITLEndpointCause:
         assert len(items) == 1
         # No cause or origin — should remain empty
         assert items[0]["cause"] == ""
+
+    @pytest.mark.asyncio
+    async def test_hitl_includes_is_memory_suggestion_when_origin_is_improve(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When HITL origin matches improve_label, isMemorySuggestion should be True."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-improve")
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        hitl_item = HITLItem(issue=42, title="Memory suggestion", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["isMemorySuggestion"] is True
+
+    @pytest.mark.asyncio
+    async def test_hitl_is_memory_suggestion_false_when_origin_is_other(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When HITL origin is not improve_label, isMemorySuggestion should be False."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-review")
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["isMemorySuggestion"] is False
+
+    @pytest.mark.asyncio
+    async def test_hitl_is_memory_suggestion_false_when_no_origin(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When no HITL origin is set at all, isMemorySuggestion should be False."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["isMemorySuggestion"] is False
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_falls_back_to_origin_label(

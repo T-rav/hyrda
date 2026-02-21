@@ -114,19 +114,20 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
-            if not cause:
-                origin = state.get_hitl_origin(item.issue)
-                if origin:
-                    if origin in config.improve_label:
-                        cause = "Self-improvement proposal"
-                    elif origin in config.review_label:
-                        cause = "Review escalation"
-                    elif origin in config.find_label:
-                        cause = "Triage escalation"
-                    else:
-                        cause = "Escalation (reason not recorded)"
+            origin = state.get_hitl_origin(item.issue)
+            if not cause and origin:
+                if origin in config.improve_label:
+                    cause = "Self-improvement proposal"
+                elif origin in config.review_label:
+                    cause = "Review escalation"
+                elif origin in config.find_label:
+                    cause = "Triage escalation"
+                else:
+                    cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
+            if origin and origin in config.improve_label:
+                data["isMemorySuggestion"] = True
             enriched.append(data)
         return JSONResponse(enriched)
 
@@ -194,6 +195,31 @@ def create_router(
                     "issue": issue_number,
                     "status": "resolved",
                     "action": "close",
+                },
+            )
+        )
+        return JSONResponse({"status": "ok"})
+
+    @router.post("/api/hitl/{issue_number}/approve-memory")
+    async def hitl_approve_memory(issue_number: int) -> JSONResponse:
+        """Approve a HITL item as a memory suggestion, relabeling for sync."""
+        for lbl in config.improve_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        for lbl in config.hitl_label:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.memory_label)
+        orch = get_orchestrator()
+        if orch:
+            orch.skip_hitl_issue(issue_number)
+        state.remove_hitl_origin(issue_number)
+        state.remove_hitl_cause(issue_number)
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "status": "resolved",
+                    "action": "approved_as_memory",
                 },
             )
         )
