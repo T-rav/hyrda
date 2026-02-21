@@ -13,6 +13,7 @@ from events import EventBus, EventType, HydraEvent
 from memory import load_memory_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.planner")
 
@@ -152,6 +153,8 @@ class PlannerRunner:
             status = PlannerStatus.DONE if result.success else PlannerStatus.FAILED
             await self._emit_status(issue.number, worker_id, status)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.success = False
             result.error = str(exc)

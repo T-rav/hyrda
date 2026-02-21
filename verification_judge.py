@@ -15,6 +15,7 @@ from models import (
     JudgeVerdict,
 )
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.verification_judge")
 
@@ -77,6 +78,8 @@ class VerificationJudge:
                     )
                     and len(verdict.criteria_results) > 0
                 )
+            except CreditExhaustedError:
+                raise
             except Exception:
                 logger.warning(
                     "Code validation failed for issue #%d",
@@ -121,6 +124,8 @@ class VerificationJudge:
                     verdict.instructions_quality = quality2
                     verdict.instructions_feedback = feedback2
                     verdict.refined = bool(refined)
+            except CreditExhaustedError:
+                raise
             except Exception:
                 logger.warning(
                     "Instructions validation failed for issue #%d",

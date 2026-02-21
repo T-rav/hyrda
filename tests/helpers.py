@@ -102,6 +102,7 @@ class ConfigFactory:
         max_memory_chars: int = 4000,
         max_memory_prompt_chars: int = 4000,
         memory_sync_interval: int = 120,
+        credit_pause_buffer_minutes: int = 1,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -171,4 +172,5 @@ class ConfigFactory:
             max_memory_chars=max_memory_chars,
             max_memory_prompt_chars=max_memory_prompt_chars,
             memory_sync_interval=memory_sync_interval,
+            credit_pause_buffer_minutes=credit_pause_buffer_minutes,
         )
