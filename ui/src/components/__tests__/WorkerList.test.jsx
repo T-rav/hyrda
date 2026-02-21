@@ -61,10 +61,19 @@ describe('WorkerList section header styles', () => {
   it('sectionHeaderStyles has an entry for every sidebar pipeline stage', () => {
     for (const stage of SIDEBAR_STAGES) {
       expect(sectionHeaderStyles).toHaveProperty(stage.key)
+      expect(sectionHeaderStyles[stage.key]).toMatchObject({
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 12px',
+        cursor: 'pointer',
+        userSelect: 'none',
+        borderRadius: 6,
+        transition: 'background 0.15s',
+      })
       expect(sectionHeaderStyles[stage.key]).toHaveProperty('background')
       expect(sectionHeaderStyles[stage.key]).toHaveProperty('border')
       expect(sectionHeaderStyles[stage.key]).toHaveProperty('borderLeft')
-      expect(sectionHeaderStyles[stage.key]).toHaveProperty('borderRadius', 6)
     }
   })
 
@@ -105,6 +114,7 @@ describe('WorkerList section header styles', () => {
   it('section style objects are referentially stable', () => {
     expect(sectionHeaderStyles.triage).toBe(sectionHeaderStyles.triage)
     expect(sectionLabelStyles.triage).toBe(sectionLabelStyles.triage)
+    expect(sectionCountStyles.triage).toBe(sectionCountStyles.triage)
   })
 })
 

@@ -123,6 +123,7 @@ const sectionHeaderBase = {
   cursor: 'pointer',
   userSelect: 'none',
   borderRadius: 6,
+  transition: 'background 0.15s',
 }
 
 const sectionLabelBase = {
