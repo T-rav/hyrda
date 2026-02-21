@@ -66,6 +66,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_merge_conflict_fix_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=5,
+        description="Max merge conflict resolution retry cycles",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -281,6 +287,15 @@ class HydraConfig(BaseModel):
             if env_retries is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
+
+        # merge conflict fix attempts override
+        if self.max_merge_conflict_fix_attempts == 3:  # still at default
+            env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
+            if env_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_merge_conflict_fix_attempts", int(env_attempts)
+                    )
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
