@@ -1489,6 +1489,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         fixed_label=["custom-fixed"],
         improve_label=["custom-improve"],
         memory_label=["custom-memory"],
+        metrics_label=["custom-metrics"],
         dup_label=["custom-dup"],
         repo=config.repo,
         repo_root=tmp_path,
@@ -1519,6 +1520,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-fixed",
         "custom-improve",
         "custom-memory",
+        "custom-metrics",
         "custom-dup",
     }
 
@@ -2228,3 +2230,112 @@ class TestRetryWrapperUsage:
 
         _, kwargs = mock_retry.call_args
         assert kwargs["max_retries"] == 5
+
+
+# ---------------------------------------------------------------------------
+# get_label_counts
+# ---------------------------------------------------------------------------
+
+
+class TestGetLabelCounts:
+    """Tests for PRManager.get_label_counts."""
+
+    @pytest.mark.asyncio
+    async def test_returns_label_counts(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        # Mock _run_gh to return counts for each label query
+        call_count = 0
+
+        async def mock_run_gh(*cmd, cwd=None):
+            nonlocal call_count
+            call_count += 1
+            # Return different counts for different calls
+            if "issue" in cmd and "--state" in cmd:
+                state_idx = list(cmd).index("--state") + 1
+                state_val = cmd[state_idx]
+                if state_val == "open":
+                    return "3\n"
+                elif state_val == "closed":
+                    return "10\n"
+            elif "pr" in cmd:
+                return "8\n"
+            return "0\n"
+
+        mgr._run_gh = mock_run_gh
+
+        result = await mgr.get_label_counts(cfg)
+
+        assert "open_by_label" in result
+        assert "total_closed" in result
+        assert "total_merged" in result
+        assert isinstance(result["open_by_label"], dict)
+
+    @pytest.mark.asyncio
+    async def test_caches_results_for_30_seconds(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        call_count = 0
+
+        async def mock_run_gh(*cmd, cwd=None):
+            nonlocal call_count
+            call_count += 1
+            return "5\n"
+
+        mgr._run_gh = mock_run_gh
+
+        # First call — should hit the gh CLI
+        result1 = await mgr.get_label_counts(cfg)
+        first_call_count = call_count
+
+        # Second call — should return cached
+        result2 = await mgr.get_label_counts(cfg)
+        assert call_count == first_call_count  # No additional calls
+
+        assert result1 == result2
+
+    @pytest.mark.asyncio
+    async def test_handles_errors_gracefully(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        async def mock_run_gh(*cmd, cwd=None):
+            raise RuntimeError("network error")
+
+        mgr._run_gh = mock_run_gh
+        # Reset cache
+        mgr._label_counts_cache = {}
+        mgr._label_counts_ts = 0.0
+
+        result = await mgr.get_label_counts(cfg)
+
+        # Should return zeros, not raise
+        assert result["open_by_label"]["hydra-plan"] == 0
+        assert result["total_closed"] == 0
+        assert result["total_merged"] == 0

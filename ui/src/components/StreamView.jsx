@@ -1,7 +1,9 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
-import { useTimeline } from '../hooks/useTimeline'
+import { useHydra } from '../context/HydraContext'
 import { StreamCard } from './StreamCard'
+import { PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { STAGE_KEYS } from '../hooks/useTimeline'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -15,8 +17,79 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-export function StreamView({ events, workers, prs, intents, onViewTranscript, onRequestChanges }) {
-  const { issues } = useTimeline(events, workers, prs)
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle }) {
+  const activeCount = issues.filter(i => i.overallStatus === 'active').length
+  const queuedCount = issues.length - activeCount
+
+  return (
+    <div style={styles.section}>
+      <div
+        style={sectionHeaderStyles[stage.key]}
+        onClick={onToggle}
+      >
+        <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
+        <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
+        <span style={sectionCountStyles[stage.key]}>
+          <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
+          <span> · {queuedCount} queued</span>
+          <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
+        </span>
+      </div>
+      {open && issues.map(issue => (
+        <StreamCard
+          key={issue.issueNumber}
+          issue={issue}
+          intent={intentMap.get(issue.issueNumber)}
+          defaultExpanded={issue.overallStatus === 'active'}
+          onViewTranscript={onViewTranscript}
+          onRequestChanges={onRequestChanges}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** Map pipeline stage key to its index in STAGE_KEYS for building synthetic stages. */
+const STAGE_INDEX = Object.fromEntries(STAGE_KEYS.map((k, i) => [k, i]))
+
+/**
+ * Convert a PipelineIssue from the server into a StreamCard-compatible shape.
+ * Builds a synthetic `stages` object based on current pipeline position.
+ */
+function toStreamIssue(pipeIssue, stageKey, prs) {
+  const currentIdx = STAGE_INDEX[stageKey] ?? 0
+  const isActive = pipeIssue.status === 'active'
+  const stages = {}
+  for (let i = 0; i < STAGE_KEYS.length; i++) {
+    const k = STAGE_KEYS[i]
+    if (i < currentIdx) {
+      stages[k] = { status: 'done', startTime: null, endTime: null, transcript: [] }
+    } else if (i === currentIdx) {
+      stages[k] = { status: isActive ? 'active' : 'pending', startTime: null, endTime: null, transcript: [] }
+    } else {
+      stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
+    }
+  }
+
+  // Match PR from prs array
+  const matchedPr = (prs || []).find(p => p.issue === pipeIssue.issue_number)
+  const pr = matchedPr ? { number: matchedPr.pr, url: matchedPr.url || null } : null
+
+  return {
+    issueNumber: pipeIssue.issue_number,
+    title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    currentStage: stageKey,
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isActive ? 'active' : 'active',
+    startTime: null,
+    endTime: null,
+    pr,
+    branch: `agent/issue-${pipeIssue.issue_number}`,
+    stages,
+  }
+}
+
+export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
+  const { pipelineIssues, workers, prs } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -35,45 +108,140 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
     [intents]
   )
 
-  // Sort: active first, then by recency
-  const sorted = useMemo(() => {
-    return [...issues].sort((a, b) => {
-      const aActive = a.overallStatus === 'active' ? 1 : 0
-      const bActive = b.overallStatus === 'active' ? 1 : 0
-      if (aActive !== bActive) return bActive - aActive
-      const aTime = a.endTime || a.startTime || ''
-      const bTime = b.endTime || b.startTime || ''
-      return bTime.localeCompare(aTime)
-    })
-  }, [issues])
+  // Build stage groups from pipelineIssues
+  const stageGroups = useMemo(() => {
+    // Build merged issues from PRs that are merged
+    const mergedFromPrs = (prs || [])
+      .filter(p => p.merged && p.issue)
+      .map(p => toStreamIssue(
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        'merged',
+        prs,
+      ))
+    // Dedupe by issue number (pipeline may also have merged entries)
+    const mergedSet = new Set(mergedFromPrs.map(i => i.issueNumber))
 
-  const isEmpty = sorted.length === 0 && pendingIntents.length === 0
+    return PIPELINE_STAGES.map(stage => {
+      let stageIssues
+      if (stage.key === 'merged') {
+        // Combine pipelineIssues.merged (if any) + merged PRs
+        const pipelineMerged = (pipelineIssues.merged || []).map(pi => toStreamIssue(pi, 'merged', prs))
+        const combined = [...pipelineMerged]
+        for (const m of mergedFromPrs) {
+          if (!combined.some(i => i.issueNumber === m.issueNumber)) {
+            combined.push(m)
+          }
+        }
+        stageIssues = combined
+      } else {
+        stageIssues = (pipelineIssues[stage.key] || []).map(pi => toStreamIssue(pi, stage.key, prs))
+      }
+      // Sort active-first
+      stageIssues.sort((a, b) => {
+        const aActive = a.overallStatus === 'active' ? 1 : 0
+        const bActive = b.overallStatus === 'active' ? 1 : 0
+        return bActive - aActive
+      })
+      return { stage, issues: stageIssues }
+    })
+  }, [pipelineIssues, prs])
+
+  // Count active pipeline workers per stage role
+  const workerCounts = useMemo(() => {
+    const counts = {}
+    for (const stage of PIPELINE_STAGES) {
+      if (!stage.role) continue
+      counts[stage.key] = Object.values(workers || {}).filter(
+        w => w.role === stage.role && ACTIVE_STATUSES.includes(w.status)
+      ).length
+    }
+    return counts
+  }, [workers])
+
+  const handleToggleStage = useCallback((key) => {
+    onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
+  }, [onToggleStage])
+
+  const totalIssues = stageGroups.reduce((sum, g) => sum + g.issues.length, 0)
+  const hasAnyIssues = totalIssues > 0 || pendingIntents.length > 0
 
   return (
     <div style={styles.container}>
-      {isEmpty && (
-        <div style={styles.empty}>
-          No active work. Type an intent above to get started.
-        </div>
-      )}
-
       {pendingIntents.map((intent, i) => (
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
 
-      {sorted.map(issue => (
-        <StreamCard
-          key={issue.issueNumber}
-          issue={issue}
-          intent={intentMap.get(issue.issueNumber)}
-          defaultExpanded={issue.overallStatus === 'active'}
+      {stageGroups.map(({ stage, issues: stageIssues }) => (
+        <StageSection
+          key={stage.key}
+          stage={stage}
+          issues={stageIssues}
+          workerCount={workerCounts[stage.key] || 0}
+          intentMap={intentMap}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
+          open={!!expandedStages[stage.key]}
+          onToggle={() => handleToggleStage(stage.key)}
         />
       ))}
+
+      {!hasAnyIssues && (
+        <div style={styles.empty}>
+          No active work.
+        </div>
+      )}
     </div>
   )
 }
+
+// Pre-computed per-stage section header styles (avoids object spread in .map())
+const sectionHeaderBase = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '8px 12px',
+  margin: '8px 8px 4px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  borderRadius: 6,
+  transition: 'background 0.15s',
+}
+
+const sectionLabelBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+}
+
+const sectionCountBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  marginLeft: 'auto',
+}
+
+const sectionHeaderStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionHeaderBase,
+    background: s.subtleColor,
+    border: `1px solid ${s.color}33`,
+    borderLeft: `3px solid ${s.color}`,
+  }])
+)
+
+const sectionLabelStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionLabelBase,
+    color: s.color,
+  }])
+)
+
+const sectionCountStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...sectionCountBase,
+    color: s.color,
+  }])
+)
 
 const styles = {
   container: {
@@ -88,6 +256,12 @@ const styles = {
     height: 200,
     color: theme.textMuted,
     fontSize: 13,
+  },
+  section: {
+    marginBottom: 4,
+  },
+  activeBadge: {
+    fontWeight: 700,
   },
   pendingCard: {
     display: 'flex',

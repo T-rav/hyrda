@@ -26,7 +26,7 @@ export function eventSummary(type, data) {
     case 'batch_start': return `Batch ${data.batch} started`
     case 'phase_change': return data.phase
     case 'worker_update': return `#${data.issue} \u2192 ${data.status}`
-    case 'transcript_line': return `#${data.issue || data.pr}`
+    case 'transcript_line': return `#${data.issue || data.pr} ${data.line || ''}`
     case 'pr_created': return `PR #${data.pr} for #${data.issue}${data.draft ? ' (draft)' : ''}`
     case 'review_update': return `PR #${data.pr} \u2192 ${data.verdict || data.status}`
     case 'merge_update': return `PR #${data.pr} ${data.status}`

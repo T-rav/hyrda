@@ -3,13 +3,10 @@ import { render, screen } from '@testing-library/react'
 import {
   Header,
   dotConnected, dotDisconnected,
-  pillStyles, headerConnectorStyles,
   sessionPillStyles, sessionConnectorStyles,
-  countLit, countDim,
   startBtnEnabled, startBtnDisabled,
 } from '../Header'
 
-const STAGE_KEYS = ['triage', 'plan', 'implement', 'review']
 const SESSION_STAGE_KEYS = ['triage', 'plan', 'implement', 'review', 'merged']
 const STAGE_COLORS = {
   triage: 'var(--triage-green)',
@@ -36,52 +33,6 @@ describe('Header pre-computed styles', () => {
     })
   })
 
-  describe('pill styles', () => {
-    it('has entries for each stage', () => {
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles).toHaveProperty(key)
-        expect(pillStyles[key]).toHaveProperty('lit')
-        expect(pillStyles[key]).toHaveProperty('dim')
-      }
-    })
-
-    it('lit variant uses stage color for background', () => {
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles[key].lit.background).toBe(STAGE_COLORS[key])
-        expect(pillStyles[key].lit.color).toBe('var(--bg)')
-        expect(pillStyles[key].lit.borderColor).toBe(STAGE_COLORS[key])
-      }
-    })
-
-    it('dim variant uses color with opacity suffixes', () => {
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles[key].dim.background).toBe(STAGE_COLORS[key] + '20')
-        expect(pillStyles[key].dim.color).toBe(STAGE_COLORS[key] + '99')
-        expect(pillStyles[key].dim.borderColor).toBe(STAGE_COLORS[key] + '55')
-      }
-    })
-
-    it('pill variants include base pill properties', () => {
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles[key].lit).toMatchObject({
-          padding: '2px 8px',
-          borderRadius: 10,
-          fontSize: 10,
-          fontWeight: 600,
-        })
-      }
-    })
-
-    it('pill and session pill styles share the same dimensions', () => {
-      // Both pill types should use identical padding, fontSize, borderRadius
-      for (const key of STAGE_KEYS) {
-        expect(pillStyles[key].dim.padding).toBe(sessionPillStyles[key].padding)
-        expect(pillStyles[key].dim.borderRadius).toBe(sessionPillStyles[key].borderRadius)
-        expect(pillStyles[key].dim.fontSize).toBe(sessionPillStyles[key].fontSize)
-      }
-    })
-  })
-
   describe('session pill styles', () => {
     it('has entries for all 5 session stages including merged', () => {
       for (const key of SESSION_STAGE_KEYS) {
@@ -100,34 +51,11 @@ describe('Header pre-computed styles', () => {
     it('session pill styles include base sessionPill properties', () => {
       for (const key of SESSION_STAGE_KEYS) {
         expect(sessionPillStyles[key]).toMatchObject({
-          padding: '2px 8px',
+          padding: '3px 10px',
           borderRadius: 10,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: 600,
         })
-      }
-    })
-  })
-
-  describe('header connector styles', () => {
-    it('has entries for each stage with lit/dim sub-keys', () => {
-      for (const key of STAGE_KEYS) {
-        expect(headerConnectorStyles).toHaveProperty(key)
-        expect(headerConnectorStyles[key]).toHaveProperty('lit')
-        expect(headerConnectorStyles[key]).toHaveProperty('dim')
-      }
-    })
-
-    it('lit variant uses stage color, dim uses color + 55', () => {
-      for (const key of STAGE_KEYS) {
-        expect(headerConnectorStyles[key].lit.background).toBe(STAGE_COLORS[key])
-        expect(headerConnectorStyles[key].dim.background).toBe(STAGE_COLORS[key] + '55')
-      }
-    })
-
-    it('connector variants include base connector properties', () => {
-      for (const key of STAGE_KEYS) {
-        expect(headerConnectorStyles[key].lit).toMatchObject({ width: 24, height: 2, flexShrink: 0 })
       }
     })
   })
@@ -151,23 +79,6 @@ describe('Header pre-computed styles', () => {
       }
     })
 
-    it('session connectors are thinner than process connectors', () => {
-      const sessionConn = sessionConnectorStyles.plan
-      const processConn = headerConnectorStyles.plan.lit
-      expect(sessionConn.width).toBeLessThan(processConn.width)
-      expect(sessionConn.height).toBeLessThan(processConn.height)
-    })
-  })
-
-  describe('count styles', () => {
-    it('countLit has opacity 1', () => {
-      expect(countLit.opacity).toBe(1)
-      expect(countLit).toMatchObject({ borderRadius: 6, fontSize: 9, fontWeight: 700 })
-    })
-
-    it('countDim has opacity 0.6', () => {
-      expect(countDim.opacity).toBe(0.6)
-    })
   })
 
   describe('start button variants', () => {
@@ -183,7 +94,6 @@ describe('Header pre-computed styles', () => {
 
   it('style objects are referentially stable', () => {
     expect(dotConnected).toBe(dotConnected)
-    expect(pillStyles.plan.lit).toBe(pillStyles.plan.lit)
     expect(startBtnEnabled).toBe(startBtnEnabled)
     expect(sessionPillStyles.triage).toBe(sessionPillStyles.triage)
   })
@@ -198,7 +108,6 @@ describe('Header component', () => {
     onStop: () => {},
     phase: 'idle',
     workers: {},
-    config: { max_planners: 2, max_workers: 4, max_reviewers: 2 },
   }
 
   it('renders without errors', () => {
@@ -216,25 +125,13 @@ describe('Header component', () => {
     expect(screen.getByText('Stop')).toBeInTheDocument()
   })
 
-  it('renders pipeline stage pills', () => {
-    render(<Header {...defaultProps} />)
-    // Pipeline pills render TRIAGE, PLAN, IMPLEMENT, REVIEW
-    // Session pills also render these plus MERGED
-    expect(screen.getAllByText('TRIAGE').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('PLAN').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('IMPLEMENT').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('REVIEW').length).toBeGreaterThanOrEqual(1)
-  })
-
   it('renders session pills with all 5 stage labels', () => {
     render(<Header {...defaultProps} />)
+    expect(screen.getByText('TRIAGE')).toBeInTheDocument()
+    expect(screen.getByText('PLAN')).toBeInTheDocument()
+    expect(screen.getByText('IMPLEMENT')).toBeInTheDocument()
+    expect(screen.getByText('REVIEW')).toBeInTheDocument()
     expect(screen.getByText('MERGED')).toBeInTheDocument()
-    // Each stage appears twice: once in session pills, once in pipeline pills (except MERGED)
-    expect(screen.getAllByText('TRIAGE')).toHaveLength(2)
-    expect(screen.getAllByText('PLAN')).toHaveLength(2)
-    expect(screen.getAllByText('IMPLEMENT')).toHaveLength(2)
-    expect(screen.getAllByText('REVIEW')).toHaveLength(2)
-    expect(screen.getAllByText('MERGED')).toHaveLength(1)
   })
 
   it('renders session pill counts correctly', () => {
@@ -247,9 +144,9 @@ describe('Header component', () => {
 
   it('renders session pill counts as 0 when all zero', () => {
     render(<Header {...defaultProps} />)
-    // All 5 session pills show 0, plus pipeline pills show config counts
+    // All 5 session pills show 0
     const zeros = screen.getAllByText('0')
-    expect(zeros.length).toBeGreaterThanOrEqual(5)
+    expect(zeros.length).toBe(5)
   })
 
   it('renders workload summary with empty workers', () => {

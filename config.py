@@ -127,6 +127,10 @@ class HydraConfig(BaseModel):
         default=["hydra-memory"],
         description="Labels for accepted agent learnings (OR logic)",
     )
+    metrics_label: list[str] = Field(
+        default=["hydra-metrics"],
+        description="Labels for the metrics persistence issue (OR logic)",
+    )
     dup_label: list[str] = Field(
         default=["hydra-dup"],
         description="Labels applied when issue is already satisfied (no changes needed)",
@@ -288,6 +292,12 @@ class HydraConfig(BaseModel):
         ge=10,
         le=1200,
         description="Seconds between memory sync polls (default: poll_interval * 4)",
+    )
+    metrics_sync_interval: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Seconds between metrics snapshot syncs",
     )
     data_poll_interval: int = Field(
         default=60,
@@ -459,6 +469,15 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "memory_sync_interval", int(env_mem_sync))
 
+        # Metrics sync interval override
+        if self.metrics_sync_interval == 300:  # still at default
+            env_metrics_sync = os.environ.get("HYDRA_METRICS_SYNC_INTERVAL")
+            if env_metrics_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "metrics_sync_interval", int(env_metrics_sync)
+                    )
+
         # merge conflict fix attempts override
         if self.max_merge_conflict_fix_attempts == 3:  # still at default
             env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
@@ -486,6 +505,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
             "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
+            "HYDRA_LABEL_METRICS": ("metrics_label", ["hydra-metrics"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
