@@ -280,6 +280,17 @@ class TestSaveTranscript:
         assert path.exists()
         assert path.read_text() == "test transcript content"
 
+    def test_save_transcript_handles_oserror(
+        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        runner = HITLRunner(config, EventBus())
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            runner._save_transcript(42, "transcript")  # should not raise
+
+        assert "Could not save transcript" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Terminate

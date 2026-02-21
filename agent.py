@@ -115,12 +115,22 @@ class AgentRunner:
     def _save_transcript(self, result: WorkerResult) -> None:
         """Write the transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"issue-{result.issue_number}.txt"
-        path.write_text(result.transcript)
-        logger.info(
-            "Transcript saved to %s", path, extra={"issue": result.issue_number}
-        )
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"issue-{result.issue_number}.txt"
+            path.write_text(result.transcript)
+            logger.info(
+                "Transcript saved to %s",
+                path,
+                extra={"issue": result.issue_number},
+            )
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"issue": result.issue_number},
+            )
 
     def _build_command(self, worktree_path: Path) -> list[str]:
         """Construct the ``claude`` CLI invocation.

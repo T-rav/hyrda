@@ -171,7 +171,11 @@ class VerificationJudge:
         )
         if not path.exists():
             return None
-        return path.read_text()
+        try:
+            return path.read_text()
+        except OSError:
+            logger.warning("Could not read criteria file %s", path, exc_info=True)
+            return None
 
     def _parse_criteria(self, criteria_text: str) -> tuple[list[str], str]:
         """Extract acceptance criteria items and instructions from the markdown.
@@ -402,9 +406,12 @@ REFINED_INSTRUCTIONS_END
             / "verification"
             / f"issue-{issue_number}-judge.md"
         )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(self._format_judge_report(verdict))
-        logger.info("Judge report saved to %s", path)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self._format_judge_report(verdict))
+            logger.info("Judge report saved to %s", path)
+        except OSError:
+            logger.warning("Could not save judge report to %s", path, exc_info=True)
 
     def _format_judge_report(self, verdict: JudgeVerdict) -> str:
         """Format the judge verdict as a markdown report."""
@@ -459,7 +466,12 @@ REFINED_INSTRUCTIONS_END
         if not path.exists():
             return
 
-        content = path.read_text()
+        try:
+            content = path.read_text()
+        except OSError:
+            logger.warning("Could not read criteria file %s", path, exc_info=True)
+            return
+
         # Find and replace the instructions section
         pattern = re.compile(
             r"(##\s*(?:Verification\s+)?Instructions?\s*\n)(.*?)(\n##|\Z)",
@@ -474,11 +486,16 @@ REFINED_INSTRUCTIONS_END
                 + "\n"
                 + content[match.start(3) :]
             )
-            path.write_text(new_content)
         else:
             # No instructions section — append one
-            content += f"\n## Verification Instructions\n\n{refined_instructions}\n"
-            path.write_text(content)
+            new_content = (
+                content + f"\n## Verification Instructions\n\n{refined_instructions}\n"
+            )
+
+        try:
+            path.write_text(new_content)
+        except OSError:
+            logger.warning("Could not update criteria file %s", path, exc_info=True)
 
     async def _execute(self, cmd: list[str], prompt: str, issue_number: int) -> str:
         """Run the claude judge process."""
