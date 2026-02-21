@@ -146,13 +146,6 @@ class HydraConfig(BaseModel):
         default=["bug", "typo", "docs"],
         description="Issue labels that trigger a lite plan (fewer required sections)",
     )
-    max_plan_file_overlap: int = Field(
-        default=3,
-        ge=1,
-        le=20,
-        description="Max files overlapping between concurrent plans before BLOCK",
-    )
-
     # Metric thresholds for improvement proposals
     quality_fix_rate_threshold: float = Field(
         default=0.5,
@@ -349,13 +342,6 @@ class HydraConfig(BaseModel):
             parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
-
-        # plan file overlap override
-        if self.max_plan_file_overlap == 3:  # still at default
-            env_overlap = os.environ.get("HYDRA_MAX_PLAN_FILE_OVERLAP")
-            if env_overlap is not None:
-                with contextlib.suppress(ValueError):
-                    object.__setattr__(self, "max_plan_file_overlap", int(env_overlap))
 
         # Review fix attempts override
         if self.max_review_fix_attempts == 2:  # still at default

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 
 from models import AnalysisResult, AnalysisSection, AnalysisVerdict
-
-logger = logging.getLogger("hydra.analysis")
 
 # File extensions considered valid code/config references in plans.
 _CODE_EXTENSIONS = frozenset(
@@ -33,23 +30,17 @@ _CODE_EXTENSIONS = frozenset(
 class PlanAnalyzer:
     """Analyzes a plan for consistency before implementation begins."""
 
-    def __init__(self, repo_root: Path, max_file_overlap: int = 3) -> None:
+    def __init__(self, repo_root: Path) -> None:
         self._repo_root = repo_root
-        self._plans_dir = repo_root / ".hydra" / "plans"
-        self._max_file_overlap = max_file_overlap
 
     def analyze(self, plan_text: str, issue_number: int) -> AnalysisResult:
         """Run all analysis checks and return the combined result."""
         file_section = self._validate_file_references(plan_text)
-        conflict_section, overlapping = self._check_concurrent_conflicts(
-            plan_text, issue_number
-        )
         test_section = self._validate_test_patterns(plan_text)
 
         return AnalysisResult(
             issue_number=issue_number,
-            sections=[file_section, conflict_section, test_section],
-            overlapping_issues=overlapping,
+            sections=[file_section, test_section],
         )
 
     @staticmethod
@@ -148,81 +139,6 @@ class PlanAnalyzer:
 
         return warnings
 
-    def _check_concurrent_conflicts(
-        self, plan_text: str, issue_number: int
-    ) -> tuple[AnalysisSection, dict[int, list[str]]]:
-        """Cross-reference plan files against other active plans."""
-        modify_section = self._extract_section(plan_text, "Files to Modify")
-        new_section = self._extract_section(plan_text, "New Files")
-        current_files = set(
-            self._extract_file_paths(modify_section)
-            + self._extract_file_paths(new_section)
-        )
-
-        overlapping: dict[int, list[str]] = {}
-
-        if not self._plans_dir.is_dir():
-            return (
-                AnalysisSection(
-                    name="Conflict Check",
-                    verdict=AnalysisVerdict.PASS,
-                    details=["No other active plans found."],
-                ),
-                overlapping,
-            )
-
-        for plan_file in sorted(self._plans_dir.glob("issue-*.md")):
-            try:
-                other_number = int(plan_file.stem.split("-")[1])
-            except (IndexError, ValueError):
-                continue
-            if other_number == issue_number:
-                continue
-
-            other_files = set(self._extract_files_from_plan_file(plan_file))
-            overlap = current_files & other_files
-            if overlap:
-                overlapping[other_number] = sorted(overlap)
-
-        total_overlap = sum(len(files) for files in overlapping.values())
-        if total_overlap == 0:
-            return (
-                AnalysisSection(
-                    name="Conflict Check",
-                    verdict=AnalysisVerdict.PASS,
-                    details=["No file conflicts with other active plans."],
-                ),
-                overlapping,
-            )
-
-        details: list[str] = []
-        for other_issue, files in sorted(overlapping.items()):
-            file_list = ", ".join(f"`{f}`" for f in files)
-            details.append(f"Overlaps with issue #{other_issue}: {file_list}")
-
-        if total_overlap > self._max_file_overlap:
-            details.append(
-                f"Total overlapping files ({total_overlap}) exceeds "
-                f"threshold ({self._max_file_overlap})."
-            )
-            return (
-                AnalysisSection(
-                    name="Conflict Check",
-                    verdict=AnalysisVerdict.BLOCK,
-                    details=details,
-                ),
-                overlapping,
-            )
-
-        return (
-            AnalysisSection(
-                name="Conflict Check",
-                verdict=AnalysisVerdict.WARN,
-                details=details,
-            ),
-            overlapping,
-        )
-
     def _validate_test_patterns(self, plan_text: str) -> AnalysisSection:
         """Validate test patterns referenced in the plan."""
         test_section = self._extract_section(plan_text, "Testing Strategy")
@@ -272,18 +188,4 @@ class PlanAnalyzer:
             name="Test Pattern Check",
             verdict=verdict,
             details=details,
-        )
-
-    def _extract_files_from_plan_file(self, plan_path: Path) -> list[str]:
-        """Read a saved plan file and extract file paths from it."""
-        try:
-            content = plan_path.read_text()
-        except OSError:
-            logger.warning("Could not read plan file: %s", plan_path)
-            return []
-
-        modify_section = self._extract_section(content, "Files to Modify")
-        new_section = self._extract_section(content, "New Files")
-        return self._extract_file_paths(modify_section) + self._extract_file_paths(
-            new_section
         )
