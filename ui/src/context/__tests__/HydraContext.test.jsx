@@ -227,3 +227,31 @@ describe('HydraProvider', () => {
     expect(screen.getByText('Test Child')).toBeInTheDocument()
   })
 })
+
+describe('UPDATE_BG_WORKER_INTERVAL action', () => {
+  it('updates interval_seconds for existing worker', () => {
+    const state = {
+      ...initialState,
+      backgroundWorkers: [
+        { name: 'memory_sync', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+      ],
+    }
+    const result = reducer(state, {
+      type: 'UPDATE_BG_WORKER_INTERVAL',
+      data: { name: 'memory_sync', interval_seconds: 7200 },
+    })
+    const worker = result.backgroundWorkers.find(w => w.name === 'memory_sync')
+    expect(worker.interval_seconds).toBe(7200)
+  })
+
+  it('creates stub entry for unknown worker', () => {
+    const state = { ...initialState, backgroundWorkers: [] }
+    const result = reducer(state, {
+      type: 'UPDATE_BG_WORKER_INTERVAL',
+      data: { name: 'metrics', interval_seconds: 1800 },
+    })
+    expect(result.backgroundWorkers).toHaveLength(1)
+    expect(result.backgroundWorkers[0].name).toBe('metrics')
+    expect(result.backgroundWorkers[0].interval_seconds).toBe(1800)
+  })
+})

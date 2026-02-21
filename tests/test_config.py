@@ -1775,7 +1775,7 @@ class TestHydraConfigImproveLabelAndMemoryLabel:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.metrics_sync_interval == 300
+        assert cfg.metrics_sync_interval == 7200
 
     def test_metrics_sync_interval_env_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -2136,3 +2136,63 @@ class TestMaxIssueAttempts:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_issue_attempts == 4
+
+
+class TestUpdatedIntervalDefaults:
+    """Verify updated default intervals for memory_sync and metrics."""
+
+    def test_memory_sync_default_is_3600(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_sync_interval == 3600
+
+    def test_metrics_sync_default_is_7200(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_sync_interval == 7200
+
+    def test_memory_sync_max_increased_to_14400(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            memory_sync_interval=14400,
+        )
+        assert cfg.memory_sync_interval == 14400
+
+    def test_metrics_sync_max_increased_to_14400(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            metrics_sync_interval=14400,
+        )
+        assert cfg.metrics_sync_interval == 14400
+
+    def test_memory_sync_env_override_with_new_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MEMORY_SYNC_INTERVAL", "900")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_sync_interval == 900
+
+    def test_metrics_sync_env_override_with_new_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_METRICS_SYNC_INTERVAL", "1800")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.metrics_sync_interval == 1800

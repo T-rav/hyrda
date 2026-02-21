@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
 import { useHydra } from '../context/HydraContext'
 
 function relativeTime(isoString) {
@@ -22,6 +22,32 @@ function formatDuration(startTime) {
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
   return `${minutes}m ${secs}s`
+}
+
+export function formatInterval(seconds) {
+  if (seconds == null) return null
+  if (seconds < 60) return `every ${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `every ${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const remainMinutes = minutes % 60
+  if (remainMinutes === 0) return `every ${hours}h`
+  return `every ${hours}h ${remainMinutes}m`
+}
+
+export function formatNextRun(lastRun, intervalSeconds) {
+  if (!lastRun || !intervalSeconds) return null
+  const nextTime = new Date(lastRun).getTime() + intervalSeconds * 1000
+  const diff = nextTime - Date.now()
+  if (diff <= 0) return 'now'
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return `in ${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `in ${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const remainMinutes = minutes % 60
+  if (remainMinutes === 0) return `in ${hours}h`
+  return `in ${hours}h ${remainMinutes}m`
 }
 
 function statusColor(status) {
@@ -88,10 +114,12 @@ function PipelineWorkerCard({ workerKey, worker }) {
   )
 }
 
-function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog }) {
+function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval }) {
+  const [showIntervalEditor, setShowIntervalEditor] = useState(false)
   const isPipelinePoller = def.key === 'pipeline_poller'
   const isSystem = def.system === true
   const orchRunning = orchestratorStatus === 'running'
+  const isEditable = EDITABLE_INTERVAL_WORKERS.has(def.key)
 
   let dotColor, statusText, lastRun, details
 
@@ -181,6 +209,44 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
       <div style={styles.lastRun}>
         Last run: {relativeTime(lastRun)}
       </div>
+      {state?.interval_seconds != null && (
+        <div style={styles.scheduleRow} data-testid={`schedule-${def.key}`}>
+          <span style={styles.scheduleText}>
+            Runs {formatInterval(state.interval_seconds)}
+          </span>
+          {lastRun && (
+            <span style={styles.nextRunText}>
+              {' \u00b7 Next '}{formatNextRun(lastRun, state.interval_seconds)}
+            </span>
+          )}
+          {isEditable && onUpdateInterval && (
+            <span
+              style={styles.editIntervalLink}
+              onClick={() => setShowIntervalEditor(!showIntervalEditor)}
+              data-testid={`edit-interval-${def.key}`}
+            >
+              {showIntervalEditor ? 'close' : 'edit'}
+            </span>
+          )}
+        </div>
+      )}
+      {showIntervalEditor && isEditable && onUpdateInterval && (
+        <div style={styles.intervalEditor} data-testid={`interval-editor-${def.key}`}>
+          {INTERVAL_PRESETS.map((preset) => (
+            <button
+              key={preset.seconds}
+              style={state?.interval_seconds === preset.seconds ? styles.presetActive : styles.presetButton}
+              onClick={() => {
+                onUpdateInterval(def.key, preset.seconds)
+                setShowIntervalEditor(false)
+              }}
+              data-testid={`preset-${preset.label}`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      )}
       {hasDetails && (
         <div style={isError ? (onViewLog ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
@@ -206,7 +272,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
   )
 }
 
-export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog }) {
+export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
   const { pipelinePollerLastRun, hitlItems, pipelineIssues, orchestratorStatus } = useHydra()
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && w.status !== 'queued'
@@ -290,6 +356,7 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
               orchestratorStatus={orchestratorStatus}
               onToggleBgWorker={onToggleBgWorker}
               onViewLog={onViewLog}
+              onUpdateInterval={onUpdateInterval}
             />
           )
         })}
@@ -565,5 +632,55 @@ const styles = {
     border: `1px solid ${theme.border}`,
     background: 'transparent',
     transition: 'background 0.15s',
+  },
+  scheduleRow: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 8,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
+  scheduleText: {
+    color: theme.textMuted,
+  },
+  nextRunText: {
+    color: theme.textMuted,
+  },
+  editIntervalLink: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: theme.accent,
+    cursor: 'pointer',
+    marginLeft: 4,
+  },
+  intervalEditor: {
+    display: 'flex',
+    gap: 4,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  presetButton: {
+    padding: '2px 8px',
+    fontSize: 10,
+    fontWeight: 600,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 8,
+    background: theme.surface,
+    color: theme.textMuted,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  presetActive: {
+    padding: '2px 8px',
+    fontSize: 10,
+    fontWeight: 600,
+    border: `1px solid ${theme.accent}`,
+    borderRadius: 8,
+    background: theme.accentSubtle,
+    color: theme.accent,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
 }

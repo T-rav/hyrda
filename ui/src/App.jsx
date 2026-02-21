@@ -40,7 +40,7 @@ function AppContent() {
     sessionImplemented, sessionReviewed, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
-    lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker,
+    lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker, updateBgWorkerInterval,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -133,7 +133,7 @@ function AppContent() {
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'livestream' && <Livestream events={events} />}
-          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
           {activeTab === 'metrics' && (
             <MetricsPanel
               metrics={metrics}

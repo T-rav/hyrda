@@ -288,16 +288,16 @@ class HydraConfig(BaseModel):
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
     memory_sync_interval: int = Field(
-        default=120,
+        default=3600,
         ge=10,
-        le=1200,
-        description="Seconds between memory sync polls (default: poll_interval * 4)",
+        le=14400,
+        description="Seconds between memory sync polls (default: 1 hour)",
     )
     metrics_sync_interval: int = Field(
-        default=300,
+        default=7200,
         ge=30,
-        le=3600,
-        description="Seconds between metrics snapshot syncs",
+        le=14400,
+        description="Seconds between metrics snapshot syncs (default: 2 hours)",
     )
     data_poll_interval: int = Field(
         default=60,
@@ -463,14 +463,14 @@ class HydraConfig(BaseModel):
                     )
 
         # Memory sync interval override
-        if self.memory_sync_interval == 120:  # still at default
+        if self.memory_sync_interval == 3600:  # still at default
             env_mem_sync = os.environ.get("HYDRA_MEMORY_SYNC_INTERVAL")
             if env_mem_sync is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "memory_sync_interval", int(env_mem_sync))
 
         # Metrics sync interval override
-        if self.metrics_sync_interval == 300:  # still at default
+        if self.metrics_sync_interval == 7200:  # still at default
             env_metrics_sync = os.environ.get("HYDRA_METRICS_SYNC_INTERVAL")
             if env_metrics_sync is not None:
                 with contextlib.suppress(ValueError):

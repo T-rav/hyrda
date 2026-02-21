@@ -1603,3 +1603,32 @@ class TestActiveIssueNumbersTracking:
         tracker = StateTracker(state_file)
         assert tracker.get_active_issue_numbers() == []
         assert tracker.get_current_batch() == 5
+
+
+class TestWorkerIntervals:
+    """Tests for worker interval override persistence."""
+
+    def test_get_returns_empty_dict_initially(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_worker_intervals() == {}
+
+    def test_set_and_get_round_trip(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_worker_intervals({"memory_sync": 1800, "metrics": 7200})
+        assert tracker.get_worker_intervals() == {"memory_sync": 1800, "metrics": 7200}
+
+    def test_persists_across_instances(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker1 = StateTracker(state_file)
+        tracker1.set_worker_intervals({"memory_sync": 3600})
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_worker_intervals() == {"memory_sync": 3600}
+
+    def test_get_returns_copy(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_worker_intervals({"memory_sync": 1800})
+        result1 = tracker.get_worker_intervals()
+        result2 = tracker.get_worker_intervals()
+        assert result1 == result2
+        assert result1 is not result2

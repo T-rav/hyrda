@@ -419,6 +419,28 @@ def create_router(
         ("review_insights", "Review Insights"),
     ]
 
+    # Workers that have independent configurable intervals
+    _INTERVAL_WORKERS = {"memory_sync", "metrics"}
+    # Pipeline loops share poll_interval (read-only display)
+    _PIPELINE_WORKERS = {"triage", "plan", "implement", "review"}
+
+    def _compute_next_run(
+        last_run: str | None, interval_seconds: int | None
+    ) -> str | None:
+        """Compute next run ISO timestamp from last_run + interval."""
+        if not last_run or not interval_seconds:
+            return None
+        from datetime import datetime, timedelta
+
+        try:
+            last_dt = datetime.fromisoformat(last_run)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=UTC)
+            next_dt = last_dt + timedelta(seconds=interval_seconds)
+            return next_dt.isoformat()
+        except (ValueError, TypeError):
+            return None
+
     @router.get("/api/system/workers")
     async def get_system_workers() -> JSONResponse:
         """Return last known status of each background worker."""
@@ -427,21 +449,42 @@ def create_router(
         workers = []
         for name, label in _bg_worker_defs:
             enabled = orch.is_bg_worker_enabled(name) if orch else True
+
+            # Determine interval for this worker
+            interval: int | None = None
+            if name in _INTERVAL_WORKERS and orch:
+                interval = orch.get_bg_worker_interval(name)
+            elif name in _INTERVAL_WORKERS:
+                if name == "memory_sync":
+                    interval = config.memory_sync_interval
+                elif name == "metrics":
+                    interval = config.metrics_sync_interval
+            elif name in _PIPELINE_WORKERS:
+                interval = config.poll_interval
+
             if name in bg_states:
                 entry = bg_states[name]
+                last_run = entry.get("last_run")
                 workers.append(
                     BackgroundWorkerStatus(
                         name=name,
                         label=label,
                         status=entry["status"],
                         enabled=enabled,
-                        last_run=entry.get("last_run"),
+                        last_run=last_run,
+                        interval_seconds=interval,
+                        next_run=_compute_next_run(last_run, interval),
                         details=entry.get("details", {}),
                     )
                 )
             else:
                 workers.append(
-                    BackgroundWorkerStatus(name=name, label=label, enabled=enabled)
+                    BackgroundWorkerStatus(
+                        name=name,
+                        label=label,
+                        enabled=enabled,
+                        interval_seconds=interval,
+                    )
                 )
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
 
@@ -459,6 +502,45 @@ def create_router(
             return JSONResponse({"error": "no orchestrator"}, status_code=400)
         orch.set_bg_worker_enabled(name, bool(enabled))
         return JSONResponse({"status": "ok", "name": name, "enabled": bool(enabled)})
+
+    # Interval bounds per editable worker (must match config.py Field constraints)
+    _INTERVAL_BOUNDS = {
+        "memory_sync": (10, 14400),
+        "metrics": (30, 14400),
+    }
+
+    @router.post("/api/control/bg-worker/interval")
+    async def set_bg_worker_interval(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Update the polling interval for a background worker."""
+        name = body.get("name")
+        interval = body.get("interval_seconds")
+        if not name or interval is None:
+            return JSONResponse(
+                {"error": "name and interval_seconds are required"}, status_code=400
+            )
+        if name not in _INTERVAL_BOUNDS:
+            return JSONResponse(
+                {"error": f"interval not editable for worker '{name}'"}, status_code=400
+            )
+        try:
+            interval = int(interval)
+        except (TypeError, ValueError):
+            return JSONResponse(
+                {"error": "interval_seconds must be an integer"}, status_code=400
+            )
+        lo, hi = _INTERVAL_BOUNDS[name]
+        if interval < lo or interval > hi:
+            return JSONResponse(
+                {"error": f"interval_seconds must be between {lo} and {hi}"},
+                status_code=422,
+            )
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+        orch.set_bg_worker_interval(name, interval)
+        return JSONResponse(
+            {"status": "ok", "name": name, "interval_seconds": interval}
+        )
 
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:

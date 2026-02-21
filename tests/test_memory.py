@@ -523,7 +523,7 @@ class TestMemoryConfig:
         from config import HydraConfig
 
         config = HydraConfig(repo="test/repo")
-        assert config.memory_sync_interval == 120
+        assert config.memory_sync_interval == 3600
 
     def test_max_memory_chars_default(self) -> None:
         from config import HydraConfig
