@@ -127,7 +127,7 @@ export function HITLTable({ items, onRefresh }) {
                     <td colSpan={6} style={styles.detailCell}>
                       <div style={styles.detailPanel}>
                         {item.cause && (
-                          <div style={item.isMemorySuggestion ? styles.memoryCauseBadge : { ...styles.causeBadge, background: causeColors(item.cause).bg, color: causeColors(item.cause).fg }} data-testid={`hitl-cause-${item.issue}`}>
+                          <div style={causeBadgeStyle(item)} data-testid={`hitl-cause-${item.issue}`}>
                             Cause: {item.cause}
                           </div>
                         )}
@@ -221,6 +221,17 @@ function causeColors(cause) {
   return { bg: theme.orangeSubtle, fg: theme.orange }
 }
 
+function causeBadgeStyle(item) {
+  if (item.isMemorySuggestion) return styles.memoryCauseBadge
+  const colors = causeColors(item.cause)
+  return { ...badgeBase, background: colors.bg, color: colors.fg }
+}
+
+const badgeBase = {
+  display: 'inline-block', marginBottom: 8,
+  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+}
+
 const btnBase = {
   padding: '6px 14px', border: 'none', borderRadius: 6,
   fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12,
@@ -258,11 +269,7 @@ const styles = {
     padding: '12px 16px', background: theme.surface,
     borderTop: `1px solid ${theme.border}`,
   },
-  causeBadge: {
-    display: 'inline-block', marginBottom: 8,
-    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-    background: theme.orangeSubtle, color: theme.orange,
-  },
+  causeBadge: { ...badgeBase, background: theme.orangeSubtle, color: theme.orange },
   textarea: {
     width: '100%', minHeight: 60, padding: 8,
     background: theme.bg, border: `1px solid ${theme.border}`,
@@ -274,9 +281,5 @@ const styles = {
   skipBtn: { ...btnBase, background: theme.surfaceInset, color: theme.text, border: `1px solid ${theme.border}` },
   closeBtn: { ...btnBase, background: theme.btnRed, color: theme.white },
   approveMemoryBtn: { ...btnBase, background: theme.purple, color: theme.white },
-  memoryCauseBadge: {
-    display: 'inline-block', marginBottom: 8,
-    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-    background: theme.purpleSubtle, color: theme.purple,
-  },
+  memoryCauseBadge: { ...badgeBase, background: theme.purpleSubtle, color: theme.purple },
 }
