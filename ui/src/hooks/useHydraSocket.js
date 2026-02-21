@@ -54,6 +54,7 @@ export function reducer(state, action) {
           sessionImplemented: 0,
           sessionReviewed: 0,
           hitlItems: [],
+          hitlEscalation: null,
         }
       }
       return { ...addEvent(state, action), phase: newPhase }

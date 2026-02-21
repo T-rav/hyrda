@@ -2761,6 +2761,52 @@ class TestHITLEscalationEvents:
         ]
         assert len(escalation_events) == 0
 
+    @pytest.mark.asyncio
+    async def test_review_fix_cap_exceeded_emits_hitl_event(
+        self, config: HydraConfig
+    ) -> None:
+        """Review fix cap exceeded should emit HITL_ESCALATION with cause review_fix_cap_exceeded."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Set attempts to max so cap is exceeded
+        phase._state.increment_review_attempts(42)
+        phase._state.increment_review_attempts(42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(
+                101, 42, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        escalation_events = [
+            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+        ]
+        assert len(escalation_events) == 1
+        data = escalation_events[0].data
+        assert data["issue"] == 42
+        assert data["pr"] == 101
+        assert data["status"] == "escalated"
+        assert data["role"] == "reviewer"
+        assert data["cause"] == "review_fix_cap_exceeded"
+
 
 # ---------------------------------------------------------------------------
 # REQUEST_CHANGES retry logic
