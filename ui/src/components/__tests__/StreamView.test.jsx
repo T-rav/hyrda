@@ -322,22 +322,24 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('excludes failed and hitl from queued count', () => {
+    // Note: server-side 'queued' status maps to overallStatus 'active' via toStreamIssue,
+    // so queuedCount captures only items that are not active/failed/hitl (normally 0).
+    // This test verifies failed and hitl are separated from queuedCount.
     mockUseHydra.mockReturnValue({
       ...defaultHydra,
       pipelineIssues: {
         ...defaultHydra.pipelineIssues,
         implement: [
           { issue_number: 1, title: 'Active', status: 'active' },
-          { issue_number: 2, title: 'Queued', status: 'queued' },
-          { issue_number: 3, title: 'Failed', status: 'failed' },
-          { issue_number: 4, title: 'HITL', status: 'hitl' },
+          { issue_number: 2, title: 'Failed', status: 'failed' },
+          { issue_number: 3, title: 'HITL', status: 'hitl' },
         ],
       },
     })
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('1 active')
-    expect(section.textContent).toContain('1 queued')
+    expect(section.textContent).toContain('0 queued')
     expect(section.textContent).toContain('1 failed')
     expect(section.textContent).toContain('1 hitl')
   })
