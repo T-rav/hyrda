@@ -41,11 +41,13 @@ class Escalator:
     ) -> None:
         """Perform the full HITL escalation sequence.
 
-        1. Post escalation comment (if provided)
+        1. Post escalation comment (if provided).  When *comment_on_pr* is
+           True and *pr_number* is given, the comment is posted on the PR;
+           otherwise it falls back to the issue.
         2. Record HITL origin, cause, and escalation counter in state
         3. Remove *current_labels* from issue (and PR if *pr_number* given)
         4. Add HITL label to issue (and PR if *pr_number* given)
-        5. Publish event (if provided)
+        5. Publish event (if provided and bus is set)
         """
         # 1. Post comment
         if comment:

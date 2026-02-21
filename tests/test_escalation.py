@@ -287,6 +287,27 @@ class TestCommentPosting:
         mock_prs.post_comment.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_escalate_posts_comment_to_issue_when_comment_on_pr_but_no_pr_number(
+        self, config: HydraConfig
+    ) -> None:
+        """comment_on_pr=True without pr_number falls back to issue comment."""
+        escalator, _, mock_prs, _ = _make_escalator(config)
+
+        await escalator.escalate_to_hitl(
+            issue_number=42,
+            cause="Test",
+            origin_label="hydra-review",
+            comment="Escalating to human review.",
+            comment_on_pr=True,
+            # pr_number intentionally omitted
+        )
+
+        mock_prs.post_comment.assert_awaited_once_with(
+            42, "Escalating to human review."
+        )
+        mock_prs.post_pr_comment.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_escalate_skips_comment_when_empty(self, config: HydraConfig) -> None:
         escalator, _, mock_prs, _ = _make_escalator(config)
 
