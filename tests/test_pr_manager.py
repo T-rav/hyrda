@@ -2252,3 +2252,152 @@ class TestGetLabelCounts:
         assert result["open_by_label"]["hydra-plan"] == 0
         assert result["total_closed"] == 0
         assert result["total_merged"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Edge case tests for create_pr, wait_for_ci, list_open_prs
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePrEdgeCases:
+    """Edge case tests for PRManager.create_pr."""
+
+    @pytest.mark.asyncio
+    async def test_create_pr_unparseable_url_raises_value_error(
+        self, config, event_bus, issue
+    ):
+        """create_pr should raise ValueError when gh output is not a URL with a number."""
+        manager = _make_manager(config, event_bus)
+        # gh pr create returns non-URL text
+        mock_create = _make_subprocess_mock(
+            returncode=0, stdout="Created pull request successfully"
+        )
+
+        with (
+            patch("asyncio.create_subprocess_exec", mock_create),
+            pytest.raises(ValueError),
+        ):
+            await manager.create_pr(issue, "agent/issue-42")
+
+
+class TestWaitForCiEdgeCases:
+    """Edge case tests for PRManager.wait_for_ci."""
+
+    @pytest.mark.asyncio
+    async def test_wait_for_ci_partial_completion_keeps_polling(
+        self, config, event_bus, tmp_path
+    ):
+        """When some checks pass and some are pending, should poll again."""
+        import asyncio
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        stop = asyncio.Event()
+
+        # First call: mix of SUCCESS and PENDING; second call: all SUCCESS
+        call_count = 0
+
+        async def fake_checks(_pr_num):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [
+                    {"name": "ci", "state": "SUCCESS"},
+                    {"name": "lint", "state": "PENDING"},
+                ]
+            return [
+                {"name": "ci", "state": "SUCCESS"},
+                {"name": "lint", "state": "SUCCESS"},
+            ]
+
+        mgr.get_pr_checks = fake_checks  # type: ignore[assignment]
+
+        passed, summary = await mgr.wait_for_ci(
+            101, timeout=60, poll_interval=0, stop_event=stop
+        )
+
+        assert passed is True
+        assert "2 checks passed" in summary
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_ci_cancelled_check_treated_as_failure(
+        self, config, event_bus, tmp_path
+    ):
+        """CANCELLED check state should be treated as failure (not in _PASSING_STATES)."""
+        import asyncio
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        stop = asyncio.Event()
+
+        checks = [
+            {"name": "ci", "state": "SUCCESS"},
+            {"name": "deploy", "state": "CANCELLED"},
+        ]
+        mgr.get_pr_checks = AsyncMock(return_value=checks)
+
+        passed, summary = await mgr.wait_for_ci(
+            101, timeout=60, poll_interval=5, stop_event=stop
+        )
+
+        assert passed is False
+        assert "deploy" in summary
+
+
+class TestListOpenPrsEdgeCases:
+    """Edge case tests for PRManager.list_open_prs."""
+
+    @pytest.mark.asyncio
+    async def test_list_open_prs_missing_headRefName_uses_empty_default(
+        self, config, event_bus, tmp_path
+    ):
+        """PR JSON missing headRefName should use empty string fallback."""
+        import json
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        # PR JSON with no headRefName field
+        pr_json = json.dumps(
+            [
+                {
+                    "number": 10,
+                    "url": "https://github.com/org/repo/pull/10",
+                    "isDraft": False,
+                    "title": "Fix widget",
+                },
+            ]
+        )
+        mock_create = _make_subprocess_mock(returncode=0, stdout=pr_json)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.list_open_prs(["test-label"])
+
+        assert len(result) == 1
+        assert result[0].branch == ""
+        assert result[0].issue == 0

@@ -175,6 +175,31 @@ class TestLoadMemoryDigest:
         assert len(result) < 5000
         assert "truncated" in result
 
+    def test_at_exact_max_chars_no_truncation(self, tmp_path: Path) -> None:
+        """Content at exactly max_memory_prompt_chars should NOT be truncated."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir.mkdir(parents=True)
+        exact_content = "x" * config.max_memory_prompt_chars
+        (digest_dir / "digest.md").write_text(exact_content)
+
+        result = load_memory_digest(config)
+        assert result == exact_content
+        assert "truncated" not in result
+
+    def test_one_over_max_chars_triggers_truncation(self, tmp_path: Path) -> None:
+        """Content at max_memory_prompt_chars + 1 should be truncated."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir.mkdir(parents=True)
+        over_content = "x" * (config.max_memory_prompt_chars + 1)
+        (digest_dir / "digest.md").write_text(over_content)
+
+        result = load_memory_digest(config)
+        assert "truncated" in result
+        # The truncated content should start with the original prefix
+        assert result.startswith("x" * 100)
+
 
 # --- MemorySyncWorker tests ---
 
@@ -456,6 +481,47 @@ class TestMemorySyncWorkerSync:
         event = bus.publish.call_args[0][0]
         assert event.type.value == "memory_sync"
         assert event.data["item_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_sync_concurrent_calls_complete_without_error(
+        self, tmp_path: Path
+    ) -> None:
+        """Two concurrent sync() calls should both complete without corruption."""
+        import asyncio
+
+        config = ConfigFactory.create(repo_root=tmp_path)
+        state = MagicMock()
+        state.get_memory_state.return_value = ([], "", None)
+        bus = MagicMock()
+
+        worker = MemorySyncWorker(config, state, bus)
+
+        issues_a = [
+            {
+                "number": 10,
+                "title": "A",
+                "body": "**Learning:** First learning",
+                "createdAt": "2024-06-01",
+            },
+        ]
+        issues_b = [
+            {
+                "number": 20,
+                "title": "B",
+                "body": "**Learning:** Second learning",
+                "createdAt": "2024-06-02",
+            },
+        ]
+
+        results = await asyncio.gather(
+            worker.sync(issues_a),
+            worker.sync(issues_b),
+            return_exceptions=True,
+        )
+
+        # Both calls should complete without raising
+        for r in results:
+            assert not isinstance(r, Exception), f"sync() raised: {r}"
 
 
 # --- State tracking tests ---
