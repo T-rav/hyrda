@@ -97,7 +97,7 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
     currentStage: stageKey,
-    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isActive ? 'active' : 'active',
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : 'active',
     startTime: null,
     endTime: null,
     pr,
