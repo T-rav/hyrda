@@ -296,6 +296,19 @@ describe('deriveIssueTimelines', () => {
     expect(result[0].title).toBe('Add dark mode toggle')
   })
 
+  it('does not override hitl status with active from worker', () => {
+    const events = [
+      { type: 'review_update', timestamp: '2026-01-15T10:00:00Z', data: { issue: 11, pr: 60, status: 'escalated' } },
+    ]
+    const workers = {
+      'review-60': { status: 'running', role: 'reviewer', title: 'PR #60 (Issue #11)', branch: '', transcript: [], pr: 60 },
+    }
+    const result = deriveIssueTimelines(events, workers, [])
+
+    expect(result[0].stages.review.status).toBe('hitl')
+    expect(result[0].overallStatus).toBe('hitl')
+  })
+
   it('does not mark issue as done when all stages except merged are done', () => {
     const events = [
       { type: 'triage_update', timestamp: '2026-01-15T10:00:00Z', data: { issue: 9, status: 'done' } },

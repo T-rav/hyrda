@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState } from 'react'
 import { PIPELINE_STAGES } from '../constants'
 
 /** Canonical stage keys in lifecycle order. */
@@ -214,7 +214,7 @@ export function deriveIssueTimelines(events, workers, prs) {
       stageData.status = 'failed'
     } else if (worker.status === 'escalated') {
       stageData.status = 'hitl'
-    } else if (worker.status && worker.status !== 'queued' && stageData.status !== 'done' && stageData.status !== 'failed') {
+    } else if (worker.status && worker.status !== 'queued' && stageData.status !== 'done' && stageData.status !== 'failed' && stageData.status !== 'hitl') {
       stageData.status = 'active'
     }
 
@@ -331,8 +331,8 @@ export function useTimeline(events, workers, prs) {
 
   return {
     issues,
-    filterStage, setFilterStage: useCallback(v => setFilterStage(v), []),
-    filterStatus, setFilterStatus: useCallback(v => setFilterStatus(v), []),
-    sortBy, setSortBy: useCallback(v => setSortBy(v), []),
+    filterStage, setFilterStage,
+    filterStatus, setFilterStatus,
+    sortBy, setSortBy,
   }
 }

@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react'
 import { theme } from '../theme'
-import { PIPELINE_STAGES } from '../constants'
 import { useTimeline, STAGE_KEYS, STAGE_META, formatDuration } from '../hooks/useTimeline'
 
 /** Status filter options. */
@@ -567,10 +566,13 @@ export const stageConnectorStyles = Object.fromEntries(
 
 // Issue card stage badge styles
 export const issueCardBadgeStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...styles.issueBadge,
-    background: s.subtleColor,
-    color: s.color,
-    borderColor: s.color + '44',
-  }])
+  STAGE_KEYS.map(key => {
+    const meta = STAGE_META[key]
+    return [key, {
+      ...styles.issueBadge,
+      background: meta.subtleColor,
+      color: meta.color,
+      borderColor: meta.color + '44',
+    }]
+  })
 )
