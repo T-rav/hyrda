@@ -48,7 +48,7 @@ function AppContent() {
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
-    if (selectedWorker !== null && workers[selectedWorker]) return
+    if (selectedWorker !== null && (workers[selectedWorker] || (typeof selectedWorker === 'string' && selectedWorker.startsWith('bg-')))) return
     const active = Object.entries(workers).find(
       ([, w]) => ACTIVE_STATUSES.includes(w.status)
     )
@@ -70,14 +70,18 @@ function AppContent() {
     } catch { /* ignore */ }
   }, [])
 
-  const handleViewTranscript = useCallback((issueNumber) => {
-    const numKey = Number(issueNumber)
-    if (workers[numKey]) {
-      setSelectedWorker(numKey)
-    } else if (workers[`plan-${issueNumber}`]) {
-      setSelectedWorker(`plan-${issueNumber}`)
-    } else if (workers[`triage-${issueNumber}`]) {
-      setSelectedWorker(`triage-${issueNumber}`)
+  const handleViewTranscript = useCallback((key) => {
+    if (typeof key === 'string' && key.startsWith('bg-')) {
+      setSelectedWorker(key)
+    } else {
+      const numKey = Number(key)
+      if (workers[numKey]) {
+        setSelectedWorker(numKey)
+      } else if (workers[`plan-${key}`]) {
+        setSelectedWorker(`plan-${key}`)
+      } else if (workers[`triage-${key}`]) {
+        setSelectedWorker(`triage-${key}`)
+      }
     }
     setActiveTab('transcript')
   }, [workers])
@@ -129,7 +133,7 @@ function AppContent() {
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'livestream' && <Livestream events={events} />}
-          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
           {activeTab === 'metrics' && (
             <MetricsPanel
               metrics={metrics}
