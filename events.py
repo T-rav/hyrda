@@ -44,6 +44,7 @@ class EventType(StrEnum):
     BACKGROUND_WORKER_STATUS = "background_worker_status"
     QUEUE_UPDATE = "queue_update"
     SYSTEM_ALERT = "system_alert"
+    VERIFICATION_JUDGE = "verification_judge"
 
 
 class HydraEvent(BaseModel):

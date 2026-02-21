@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models import CriterionResult, GitHubIssue, JudgeResult, PRInfo
+from models import GitHubIssue, JudgeResult, PRInfo, VerificationCriterion
 from verification import format_verification_issue_body
 
 
@@ -33,16 +33,16 @@ def _make_pr(number: int = 101, issue_number: int = 42) -> PRInfo:
 def _make_judge_result(
     issue_number: int = 42,
     pr_number: int = 101,
-    criteria: list[CriterionResult] | None = None,
+    criteria: list[VerificationCriterion] | None = None,
     verification_instructions: str = "1. Run the app\n2. Click the button",
     summary: str = "All good",
 ) -> JudgeResult:
     if criteria is None:
         criteria = [
-            CriterionResult(
+            VerificationCriterion(
                 description="Unit tests pass", passed=True, details="All 42 tests pass"
             ),
-            CriterionResult(
+            VerificationCriterion(
                 description="Linting passes", passed=True, details="No issues"
             ),
         ]
@@ -78,11 +78,11 @@ class TestFormatVerificationIssueBody:
     def test_some_criteria_failed(self) -> None:
         """When some criteria fail, body highlights failures with warning."""
         criteria = [
-            CriterionResult(description="Tests pass", passed=True, details="OK"),
-            CriterionResult(
+            VerificationCriterion(description="Tests pass", passed=True, details="OK"),
+            VerificationCriterion(
                 description="No lint errors", passed=False, details="3 errors found"
             ),
-            CriterionResult(
+            VerificationCriterion(
                 description="Type check passes", passed=False, details="2 type errors"
             ),
         ]
@@ -101,8 +101,10 @@ class TestFormatVerificationIssueBody:
     def test_single_criterion_failed_uses_singular(self) -> None:
         """When exactly one criterion fails, uses singular 'criterion'."""
         criteria = [
-            CriterionResult(description="Tests pass", passed=True, details="OK"),
-            CriterionResult(description="Lint check", passed=False, details="Failed"),
+            VerificationCriterion(description="Tests pass", passed=True, details="OK"),
+            VerificationCriterion(
+                description="Lint check", passed=False, details="Failed"
+            ),
         ]
         judge = _make_judge_result(criteria=criteria)
         issue = _make_issue()
@@ -172,7 +174,7 @@ class TestFormatVerificationIssueBody:
     def test_pipe_characters_in_criteria_escaped(self) -> None:
         """Pipe characters in criteria text are escaped to avoid breaking tables."""
         criteria = [
-            CriterionResult(
+            VerificationCriterion(
                 description="Check A | B",
                 passed=True,
                 details="Result: pass | ok",

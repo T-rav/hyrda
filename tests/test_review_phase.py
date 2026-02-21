@@ -19,12 +19,12 @@ if TYPE_CHECKING:
 from events import EventBus, EventType
 from issue_store import IssueStore
 from models import (
-    CriterionResult,
     GitHubIssue,
     JudgeResult,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
+    VerificationCriterion,
 )
 from review_phase import ReviewPhase
 from state import StateTracker
@@ -82,6 +82,7 @@ def _make_phase(
     *,
     agents: AsyncMock | None = None,
     event_bus: EventBus | None = None,
+    ac_generator: object | None = None,
 ) -> ReviewPhase:
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
@@ -108,6 +109,7 @@ def _make_phase(
         store=mock_store,
         agents=agents,
         event_bus=event_bus or EventBus(),
+        ac_generator=ac_generator,
     )
 
     return phase
@@ -3477,7 +3479,7 @@ class TestCountReviewFindings:
 def _make_judge_result(
     issue_number: int = 42,
     pr_number: int = 101,
-    criteria: list[CriterionResult] | None = None,
+    criteria: list[VerificationCriterion] | None = None,
     verification_instructions: str = "1. Run the app\n2. Click the button",
     all_pass: bool = True,
 ) -> JudgeResult:
@@ -3485,19 +3487,19 @@ def _make_judge_result(
     if criteria is None:
         if all_pass:
             criteria = [
-                CriterionResult(
+                VerificationCriterion(
                     description="Unit tests pass", passed=True, details="All pass"
                 ),
-                CriterionResult(
+                VerificationCriterion(
                     description="Lint passes", passed=True, details="Clean"
                 ),
             ]
         else:
             criteria = [
-                CriterionResult(
+                VerificationCriterion(
                     description="Unit tests pass", passed=True, details="All pass"
                 ),
-                CriterionResult(
+                VerificationCriterion(
                     description="Lint passes", passed=False, details="3 errors found"
                 ),
             ]

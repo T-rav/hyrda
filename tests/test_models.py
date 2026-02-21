@@ -9,7 +9,6 @@ from models import (
     BatchResult,
     ControlStatusConfig,
     ControlStatusResponse,
-    CriterionResult,
     GitHubIssue,
     HITLItem,
     JudgeResult,
@@ -24,6 +23,7 @@ from models import (
     ReviewResult,
     ReviewVerdict,
     StateData,
+    VerificationCriterion,
     WorkerResult,
     WorkerStatus,
 )
@@ -1246,15 +1246,15 @@ class TestLifetimeStats:
 
 
 # ---------------------------------------------------------------------------
-# CriterionResult
+# VerificationCriterion
 # ---------------------------------------------------------------------------
 
 
-class TestCriterionResult:
-    """Tests for the CriterionResult model."""
+class TestVerificationCriterion:
+    """Tests for the VerificationCriterion model."""
 
     def test_basic_instantiation(self) -> None:
-        cr = CriterionResult(
+        cr = VerificationCriterion(
             description="Tests pass", passed=True, details="All 10 pass"
         )
         assert cr.description == "Tests pass"
@@ -1262,13 +1262,15 @@ class TestCriterionResult:
         assert cr.details == "All 10 pass"
 
     def test_details_defaults_to_empty(self) -> None:
-        cr = CriterionResult(description="Lint", passed=False)
+        cr = VerificationCriterion(description="Lint", passed=False)
         assert cr.details == ""
 
     def test_serialization_round_trip(self) -> None:
-        cr = CriterionResult(description="Type check", passed=True, details="Clean")
+        cr = VerificationCriterion(
+            description="Type check", passed=True, details="Clean"
+        )
         data = cr.model_dump()
-        restored = CriterionResult.model_validate(data)
+        restored = VerificationCriterion.model_validate(data)
         assert restored == cr
 
 
@@ -1285,8 +1287,8 @@ class TestJudgeResult:
             issue_number=42,
             pr_number=101,
             criteria=[
-                CriterionResult(description="A", passed=True),
-                CriterionResult(description="B", passed=True),
+                VerificationCriterion(description="A", passed=True),
+                VerificationCriterion(description="B", passed=True),
             ],
         )
         assert judge.all_passed is True
@@ -1297,8 +1299,8 @@ class TestJudgeResult:
             issue_number=42,
             pr_number=101,
             criteria=[
-                CriterionResult(description="A", passed=True),
-                CriterionResult(description="B", passed=False, details="Failed"),
+                VerificationCriterion(description="A", passed=True),
+                VerificationCriterion(description="B", passed=False, details="Failed"),
             ],
         )
         assert judge.all_passed is False
@@ -1314,9 +1316,9 @@ class TestJudgeResult:
             issue_number=42,
             pr_number=101,
             criteria=[
-                CriterionResult(description="A", passed=False),
-                CriterionResult(description="B", passed=True),
-                CriterionResult(description="C", passed=False),
+                VerificationCriterion(description="A", passed=False),
+                VerificationCriterion(description="B", passed=True),
+                VerificationCriterion(description="C", passed=False),
             ],
         )
         failed = judge.failed_criteria
@@ -1333,7 +1335,7 @@ class TestJudgeResult:
         judge = JudgeResult(
             issue_number=42,
             pr_number=101,
-            criteria=[CriterionResult(description="X", passed=True)],
+            criteria=[VerificationCriterion(description="X", passed=True)],
             verification_instructions="Step 1",
             summary="Good",
         )

@@ -115,6 +115,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max merge conflict resolution retry cycles (default: 3)",
     )
     parser.add_argument(
+        "--max-issue-attempts",
+        type=int,
+        default=None,
+        help="Max total implementation attempts per issue (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -148,6 +154,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--improve-label",
         default=None,
         help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+    )
+    parser.add_argument(
+        "--memory-label",
+        default=None,
+        help="Labels for accepted agent learnings, comma-separated (default: hydra-memory)",
+    )
+    parser.add_argument(
+        "--memory-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between memory sync polls (default: 120)",
     )
     parser.add_argument(
         "--planner-model",
@@ -289,6 +306,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "max_review_fix_attempts",
         "min_review_findings",
         "max_merge_conflict_fix_attempts",
+        "max_issue_attempts",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
@@ -299,6 +317,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "gh_token",
         "git_user_name",
         "git_user_email",
+        "memory_sync_interval",
     ):
         val = getattr(args, field)
         if val is not None:
@@ -314,6 +333,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "find_label",
         "planner_label",
         "improve_label",
+        "memory_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

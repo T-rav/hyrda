@@ -11,6 +11,7 @@ describe('ACTIVE_STATUSES', () => {
     expect(ACTIVE_STATUSES).toEqual([
       'running', 'testing', 'committing', 'reviewing', 'planning', 'quality_fix',
       'start', 'merge_main', 'merge_fix', 'ci_wait', 'ci_fix', 'merging',
+      'evaluating', 'validating', 'retrying', 'fixing',
     ])
   })
 

@@ -174,13 +174,31 @@ describe('useHydraSocket reducer', () => {
       expect(next.sessionTriaged).toBe(1)
     })
 
-    it('triage_update does not increment sessionTriaged for running status', () => {
+    it('triage_update does not increment sessionTriaged for non-done status', () => {
       const next = reducer(initialState, {
         type: 'triage_update',
-        data: { issue: 5, status: 'running', worker: 1 },
+        data: { issue: 5, status: 'evaluating', worker: 1 },
         timestamp: '2024-01-01T00:00:00Z',
       })
       expect(next.sessionTriaged).toBe(0)
+    })
+
+    it('triage_update passes through evaluating status instead of normalizing to running', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 5, status: 'evaluating', worker: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-5'].status).toBe('evaluating')
+    })
+
+    it('triage_update passes through failed status', () => {
+      const next = reducer(initialState, {
+        type: 'triage_update',
+        data: { issue: 5, status: 'failed', worker: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.workers['triage-5'].status).toBe('failed')
     })
 
     it('planner_update increments sessionPlanned when status is done', () => {

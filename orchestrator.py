@@ -8,6 +8,7 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from analysis import PlanAnalyzer
 from config import HydraConfig
@@ -16,6 +17,7 @@ from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
 from issue_store import IssueStore
+from memory import MemorySyncWorker, build_memory_issue_body, parse_memory_suggestion
 from models import (
     GitHubIssue,
     Phase,
@@ -29,6 +31,7 @@ from reviewer import ReviewRunner
 from state import StateTracker
 from subprocess_util import AuthenticationError
 from triage import TriageRunner
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
@@ -70,8 +73,12 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of HITL-active issues (avoids double-processing)
+        # In-memory tracking of active issues (avoids double-processing)
+        self._active_impl_issues: set[int] = set()
+        self._active_review_issues: set[int] = set()
         self._active_hitl_issues: set[int] = set()
+        # Issues recovered from persisted state on startup (one-cycle grace period)
+        self._recovered_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
@@ -96,7 +103,10 @@ class HydraOrchestrator:
             self._store,
             self._stop_event,
         )
+        self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
+        self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
+        self._verification_judge = VerificationJudge(config, self._bus)
         self._reviewer = ReviewPhase(
             config,
             self._state,
@@ -108,6 +118,8 @@ class HydraOrchestrator:
             agents=self._agents,
             event_bus=self._bus,
             retrospective=self._retrospective,
+            ac_generator=self._ac_generator,
+            verification_judge=self._verification_judge,
         )
 
     @property
@@ -214,6 +226,8 @@ class HydraOrchestrator:
         self._running = False
         self._auth_failed = False
         self._store.clear_active()
+        self._active_impl_issues.clear()
+        self._active_review_issues.clear()
         self._active_hitl_issues.clear()
 
     def update_bg_worker_status(
@@ -251,6 +265,19 @@ class HydraOrchestrator:
         """
         self._stop_event.clear()
         self._running = True
+
+        # Restore active issues from persisted state for crash recovery
+        recovered = set(self._state.get_active_issue_numbers())
+        if recovered:
+            self._recovered_issues = recovered
+            # Add to implementation active set so they're skipped for one poll cycle
+            self._active_impl_issues.update(recovered)
+            logger.info(
+                "Crash recovery: loaded %d active issue(s) from state: %s",
+                len(recovered),
+                recovered,
+            )
+
         await self._publish_status()
         logger.info(
             "Hydra starting — repo=%s label=%s workers=%d poll=%ds",
@@ -275,7 +302,7 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _supervise_loops(self) -> None:
-        """Run all five loops plus the IssueStore poller, restarting any that crash."""
+        """Run all loops plus the IssueStore poller, restarting any that crash."""
 
         async def _store_loop() -> None:
             await self._store.start(self._stop_event)
@@ -287,6 +314,7 @@ class HydraOrchestrator:
             ("implement", self._implement_loop),
             ("review", self._review_loop),
             ("hitl", self._hitl_loop),
+            ("memory_sync", self._memory_sync_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -382,6 +410,17 @@ class HydraOrchestrator:
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
         while not self._stop_event.is_set():
+            # After one poll cycle, release crash-recovered issues
+            if self._recovered_issues:
+                self._active_impl_issues -= self._recovered_issues
+                self._recovered_issues.clear()
+                self._state.set_active_issue_numbers(
+                    list(
+                        self._active_impl_issues
+                        | self._active_review_issues
+                        | self._active_hitl_issues
+                    )
+                )
             try:
                 await self._implementer.run_batch()
             except AuthenticationError:
@@ -448,6 +487,69 @@ class HydraOrchestrator:
                 )
             await self._sleep_or_stop(self._config.poll_interval)
 
+    async def _memory_sync_loop(self) -> None:
+        """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
+        while not self._stop_event.is_set():
+            try:
+                issues = await self._fetcher.fetch_issues_by_labels(
+                    self._config.memory_label, limit=100
+                )
+                # Convert to dicts for the sync worker
+                issue_dicts = [
+                    {
+                        "number": i.number,
+                        "title": i.title,
+                        "body": i.body,
+                        "createdAt": i.created_at,
+                    }
+                    for i in issues
+                ]
+                stats = await self._memory_sync.sync(issue_dicts)
+                await self._memory_sync.publish_sync_event(stats)
+                self.update_bg_worker_status("memory_sync", "ok", details=stats)
+            except AuthenticationError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Memory sync loop iteration failed — will retry next cycle"
+                )
+                self.update_bg_worker_status("memory_sync", "error")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={
+                            "message": "Memory sync loop error",
+                            "source": "memory_sync",
+                        },
+                    )
+                )
+            await self._sleep_or_stop(self._config.memory_sync_interval)
+
+    async def _file_memory_suggestion(
+        self, transcript: str, source: str, reference: str
+    ) -> None:
+        """Parse and file a memory suggestion from an agent transcript."""
+        suggestion = parse_memory_suggestion(transcript)
+        if not suggestion:
+            return
+
+        body = build_memory_issue_body(
+            learning=suggestion["learning"],
+            context=suggestion["context"],
+            source=source,
+            reference=reference,
+        )
+        title = f"[Memory] {suggestion['title']}"
+        labels = list(self._config.improve_label) + list(self._config.hitl_label)
+        issue_num = await self._prs.create_issue(title, body, labels)
+        if issue_num:
+            self._state.set_hitl_cause(issue_num, "Memory suggestion")
+            logger.info(
+                "Filed memory suggestion as issue #%d: %s",
+                issue_num,
+                suggestion["title"],
+            )
+
     async def _process_hitl_corrections(self) -> None:
         """Process all pending HITL corrections."""
         if not self._hitl_corrections:
@@ -486,6 +588,13 @@ class HydraOrchestrator:
                 return
 
             self._active_hitl_issues.add(issue_number)
+            self._state.set_active_issue_numbers(
+                list(
+                    self._active_impl_issues
+                    | self._active_review_issues
+                    | self._active_hitl_issues
+                )
+            )
             try:
                 issue = await self._fetcher.fetch_issue_by_number(issue_number)
                 if not issue:
@@ -526,6 +635,7 @@ class HydraOrchestrator:
 
                     self._state.remove_hitl_origin(issue_number)
                     self._state.remove_hitl_cause(issue_number)
+                    self._state.reset_issue_attempts(issue_number)
 
                     await self._prs.post_comment(
                         issue_number,
@@ -590,6 +700,13 @@ class HydraOrchestrator:
                 logger.exception("HITL processing failed for issue #%d", issue_number)
             finally:
                 self._active_hitl_issues.discard(issue_number)
+                self._state.set_active_issue_numbers(
+                    list(
+                        self._active_impl_issues
+                        | self._active_review_issues
+                        | self._active_hitl_issues
+                    )
+                )
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -813,6 +930,14 @@ class HydraOrchestrator:
                         logger.warning(
                             "Planning failed for issue #%d — skipping label swap",
                             issue.number,
+                        )
+
+                    # File memory suggestion if present in transcript
+                    if result.transcript:
+                        await self._file_memory_suggestion(
+                            result.transcript,
+                            "planner",
+                            f"issue #{issue.number}",
                         )
 
                     return result
