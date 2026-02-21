@@ -309,7 +309,7 @@ class RetrospectiveCollector:
 
     async def _file_improvement_issue(self, title: str, body: str) -> None:
         """File a ``hydra-improve`` + ``hydra-hitl`` improvement proposal."""
-        labels = list(self._config.improve_label) + list(self._config.hitl_label)
+        labels = self._config.improve_label[:1] + self._config.hitl_label[:1]
         await self._prs.create_issue(title, body, labels)
 
     def _load_filed_patterns(self) -> set[str]:

@@ -197,13 +197,9 @@ class HydraConfig(BaseModel):
     # Retrospective
     retrospective_window: int = Field(
         default=10,
-        ge=1,
+        ge=3,
         le=100,
         description="Number of recent retrospective entries to scan for patterns",
-    )
-    improve_label: list[str] = Field(
-        default=["hydra-improve"],
-        description="Labels for auto-filed improvement proposals",
     )
 
     # Execution mode

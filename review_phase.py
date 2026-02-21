@@ -218,21 +218,14 @@ class ReviewPhase:
                                     pr.issue_number,
                                     [self._config.fixed_label[0]],
                                 )
-                                # Run post-merge retrospective (non-blocking)
+                                # Run post-merge retrospective (non-blocking;
+                                # record() catches all exceptions internally)
                                 if self._retrospective:
-                                    try:
-                                        await self._retrospective.record(
-                                            issue_number=pr.issue_number,
-                                            pr_number=pr.number,
-                                            review_result=result,
-                                        )
-                                    except Exception:
-                                        logger.warning(
-                                            "Retrospective failed for PR #%d — "
-                                            "continuing",
-                                            pr.number,
-                                            exc_info=True,
-                                        )
+                                    await self._retrospective.record(
+                                        issue_number=pr.issue_number,
+                                        pr_number=pr.number,
+                                        review_result=result,
+                                    )
                             else:
                                 logger.warning(
                                     "PR #%d merge failed — escalating to HITL",
