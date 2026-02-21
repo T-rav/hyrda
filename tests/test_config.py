@@ -304,7 +304,15 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 3
+
+    def test_improve_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["hydra-improve"]
 
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -328,7 +336,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_reviewers == 3
+        assert cfg.max_reviewers == 5
 
     def test_max_hitl_workers_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -538,6 +546,15 @@ class TestHydraConfigCustomValues:
             state_file=tmp_path / "s.json",
         )
         assert cfg.hitl_active_label == ["custom-active"]
+
+    def test_custom_improve_label(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            improve_label=["my-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["my-improve"]
 
     def test_custom_dry_run_true(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -1047,6 +1064,62 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # max_review_fix_attempts: ge=0, le=5
+
+    def test_max_review_fix_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_fix_attempts == 2
+
+    def test_max_review_fix_attempts_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_review_fix_attempts=4,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_fix_attempts == 4
+
+    def test_max_review_fix_attempts_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_review_fix_attempts=6,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # min_review_findings: ge=0, le=20
+
+    def test_min_review_findings_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_review_findings == 3
+
+    def test_min_review_findings_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            min_review_findings=5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_review_findings == 5
+
+    def test_min_review_findings_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                min_review_findings=21,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     # min_plan_words: ge=50, le=2000
 
     def test_min_plan_words_default(self, tmp_path: Path) -> None:
@@ -1079,6 +1152,45 @@ class TestHydraConfigValidationConstraints:
         with pytest.raises(ValueError):
             HydraConfig(
                 min_plan_words=2001,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    # max_merge_conflict_fix_attempts: ge=0, le=5
+
+    def test_max_merge_conflict_fix_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 3
+
+    def test_max_merge_conflict_fix_attempts_configurable(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 1
+
+    def test_max_merge_conflict_fix_attempts_zero_allowed(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 0
+
+    def test_max_merge_conflict_fix_attempts_above_maximum_raises(
+        self, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_merge_conflict_fix_attempts=6,
                 repo_root=tmp_path,
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
@@ -1302,6 +1414,82 @@ class TestHydraConfigHitlActiveLabel:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – improve_label env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigDupLabel:
+    """Tests for dup_label default, custom value, and env var override."""
+
+    def test_dup_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["hydra-dup"]
+
+    def test_dup_label_custom_value(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            dup_label=["my-dup"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["my-dup"]
+
+    def test_dup_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_DUP", "custom-dup")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["custom-dup"]
+
+    def test_dup_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_DUP", "env-dup")
+        cfg = HydraConfig(
+            dup_label=["explicit-dup"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["explicit-dup"]
+
+
+class TestHydraConfigImproveLabel:
+    """Tests for improve_label env var override."""
+
+    def test_improve_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "custom-improve")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["custom-improve"]
+
+    def test_improve_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_IMPROVE", "env-improve")
+        cfg = HydraConfig(
+            improve_label=["explicit-improve"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.improve_label == ["explicit-improve"]
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – min_plan_words env var override
 # ---------------------------------------------------------------------------
 
@@ -1342,8 +1530,110 @@ class TestHydraConfigMinPlanWords:
 
 
 # ---------------------------------------------------------------------------
+# HydraConfig – max_review_fix_attempts env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxReviewFixAttempts:
+    """Tests for max_review_fix_attempts env var override."""
+
+    def test_max_review_fix_attempts_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_FIX_ATTEMPTS", "4")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_fix_attempts == 4
+
+    def test_max_review_fix_attempts_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_FIX_ATTEMPTS", "4")
+        cfg = HydraConfig(
+            max_review_fix_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_fix_attempts == 1
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – min_review_findings env var override
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMinReviewFindings:
+    """Tests for min_review_findings env var override."""
+
+    def test_min_review_findings_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_REVIEW_FINDINGS", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_review_findings == 5
+
+    def test_min_review_findings_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MIN_REVIEW_FINDINGS", "5")
+        cfg = HydraConfig(
+            min_review_findings=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.min_review_findings == 1
+
+
+# ---------------------------------------------------------------------------
 # HydraConfig – lite_plan_labels env var override
 # ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxMergeConflictFixAttempts:
+    """Tests for max_merge_conflict_fix_attempts env var override."""
+
+    def test_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 5
+
+    def test_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 1
+
+    def test_env_var_invalid_value_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", "not-a-number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_merge_conflict_fix_attempts == 3
 
 
 class TestHydraConfigLitePlanLabels:
@@ -1512,3 +1802,250 @@ class TestWorktreePathForIssue:
             state_file=tmp_path / "s.json",
         )
         assert cfg.worktree_path_for_issue(7) == custom_base / "issue-7"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – threshold configuration
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigThresholds:
+    """Tests for the threshold configuration fields."""
+
+    def test_quality_fix_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.5)
+
+    def test_approval_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.approval_rate_threshold == pytest.approx(0.5)
+
+    def test_hitl_rate_threshold_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_rate_threshold == pytest.approx(0.2)
+
+    def test_custom_quality_fix_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=0.8,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.8)
+
+    def test_custom_approval_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            approval_rate_threshold=0.7,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.approval_rate_threshold == pytest.approx(0.7)
+
+    def test_custom_hitl_rate_threshold(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            hitl_rate_threshold=0.1,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.hitl_rate_threshold == pytest.approx(0.1)
+
+    def test_threshold_below_zero_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                quality_fix_rate_threshold=-0.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_threshold_above_one_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                quality_fix_rate_threshold=1.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_threshold_boundary_zero(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(0.0)
+
+    def test_threshold_boundary_one(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            quality_fix_rate_threshold=1.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_fix_rate_threshold == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – test_command field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigTestCommand:
+    """Tests for the test_command config field."""
+
+    def test_test_command_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "make test"
+
+    def test_test_command_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            test_command="npm test",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "npm test"
+
+    def test_test_command_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TEST_COMMAND", "pytest -x")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "pytest -x"
+
+    def test_test_command_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TEST_COMMAND", "pytest -x")
+        cfg = HydraConfig(
+            test_command="cargo test",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "cargo test"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – max_issue_body_chars field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxIssueBodyChars:
+    """Tests for the max_issue_body_chars config field."""
+
+    def test_max_issue_body_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 10_000
+
+    def test_max_issue_body_chars_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_issue_body_chars=5_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 5_000
+
+    def test_max_issue_body_chars_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_MAX_ISSUE_BODY_CHARS env var should override the default."""
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 20_000
+
+    def test_max_issue_body_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
+        cfg = HydraConfig(
+            max_issue_body_chars=5_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 5_000
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – max_review_diff_chars field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxReviewDiffChars:
+    """Tests for the max_review_diff_chars config field."""
+
+    def test_max_review_diff_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 15_000
+
+    def test_max_review_diff_chars_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_review_diff_chars=30_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 30_000
+
+    def test_max_review_diff_chars_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_MAX_REVIEW_DIFF_CHARS env var should override the default."""
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 50_000
+
+    def test_max_review_diff_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
+        cfg = HydraConfig(
+            max_review_diff_chars=25_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 25_000

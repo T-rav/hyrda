@@ -9,7 +9,7 @@ import signal
 import sys
 from typing import Any
 
-from config import HydraConfig
+from config import HydraConfig, load_config_file
 from log import setup_logging
 from orchestrator import HydraOrchestrator
 
@@ -36,7 +36,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-workers",
         type=int,
         default=None,
-        help="Max concurrent implementation agents (default: 2)",
+        help="Max concurrent implementation agents (default: 3)",
     )
     parser.add_argument(
         "--max-planners",
@@ -48,7 +48,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-reviewers",
         type=int,
         default=None,
-        help="Max concurrent review agents (default: 3)",
+        help="Max concurrent review agents (default: 5)",
     )
     parser.add_argument(
         "--max-hitl-workers",
@@ -97,6 +97,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
     )
     parser.add_argument(
+        "--max-review-fix-attempts",
+        type=int,
+        default=None,
+        help="Max review fix-and-retry cycles before HITL escalation (default: 2)",
+    )
+    parser.add_argument(
+        "--min-review-findings",
+        type=int,
+        default=None,
+        help="Minimum review findings threshold for adversarial review (default: 3)",
+    )
+    parser.add_argument(
+        "--max-merge-conflict-fix-attempts",
+        type=int,
+        default=None,
+        help="Max merge conflict resolution retry cycles (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -127,6 +145,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
     )
     parser.add_argument(
+        "--improve-label",
+        default=None,
+        help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+    )
+    parser.add_argument(
         "--planner-model",
         default=None,
         help="Model for planning agents (default: opus)",
@@ -147,6 +170,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--lite-plan-labels",
         default=None,
         help="Comma-separated labels that trigger lite plans (default: bug,typo,docs)",
+    )
+    parser.add_argument(
+        "--test-command",
+        default=None,
+        help="Test command used in agent prompts (default: make test)",
     )
     parser.add_argument(
         "--repo",
@@ -190,6 +218,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Git user.email for worktree commits; uses global git config if unset",
     )
     parser.add_argument(
+        "--config-file",
+        default=None,
+        help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -216,12 +249,30 @@ def _parse_label_arg(value: str) -> list[str]:
 def build_config(args: argparse.Namespace) -> HydraConfig:
     """Convert parsed CLI args into a :class:`HydraConfig`.
 
+    Merge priority: defaults → config file → env vars → CLI args.
     Only explicitly-provided CLI values are passed through;
     HydraConfig supplies all defaults.
     """
+    # 0) Load config file values (lowest priority after defaults)
+    from pathlib import Path  # noqa: PLC0415
+
+    config_file_path = getattr(args, "config_file", None) or ".hydra/config.json"
+    file_kwargs = load_config_file(Path(config_file_path))
+
     kwargs: dict[str, Any] = {}
 
+    # Start from config file values, then overlay CLI args
+    # Filter config file values to known HydraConfig fields
+    _known_fields = set(HydraConfig.model_fields.keys())
+    for key, val in file_kwargs.items():
+        if key in _known_fields:
+            kwargs[key] = val
+
+    # Store config_file path
+    kwargs["config_file"] = Path(config_file_path)
+
     # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
+    # CLI args override config file values
     for field in (
         "batch_size",
         "max_workers",
@@ -235,9 +286,13 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ci_check_timeout",
         "ci_poll_interval",
         "max_ci_fix_attempts",
+        "max_review_fix_attempts",
+        "min_review_findings",
+        "max_merge_conflict_fix_attempts",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
+        "test_command",
         "repo",
         "main_branch",
         "dashboard_port",
@@ -258,6 +313,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "fixed_label",
         "find_label",
         "planner_label",
+        "improve_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

@@ -7,16 +7,25 @@ import logging
 from collections.abc import Callable
 from datetime import UTC
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import ValidationError
 
-from config import HydraConfig
+from config import HydraConfig, save_config_file
 from events import EventBus, EventType, HydraEvent
-from models import ControlStatusConfig, ControlStatusResponse
+from models import (
+    BackgroundWorkersResponse,
+    BackgroundWorkerStatus,
+    ControlStatusConfig,
+    ControlStatusResponse,
+    LifetimeStats,
+    MetricsResponse,
+)
 from pr_manager import PRManager
 from state import StateTracker
+from timeline import TimelineBuilder
 
 if TYPE_CHECKING:
     from orchestrator import HydraOrchestrator
@@ -84,6 +93,7 @@ def create_router(
                 *config.hitl_label,
                 *config.hitl_active_label,
                 *config.planner_label,
+                *config.improve_label,
             }
         )
         items = await pr_manager.list_open_prs(all_labels)
@@ -100,6 +110,17 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
+            if not cause:
+                origin = state.get_hitl_origin(item.issue)
+                if origin:
+                    if origin in config.improve_label:
+                        cause = "Self-improvement proposal"
+                    elif origin in config.review_label:
+                        cause = "Review escalation"
+                    elif origin in config.find_label:
+                        cause = "Triage escalation"
+                    else:
+                        cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
             origin = state.get_hitl_origin(item.issue)
@@ -260,6 +281,7 @@ def create_router(
                 hitl_label=config.hitl_label,
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
+                improve_label=config.improve_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,
@@ -269,6 +291,145 @@ def create_router(
             ),
         )
         return JSONResponse(response.model_dump())
+
+    # Mutable fields that can be changed at runtime via PATCH
+    _MUTABLE_FIELDS = {
+        "max_workers",
+        "max_planners",
+        "max_reviewers",
+        "max_hitl_workers",
+        "max_budget_usd",
+        "model",
+        "review_model",
+        "review_budget_usd",
+        "planner_model",
+        "planner_budget_usd",
+        "batch_size",
+        "max_ci_fix_attempts",
+        "max_quality_fix_attempts",
+        "max_review_fix_attempts",
+        "min_review_findings",
+        "max_merge_conflict_fix_attempts",
+        "ci_check_timeout",
+        "ci_poll_interval",
+        "poll_interval",
+    }
+
+    @router.patch("/api/control/config")
+    async def patch_config(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Update runtime config fields. Pass ``persist: true`` to save to disk."""
+        persist = body.pop("persist", False)
+        updates: dict[str, Any] = {}
+
+        for key, value in body.items():
+            if key not in _MUTABLE_FIELDS:
+                continue
+            if not hasattr(config, key):
+                continue
+            updates[key] = value
+
+        if not updates:
+            return JSONResponse({"status": "ok", "updated": {}})
+
+        # Validate updates through Pydantic field constraints
+        test_values = config.model_dump()
+        test_values.update(updates)
+        try:
+            validated = HydraConfig.model_validate(test_values)
+        except ValidationError as exc:
+            errors = exc.errors()
+            msg = "; ".join(
+                f"{e['loc'][-1]}: {e['msg']}" for e in errors if e.get("loc")
+            )
+            return JSONResponse(
+                {"status": "error", "message": msg or str(exc)},
+                status_code=422,
+            )
+
+        # Apply validated values to the live config
+        applied: dict[str, Any] = {}
+        for key in updates:
+            validated_value = getattr(validated, key)
+            object.__setattr__(config, key, validated_value)
+            applied[key] = validated_value
+
+        if persist and applied:
+            save_config_file(config.config_file, applied)
+
+        return JSONResponse({"status": "ok", "updated": applied})
+
+    # Known background workers with human-friendly labels
+    _bg_worker_defs = [
+        ("memory_sync", "Memory Sync"),
+        ("retrospective", "Retrospective"),
+        ("metrics", "Metrics"),
+        ("review_insights", "Review Insights"),
+    ]
+
+    @router.get("/api/system/workers")
+    async def get_system_workers() -> JSONResponse:
+        """Return last known status of each background worker."""
+        orch = get_orchestrator()
+        bg_states = orch.get_bg_worker_states() if orch else {}
+        workers = []
+        for name, label in _bg_worker_defs:
+            if name in bg_states:
+                entry = bg_states[name]
+                workers.append(
+                    BackgroundWorkerStatus(
+                        name=name,
+                        label=label,
+                        status=entry["status"],
+                        last_run=entry.get("last_run"),
+                        details=entry.get("details", {}),
+                    )
+                )
+            else:
+                workers.append(BackgroundWorkerStatus(name=name, label=label))
+        return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
+
+    @router.get("/api/metrics")
+    async def get_metrics() -> JSONResponse:
+        """Return lifetime stats and derived rates."""
+        lifetime_data = state.get_lifetime_stats()
+        lifetime = LifetimeStats.model_validate(lifetime_data)
+        rates: dict[str, float] = {}
+        total_reviews = (
+            lifetime.total_review_approvals + lifetime.total_review_request_changes
+        )
+        if lifetime.issues_completed > 0:
+            rates["merge_rate"] = lifetime.prs_merged / lifetime.issues_completed
+            rates["quality_fix_rate"] = (
+                lifetime.total_quality_fix_rounds / lifetime.issues_completed
+            )
+            rates["hitl_escalation_rate"] = (
+                lifetime.total_hitl_escalations / lifetime.issues_completed
+            )
+            rates["avg_implementation_seconds"] = (
+                lifetime.total_implementation_seconds / lifetime.issues_completed
+            )
+        if total_reviews > 0:
+            rates["first_pass_approval_rate"] = (
+                lifetime.total_review_approvals / total_reviews
+            )
+            rates["reviewer_fix_rate"] = lifetime.total_reviewer_fixes / total_reviews
+        return JSONResponse(
+            MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
+        )
+
+    @router.get("/api/timeline")
+    async def get_timeline() -> JSONResponse:
+        builder = TimelineBuilder(event_bus)
+        timelines = builder.build_all()
+        return JSONResponse([t.model_dump() for t in timelines])
+
+    @router.get("/api/timeline/issue/{issue_num}")
+    async def get_timeline_issue(issue_num: int) -> JSONResponse:
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(issue_num)
+        if timeline is None:
+            return JSONResponse({"error": "Issue not found"}, status_code=404)
+        return JSONResponse(timeline.model_dump())
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:

@@ -363,6 +363,94 @@ async def test_submit_review_failure_returns_false(config, event_bus, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# submit_review — SelfReviewError
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_submit_review_raises_self_review_error_on_request_changes_own_pr(
+    config, event_bus, tmp_path
+):
+    """submit_review should raise SelfReviewError when request-changes hits own PR."""
+    from config import HydraConfig
+    from pr_manager import SelfReviewError
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(
+        returncode=1,
+        stderr="GraphQL: Review Can not request changes on your own pull request (addPullRequestReview)",
+    )
+
+    with (
+        patch("asyncio.create_subprocess_exec", mock_create),
+        pytest.raises(SelfReviewError),
+    ):
+        await mgr.submit_review(101, ReviewVerdict.REQUEST_CHANGES, "Needs work")
+
+
+@pytest.mark.asyncio
+async def test_submit_review_raises_self_review_error_on_approve_own_pr(
+    config, event_bus, tmp_path
+):
+    """submit_review should raise SelfReviewError when approve hits own PR."""
+    from config import HydraConfig
+    from pr_manager import SelfReviewError
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(
+        returncode=1,
+        stderr="GraphQL: Cannot approve your own pull request (addPullRequestReview)",
+    )
+
+    with (
+        patch("asyncio.create_subprocess_exec", mock_create),
+        pytest.raises(SelfReviewError),
+    ):
+        await mgr.submit_review(101, ReviewVerdict.APPROVE, "LGTM")
+
+
+@pytest.mark.asyncio
+async def test_submit_review_returns_false_on_generic_error(
+    config, event_bus, tmp_path
+):
+    """submit_review should return False on a generic (non-self-review) error."""
+    from config import HydraConfig
+
+    cfg = HydraConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    mock_create = _make_subprocess_mock(
+        returncode=1, stderr="GraphQL: Something else went wrong"
+    )
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await mgr.submit_review(
+            101, ReviewVerdict.REQUEST_CHANGES, "Needs work"
+        )
+
+    assert result is False
+
+
+# ---------------------------------------------------------------------------
 # create_issue
 # ---------------------------------------------------------------------------
 
@@ -1399,6 +1487,8 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         hitl_label=["custom-hitl"],
         hitl_active_label=["custom-hitl-active"],
         fixed_label=["custom-fixed"],
+        improve_label=["custom-improve"],
+        dup_label=["custom-dup"],
         repo=config.repo,
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1426,6 +1516,8 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-hitl",
         "custom-hitl-active",
         "custom-fixed",
+        "custom-improve",
+        "custom-dup",
     }
 
 

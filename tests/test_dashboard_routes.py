@@ -74,6 +74,7 @@ class TestCreateRouter:
             "/",
             "/api/state",
             "/api/stats",
+            "/api/metrics",
             "/api/events",
             "/api/prs",
             "/api/hitl",
@@ -82,6 +83,8 @@ class TestCreateRouter:
             "/api/control/start",
             "/api/control/stop",
             "/api/control/status",
+            "/api/control/config",
+            "/api/system/workers",
             "/ws",
         }
 
@@ -89,6 +92,52 @@ class TestCreateRouter:
 
         # Verify approve-memory route is registered
         assert "/api/hitl/{issue_number}/approve-memory" in paths
+
+
+class TestControlStatusImproveLabel:
+    """Tests that /api/control/status includes improve_label."""
+
+    @pytest.mark.asyncio
+    async def test_control_status_includes_improve_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """GET /api/control/status should include improve_label from config."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        get_control_status = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/status"
+                and hasattr(route, "endpoint")
+            ):
+                get_control_status = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_control_status is not None
+        response = await get_control_status()
+        import json
+
+        data = json.loads(response.body)
+        assert "config" in data
+        assert "improve_label" in data["config"]
+        assert data["config"]["improve_label"] == config.improve_label
 
 
 class TestHITLEndpointCause:
@@ -187,7 +236,7 @@ class TestHITLEndpointCause:
 
         items = json.loads(response.body)
         assert len(items) == 1
-        # cause should be the default empty string from model_dump, not overwritten
+        # No cause or origin — should remain empty
         assert items[0]["cause"] == ""
 
     @pytest.mark.asyncio
@@ -323,3 +372,255 @@ class TestHITLEndpointCause:
         items = json.loads(response.body)
         assert len(items) == 1
         assert items[0]["isMemorySuggestion"] is False
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_falls_back_to_origin_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When no cause is set but origin is, should fall back to origin description."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Set origin but not cause
+        state.set_hitl_origin(42, "hydra-review")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "Review escalation"
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_origin_fallback_unknown_label(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Unknown origin label should produce generic fallback message."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        state.set_hitl_origin(42, "some-unknown-label")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "Escalation (reason not recorded)"
+
+    @pytest.mark.asyncio
+    async def test_hitl_endpoint_cause_takes_precedence_over_origin(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When both cause and origin are set, cause should take precedence."""
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        state = make_state(tmp_path)
+        pr_mgr = PRManager(config, event_bus)
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
+        state.set_hitl_origin(42, "hydra-review")
+
+        hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
+        pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
+
+        get_hitl = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/hitl"
+                and hasattr(route, "endpoint")
+            ):
+                get_hitl = route.endpoint  # type: ignore[union-attr]
+                break
+
+        assert get_hitl is not None
+        response = await get_hitl()
+        import json
+
+        items = json.loads(response.body)
+        assert len(items) == 1
+        assert items[0]["cause"] == "CI failed after 2 fix attempt(s)"
+
+
+# ---------------------------------------------------------------------------
+# /api/metrics endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsEndpoint:
+    """Tests for the GET /api/metrics endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint  # type: ignore[union-attr]
+        return None
+
+    @pytest.mark.asyncio
+    async def test_metrics_returns_zero_rates_when_no_data(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        assert get_metrics is not None
+
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["rates"].get("quality_fix_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("hitl_escalation_rate", 0.0) == pytest.approx(0.0)
+        assert data["lifetime"]["issues_completed"] == 0
+        assert data["lifetime"]["prs_merged"] == 0
+
+    @pytest.mark.asyncio
+    async def test_metrics_returns_computed_rates(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        # Set up some stats
+        for _ in range(10):
+            state.record_issue_completed()
+        for _ in range(5):
+            state.record_pr_merged()
+        state.record_quality_fix_rounds(4)
+        state.record_review_verdict("approve", fixes_made=False)
+        state.record_review_verdict("approve", fixes_made=False)
+        state.record_review_verdict("request-changes", fixes_made=True)
+        state.record_hitl_escalation()
+        state.record_hitl_escalation()
+        state.record_implementation_duration(100.0)
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["rates"]["quality_fix_rate"] == pytest.approx(0.4)  # 4/10
+        assert data["rates"]["first_pass_approval_rate"] == pytest.approx(
+            2.0 / 3.0
+        )  # 2/3
+        assert data["rates"]["hitl_escalation_rate"] == pytest.approx(0.2)  # 2/10
+        assert data["rates"]["avg_implementation_seconds"] == pytest.approx(
+            10.0
+        )  # 100/10
+        assert data["rates"]["reviewer_fix_rate"] == pytest.approx(1.0 / 3.0)  # 1/3
+        assert data["lifetime"]["issues_completed"] == 10
+        assert data["lifetime"]["prs_merged"] == 5
+
+    @pytest.mark.asyncio
+    async def test_metrics_no_division_by_zero_on_reviews(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """When no reviews exist, approval rate should be 0 not crash."""
+        import json
+
+        state = make_state(tmp_path)
+        for _ in range(5):
+            state.record_issue_completed()
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        response = await get_metrics()
+        data = json.loads(response.body)
+
+        assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("reviewer_fix_rate", 0.0) == pytest.approx(0.0)

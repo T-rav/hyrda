@@ -58,18 +58,21 @@ export function HITLTable({ items, onRefresh }) {
   const isAnyActionLoading = (issueNum) =>
     actionLoading && actionLoading.issue === issueNum
 
-  if (items.length === 0) {
-    return <div style={styles.empty}>No stuck PRs</div>
-  }
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.headerText}>
-          {items.length} issue{items.length !== 1 ? 's' : ''} stuck on CI
+        <span style={items.length === 0
+          ? { ...styles.headerText, color: theme.textMuted }
+          : styles.headerText}>
+          {items.length === 0
+            ? 'HITL'
+            : `${items.length} issue${items.length !== 1 ? 's' : ''} stuck on CI`}
         </span>
         <button onClick={onRefresh} style={styles.refresh}>Refresh</button>
       </div>
+      {items.length === 0 ? (
+        <div style={styles.empty}>No stuck PRs</div>
+      ) : (
       <table style={styles.table}>
         <thead>
           <tr>
@@ -101,7 +104,7 @@ export function HITLTable({ items, onRefresh }) {
                   <td style={styles.td}>{item.title}</td>
                   <td style={styles.td}>
                     {item.cause
-                      ? <span style={styles.causeText}>{item.cause}</span>
+                      ? <span style={{ ...styles.causeText, color: causeColors(item.cause).fg }}>{item.cause}</span>
                       : <span style={styles.causePlaceholder}>—</span>}
                   </td>
                   <td style={styles.td}>
@@ -124,7 +127,7 @@ export function HITLTable({ items, onRefresh }) {
                     <td colSpan={6} style={styles.detailCell}>
                       <div style={styles.detailPanel}>
                         {item.cause && (
-                          <div style={item.isMemorySuggestion ? styles.memoryCauseBadge : styles.causeBadge} data-testid={`hitl-cause-${item.issue}`}>
+                          <div style={item.isMemorySuggestion ? styles.memoryCauseBadge : { ...styles.causeBadge, background: causeColors(item.cause).bg, color: causeColors(item.cause).fg }} data-testid={`hitl-cause-${item.issue}`}>
                             Cause: {item.cause}
                           </div>
                         )}
@@ -181,6 +184,7 @@ export function HITLTable({ items, onRefresh }) {
           })}
         </tbody>
       </table>
+      )}
     </div>
   )
 }
@@ -203,6 +207,18 @@ function statusBadgeStyle(status) {
     fontSize: 11, padding: '2px 8px', borderRadius: 8, fontWeight: 600,
     background: bg, color: fg,
   }
+}
+
+function causeColors(cause) {
+  if (!cause) return { bg: theme.orangeSubtle, fg: theme.orange }
+  const lower = cause.toLowerCase()
+  if (lower.includes('proposal') || lower.includes('improve')) {
+    return { bg: theme.purpleSubtle, fg: theme.purple }
+  }
+  if (lower.includes('triage') || lower.includes('insufficient')) {
+    return { bg: theme.yellowSubtle, fg: theme.yellow }
+  }
+  return { bg: theme.orangeSubtle, fg: theme.orange }
 }
 
 const btnBase = {

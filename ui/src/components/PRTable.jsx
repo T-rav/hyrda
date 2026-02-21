@@ -24,10 +24,6 @@ export function PRTable() {
     return <div style={styles.empty}>Loading...</div>
   }
 
-  if (prs.length === 0) {
-    return <div style={styles.empty}>No pull requests yet</div>
-  }
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -36,34 +32,38 @@ export function PRTable() {
         </span>
         <button onClick={fetchPRs} style={styles.refresh}>Refresh</button>
       </div>
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th style={styles.th}>PR</th>
-            <th style={styles.th}>Issue</th>
-            <th style={styles.th}>Branch</th>
-            <th style={styles.th}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {prs.map((p, i) => (
-            <tr key={i}>
-              <td style={styles.td}>
-                <a href={p.url || '#'} target="_blank" rel="noreferrer" style={styles.link}>
-                  #{p.pr}
-                </a>
-              </td>
-              <td style={styles.td}>#{p.issue}</td>
-              <td style={styles.td}>{p.branch}</td>
-              <td style={styles.td}>
-                {p.merged
-                  ? <span style={styles.merged}>Merged</span>
-                  : p.draft ? 'Draft' : 'Ready'}
-              </td>
+      {prs.length > 0 ? (
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>PR</th>
+              <th style={styles.th}>Issue</th>
+              <th style={styles.th}>Branch</th>
+              <th style={styles.th}>Status</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {prs.map((p, i) => (
+              <tr key={i}>
+                <td style={styles.td}>
+                  <a href={p.url || '#'} target="_blank" rel="noreferrer" style={styles.link}>
+                    #{p.pr}
+                  </a>
+                </td>
+                <td style={styles.td}>#{p.issue}</td>
+                <td style={styles.td}>{p.branch}</td>
+                <td style={styles.td}>
+                  {p.merged
+                    ? <span style={styles.merged}>Merged</span>
+                    : p.draft ? 'Draft' : 'Ready'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <div style={styles.empty}>No pull requests yet</div>
+      )}
     </div>
   )
 }

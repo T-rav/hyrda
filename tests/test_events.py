@@ -26,11 +26,17 @@ class TestEventTypeEnum:
             "PLANNER_UPDATE",
             "MERGE_UPDATE",
             "CI_CHECK",
+            "HITL_ESCALATION",
             "ISSUE_CREATED",
             "BATCH_COMPLETE",
             "HITL_UPDATE",
             "ORCHESTRATOR_STATUS",
             "ERROR",
+            "MEMORY_SYNC",
+            "RETROSPECTIVE",
+            "METRICS_UPDATE",
+            "REVIEW_INSIGHT",
+            "BACKGROUND_WORKER_STATUS",
         }
         actual = {member.name for member in EventType}
         assert expected == actual

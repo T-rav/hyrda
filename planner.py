@@ -65,6 +65,21 @@ class PlannerRunner:
             )
             result.transcript = transcript
 
+            # Check for already-satisfied before plan extraction
+            satisfied_explanation = self._extract_already_satisfied(transcript)
+            if satisfied_explanation:
+                result.already_satisfied = True
+                result.success = True
+                result.summary = satisfied_explanation[:200]
+                result.duration_seconds = time.monotonic() - start
+                self._save_transcript(issue.number, result.transcript)
+                await self._emit_status(issue.number, worker_id, PlannerStatus.DONE)
+                logger.info(
+                    "Issue #%d already satisfied — no changes needed",
+                    issue.number,
+                )
+                return result
+
             result.plan = self._extract_plan(transcript)
             result.summary = self._extract_summary(transcript)
             result.new_issues = self._extract_new_issues(transcript)
@@ -172,10 +187,9 @@ class PlannerRunner:
             cmd.extend(["--max-budget-usd", str(self._config.planner_budget_usd)])
         return cmd
 
-    # Maximum characters for issue body and comments in the prompt.
+    # Maximum characters for comments in the prompt.
     # Keep conservative to avoid hitting Claude CLI's internal text-splitter
     # limits (RecursiveCharacterTextSplitter fails on very long unsplittable lines).
-    _MAX_BODY_CHARS = 4_000
     _MAX_COMMENT_CHARS = 1_000
     _MAX_LINE_CHARS = 500
 
@@ -220,7 +234,7 @@ class PlannerRunner:
             comments_section = f"\n\n## Discussion\n{formatted}"
 
         body = self._truncate_text(
-            issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
+            issue.body or "", self._config.max_issue_body_chars, self._MAX_LINE_CHARS
         )
 
         # Detect attached images and add a note for the planner.
@@ -317,6 +331,13 @@ Use these tools to build a deep understanding of the code:
 - Use `get_incoming_calls` / `get_outgoing_calls` to understand call graphs
 - Only fall back to Grep for simple text pattern matching
 
+### UI Exploration (when the issue involves UI changes)
+
+- Search `ui/src/components/` to inventory existing components and their patterns
+- Check `ui/src/constants.js`, `ui/src/types.js`, and `ui/src/theme.js` for shared definitions
+- Examine existing component styles for spacing, color palette (theme tokens), and layout approach
+- Note whether existing components handle responsive behavior
+
 ## Planning Steps
 
 1. Read the issue carefully and understand what needs to be done.
@@ -325,6 +346,7 @@ Use these tools to build a deep understanding of the code:
 4. Identify what needs to change and where.
 5. Consider testing strategy (what tests to write, what to mock).
 6. Consider edge cases and potential pitfalls.
+7. If the issue involves UI changes, list existing components and shared code (`constants.js`, `types.js`, `theme.js`) that should be reused or extended.
 
 ## Required Output
 
@@ -368,6 +390,19 @@ or one-line bodies will be rejected. Include file paths, function names, and con
 
 **IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
 Do NOT invent labels. All discovered issues enter the pipeline via the find label.
+
+## Already Satisfied
+
+If after exploring the codebase you determine that the issue's acceptance criteria are
+**already fully met** by the existing code (i.e., no changes are needed), do NOT produce
+a plan. Instead, output:
+
+ALREADY_SATISFIED_START
+<explanation of why no changes are needed, referencing specific files and code>
+ALREADY_SATISFIED_END
+
+This will close the issue automatically. Only use this when you are **certain** the
+requirements are already implemented — not when the issue is unclear or you are unsure.
 """
 
     # Required plan sections — each must appear as a ## header.
@@ -646,6 +681,18 @@ Do NOT invent labels. All discovered issues enter the pipeline via the find labe
         return lines[-1][:200] if lines else "No summary provided"
 
     @staticmethod
+    def _extract_already_satisfied(transcript: str) -> str:
+        """Extract the already-satisfied explanation from the transcript.
+
+        Returns the explanation text if the markers are present, empty string otherwise.
+        """
+        pattern = r"ALREADY_SATISFIED_START\s*\n(.*?)\nALREADY_SATISFIED_END"
+        match = re.search(pattern, transcript, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return ""
+
+    @staticmethod
     def _extract_new_issues(transcript: str) -> list[NewIssueSpec]:
         """Parse NEW_ISSUES_START/NEW_ISSUES_END markers into issue specs."""
         pattern = r"NEW_ISSUES_START\s*\n(.*?)\nNEW_ISSUES_END"
@@ -785,6 +832,12 @@ SUMMARY: <brief one-line description of the plan>
             if "PLAN_END" in accumulated:
                 logger.info(
                     "Plan markers found for issue #%d — terminating planner",
+                    issue_number,
+                )
+                return True
+            if "ALREADY_SATISFIED_END" in accumulated:
+                logger.info(
+                    "Already-satisfied markers found for issue #%d — terminating planner",
                     issue_number,
                 )
                 return True

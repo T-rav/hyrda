@@ -31,11 +31,17 @@ class EventType(StrEnum):
     PLANNER_UPDATE = "planner_update"
     MERGE_UPDATE = "merge_update"
     CI_CHECK = "ci_check"
+    HITL_ESCALATION = "hitl_escalation"
     ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
     HITL_UPDATE = "hitl_update"
     ORCHESTRATOR_STATUS = "orchestrator_status"
     ERROR = "error"
+    MEMORY_SYNC = "memory_sync"
+    RETROSPECTIVE = "retrospective"
+    METRICS_UPDATE = "metrics_update"
+    REVIEW_INSIGHT = "review_insight"
+    BACKGROUND_WORKER_STATUS = "background_worker_status"
 
 
 class HydraEvent(BaseModel):

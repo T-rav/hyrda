@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import contextlib
+import json
+import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger("hydra.config")
 
 
 class HydraConfig(BaseModel):
@@ -24,12 +29,12 @@ class HydraConfig(BaseModel):
     )
 
     # Worker configuration
-    max_workers: int = Field(default=2, ge=1, le=10, description="Concurrent agents")
+    max_workers: int = Field(default=3, ge=1, le=10, description="Concurrent agents")
     max_planners: int = Field(
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )
     max_reviewers: int = Field(
-        default=3, ge=1, le=10, description="Concurrent review agents"
+        default=5, ge=1, le=10, description="Concurrent review agents"
     )
     max_hitl_workers: int = Field(
         default=1, ge=1, le=5, description="Concurrent HITL correction agents"
@@ -66,6 +71,24 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_review_fix_attempts: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Max review fix-and-retry cycles before HITL escalation",
+    )
+    min_review_findings: int = Field(
+        default=3,
+        ge=0,
+        le=20,
+        description="Minimum review findings threshold for adversarial review",
+    )
+    max_merge_conflict_fix_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=5,
+        description="Max merge conflict resolution retry cycles",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -98,6 +121,10 @@ class HydraConfig(BaseModel):
         default=["hydra-memory"],
         description="Labels for approved memory items awaiting sync (OR logic)",
     )
+    dup_label: list[str] = Field(
+        default=["hydra-dup"],
+        description="Labels applied when issue is already satisfied (no changes needed)",
+    )
 
     # Discovery / planner configuration
     find_label: list[str] = Field(
@@ -127,6 +154,57 @@ class HydraConfig(BaseModel):
     lite_plan_labels: list[str] = Field(
         default=["bug", "typo", "docs"],
         description="Issue labels that trigger a lite plan (fewer required sections)",
+    )
+    # Metric thresholds for improvement proposals
+    quality_fix_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if quality fix rate exceeds this (0.0-1.0)",
+    )
+    approval_rate_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Alert if first-pass approval rate drops below this (0.0-1.0)",
+    )
+    hitl_rate_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Alert if HITL escalation rate exceeds this (0.0-1.0)",
+    )
+
+    # Review insight aggregation
+    review_insight_window: int = Field(
+        default=10,
+        ge=3,
+        le=50,
+        description="Number of recent reviews to analyze for patterns",
+    )
+    review_pattern_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Minimum category frequency to trigger improvement proposal",
+    )
+
+    # Agent prompt configuration
+    test_command: str = Field(
+        default="make test",
+        description="Quick test command for agent prompts",
+    )
+    max_issue_body_chars: int = Field(
+        default=10_000,
+        ge=1_000,
+        le=100_000,
+        description="Max characters for issue body in agent prompts before truncation",
+    )
+    max_review_diff_chars: int = Field(
+        default=15_000,
+        ge=1_000,
+        le=200_000,
+        description="Max characters for PR diff in reviewer prompts before truncation",
     )
 
     # Git configuration
@@ -165,6 +243,12 @@ class HydraConfig(BaseModel):
         description="Days of event history to retain during rotation",
     )
 
+    # Config file persistence
+    config_file: Path | None = Field(
+        default=None,
+        description="Path to JSON config file for persisting runtime changes",
+    )
+
     # Dashboard
     dashboard_port: int = Field(
         default=5555, ge=1024, le=65535, description="Dashboard web UI port"
@@ -176,6 +260,14 @@ class HydraConfig(BaseModel):
     # Polling
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
+    )
+
+    # Retrospective
+    retrospective_window: int = Field(
+        default=10,
+        ge=3,
+        le=100,
+        description="Number of recent retrospective entries to scan for patterns",
     )
 
     # Execution mode
@@ -219,6 +311,7 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_FIXED       → fixed_label
             HYDRA_LABEL_IMPROVE     → improve_label
             HYDRA_LABEL_MEMORY      → memory_label
+            HYDRA_LABEL_DUP         → dup_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -267,12 +360,54 @@ class HydraConfig(BaseModel):
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
 
+        # Review fix attempts override
+        if self.max_review_fix_attempts == 2:  # still at default
+            env_review_fix = os.environ.get("HYDRA_MAX_REVIEW_FIX_ATTEMPTS")
+            if env_review_fix is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_review_fix_attempts", int(env_review_fix)
+                    )
+
+        # Min review findings override
+        if self.min_review_findings == 3:  # still at default
+            env_min_findings = os.environ.get("HYDRA_MIN_REVIEW_FINDINGS")
+            if env_min_findings is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "min_review_findings", int(env_min_findings)
+                    )
+
+        # Agent prompt config overrides
+        env_test_cmd = os.environ.get("HYDRA_TEST_COMMAND")
+        if env_test_cmd is not None and self.test_command == "make test":
+            object.__setattr__(self, "test_command", env_test_cmd)
+
+        env_max_body = os.environ.get("HYDRA_MAX_ISSUE_BODY_CHARS")
+        if env_max_body is not None and self.max_issue_body_chars == 10_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_issue_body_chars", int(env_max_body))
+
+        env_max_diff = os.environ.get("HYDRA_MAX_REVIEW_DIFF_CHARS")
+        if env_max_diff is not None and self.max_review_diff_chars == 15_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_review_diff_chars", int(env_max_diff))
+
         # gh retry override
         if self.gh_max_retries == 3:  # still at default
             env_retries = os.environ.get("HYDRA_GH_MAX_RETRIES")
             if env_retries is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
+
+        # merge conflict fix attempts override
+        if self.max_merge_conflict_fix_attempts == 3:  # still at default
+            env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
+            if env_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_merge_conflict_fix_attempts", int(env_attempts)
+                    )
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
@@ -285,6 +420,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
             "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
+            "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)
@@ -339,3 +475,38 @@ def _detect_repo_slug(repo_root: Path) -> str:
         return ""
     except (FileNotFoundError, OSError):
         return ""
+
+
+def load_config_file(path: Path | None) -> dict[str, Any]:
+    """Load a JSON config file and return its contents as a dict.
+
+    Returns an empty dict if the file is missing, unreadable, or invalid.
+    """
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
+    """Save config values to a JSON file, merging with existing contents."""
+    if path is None:
+        return
+    existing: dict[str, Any] = {}
+    try:
+        existing = json.loads(path.read_text())
+        if not isinstance(existing, dict):
+            existing = {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    existing.update(values)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing, indent=2) + "\n")
+    except OSError:
+        logger.warning("Failed to write config file %s", path)

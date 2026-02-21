@@ -11,12 +11,14 @@ from models import (
     ControlStatusResponse,
     GitHubIssue,
     HITLItem,
+    LifetimeStats,
     NewIssueSpec,
     Phase,
     PlannerStatus,
     PlanResult,
     PRInfo,
     PRListItem,
+    ReviewerStatus,
     ReviewResult,
     ReviewVerdict,
     WorkerResult,
@@ -334,6 +336,14 @@ class TestPlanResult:
         result = PlanResult(issue_number=1, retry_attempted=True)
         assert result.retry_attempted is True
 
+    def test_already_satisfied_defaults_to_false(self) -> None:
+        result = PlanResult(issue_number=1)
+        assert result.already_satisfied is False
+
+    def test_already_satisfied_can_be_set(self) -> None:
+        result = PlanResult(issue_number=1, already_satisfied=True)
+        assert result.already_satisfied is True
+
     def test_all_fields_set(self) -> None:
         result = PlanResult(
             issue_number=7,
@@ -573,6 +583,38 @@ class TestPRInfo:
 
 
 # ---------------------------------------------------------------------------
+# ReviewerStatus
+# ---------------------------------------------------------------------------
+
+
+class TestReviewerStatus:
+    """Tests for the ReviewerStatus enum."""
+
+    @pytest.mark.parametrize(
+        "member, expected_value",
+        [
+            (ReviewerStatus.REVIEWING, "reviewing"),
+            (ReviewerStatus.DONE, "done"),
+            (ReviewerStatus.FAILED, "failed"),
+            (ReviewerStatus.FIXING, "fixing"),
+            (ReviewerStatus.FIX_DONE, "fix_done"),
+        ],
+    )
+    def test_enum_values(self, member: ReviewerStatus, expected_value: str) -> None:
+        assert member.value == expected_value
+
+    def test_enum_is_string_subclass(self) -> None:
+        assert isinstance(ReviewerStatus.DONE, str)
+
+    def test_all_members_present(self) -> None:
+        assert len(ReviewerStatus) == 5
+
+    def test_lookup_by_value(self) -> None:
+        status = ReviewerStatus("reviewing")
+        assert status is ReviewerStatus.REVIEWING
+
+
+# ---------------------------------------------------------------------------
 # ReviewVerdict
 # ---------------------------------------------------------------------------
 
@@ -656,6 +698,7 @@ class TestReviewResult:
             summary="Looks great!",
             fixes_made=True,
             transcript="Reviewed 5 files.",
+            duration_seconds=12.3,
         )
 
         # Assert
@@ -665,6 +708,15 @@ class TestReviewResult:
         assert review.summary == "Looks great!"
         assert review.fixes_made is True
         assert review.transcript == "Reviewed 5 files."
+        assert review.duration_seconds == pytest.approx(12.3)
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=42.5)
+        assert review.duration_seconds == pytest.approx(42.5)
 
     def test_ci_passed_defaults_to_none(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
@@ -673,6 +725,19 @@ class TestReviewResult:
     def test_ci_fix_attempts_defaults_to_zero(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.ci_fix_attempts == 0
+
+    def test_duration_seconds_defaults_to_zero(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1)
+        assert review.duration_seconds == pytest.approx(0.0)
+
+    def test_duration_seconds_can_be_set(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=45.5)
+        assert review.duration_seconds == pytest.approx(45.5)
+
+    def test_duration_seconds_in_serialization(self) -> None:
+        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=30.0)
+        data = review.model_dump()
+        assert data["duration_seconds"] == pytest.approx(30.0)
 
     def test_ci_passed_can_be_set_true(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1, ci_passed=True)
@@ -1121,3 +1186,56 @@ class TestControlStatusResponse:
         assert data["config"]["max_workers"] == 2
         assert data["config"]["batch_size"] == 15
         assert data["config"]["model"] == "sonnet"
+
+
+# ---------------------------------------------------------------------------
+# LifetimeStats
+# ---------------------------------------------------------------------------
+
+
+class TestLifetimeStats:
+    """Tests for the LifetimeStats model."""
+
+    def test_new_volume_counter_defaults(self) -> None:
+        stats = LifetimeStats()
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_ci_fix_rounds == 0
+        assert stats.total_hitl_escalations == 0
+        assert stats.total_review_request_changes == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_reviewer_fixes == 0
+
+    def test_new_timing_defaults(self) -> None:
+        stats = LifetimeStats()
+        assert stats.total_implementation_seconds == pytest.approx(0.0)
+        assert stats.total_review_seconds == pytest.approx(0.0)
+
+    def test_fired_thresholds_default(self) -> None:
+        stats = LifetimeStats()
+        assert stats.fired_thresholds == []
+
+    def test_fired_thresholds_are_independent_between_instances(self) -> None:
+        a = LifetimeStats()
+        b = LifetimeStats()
+        a.fired_thresholds.append("test")
+        assert b.fired_thresholds == []
+
+    def test_serialization_roundtrip_with_new_fields(self) -> None:
+        stats = LifetimeStats(
+            issues_completed=10,
+            total_quality_fix_rounds=5,
+            total_implementation_seconds=120.5,
+            fired_thresholds=["quality_fix_rate"],
+        )
+        json_str = stats.model_dump_json()
+        restored = LifetimeStats.model_validate_json(json_str)
+        assert restored == stats
+
+    def test_backward_compat_missing_new_fields(self) -> None:
+        """Old data without new fields should get zero defaults."""
+        old_data = {"issues_completed": 3, "prs_merged": 1, "issues_created": 0}
+        stats = LifetimeStats.model_validate(old_data)
+        assert stats.issues_completed == 3
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_implementation_seconds == 0.0
+        assert stats.fired_thresholds == []

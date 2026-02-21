@@ -9,6 +9,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 
 from agent import AgentRunner
+from analysis import PlanAnalyzer
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from hitl_runner import HITLRunner
@@ -21,6 +22,7 @@ from models import (
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
+from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
@@ -66,13 +68,17 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of issues active in this run (avoids double-processing)
-        self._active_issues: set[int] = set()
+        # In-memory tracking of issues active per phase (avoids double-processing)
+        self._active_impl_issues: set[int] = set()
+        self._active_review_issues: set[int] = set()
+        self._active_hitl_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
+        # Background worker last-known status: {worker_name: status dict}
+        self._bg_worker_states: dict[str, dict[str, Any]] = {}
 
         # Delegate phases to focused modules
         self._fetcher = IssueFetcher(config)
@@ -84,8 +90,9 @@ class HydraOrchestrator:
             self._prs,
             self._fetcher,
             self._stop_event,
-            self._active_issues,
+            self._active_impl_issues,
         )
+        self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._reviewer = ReviewPhase(
             config,
             self._state,
@@ -93,9 +100,10 @@ class HydraOrchestrator:
             self._reviewers,
             self._prs,
             self._stop_event,
-            self._active_issues,
+            self._active_review_issues,
             agents=self._agents,
             event_bus=self._bus,
+            retrospective=self._retrospective,
         )
 
     @property
@@ -113,10 +121,21 @@ class HydraOrchestrator:
         """Whether the orchestrator is currently executing."""
         return self._running
 
+    def _has_active_processes(self) -> bool:
+        """Return True if any runner pool still has live subprocesses."""
+        return bool(
+            self._planners._active_procs
+            or self._agents._active_procs
+            or self._reviewers._active_procs
+            or self._hitl_runner._active_procs
+        )
+
     @property
     def run_status(self) -> str:
         """Return the current lifecycle status: idle, running, stopping, or done."""
-        if self._stop_event.is_set() and self._running:
+        if self._stop_event.is_set() and (
+            self._running or self._has_active_processes()
+        ):
             return "stopping"
         if self._running:
             return "running"
@@ -151,7 +170,11 @@ class HydraOrchestrator:
         waiting on human action.  Falls back to ``"pending"`` when no
         origin data is available.
         """
-        if issue_number in self._active_issues:
+        if (
+            issue_number in self._active_impl_issues
+            or issue_number in self._active_review_issues
+            or issue_number in self._active_hitl_issues
+        ):
             return "processing"
         origin = self._state.get_hitl_origin(issue_number)
         if origin:
@@ -179,7 +202,26 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
-        self._active_issues.clear()
+        self._active_impl_issues.clear()
+        self._active_review_issues.clear()
+        self._active_hitl_issues.clear()
+
+    def update_bg_worker_status(
+        self, name: str, status: str, details: dict[str, Any] | None = None
+    ) -> None:
+        """Record the latest heartbeat from a background worker."""
+        from datetime import UTC, datetime
+
+        self._bg_worker_states[name] = {
+            "name": name,
+            "status": status,
+            "last_run": datetime.now(UTC).isoformat(),
+            "details": details or {},
+        }
+
+    def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
+        """Return a copy of all background worker states."""
+        return dict(self._bg_worker_states)
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -213,11 +255,12 @@ class HydraOrchestrator:
         try:
             await self._supervise_loops()
         finally:
-            self._running = False
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
             self._hitl_runner.terminate()
+            await asyncio.sleep(0)
+            self._running = False
             await self._publish_status()
             logger.info("Hydra stopped")
 
@@ -283,7 +326,6 @@ class HydraOrchestrator:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
             try:
-                await self._triage_find_issues()
                 await self._plan_issues()
             except Exception:
                 logger.exception("Plan loop iteration failed — will retry next cycle")
@@ -317,7 +359,7 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 prs, issues = await self._fetcher.fetch_reviewable_prs(
-                    self._active_issues
+                    self._active_review_issues
                 )
                 if prs:
                     review_results = await self._reviewer.review_prs(prs, issues)
@@ -387,7 +429,7 @@ class HydraOrchestrator:
             if self._stop_event.is_set():
                 return
 
-            self._active_issues.add(issue_number)
+            self._active_hitl_issues.add(issue_number)
             try:
                 issue = await self._fetcher.fetch_issue_by_number(issue_number)
                 if not issue:
@@ -491,7 +533,7 @@ class HydraOrchestrator:
             except Exception:
                 logger.exception("HITL processing failed for issue #%d", issue_number)
             finally:
-                self._active_issues.discard(issue_number)
+                self._active_hitl_issues.discard(issue_number)
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -547,6 +589,7 @@ class HydraOrchestrator:
                     issue.number,
                     "Insufficient issue detail for triage",
                 )
+                self._state.record_hitl_escalation()
                 await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
                 note = (
                     "## Needs More Information\n\n"
@@ -595,6 +638,27 @@ class HydraOrchestrator:
 
                 result = await self._planners.plan(issue, worker_id=idx)
 
+                if result.already_satisfied:
+                    # Issue is already satisfied — close with dup label
+                    for lbl in self._config.planner_label:
+                        await self._prs.remove_label(issue.number, lbl)
+                    await self._prs.add_labels(issue.number, self._config.dup_label)
+                    await self._prs.post_comment(
+                        issue.number,
+                        f"## Already Satisfied\n\n"
+                        f"The planner determined that this issue's requirements "
+                        f"are already met by the existing codebase.\n\n"
+                        f"{result.summary}\n\n"
+                        f"---\n"
+                        f"*Generated by Hydra Planner*",
+                    )
+                    await self._prs.close_issue(issue.number)
+                    logger.info(
+                        "Issue #%d closed as already satisfied",
+                        issue.number,
+                    )
+                    return result
+
                 if result.success and result.plan:
                     # Post plan + branch as comment on the issue
                     branch = self._config.branch_for_issue(issue.number)
@@ -606,6 +670,17 @@ class HydraOrchestrator:
                         f"*Generated by Hydra Planner*"
                     )
                     await self._prs.post_comment(issue.number, comment_body)
+
+                    # Run pre-implementation analysis
+                    analyzer = PlanAnalyzer(
+                        repo_root=self._config.repo_root,
+                    )
+                    analysis = analyzer.analyze(result.plan, issue.number)
+
+                    # Post analysis comment
+                    await self._prs.post_comment(
+                        issue.number, analysis.format_comment()
+                    )
 
                     # Swap labels: remove planner label(s), add implementation label
                     for lbl in self._config.planner_label:
@@ -659,6 +734,7 @@ class HydraOrchestrator:
                         issue.number,
                         "Plan validation failed after retry",
                     )
+                    self._state.record_hitl_escalation()
                     await self._prs.add_labels(
                         issue.number, [self._config.hitl_label[0]]
                     )

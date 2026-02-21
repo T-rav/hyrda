@@ -58,12 +58,16 @@ class ConfigFactory:
         ci_poll_interval: int = 30,
         max_ci_fix_attempts: int = 0,
         max_quality_fix_attempts: int = 2,
+        max_review_fix_attempts: int = 2,
+        min_review_findings: int = 3,
+        max_merge_conflict_fix_attempts: int = 3,
         review_label: list[str] | None = None,
         hitl_label: list[str] | None = None,
         fixed_label: list[str] | None = None,
+        improve_label: list[str] | None = None,
+        dup_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
-        improve_label: list[str] | None = None,
         memory_label: list[str] | None = None,
         planner_model: str = "opus",
         planner_budget_usd: float = 1.0,
@@ -77,17 +81,24 @@ class ConfigFactory:
         git_user_email: str = "",
         dashboard_enabled: bool = False,
         dashboard_port: int = 15555,
+        review_insight_window: int = 10,
+        review_pattern_threshold: int = 3,
         gh_max_retries: int = 3,
+        test_command: str = "make test",
+        max_issue_body_chars: int = 10_000,
+        max_review_diff_chars: int = 15_000,
         repo_root: Path | None = None,
         worktree_base: Path | None = None,
         state_file: Path | None = None,
         event_log_path: Path | None = None,
+        config_file: Path | None = None,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
 
         root = repo_root or Path("/tmp/hydra-test-repo")
         return HydraConfig(
+            config_file=config_file,
             ready_label=ready_label if ready_label is not None else ["test-label"],
             batch_size=batch_size,
             max_workers=max_workers,
@@ -101,16 +112,20 @@ class ConfigFactory:
             ci_poll_interval=ci_poll_interval,
             max_ci_fix_attempts=max_ci_fix_attempts,
             max_quality_fix_attempts=max_quality_fix_attempts,
+            max_review_fix_attempts=max_review_fix_attempts,
+            min_review_findings=min_review_findings,
+            max_merge_conflict_fix_attempts=max_merge_conflict_fix_attempts,
             review_label=review_label if review_label is not None else ["hydra-review"],
             hitl_label=hitl_label if hitl_label is not None else ["hydra-hitl"],
             fixed_label=fixed_label if fixed_label is not None else ["hydra-fixed"],
+            improve_label=improve_label
+            if improve_label is not None
+            else ["hydra-improve"],
+            dup_label=dup_label if dup_label is not None else ["hydra-dup"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
             else ["hydra-plan"],
-            improve_label=improve_label
-            if improve_label is not None
-            else ["hydra-improve"],
             memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             planner_model=planner_model,
             planner_budget_usd=planner_budget_usd,
@@ -126,7 +141,12 @@ class ConfigFactory:
             git_user_email=git_user_email,
             dashboard_enabled=dashboard_enabled,
             dashboard_port=dashboard_port,
+            review_insight_window=review_insight_window,
+            review_pattern_threshold=review_pattern_threshold,
             gh_max_retries=gh_max_retries,
+            test_command=test_command,
+            max_issue_body_chars=max_issue_body_chars,
+            max_review_diff_chars=max_review_diff_chars,
             repo_root=root,
             worktree_base=worktree_base or root.parent / "test-worktrees",
             state_file=state_file or root / ".hydra-state.json",
