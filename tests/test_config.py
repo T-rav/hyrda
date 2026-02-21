@@ -1646,6 +1646,7 @@ class TestHydraConfigMaxIssueBodyChars:
     def test_max_issue_body_chars_env_var_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """HYDRA_MAX_ISSUE_BODY_CHARS env var should override the default."""
         monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -1653,6 +1654,19 @@ class TestHydraConfigMaxIssueBodyChars:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_issue_body_chars == 20_000
+
+    def test_max_issue_body_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
+        cfg = HydraConfig(
+            max_issue_body_chars=5_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 5_000
 
 
 # ---------------------------------------------------------------------------
@@ -1683,6 +1697,7 @@ class TestHydraConfigMaxReviewDiffChars:
     def test_max_review_diff_chars_env_var_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        """HYDRA_MAX_REVIEW_DIFF_CHARS env var should override the default."""
         monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -1690,3 +1705,16 @@ class TestHydraConfigMaxReviewDiffChars:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_review_diff_chars == 50_000
+
+    def test_max_review_diff_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
+        cfg = HydraConfig(
+            max_review_diff_chars=25_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 25_000

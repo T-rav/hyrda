@@ -821,6 +821,16 @@ def test_build_ci_fix_prompt_includes_pr_and_issue_context(
     assert "Attempt 2" in prompt
 
 
+def test_build_ci_fix_prompt_uses_configured_test_command(event_bus, pr_info, issue):
+    """CI fix prompt should use the configured test_command."""
+    cfg = ConfigFactory.create(test_command="npm test")
+    runner = _make_runner(cfg, event_bus)
+    prompt = runner._build_ci_fix_prompt(pr_info, issue, "CI failed", 1)
+
+    assert "`npm test`" in prompt
+    assert "make test-fast" not in prompt
+
+
 # ---------------------------------------------------------------------------
 # fix_ci — success path
 # ---------------------------------------------------------------------------
