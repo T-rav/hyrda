@@ -15,13 +15,24 @@ import { ACTIVE_STATUSES } from './constants'
 
 const TABS = ['transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
 
+function SystemAlertBanner({ alert }) {
+  if (!alert) return null
+  return (
+    <div style={styles.alertBanner}>
+      <span style={styles.alertIcon}>!</span>
+      <span>{alert.message}</span>
+      {alert.source && <span style={styles.alertSource}>Source: {alert.source}</span>}
+    </div>
+  )
+}
+
 export default function App() {
   const {
     connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
     mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
     sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics,
+    backgroundWorkers, metrics, systemAlert,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
@@ -81,6 +92,7 @@ export default function App() {
       />
 
       <div style={styles.main}>
+        <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
 
         <div style={styles.tabs}>
@@ -106,19 +118,7 @@ export default function App() {
           {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'timeline' && <Timeline events={events} workers={workers} prs={prs} />}
-          {activeTab === 'livestream' && (
-            <div style={styles.timeline}>
-              {events.map((e, i) => (
-                <div key={i} style={styles.timelineItem}>
-                  <span style={styles.timelineTime}>
-                    {new Date(e.timestamp).toLocaleTimeString()}
-                  </span>
-                  <span style={styles.timelineType}>{e.type.replace(/_/g, ' ')}</span>
-                  <span>{JSON.stringify(e.data).slice(0, 120)}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          {activeTab === 'livestream' && <Livestream events={events} />}
           {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} />}
           {activeTab === 'metrics' && <MetricsPanel metrics={metrics} lifetimeStats={lifetimeStats} />}
         </div>
@@ -165,18 +165,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
   },
-  timeline: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: 8,
-  },
-  timelineItem: {
-    padding: '6px 8px',
-    borderBottom: `1px solid ${theme.border}`,
-    fontSize: 11,
-  },
-  timelineTime: { color: theme.textMuted, marginRight: 8 },
-  timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
   tabBadge: {
     marginLeft: 6,
     padding: '1px 6px',
@@ -194,6 +182,36 @@ const styles = {
     borderRadius: 10,
     padding: '1px 6px',
     marginLeft: 6,
+  },
+  alertBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 16px',
+    background: theme.redSubtle,
+    borderBottom: `2px solid ${theme.red}`,
+    color: theme.red,
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  alertIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    background: theme.red,
+    color: theme.white,
+    fontSize: 12,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  alertSource: {
+    marginLeft: 'auto',
+    fontSize: 11,
+    fontWeight: 400,
+    opacity: 0.8,
   },
 }
 

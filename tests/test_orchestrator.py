@@ -27,6 +27,7 @@ from models import (
     WorkerResult,
 )
 from orchestrator import HydraOrchestrator
+from subprocess_util import AuthenticationError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -2816,3 +2817,116 @@ class TestHITLLoop:
         await orch._process_one_hitl(42, "Fix it", semaphore)
 
         mock_wt.destroy.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Auth failure detection
+# ---------------------------------------------------------------------------
+
+
+class TestAuthFailure:
+    """Tests for AuthenticationError handling in the orchestrator."""
+
+    @pytest.mark.asyncio
+    async def test_auth_failure_stops_all_loops(self, config: HydraConfig) -> None:
+        """An AuthenticationError in any loop should stop the orchestrator."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        async def auth_failing_triage() -> None:
+            raise AuthenticationError("401 Unauthorized")
+
+        orch._triage_find_issues = auth_failing_triage  # type: ignore[method-assign]
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        async def instant_sleep(seconds: int) -> None:
+            await asyncio.sleep(0)
+
+        orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert not orch.running
+        assert orch._stop_event.is_set()
+
+    @pytest.mark.asyncio
+    async def test_auth_failure_publishes_system_alert_event(
+        self, config: HydraConfig
+    ) -> None:
+        """Auth failure should publish a SYSTEM_ALERT event."""
+        bus = EventBus()
+        orch = HydraOrchestrator(config, event_bus=bus)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        async def auth_failing_plan() -> list[PlanResult]:
+            raise AuthenticationError("401 Unauthorized")
+
+        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
+        orch._plan_issues = auth_failing_plan  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        async def instant_sleep(seconds: int) -> None:
+            await asyncio.sleep(0)
+
+        orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
+
+        await orch.run()
+
+        alert_events = [
+            e for e in bus.get_history() if e.type == EventType.SYSTEM_ALERT
+        ]
+        assert len(alert_events) == 1
+        assert "authentication" in alert_events[0].data["message"].lower()
+        assert alert_events[0].data["source"] == "plan"
+
+    @pytest.mark.asyncio
+    async def test_auth_failure_sets_auth_failed_flag(
+        self, config: HydraConfig
+    ) -> None:
+        """Auth failure should set the _auth_failed flag."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+
+        async def auth_failing_implement() -> tuple[
+            list[WorkerResult], list[GitHubIssue]
+        ]:
+            raise AuthenticationError("401 Unauthorized")
+
+        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
+        orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._implementer.run_batch = auth_failing_implement  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        async def instant_sleep(seconds: int) -> None:
+            await asyncio.sleep(0)
+
+        orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
+
+        await orch.run()
+
+        assert orch._auth_failed is True
+
+    def test_run_status_returns_auth_failed(self, config: HydraConfig) -> None:
+        """run_status should return 'auth_failed' when the flag is set."""
+        orch = HydraOrchestrator(config)
+        orch._auth_failed = True
+        assert orch.run_status == "auth_failed"
+
+    def test_run_status_auth_failed_takes_precedence(self, config: HydraConfig) -> None:
+        """auth_failed should take precedence over other statuses."""
+        orch = HydraOrchestrator(config)
+        orch._auth_failed = True
+        orch._running = True
+        assert orch.run_status == "auth_failed"
+
+    def test_reset_clears_auth_failed(self, config: HydraConfig) -> None:
+        """reset() should clear the _auth_failed flag."""
+        orch = HydraOrchestrator(config)
+        orch._auth_failed = True
+        orch._stop_event.set()
+        orch.reset()
+        assert orch._auth_failed is False
+        assert not orch._stop_event.is_set()

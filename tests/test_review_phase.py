@@ -2581,10 +2581,8 @@ class TestGranularReviewStatusEvents:
         assert merge_main_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_conflict_resolution_status_emitted(
-        self, config: HydraConfig
-    ) -> None:
-        """A 'conflict_resolution' event should be published when resolving conflicts."""
+    async def test_merge_fix_status_emitted(self, config: HydraConfig) -> None:
+        """A 'merge_fix' event should be published when resolving conflicts."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
@@ -2613,11 +2611,10 @@ class TestGranularReviewStatusEvents:
         conflict_events = [
             e
             for e in history
-            if e.type == EventType.REVIEW_UPDATE
-            and e.data.get("status") == "conflict_resolution"
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "merge_fix"
         ]
         # One event from the caller in review_prs, one from the retry loop
-        assert len(conflict_events) >= 1
+        assert len(conflict_events) == 2
         assert conflict_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio

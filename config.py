@@ -115,7 +115,11 @@ class HydraConfig(BaseModel):
     )
     improve_label: list[str] = Field(
         default=["hydra-improve"],
-        description="Labels for review insight improvement proposals (OR logic)",
+        description="Labels for improvement/memory suggestion issues (OR logic)",
+    )
+    memory_label: list[str] = Field(
+        default=["hydra-memory"],
+        description="Labels for approved memory items awaiting sync (OR logic)",
     )
     dup_label: list[str] = Field(
         default=["hydra-dup"],
@@ -312,6 +316,8 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
             HYDRA_LABEL_IMPROVE     → improve_label
+            HYDRA_LABEL_MEMORY      → memory_label
+            HYDRA_LABEL_DUP         → dup_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -426,6 +432,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
+            "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
