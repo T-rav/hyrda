@@ -10,7 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
+from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.reviewer")
@@ -53,7 +53,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "reviewing",
+                    "status": ReviewerStatus.REVIEWING.value,
                     "role": "reviewer",
                 },
             )
@@ -95,7 +95,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "done",
+                    "status": ReviewerStatus.DONE.value,
                     "verdict": result.verdict.value,
                     "duration": time.monotonic() - start,
                     "role": "reviewer",
@@ -134,7 +134,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "fixing",
+                    "status": ReviewerStatus.FIXING.value,
                     "attempt": attempt,
                 },
             )
@@ -169,7 +169,7 @@ class ReviewRunner:
                     "pr": pr.number,
                     "issue": issue.number,
                     "worker": worker_id,
-                    "status": "fix_done",
+                    "status": ReviewerStatus.FIX_DONE.value,
                     "attempt": attempt,
                     "verdict": result.verdict.value,
                 },
@@ -187,6 +187,7 @@ class ReviewRunner:
         attempt: int,
     ) -> str:
         """Build a focused prompt for fixing CI failures."""
+        test_cmd = self._config.test_command
         return f"""You are fixing CI failures on PR #{pr.number} (issue #{issue.number}: {issue.title}).
 
 ## CI Failure Summary
@@ -197,7 +198,7 @@ class ReviewRunner:
 
 1. Read the failing CI output above.
 2. Fix the root causes — do NOT skip or disable tests.
-3. Run `make lint` and `make test` to verify locally.
+3. Run `make lint` and `{test_cmd}` to verify locally.
 4. Commit fixes with message: "ci-fix: <description> (PR #{pr.number})"
 
 ## Required Output
@@ -233,6 +234,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
     def _build_review_prompt(self, pr: PRInfo, issue: GitHubIssue, diff: str) -> str:
         """Build the review prompt for the agent."""
         ci_enabled = self._config.max_ci_fix_attempts > 0
+        test_cmd = self._config.test_command
         ui_criteria = ""
         if "ui/" in diff:
             ui_criteria = """
@@ -252,9 +254,26 @@ Then a brief summary on the next line starting with "SUMMARY: ".
             fix_verify = "2. Do NOT run tests locally — CI will verify after push."
         else:
             verify_step = (
-                "5. Run `make lint` and `make test` to verify everything passes."
+                f"5. Run `make lint` and `{test_cmd}` to verify everything passes."
             )
-            fix_verify = "2. Run `make lint` and `make test-fast`."
+            fix_verify = f"2. Run `make lint` and `{test_cmd}`."
+
+        # Truncate diff with warning
+        max_diff = self._config.max_review_diff_chars
+        if len(diff) > max_diff:
+            logger.warning(
+                "PR #%d diff truncated from %d to %d chars",
+                pr.number,
+                len(diff),
+                max_diff,
+            )
+            diff_text = (
+                diff[:max_diff]
+                + f"\n\n[Diff truncated at {max_diff:,} chars"
+                + " — review may be incomplete for large PRs]"
+            )
+        else:
+            diff_text = diff
 
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
@@ -265,7 +284,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 ## PR Diff
 
 ```diff
-{diff[:15000]}
+{diff_text}
 ```
 
 ## Review Instructions
