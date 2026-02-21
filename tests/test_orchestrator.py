@@ -47,16 +47,18 @@ def make_issue(
 
 
 def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
-    """Mock all fetcher methods so no real gh CLI calls are made.
+    """Mock store and fetcher methods so no real gh CLI calls are made.
 
     Required for tests that go through run() since exception isolation
-    catches errors from unmocked fetcher calls instead of propagating them.
+    catches errors from unmocked fetcher/store calls instead of propagating them.
     """
-    orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    orch._fetcher.fetch_ready_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
-    orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+    orch._store.get_triageable = lambda _max_count: []  # type: ignore[method-assign]
+    orch._store.get_plannable = lambda _max_count: []  # type: ignore[method-assign]
+    orch._store.get_reviewable = lambda _max_count: []  # type: ignore[method-assign]
+    orch._store.start = AsyncMock()  # type: ignore[method-assign]
+    orch._store.get_active_issues = lambda: {}  # type: ignore[method-assign]
     orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
 
 
 def make_worker_result(
@@ -995,7 +997,7 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         mock_triage.evaluate.assert_awaited_once_with(issue)
@@ -1028,7 +1030,7 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         mock_prs.remove_label.assert_called_once_with(2, config.find_label[0])
@@ -1064,7 +1066,7 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         assert orch._state.get_hitl_origin(2) == "hydra-find"
@@ -1093,7 +1095,7 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         assert orch._state.get_hitl_cause(2) == "Insufficient issue detail for triage"
@@ -1139,7 +1141,7 @@ class TestTriageFindIssues:
         mock_triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
         orch._triage = mock_triage
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: issues  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         # Only the first issue should be evaluated; second skipped due to stop
@@ -1152,7 +1154,7 @@ class TestTriageFindIssues:
         mock_prs = AsyncMock()
         orch._prs = mock_prs
 
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._store.get_triageable = lambda _max_count: []  # type: ignore[method-assign]
         await orch._triage_find_issues()
 
         mock_prs.remove_label.assert_not_called()
@@ -1219,7 +1221,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1251,7 +1253,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1281,7 +1283,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1301,7 +1303,7 @@ class TestPlanPhase:
     ) -> None:
         """When no issues have the planner label, return empty list."""
         orch = HydraOrchestrator(config)
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: []  # type: ignore[method-assign]
 
         results = await orch._plan_issues()
 
@@ -1338,7 +1340,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1375,7 +1377,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1418,7 +1420,7 @@ class TestPlanPhase:
 
         orch = HydraOrchestrator(config)  # max_planners=1 from conftest
         orch._planners.plan = fake_plan  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: issues  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1444,7 +1446,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1482,7 +1484,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1520,7 +1522,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1554,7 +1556,7 @@ class TestPlanPhase:
             )
 
         orch._planners.plan = fake_plan  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: issues  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1587,7 +1589,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1628,7 +1630,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1664,7 +1666,7 @@ class TestPlanPhase:
         (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1710,7 +1712,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1756,7 +1758,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1795,7 +1797,7 @@ class TestPlanPhaseAlreadySatisfied:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1838,7 +1840,7 @@ class TestPlanPhaseAlreadySatisfied:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -1888,18 +1890,18 @@ class TestHITLCorrection:
         orch = HydraOrchestrator(config)
         assert orch.get_hitl_status(42) == "pending"
 
-    def test_get_hitl_status_returns_processing_when_active_in_impl(
+    def test_get_hitl_status_returns_processing_when_active_in_store(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._active_impl_issues.add(42)
+        orch._store.mark_active(42, "implement")
         assert orch.get_hitl_status(42) == "processing"
 
-    def test_get_hitl_status_returns_processing_when_active_in_review(
+    def test_get_hitl_status_returns_processing_when_active_in_review_store(
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._active_review_issues.add(42)
+        orch._store.mark_active(42, "review")
         assert orch.get_hitl_status(42) == "processing"
 
     def test_get_hitl_status_returns_processing_when_active_in_hitl(
@@ -1913,7 +1915,7 @@ class TestHITLCorrection:
         self, config: HydraConfig
     ) -> None:
         orch = HydraOrchestrator(config)
-        orch._active_impl_issues.add(99)
+        orch._store.mark_active(99, "implement")
         assert orch.get_hitl_status(42) == "pending"
 
     @pytest.mark.parametrize(
@@ -1944,7 +1946,7 @@ class TestHITLCorrection:
     ) -> None:
         orch = HydraOrchestrator(config)
         orch._state.set_hitl_origin(42, "hydra-review")
-        orch._active_impl_issues.add(42)
+        orch._store.mark_active(42, "implement")
         assert orch.get_hitl_status(42) == "processing"
 
     def test_skip_hitl_issue_removes_correction(self, config: HydraConfig) -> None:
@@ -2059,21 +2061,19 @@ class TestLoopExceptionIsolation:
     async def test_review_loop_continues_after_exception(
         self, config: HydraConfig
     ) -> None:
-        """An exception in fetch_reviewable_prs should not crash the review loop."""
+        """An exception in get_reviewable should not crash the review loop."""
         orch = HydraOrchestrator(config)
         call_count = 0
 
-        async def failing_fetch(
-            active: object,
-        ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+        def failing_get_reviewable(_max_count: int) -> list[GitHubIssue]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("review boom")
             orch._stop_event.set()
-            return [], []
+            return []
 
-        orch._fetcher.fetch_reviewable_prs = failing_fetch  # type: ignore[method-assign]
+        orch._store.get_reviewable = failing_get_reviewable  # type: ignore[method-assign]
 
         await orch._review_loop()
 
@@ -2135,17 +2135,15 @@ class TestLoopExceptionIsolation:
         orch = HydraOrchestrator(config)
         call_count = 0
 
-        async def failing_fetch(
-            active: object,
-        ) -> tuple[list[PRInfo], list[GitHubIssue]]:
+        def failing_get_reviewable(_max_count: int) -> list[GitHubIssue]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("review error")
             orch._stop_event.set()
-            return [], []
+            return []
 
-        orch._fetcher.fetch_reviewable_prs = failing_fetch  # type: ignore[method-assign]
+        orch._store.get_reviewable = failing_get_reviewable  # type: ignore[method-assign]
 
         await orch._review_loop()
 
@@ -2216,7 +2214,8 @@ class TestSupervisorLoops:
         orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
         orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
         orch._implementer.run_batch = failing_implement  # type: ignore[method-assign]
-        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+        orch._store.get_reviewable = lambda _max_count: []  # type: ignore[method-assign]
+        orch._store.start = AsyncMock()  # type: ignore[method-assign]
 
         # Use instant sleep to avoid 30s poll_interval delays
         async def instant_sleep(seconds: int) -> None:
@@ -2236,110 +2235,73 @@ class TestSupervisorLoops:
 # ---------------------------------------------------------------------------
 
 
-class TestPhaseSpecificActiveIssues:
-    """Tests that _active_impl_issues and _active_review_issues are separate."""
+class TestStoreBasedActiveIssueTracking:
+    """Tests that active issue tracking uses the centralized IssueStore."""
 
-    def test_impl_issues_passed_to_implementer(self, config: HydraConfig) -> None:
-        """ImplementPhase receives _active_impl_issues, not _active_review_issues."""
+    def test_implementer_receives_store(self, config: HydraConfig) -> None:
+        """ImplementPhase receives the shared IssueStore."""
         orch = HydraOrchestrator(config)
-        assert orch._implementer._active_issues is orch._active_impl_issues
+        assert orch._implementer._store is orch._store
 
-    def test_review_issues_passed_to_reviewer(self, config: HydraConfig) -> None:
-        """ReviewPhase receives _active_review_issues, not _active_impl_issues."""
+    def test_reviewer_receives_store(self, config: HydraConfig) -> None:
+        """ReviewPhase receives the shared IssueStore."""
         orch = HydraOrchestrator(config)
-        assert orch._reviewer._active_issues is orch._active_review_issues
+        assert orch._reviewer._store is orch._store
 
-    def test_impl_and_review_sets_are_independent(self, config: HydraConfig) -> None:
-        """The two sets are distinct objects."""
+    def test_implementer_and_reviewer_share_same_store(
+        self, config: HydraConfig
+    ) -> None:
+        """Both phases share the same IssueStore instance."""
         orch = HydraOrchestrator(config)
-        assert orch._active_impl_issues is not orch._active_review_issues
+        assert orch._implementer._store is orch._reviewer._store
 
-    def test_reset_clears_all_sets(self, config: HydraConfig) -> None:
-        """reset() must clear all phase-specific sets."""
+    def test_reset_clears_store_active_and_hitl(self, config: HydraConfig) -> None:
+        """reset() must clear store active tracking and HITL issues."""
         orch = HydraOrchestrator(config)
-        orch._active_impl_issues.add(1)
-        orch._active_review_issues.add(2)
+        orch._store.mark_active(1, "implement")
+        orch._store.mark_active(2, "review")
         orch._active_hitl_issues.add(3)
         orch.reset()
-        assert len(orch._active_impl_issues) == 0
-        assert len(orch._active_review_issues) == 0
+        assert not orch._store.is_active(1)
+        assert not orch._store.is_active(2)
         assert len(orch._active_hitl_issues) == 0
 
     @pytest.mark.asyncio
-    async def test_review_loop_passes_review_issues_to_fetcher(
+    async def test_review_loop_passes_store_active_to_fetcher(
         self, config: HydraConfig
     ) -> None:
-        """_review_loop should pass _active_review_issues to fetch_reviewable_prs."""
+        """_review_loop should pass store active issues to fetch_reviewable_prs."""
         orch = HydraOrchestrator(config)
-        captured_arg = None
+        review_issue = make_issue(42)
+        captured_active: set[int] | None = None
+
+        orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
+        orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
 
         async def capturing_fetch(
             active: set[int],
+            prefetched_issues: object = None,
         ) -> tuple[list[PRInfo], list[GitHubIssue]]:
-            nonlocal captured_arg
-            captured_arg = active
+            nonlocal captured_active
+            captured_active = active
             orch._stop_event.set()
             return [], []
 
         orch._fetcher.fetch_reviewable_prs = capturing_fetch  # type: ignore[method-assign]
         await orch._review_loop()
 
-        assert captured_arg is orch._active_review_issues
+        assert captured_active == {42}
 
-    @pytest.mark.asyncio
-    async def test_review_issues_do_not_block_implementation_fetch(
-        self, config: HydraConfig
-    ) -> None:
-        """Issues in _active_review_issues must not block fetch_ready_issues.
-
-        This is the key acceptance test: with issues in the review pipeline,
-        the implementation fetcher should still return new issues because it
-        only filters against _active_impl_issues.
-        """
+    def test_store_active_tracking_is_unified(self, config: HydraConfig) -> None:
+        """Marking an issue active in one stage is visible to all phases."""
         orch = HydraOrchestrator(config)
+        orch._store.mark_active(100, "implement")
 
-        # Simulate issue #100 in review
-        orch._active_review_issues.add(100)
-
-        # The implementation fetcher receives _active_impl_issues (empty),
-        # so issue #100 should NOT be filtered out if it shows up in fetch.
-        issues = [make_issue(100), make_issue(200)]
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=issues)  # type: ignore[method-assign]
-
-        result = await orch._fetcher.fetch_ready_issues(orch._active_impl_issues)
-
-        # Both issues should be returned since _active_impl_issues is empty
-        assert len(result) == 2
-        assert {i.number for i in result} == {100, 200}
-
-    @pytest.mark.asyncio
-    async def test_impl_issues_do_not_block_review_fetch(
-        self, config: HydraConfig
-    ) -> None:
-        """Issues in _active_impl_issues must not block fetch_reviewable_prs."""
-        orch = HydraOrchestrator(config)
-
-        # Simulate issue #100 being implemented
-        orch._active_impl_issues.add(100)
-
-        # fetch_reviewable_prs receives _active_review_issues (empty)
-        review_issues = [make_issue(100)]
-        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=review_issues)  # type: ignore[method-assign]
-
-        # Mock run_subprocess for PR lookup
-        with patch(
-            "issue_fetcher.run_subprocess",
-            new_callable=AsyncMock,
-            return_value='[{"number": 501, "url": "https://github.com/t/r/pull/501", "isDraft": false}]',
-        ):
-            prs, issues = await orch._fetcher.fetch_reviewable_prs(
-                orch._active_review_issues
-            )
-
-        # Issue #100 should not be filtered out (not in review set)
-        assert len(issues) == 1
-        assert issues[0].number == 100
-        assert len(prs) == 1
+        # The same store is shared, so is_active works from anywhere
+        assert orch._store.is_active(100)
+        # Marking complete removes it
+        orch._store.mark_complete(100)
+        assert not orch._store.is_active(100)
 
 
 # ---------------------------------------------------------------------------

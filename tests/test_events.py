@@ -37,6 +37,7 @@ class TestEventTypeEnum:
             "METRICS_UPDATE",
             "REVIEW_INSIGHT",
             "BACKGROUND_WORKER_STATUS",
+            "QUEUE_UPDATE",
         }
         actual = {member.name for member in EventType}
         assert expected == actual

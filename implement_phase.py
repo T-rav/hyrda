@@ -8,7 +8,7 @@ from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraConfig
-from issue_fetcher import IssueFetcher
+from issue_store import IssueStore
 from models import GitHubIssue, WorkerResult
 from pr_manager import PRManager
 from state import StateTracker
@@ -27,18 +27,16 @@ class ImplementPhase:
         worktrees: WorktreeManager,
         agents: AgentRunner,
         prs: PRManager,
-        fetcher: IssueFetcher,
+        store: IssueStore,
         stop_event: asyncio.Event,
-        active_issues: set[int],
     ) -> None:
         self._config = config
         self._state = state
         self._worktrees = worktrees
         self._agents = agents
         self._prs = prs
-        self._fetcher = fetcher
+        self._store = store
         self._stop_event = stop_event
-        self._active_issues = active_issues
 
     async def _close_as_already_satisfied(self, issue: GitHubIssue) -> None:
         """Close an issue as already satisfied (no changes needed)."""
@@ -62,14 +60,16 @@ class ImplementPhase:
 
     async def run_batch(
         self,
+        issues: list[GitHubIssue] | None = None,
     ) -> tuple[list[WorkerResult], list[GitHubIssue]]:
-        """Fetch ready issues and run implementation agents concurrently.
+        """Run implementation agents on *issues* concurrently.
 
+        If *issues* is ``None``, pulls from the ``IssueStore`` ready queue.
         Returns ``(worker_results, issues)`` so the caller has access
-        to the issue list for downstream phases.  The internal queue
-        holds up to ``2 * max_workers`` issues.
+        to the issue list for downstream phases.
         """
-        issues = await self._fetcher.fetch_ready_issues(self._active_issues)
+        if issues is None:
+            issues = self._store.get_implementable(2 * self._config.max_workers)
         if not issues:
             return [], []
 
@@ -93,7 +93,7 @@ class ImplementPhase:
                     )
 
                 branch = f"agent/issue-{issue.number}"
-                self._active_issues.add(issue.number)
+                self._store.mark_active(issue.number, "implement")
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
 
@@ -206,7 +206,7 @@ class ImplementPhase:
                         error=f"Worker exception for issue #{issue.number}",
                     )
                 finally:
-                    self._active_issues.discard(issue.number)
+                    self._store.mark_complete(issue.number)
 
         all_tasks = [
             asyncio.create_task(_worker(i, issue)) for i, issue in enumerate(issues)

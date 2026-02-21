@@ -22,6 +22,7 @@ from models import (
     ControlStatusResponse,
     LifetimeStats,
     MetricsResponse,
+    QueueStats,
 )
 from pr_manager import PRManager
 from state import StateTracker
@@ -63,7 +64,19 @@ def create_router(
 
     @router.get("/api/stats")
     async def get_stats() -> JSONResponse:
-        return JSONResponse(state.get_lifetime_stats())
+        data: dict[str, Any] = state.get_lifetime_stats()
+        orch = get_orchestrator()
+        if orch:
+            data["queue"] = orch.issue_store.get_queue_stats().model_dump()
+        return JSONResponse(data)
+
+    @router.get("/api/queue")
+    async def get_queue() -> JSONResponse:
+        """Return current queue depths, active counts, and throughput."""
+        orch = get_orchestrator()
+        if orch:
+            return JSONResponse(orch.issue_store.get_queue_stats().model_dump())
+        return JSONResponse(QueueStats().model_dump())
 
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:

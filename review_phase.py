@@ -11,6 +11,7 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from issue_store import IssueStore
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
 from pr_manager import PRManager, SelfReviewError
 from retrospective import RetrospectiveCollector
@@ -40,7 +41,7 @@ class ReviewPhase:
         reviewers: ReviewRunner,
         prs: PRManager,
         stop_event: asyncio.Event,
-        active_issues: set[int],
+        store: IssueStore,
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
         retrospective: RetrospectiveCollector | None = None,
@@ -51,7 +52,7 @@ class ReviewPhase:
         self._reviewers = reviewers
         self._prs = prs
         self._stop_event = stop_event
-        self._active_issues = active_issues
+        self._store = store
         self._agents = agents
         self._bus = event_bus or EventBus()
         self._retrospective = retrospective
@@ -72,7 +73,7 @@ class ReviewPhase:
 
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
-                self._active_issues.add(pr.issue_number)
+                self._store.mark_active(pr.issue_number, "review")
 
                 try:
                     # Publish a start event immediately so the dashboard
@@ -344,7 +345,7 @@ class ReviewPhase:
                     )
                 finally:
                     await self._publish_review_status(pr, idx, "done")
-                    self._active_issues.discard(pr.issue_number)
+                    self._store.mark_complete(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
         for task in asyncio.as_completed(tasks):

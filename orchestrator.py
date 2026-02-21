@@ -15,6 +15,7 @@ from events import EventBus, EventType, HydraEvent
 from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
+from issue_store import IssueStore
 from models import (
     GitHubIssue,
     Phase,
@@ -68,9 +69,7 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of issues active per phase (avoids double-processing)
-        self._active_impl_issues: set[int] = set()
-        self._active_review_issues: set[int] = set()
+        # In-memory tracking of HITL-active issues (avoids double-processing)
         self._active_hitl_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
@@ -80,17 +79,19 @@ class HydraOrchestrator:
         # Background worker last-known status: {worker_name: status dict}
         self._bg_worker_states: dict[str, dict[str, Any]] = {}
 
-        # Delegate phases to focused modules
+        # Centralized issue store and fetcher
         self._fetcher = IssueFetcher(config)
+        self._store = IssueStore(config, self._fetcher, self._bus)
+
+        # Delegate phases to focused modules
         self._implementer = ImplementPhase(
             config,
             self._state,
             self._worktrees,
             self._agents,
             self._prs,
-            self._fetcher,
+            self._store,
             self._stop_event,
-            self._active_impl_issues,
         )
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._reviewer = ReviewPhase(
@@ -100,7 +101,7 @@ class HydraOrchestrator:
             self._reviewers,
             self._prs,
             self._stop_event,
-            self._active_review_issues,
+            self._store,
             agents=self._agents,
             event_bus=self._bus,
             retrospective=self._retrospective,
@@ -110,6 +111,11 @@ class HydraOrchestrator:
     def event_bus(self) -> EventBus:
         """Expose event bus for dashboard integration."""
         return self._bus
+
+    @property
+    def issue_store(self) -> IssueStore:
+        """Expose the centralized issue store for dashboard integration."""
+        return self._store
 
     @property
     def state(self) -> StateTracker:
@@ -171,8 +177,7 @@ class HydraOrchestrator:
         origin data is available.
         """
         if (
-            issue_number in self._active_impl_issues
-            or issue_number in self._active_review_issues
+            self._store.is_active(issue_number)
             or issue_number in self._active_hitl_issues
         ):
             return "processing"
@@ -202,8 +207,7 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
-        self._active_impl_issues.clear()
-        self._active_review_issues.clear()
+        self._store.clear_active()
         self._active_hitl_issues.clear()
 
     def update_bg_worker_status(
@@ -265,8 +269,13 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _supervise_loops(self) -> None:
-        """Run all five loops, restarting any that crash unexpectedly."""
+        """Run all five loops plus the IssueStore poller, restarting any that crash."""
+
+        async def _store_loop() -> None:
+            await self._store.start(self._stop_event)
+
         loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]] = [
+            ("store", _store_loop),
             ("triage", self._triage_loop),
             ("plan", self._plan_loop),
             ("implement", self._implement_loop),
@@ -355,18 +364,26 @@ class HydraOrchestrator:
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _review_loop(self) -> None:
-        """Continuously poll for ``hydra-review`` issues and review their PRs."""
+        """Continuously consume reviewable issues from the store and review their PRs."""
         while not self._stop_event.is_set():
             try:
-                prs, issues = await self._fetcher.fetch_reviewable_prs(
-                    self._active_review_issues
+                review_issues = self._store.get_reviewable(
+                    self._config.batch_size,
                 )
-                if prs:
-                    review_results = await self._reviewer.review_prs(prs, issues)
-                    any_merged = any(r.merged for r in review_results)
-                    if any_merged:
-                        await asyncio.sleep(5)
-                        await self._prs.pull_main()
+                if review_issues:
+                    # Resolve PRs for the issues obtained from the store.
+                    # We still need per-issue gh pr list calls for PR metadata,
+                    # but issue discovery is centralized via the store.
+                    active_in_store = set(self._store.get_active_issues().keys())
+                    prs, issues = await self._fetcher.fetch_reviewable_prs(
+                        active_in_store, prefetched_issues=review_issues
+                    )
+                    if prs:
+                        review_results = await self._reviewer.review_prs(prs, issues)
+                        any_merged = any(r.merged for r in review_results)
+                        if any_merged:
+                            await asyncio.sleep(5)
+                            await self._prs.pull_main()
             except Exception:
                 logger.exception("Review loop iteration failed — will retry next cycle")
                 await self._bus.publish(
@@ -553,9 +570,7 @@ class HydraOrchestrator:
         if not self._config.find_label:
             return
 
-        issues = await self._fetcher.fetch_issues_by_labels(
-            self._config.find_label, self._config.batch_size
-        )
+        issues = self._store.get_triageable(self._config.batch_size)
         if not issues:
             return
 
@@ -620,8 +635,8 @@ class HydraOrchestrator:
                 )
 
     async def _plan_issues(self) -> list[PlanResult]:
-        """Run planning agents on issues labeled with the planner label."""
-        issues = await self._fetcher.fetch_plan_issues()
+        """Run planning agents on issues from the plan queue."""
+        issues = self._store.get_plannable(self._config.batch_size)
         if not issues:
             return []
 
