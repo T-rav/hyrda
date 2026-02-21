@@ -447,6 +447,23 @@ class TestPersist:
         assert "AC-1: New" in content
         assert "AC-1: Old" not in content
 
+    def test_persist_handles_oserror(
+        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        gen, _ = _make_generator(config)
+        criteria = VerificationCriteria(
+            issue_number=42,
+            pr_number=101,
+            acceptance_criteria="AC-1: Test",
+            verification_instructions="1. Check",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            gen._persist(criteria)  # should not raise
+
+        assert "Could not persist acceptance criteria" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # TestBuildCommand

@@ -477,6 +477,93 @@ class TestWorkerExceptionIsolation:
 
 
 # ---------------------------------------------------------------------------
+# Worktree creation failure edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestWorktreeCreationFailure:
+    """Tests for worktree creation failure during run_batch."""
+
+    @pytest.mark.asyncio
+    async def test_worktree_creation_failure_returns_error_result(
+        self, config: HydraConfig
+    ) -> None:
+        """When worktrees.create raises, worker should return a failed result."""
+        issue = IssueFactory.create(number=42)
+
+        phase, mock_wt, _ = _make_phase(config, [issue])
+        mock_wt.create = AsyncMock(side_effect=RuntimeError("disk full"))
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert results[0].error is not None
+        assert "Worker exception" in results[0].error
+
+    @pytest.mark.asyncio
+    async def test_worktree_creation_failure_does_not_crash_other_workers(
+        self, config: HydraConfig
+    ) -> None:
+        """First worktree.create failure should not prevent second worker from completing."""
+        issues = [IssueFactory.create(number=1), IssueFactory.create(number=2)]
+
+        async def create_side_effect(num: int, branch: str) -> Path:
+            if num == 1:
+                raise RuntimeError("disk full")
+            return config.worktree_base / f"issue-{num}"
+
+        phase, mock_wt, _ = _make_phase(config, issues)
+        mock_wt.create = AsyncMock(side_effect=create_side_effect)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 2
+        result_map = {r.issue_number: r for r in results}
+        assert result_map[1].success is False
+        assert "Worker exception" in result_map[1].error
+        assert result_map[2].success is True
+
+    @pytest.mark.asyncio
+    async def test_stop_event_cancels_remaining_workers(
+        self, config: HydraConfig
+    ) -> None:
+        """Setting stop_event should cause workers to return early with error."""
+        issues = [
+            IssueFactory.create(number=1),
+            IssueFactory.create(number=2),
+            IssueFactory.create(number=3),
+        ]
+
+        async def slow_agent_run(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            # Simulate slow execution
+            await asyncio.sleep(10)
+            return WorkerResultFactory.create(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, _ = _make_phase(config, issues, agent_run=slow_agent_run)
+
+        # Set stop event immediately
+        phase._stop_event.set()
+
+        results, _ = await phase.run_batch()
+
+        # All collected results should be stopped (stop event checked before semaphore)
+        for r in results:
+            assert r.success is False
+            assert r.error == "stopped"
+
+
+# ---------------------------------------------------------------------------
 # Lifecycle metric recording
 # ---------------------------------------------------------------------------
 

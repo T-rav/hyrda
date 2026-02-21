@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -627,6 +627,15 @@ class TestFiledPatterns:
         filed_path.write_text("not valid json")
         result = collector._load_filed_patterns()
         assert result == set()
+
+    def test_save_filed_patterns_handles_oserror(
+        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        collector, _, _ = _make_collector(config)
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            collector._save_filed_patterns({"quality_fix"})  # should not raise
+
+        assert "Could not save filed patterns" in caplog.text
 
 
 # ---------------------------------------------------------------------------
