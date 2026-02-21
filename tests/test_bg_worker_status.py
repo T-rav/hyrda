@@ -50,14 +50,14 @@ class TestBackgroundWorkerStatusModel:
     def test_full_model_serializes_correctly(self) -> None:
         status = BackgroundWorkerStatus(
             name="memory_sync",
-            label="Memory Sync",
+            label="Memory Manager",
             status="ok",
             last_run="2026-02-20T10:30:00Z",
             details={"item_count": 12, "digest_chars": 2400},
         )
         data = status.model_dump()
         assert data["name"] == "memory_sync"
-        assert data["label"] == "Memory Sync"
+        assert data["label"] == "Memory Manager"
         assert data["status"] == "ok"
         assert data["last_run"] == "2026-02-20T10:30:00Z"
         assert data["details"]["item_count"] == 12
@@ -178,7 +178,7 @@ class TestSystemWorkersEndpoint:
         return None
 
     @pytest.mark.asyncio
-    async def test_returns_all_four_workers(
+    async def test_returns_all_workers(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
         router = self._make_router(config, event_bus, tmp_path)
@@ -187,9 +187,18 @@ class TestSystemWorkersEndpoint:
 
         response = await endpoint()
         data = json.loads(response.body)
-        assert len(data["workers"]) == 4
+        assert len(data["workers"]) == 8
         names = [w["name"] for w in data["workers"]]
-        assert names == ["memory_sync", "retrospective", "metrics", "review_insights"]
+        assert names == [
+            "triage",
+            "plan",
+            "implement",
+            "review",
+            "memory_sync",
+            "retrospective",
+            "metrics",
+            "review_insights",
+        ]
 
     @pytest.mark.asyncio
     async def test_returns_disabled_when_no_orchestrator(

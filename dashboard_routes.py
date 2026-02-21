@@ -23,7 +23,10 @@ from models import (
     IntentRequest,
     IntentResponse,
     LifetimeStats,
+    MetricsHistoryResponse,
     MetricsResponse,
+    PipelineIssue,
+    PipelineSnapshot,
     QueueStats,
 )
 from pr_manager import PRManager
@@ -83,6 +86,34 @@ def create_router(
         if orch:
             return JSONResponse(orch.issue_store.get_queue_stats().model_dump())
         return JSONResponse(QueueStats().model_dump())
+
+    # Backend stage keys → frontend stage names
+    _STAGE_NAME_MAP = {
+        "find": "triage",
+        "plan": "plan",
+        "ready": "implement",
+        "review": "review",
+        "hitl": "hitl",
+    }
+
+    @router.get("/api/pipeline")
+    async def get_pipeline() -> JSONResponse:
+        """Return current pipeline snapshot with issues per stage."""
+        orch = get_orchestrator()
+        if orch:
+            raw = orch.issue_store.get_pipeline_snapshot()
+            mapped: dict[str, list[dict[str, object]]] = {}
+            for backend_stage, issues in raw.items():
+                frontend_stage = _STAGE_NAME_MAP.get(backend_stage, backend_stage)
+                mapped[frontend_stage] = issues
+            snapshot = PipelineSnapshot(
+                stages={
+                    k: [PipelineIssue(**i) for i in v]  # type: ignore[arg-type]
+                    for k, v in mapped.items()
+                }
+            )
+            return JSONResponse(snapshot.model_dump())
+        return JSONResponse(PipelineSnapshot().model_dump())
 
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:
@@ -376,9 +407,13 @@ def create_router(
 
         return JSONResponse({"status": "ok", "updated": applied})
 
-    # Known background workers with human-friendly labels
+    # Known workers with human-friendly labels (pipeline loops + background)
     _bg_worker_defs = [
-        ("memory_sync", "Memory Sync"),
+        ("triage", "Triage"),
+        ("plan", "Plan"),
+        ("implement", "Implement"),
+        ("review", "Review"),
+        ("memory_sync", "Memory Manager"),
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
@@ -391,6 +426,7 @@ def create_router(
         bg_states = orch.get_bg_worker_states() if orch else {}
         workers = []
         for name, label in _bg_worker_defs:
+            enabled = orch.is_bg_worker_enabled(name) if orch else True
             if name in bg_states:
                 entry = bg_states[name]
                 workers.append(
@@ -398,13 +434,31 @@ def create_router(
                         name=name,
                         label=label,
                         status=entry["status"],
+                        enabled=enabled,
                         last_run=entry.get("last_run"),
                         details=entry.get("details", {}),
                     )
                 )
             else:
-                workers.append(BackgroundWorkerStatus(name=name, label=label))
+                workers.append(
+                    BackgroundWorkerStatus(name=name, label=label, enabled=enabled)
+                )
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
+
+    @router.post("/api/control/bg-worker")
+    async def toggle_bg_worker(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Enable or disable a background worker."""
+        name = body.get("name")
+        enabled = body.get("enabled")
+        if not name or enabled is None:
+            return JSONResponse(
+                {"error": "name and enabled are required"}, status_code=400
+            )
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+        orch.set_bg_worker_enabled(name, bool(enabled))
+        return JSONResponse({"status": "ok", "name": name, "enabled": bool(enabled)})
 
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:
@@ -433,6 +487,28 @@ def create_router(
             rates["reviewer_fix_rate"] = lifetime.total_reviewer_fixes / total_reviews
         return JSONResponse(
             MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
+        )
+
+    @router.get("/api/metrics/github")
+    async def get_github_metrics() -> JSONResponse:
+        """Query GitHub for issue/PR counts by label state."""
+        counts = await pr_manager.get_label_counts(config)
+        return JSONResponse(counts)
+
+    @router.get("/api/metrics/history")
+    async def get_metrics_history() -> JSONResponse:
+        """Historical snapshots from the metrics issue + current in-memory snapshot."""
+        orch = get_orchestrator()
+        if orch is None:
+            return JSONResponse(MetricsHistoryResponse().model_dump())
+        mgr = orch.metrics_manager
+        snapshots = await mgr.fetch_history_from_issue()
+        current = mgr.latest_snapshot
+        return JSONResponse(
+            MetricsHistoryResponse(
+                snapshots=snapshots,
+                current=current,
+            ).model_dump()
         )
 
     @router.get("/api/timeline")

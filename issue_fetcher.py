@@ -241,3 +241,34 @@ class IssueFetcher:
         non_draft = [p for p in pr_infos if not p.draft and p.number > 0]
         logger.info("Fetched %d reviewable PRs", len(non_draft))
         return non_draft, issues
+
+    async def fetch_issue_comments(self, issue_number: int) -> list[str]:
+        """Fetch all comment bodies for *issue_number*.
+
+        Returns a list of comment body strings, oldest-first.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would fetch comments for issue #%d", issue_number)
+            return []
+        try:
+            raw = await run_subprocess(
+                "gh",
+                "issue",
+                "view",
+                str(issue_number),
+                "--repo",
+                self._config.repo,
+                "--json",
+                "comments",
+                gh_token=self._config.gh_token,
+            )
+            data = json.loads(raw)
+            comments = data.get("comments", [])
+            return [
+                c.get("body", "") if isinstance(c, dict) else str(c) for c in comments
+            ]
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            logger.error(
+                "Could not fetch comments for issue #%d: %s", issue_number, exc
+            )
+            return []

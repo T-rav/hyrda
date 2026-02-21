@@ -334,6 +334,31 @@ class StateTracker:
             self._data.memory_last_synced,
         )
 
+    # --- metrics state ---
+
+    def get_metrics_issue_number(self) -> int | None:
+        """Return the cached metrics issue number, or *None*."""
+        return self._data.metrics_issue_number
+
+    def set_metrics_issue_number(self, issue_number: int) -> None:
+        """Cache the metrics issue number."""
+        self._data.metrics_issue_number = issue_number
+        self.save()
+
+    def get_metrics_state(self) -> tuple[int | None, str, str | None]:
+        """Return ``(issue_number, last_snapshot_hash, last_synced)``."""
+        return (
+            self._data.metrics_issue_number,
+            self._data.metrics_last_snapshot_hash,
+            self._data.metrics_last_synced,
+        )
+
+    def update_metrics_state(self, snapshot_hash: str) -> None:
+        """Update metrics tracking fields and persist."""
+        self._data.metrics_last_snapshot_hash = snapshot_hash
+        self._data.metrics_last_synced = datetime.now(UTC).isoformat()
+        self.save()
+
     # --- threshold tracking ---
 
     def get_fired_thresholds(self) -> list[str]:

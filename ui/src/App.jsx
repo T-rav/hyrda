@@ -1,21 +1,26 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { useHydraSocket } from './hooks/useHydraSocket'
+import { HydraProvider, useHydra } from './context/HydraContext'
 import { Header } from './components/Header'
-import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
-import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { Livestream } from './components/Livestream'
-import { Timeline } from './components/Timeline'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
-import { IntentInput } from './components/IntentInput'
 import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['stream', 'transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
+const TABS = ['issues', 'transcript', 'hitl', 'livestream', 'metrics', 'system']
+
+const TAB_LABELS = {
+  issues: 'Work Stream',
+  transcript: 'Transcript',
+  hitl: 'HITL',
+  livestream: 'Livestream',
+  metrics: 'Metrics',
+  system: 'System',
+}
 
 function SystemAlertBanner({ alert }) {
   if (!alert) return null
@@ -28,20 +33,18 @@ function SystemAlertBanner({ alert }) {
   )
 }
 
-export default function App() {
+function AppContent() {
   const {
-    connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
-    mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
-    sessionImplemented, sessionReviewed, lifetimeStats, config, events,
+    connected, orchestratorStatus, workers, prs,
+    mergedCount, sessionTriaged, sessionPlanned,
+    sessionImplemented, sessionReviewed, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics, systemAlert, intents, submitIntent,
-  } = useHydraSocket()
+    backgroundWorkers, metrics, systemAlert, intents,
+    lifetimeStats, githubMetrics, metricsHistory, phase, toggleBgWorker,
+  } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
-  const [activeTab, setActiveTab] = useState('stream')
-  const handleWorkerSelect = useCallback((worker) => {
-    setSelectedWorker(worker)
-    setActiveTab('transcript')
-  }, [])
+  const [activeTab, setActiveTab] = useState('issues')
+  const [expandedStages, setExpandedStages] = useState({})
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
@@ -68,7 +71,6 @@ export default function App() {
   }, [])
 
   const handleViewTranscript = useCallback((issueNumber) => {
-    // Find the worker key for the given issue number
     const numKey = Number(issueNumber)
     if (workers[numKey]) {
       setSelectedWorker(numKey)
@@ -80,7 +82,7 @@ export default function App() {
     setActiveTab('transcript')
   }, [workers])
 
-  const handleRequestChanges = useCallback((issueNumber) => {
+  const handleRequestChanges = useCallback(() => {
     setActiveTab('hitl')
   }, [])
 
@@ -93,24 +95,11 @@ export default function App() {
         onStop={handleStop}
         phase={phase}
         workers={workers}
-        config={config}
-      />
-
-      <WorkerList
-        workers={workers}
-        selectedWorker={selectedWorker}
-        onSelect={handleWorkerSelect}
-        humanInputRequests={humanInputRequests}
       />
 
       <div style={styles.main}>
         <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
-        <IntentInput
-          connected={connected}
-          orchestratorStatus={orchestratorStatus}
-          onSubmit={submitIntent}
-        />
 
         <div style={styles.tabs}>
           {TABS.map((tab) => (
@@ -119,23 +108,19 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'stream' ? 'Stream'
-                : tab === 'prs'
-                  ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
-                  : tab === 'hitl' ? (
-                  <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-                ) : tab === 'timeline' ? 'Timeline' : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'hitl' ? (
+                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
+              ) : TAB_LABELS[tab]}
             </div>
           ))}
         </div>
 
         <div style={styles.tabContent}>
-          {activeTab === 'stream' && (
+          {activeTab === 'issues' && (
             <StreamView
-              events={events}
-              workers={workers}
-              prs={prs}
               intents={intents}
+              expandedStages={expandedStages}
+              onToggleStage={setExpandedStages}
               onViewTranscript={handleViewTranscript}
               onRequestChanges={handleRequestChanges}
             />
@@ -143,12 +128,24 @@ export default function App() {
           {activeTab === 'transcript' && (
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'timeline' && <Timeline events={events} workers={workers} prs={prs} />}
           {activeTab === 'livestream' && <Livestream events={events} />}
-          {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} />}
-          {activeTab === 'metrics' && <MetricsPanel metrics={metrics} lifetimeStats={lifetimeStats} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} />}
+          {activeTab === 'metrics' && (
+            <MetricsPanel
+              metrics={metrics}
+              lifetimeStats={lifetimeStats}
+              githubMetrics={githubMetrics}
+              metricsHistory={metricsHistory}
+              sessionCounts={{
+                triaged: sessionTriaged,
+                planned: sessionPlanned,
+                implemented: sessionImplemented,
+                reviewed: sessionReviewed,
+                merged: mergedCount,
+              }}
+            />
+          )}
         </div>
       </div>
 
@@ -156,13 +153,21 @@ export default function App() {
   )
 }
 
+export default function App() {
+  return (
+    <HydraProvider>
+      <AppContent />
+    </HydraProvider>
+  )
+}
+
 const styles = {
   layout: {
     display: 'grid',
     gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '280px 1fr',
+    gridTemplateColumns: '1fr',
     height: '100vh',
-    minWidth: '1024px',
+    minWidth: '800px',
   },
   main: {
     display: 'flex',
@@ -192,15 +197,6 @@ const styles = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-  },
-  tabBadge: {
-    marginLeft: 6,
-    padding: '1px 6px',
-    borderRadius: 10,
-    fontSize: 10,
-    fontWeight: 600,
-    background: theme.border,
-    color: theme.textMuted,
   },
   hitlBadge: {
     background: theme.red,
@@ -246,5 +242,4 @@ const styles = {
 // Pre-computed tab style variants (avoids object spread in .map())
 export const tabInactiveStyle = styles.tab
 export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
-export const tabBadgeStyle = styles.tabBadge
 export const hitlBadgeStyle = styles.hitlBadge

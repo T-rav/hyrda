@@ -395,10 +395,28 @@ class StateData(BaseModel):
     memory_issue_ids: list[int] = Field(default_factory=list)
     memory_digest_hash: str = ""
     memory_last_synced: str | None = None
+    metrics_issue_number: int | None = None
+    metrics_last_snapshot_hash: str = ""
+    metrics_last_synced: str | None = None
     last_updated: str | None = None
 
 
 # --- Dashboard API Responses ---
+
+
+class PipelineIssue(BaseModel):
+    """A single issue in a pipeline stage snapshot."""
+
+    issue_number: int
+    title: str = ""
+    url: str = ""
+    status: str = "queued"  # "queued" | "active" | "hitl"
+
+
+class PipelineSnapshot(BaseModel):
+    """Snapshot of all pipeline stages with their issues."""
+
+    stages: dict[str, list[PipelineIssue]] = Field(default_factory=dict)
 
 
 class IntentRequest(BaseModel):
@@ -478,6 +496,7 @@ class BackgroundWorkerStatus(BaseModel):
     name: str
     label: str
     status: str = "disabled"  # ok | error | disabled
+    enabled: bool = True
     last_run: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
@@ -493,6 +512,45 @@ class MetricsResponse(BaseModel):
 
     lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
     rates: dict[str, float] = Field(default_factory=dict)
+
+
+class MetricsSnapshot(BaseModel):
+    """A single timestamped metrics snapshot for historical tracking."""
+
+    timestamp: str
+    # Core counters (from LifetimeStats)
+    issues_completed: int = 0
+    prs_merged: int = 0
+    issues_created: int = 0
+    # Volume counters
+    total_quality_fix_rounds: int = 0
+    total_ci_fix_rounds: int = 0
+    total_hitl_escalations: int = 0
+    total_review_approvals: int = 0
+    total_review_request_changes: int = 0
+    total_reviewer_fixes: int = 0
+    # Timing
+    total_implementation_seconds: float = 0.0
+    total_review_seconds: float = 0.0
+    # Derived rates (computed at snapshot time)
+    merge_rate: float = 0.0
+    quality_fix_rate: float = 0.0
+    hitl_escalation_rate: float = 0.0
+    first_pass_approval_rate: float = 0.0
+    avg_implementation_seconds: float = 0.0
+    # Queue snapshot
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    # GitHub label counts
+    github_open_by_label: dict[str, int] = Field(default_factory=dict)
+    github_total_closed: int = 0
+    github_total_merged: int = 0
+
+
+class MetricsHistoryResponse(BaseModel):
+    """Response for GET /api/metrics/history."""
+
+    snapshots: list[MetricsSnapshot] = Field(default_factory=list)
+    current: MetricsSnapshot | None = None
 
 
 # --- Timeline ---

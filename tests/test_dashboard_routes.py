@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -75,7 +75,9 @@ class TestCreateRouter:
             "/api/state",
             "/api/stats",
             "/api/queue",
+            "/api/pipeline",
             "/api/metrics",
+            "/api/metrics/github",
             "/api/events",
             "/api/prs",
             "/api/hitl",
@@ -85,6 +87,7 @@ class TestCreateRouter:
             "/api/control/stop",
             "/api/control/status",
             "/api/control/config",
+            "/api/control/bg-worker",
             "/api/system/workers",
             "/api/hitl/{issue_number}/correct",
             "/api/hitl/{issue_number}/skip",
@@ -632,3 +635,265 @@ class TestMetricsEndpoint:
 
         assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
         assert data["rates"].get("reviewer_fix_rate", 0.0) == pytest.approx(0.0)
+
+
+class TestGitHubMetricsEndpoint:
+    """Tests for the GET /api/metrics/github endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        ), pr_mgr
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_github_metrics_returns_label_counts(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
+
+        mock_counts = {
+            "open_by_label": {
+                "hydra-plan": 3,
+                "hydra-ready": 1,
+                "hydra-review": 2,
+                "hydra-hitl": 0,
+                "hydra-fixed": 0,
+            },
+            "total_closed": 10,
+            "total_merged": 8,
+        }
+        pr_mgr.get_label_counts = AsyncMock(return_value=mock_counts)
+
+        get_github_metrics = self._find_endpoint(router, "/api/metrics/github")
+        assert get_github_metrics is not None
+
+        response = await get_github_metrics()
+        data = json.loads(response.body)
+
+        assert data["open_by_label"]["hydra-plan"] == 3
+        assert data["total_closed"] == 10
+        assert data["total_merged"] == 8
+
+
+class TestBgWorkerToggleEndpoint:
+    """Tests for POST /api/control/bg-worker endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=get_orch or (lambda: None),
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path, method="POST"):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_returns_error_without_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync", "enabled": False})
+        data = json.loads(response.body)
+        assert response.status_code == 400
+        assert data["error"] == "no orchestrator"
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_requires_name_and_enabled(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        state = make_state(tmp_path)
+        mock_orch = AsyncMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync"})
+        assert response.status_code == 400
+
+        response = await toggle({"enabled": True})
+        assert response.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_bg_worker_toggle_calls_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        mock_orch = MagicMock()
+        mock_orch.set_bg_worker_enabled = MagicMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        toggle = self._find_endpoint(router, "/api/control/bg-worker")
+        assert toggle is not None
+
+        response = await toggle({"name": "memory_sync", "enabled": False})
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        assert data["name"] == "memory_sync"
+        assert data["enabled"] is False
+        mock_orch.set_bg_worker_enabled.assert_called_once_with("memory_sync", False)
+
+    def test_route_is_registered(self, config, event_bus, tmp_path) -> None:
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/control/bg-worker" in paths
+
+
+# ---------------------------------------------------------------------------
+# /api/pipeline endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineEndpoint:
+    """Tests for the GET /api/pipeline endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=get_orch or (lambda: None),
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    def test_pipeline_route_is_registered(self, config, event_bus, tmp_path) -> None:
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/pipeline" in paths
+
+    @pytest.mark.asyncio
+    async def test_pipeline_returns_empty_without_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_pipeline = self._find_endpoint(router, "/api/pipeline")
+        assert get_pipeline is not None
+
+        response = await get_pipeline()
+        data = json.loads(response.body)
+        assert "stages" in data
+        assert data["stages"] == {}
+
+    @pytest.mark.asyncio
+    async def test_pipeline_maps_backend_stage_names_to_frontend(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+
+        mock_orch = MagicMock()
+        mock_orch.issue_store = MagicMock()
+        mock_orch.issue_store.get_pipeline_snapshot = MagicMock(
+            return_value={
+                "find": [
+                    {
+                        "issue_number": 1,
+                        "title": "Triage me",
+                        "url": "",
+                        "status": "queued",
+                    }
+                ],
+                "ready": [
+                    {
+                        "issue_number": 2,
+                        "title": "Implement me",
+                        "url": "",
+                        "status": "active",
+                    }
+                ],
+                "hitl": [],
+            }
+        )
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        get_pipeline = self._find_endpoint(router, "/api/pipeline")
+        assert get_pipeline is not None
+
+        response = await get_pipeline()
+        data = json.loads(response.body)
+
+        # "find" → "triage", "ready" → "implement"
+        assert "triage" in data["stages"]
+        assert "implement" in data["stages"]
+        assert len(data["stages"]["triage"]) == 1
+        assert data["stages"]["triage"][0]["issue_number"] == 1
+        assert len(data["stages"]["implement"]) == 1
+        assert data["stages"]["implement"][0]["status"] == "active"
