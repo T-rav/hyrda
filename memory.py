@@ -5,9 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import os
 import re
-import tempfile
 from datetime import UTC, datetime
 from typing import Any
 
@@ -310,27 +308,10 @@ class MemorySyncWorker:
 
     def _write_digest(self, content: str) -> None:
         """Write digest to disk atomically."""
-        digest_dir = self._config.repo_root / ".hydra" / "memory"
-        digest_dir.mkdir(parents=True, exist_ok=True)
-        digest_path = digest_dir / "digest.md"
+        from file_util import atomic_write
 
-        fd, tmp = tempfile.mkstemp(
-            dir=digest_dir,
-            prefix=".digest-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, digest_path)
-        except BaseException:
-            import contextlib
-
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
+        atomic_write(digest_path, content)
 
     async def publish_sync_event(self, stats: dict[str, Any]) -> None:
         """Publish a MEMORY_SYNC event with *stats*."""
