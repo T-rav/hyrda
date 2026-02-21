@@ -11,6 +11,7 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from issue_store import IssueStore
 from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict, WorkerStatus
 from pr_manager import PRManager, SelfReviewError
 from retrospective import RetrospectiveCollector
@@ -24,6 +25,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.review_phase")
@@ -40,10 +42,11 @@ class ReviewPhase:
         reviewers: ReviewRunner,
         prs: PRManager,
         stop_event: asyncio.Event,
-        active_issues: set[int],
+        store: IssueStore,
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
         retrospective: RetrospectiveCollector | None = None,
+        verification_judge: VerificationJudge | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -51,11 +54,13 @@ class ReviewPhase:
         self._reviewers = reviewers
         self._prs = prs
         self._stop_event = stop_event
-        self._active_issues = active_issues
+        self._store = store
         self._agents = agents
         self._bus = event_bus or EventBus()
         self._retrospective = retrospective
+        self._verification_judge = verification_judge
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._active_issues: set[int] = set()
 
     async def review_prs(
         self,
@@ -74,6 +79,7 @@ class ReviewPhase:
             async with semaphore:
                 self._active_issues.add(pr.issue_number)
                 self._state.set_active_issue_numbers(list(self._active_issues))
+                self._store.mark_active(pr.issue_number, "review")
 
                 try:
                     # Publish a start event immediately so the dashboard
@@ -269,6 +275,20 @@ class ReviewPhase:
                                             pr.issue_number,
                                             exc_info=True,
                                         )
+                                # Run verification judge (non-blocking)
+                                if self._verification_judge:
+                                    try:
+                                        await self._verification_judge.judge(
+                                            issue_number=pr.issue_number,
+                                            pr_number=pr.number,
+                                            diff=diff,
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Verification judge failed for issue #%d",
+                                            pr.issue_number,
+                                            exc_info=True,
+                                        )
                             else:
                                 logger.warning(
                                     "PR #%d merge failed — escalating to HITL",
@@ -348,6 +368,7 @@ class ReviewPhase:
                     await self._publish_review_status(pr, idx, "done")
                     self._active_issues.discard(pr.issue_number)
                     self._state.set_active_issue_numbers(list(self._active_issues))
+                    self._store.mark_complete(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]
         for task in asyncio.as_completed(tasks):

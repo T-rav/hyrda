@@ -2,6 +2,15 @@ import React, { useState } from 'react'
 import { theme } from '../theme'
 import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
+const SIDEBAR_STAGES = PIPELINE_STAGES.filter(s => s.role != null)
+
+const ROLE_FILTERS = {
+  triage: ([, w]) => w.role === 'triage',
+  planner: ([, w]) => w.role === 'planner',
+  implementer: ([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage',
+  reviewer: ([, w]) => w.role === 'reviewer',
+}
+
 const statusColors = {
   queued:              { bg: theme.mutedSubtle,  fg: theme.textMuted },
   running:             { bg: theme.accentSubtle, fg: theme.accent },
@@ -17,16 +26,18 @@ const statusColors = {
   ci_fix:              { bg: theme.yellowSubtle, fg: theme.yellow },
   merging:             { bg: theme.greenSubtle,  fg: theme.green },
   escalating:          { bg: theme.redSubtle,    fg: theme.red },
+  escalated:           { bg: theme.redSubtle,    fg: theme.red },
+  evaluating:          { bg: theme.greenSubtle,  fg: theme.triageGreen },
+  validating:          { bg: theme.purpleSubtle, fg: theme.purple },
+  retrying:            { bg: theme.yellowSubtle, fg: theme.yellow },
+  fixing:              { bg: theme.orangeSubtle, fg: theme.orange },
+  fix_done:            { bg: theme.greenSubtle,  fg: theme.green },
   done:                { bg: theme.greenSubtle,  fg: theme.green },
   failed:              { bg: theme.redSubtle,    fg: theme.red },
 }
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)
-  const triagers = allEntries.filter(([, w]) => w.role === 'triage')
-  const planners = allEntries.filter(([, w]) => w.role === 'planner')
-  const implementers = allEntries.filter(([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage')
-  const reviewers = allEntries.filter(([, w]) => w.role === 'reviewer')
 
   return (
     <div style={styles.sidebar}>
@@ -36,43 +47,21 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
           50% { opacity: 0.4; }
         }
       `}</style>
-      <RoleSection
-        label="Triage"
-        role="triage"
-        entries={triagers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Planners"
-        role="planner"
-        entries={planners}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Implementers"
-        role="implementer"
-        entries={implementers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Reviewers"
-        role="reviewer"
-        entries={reviewers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
+      {SIDEBAR_STAGES.map(stage => (
+        <RoleSection
+          key={stage.key}
+          stage={stage}
+          entries={allEntries.filter(ROLE_FILTERS[stage.role])}
+          selectedWorker={selectedWorker}
+          onSelect={onSelect}
+          humanInputRequests={humanInputRequests}
+        />
+      ))}
     </div>
   )
 }
 
-function RoleSection({ label, role, entries, selectedWorker, onSelect, humanInputRequests }) {
+function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputRequests }) {
   const [collapsed, setCollapsed] = useState(false)
   const sorted = [...entries].sort((a, b) => {
     // Sort numerically where possible, string keys (review-*) at end
@@ -86,17 +75,17 @@ function RoleSection({ label, role, entries, selectedWorker, onSelect, humanInpu
 
   const active = entries.filter(([, w]) => ACTIVE_STATUSES.includes(w.status)).length
   const total = entries.length
-  const stageCards = cardStylesByStage[role] || defaultCardStyles
+  const stageCards = cardStylesByStage[stage.role] || defaultCardStyles
 
   return (
     <>
       <div
-        style={sectionHeaderByRole[role] || styles.sectionHeader}
+        style={sectionHeaderStyles[stage.key]}
         onClick={() => setCollapsed(!collapsed)}
       >
         <span style={styles.chevron}>{collapsed ? '\u25b6' : '\u25bc'}</span>
-        <span style={sectionLabelByRole[role] || styles.sectionLabel}>{label}</span>
-        <span style={styles.sectionCount}>{active}/{total}</span>
+        <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
+        <span style={sectionCountStyles[stage.key]}>{active}/{total}</span>
       </div>
       {!collapsed && sorted.map(([num, w]) => {
         const isActive = selectedWorker === num || selectedWorker === Number(num)
@@ -131,36 +120,64 @@ function RoleSection({ label, role, entries, selectedWorker, onSelect, humanInpu
   )
 }
 
+// Pre-computed per-stage section header styles (avoids object spread in .map())
+const sectionHeaderBase = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '8px 12px',
+  margin: '8px 8px 4px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  borderRadius: 6,
+  transition: 'background 0.15s',
+}
+
+const sectionLabelBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+}
+
+export const sectionHeaderStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionHeaderBase,
+    background: s.subtleColor,
+    border: `1px solid ${s.color}33`,
+    borderLeft: `3px solid ${s.color}`,
+  }])
+)
+
+export const sectionLabelStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionLabelBase,
+    color: s.color,
+  }])
+)
+
+const sectionCountBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  marginLeft: 'auto',
+}
+
+export const sectionCountStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionCountBase,
+    color: s.color,
+  }])
+)
+
 const styles = {
   sidebar: {
     borderRight: `1px solid ${theme.border}`,
     overflowY: 'auto',
     background: theme.surface,
   },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '10px 16px 8px',
-    cursor: 'pointer',
-    userSelect: 'none',
-  },
   chevron: {
     fontSize: 9,
     color: theme.textMuted,
-  },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    color: theme.textMuted,
-    letterSpacing: 0.5,
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: theme.accent,
-    fontWeight: 600,
-    marginLeft: 'auto',
   },
   card: {
     padding: '10px 16px',
@@ -221,22 +238,6 @@ export const cardStylesByStage = Object.fromEntries(
   PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
     normal: { ...styles.card, borderLeft: `3px solid ${s.color}` },
     active: { ...styles.card, ...styles.active, borderLeft: `3px solid ${s.color}` },
-  }])
-)
-
-// Pre-computed section header styles per stage
-export const sectionHeaderByRole = Object.fromEntries(
-  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
-    ...styles.sectionHeader,
-    borderBottom: `2px solid ${s.color}`,
-  }])
-)
-
-// Pre-computed section label styles per stage
-export const sectionLabelByRole = Object.fromEntries(
-  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
-    ...styles.sectionLabel,
-    color: s.color,
   }])
 )
 

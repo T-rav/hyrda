@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 # --- GitHub ---
 
@@ -19,6 +19,10 @@ class GitHubIssue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str = ""
+    created_at: str = Field(
+        default="",
+        validation_alias=AliasChoices("createdAt", "created_at"),
+    )
 
     @field_validator("labels", mode="before")
     @classmethod
@@ -234,6 +238,43 @@ class ReviewResult(BaseModel):
     duration_seconds: float = 0.0
 
 
+# --- Verification Judge ---
+
+
+class CriterionVerdict(StrEnum):
+    """Verdict for a single acceptance criterion."""
+
+    PASS = "pass"
+    FAIL = "fail"
+
+
+class CriterionResult(BaseModel):
+    """Result of evaluating a single acceptance criterion against the code."""
+
+    criterion: str
+    verdict: CriterionVerdict = CriterionVerdict.FAIL
+    reasoning: str = ""
+
+
+class InstructionsQuality(StrEnum):
+    """Quality verdict for human verification instructions."""
+
+    READY = "ready"
+    NEEDS_REFINEMENT = "needs_refinement"
+
+
+class JudgeVerdict(BaseModel):
+    """Full result of the verification judge evaluation."""
+
+    issue_number: int
+    criteria_results: list[CriterionResult] = Field(default_factory=list)
+    all_criteria_pass: bool = False
+    instructions_quality: InstructionsQuality = InstructionsQuality.NEEDS_REFINEMENT
+    instructions_feedback: str = ""
+    refined: bool = False
+    summary: str = ""
+
+
 # --- Batch ---
 
 
@@ -264,6 +305,15 @@ class Phase(StrEnum):
 
 
 # --- State Persistence ---
+
+
+class QueueStats(BaseModel):
+    """Snapshot of IssueStore queue depths and throughput."""
+
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    active_count: dict[str, int] = Field(default_factory=dict)
+    total_processed: dict[str, int] = Field(default_factory=dict)
+    last_poll_timestamp: str | None = None
 
 
 class LifetimeStats(BaseModel):
@@ -303,10 +353,28 @@ class StateData(BaseModel):
     issue_attempts: dict[str, int] = Field(default_factory=dict)
     active_issue_numbers: list[int] = Field(default_factory=list)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    memory_issue_ids: list[int] = Field(default_factory=list)
+    memory_digest_hash: str = ""
+    memory_last_synced: str | None = None
     last_updated: str | None = None
 
 
 # --- Dashboard API Responses ---
+
+
+class IntentRequest(BaseModel):
+    """Request body for POST /api/intent."""
+
+    text: str = Field(..., min_length=1, max_length=5000)
+
+
+class IntentResponse(BaseModel):
+    """Response for POST /api/intent."""
+
+    issue_number: int
+    title: str
+    url: str = ""
+    status: str = "created"
 
 
 class PRListItem(BaseModel):
@@ -346,6 +414,7 @@ class ControlStatusConfig(BaseModel):
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
     improve_label: list[str] = Field(default_factory=list)
+    memory_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0

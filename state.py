@@ -304,6 +304,23 @@ class StateTracker:
         """Return a copy of the lifetime stats counters."""
         return self._data.lifetime_stats.model_dump()
 
+    # --- memory state ---
+
+    def update_memory_state(self, issue_ids: list[int], digest_hash: str) -> None:
+        """Update memory tracking fields and persist."""
+        self._data.memory_issue_ids = issue_ids
+        self._data.memory_digest_hash = digest_hash
+        self._data.memory_last_synced = datetime.now(UTC).isoformat()
+        self.save()
+
+    def get_memory_state(self) -> tuple[list[int], str, str | None]:
+        """Return ``(issue_ids, digest_hash, last_synced)``."""
+        return (
+            list(self._data.memory_issue_ids),
+            self._data.memory_digest_hash,
+            self._data.memory_last_synced,
+        )
+
     # --- threshold tracking ---
 
     def get_fired_thresholds(self) -> list[str]:

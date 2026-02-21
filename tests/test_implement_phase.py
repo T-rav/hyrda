@@ -86,11 +86,11 @@ def _make_phase(
 
     Returns ``(phase, mock_wt, mock_prs)``.
     """
+    from issue_store import IssueStore
     from state import StateTracker
 
     state = StateTracker(config.state_file)
     stop_event = asyncio.Event()
-    active_issues: set[int] = set()
 
     if agent_run is None:
 
@@ -112,8 +112,12 @@ def _make_phase(
     mock_agents = AsyncMock()
     mock_agents.run = agent_run
 
-    mock_fetcher = AsyncMock()
-    mock_fetcher.fetch_ready_issues = AsyncMock(return_value=issues)
+    # Mock IssueStore — get_implementable returns the supplied issues
+    mock_store = AsyncMock(spec=IssueStore)
+    mock_store.get_implementable = lambda limit: issues
+    mock_store.mark_active = lambda num, stage: None
+    mock_store.mark_complete = lambda num: None
+    mock_store.is_active = lambda num: False
 
     mock_wt = AsyncMock()
     mock_wt.create = AsyncMock(
@@ -138,9 +142,8 @@ def _make_phase(
         worktrees=mock_wt,
         agents=mock_agents,
         prs=mock_prs,
-        fetcher=mock_fetcher,
+        store=mock_store,
         stop_event=stop_event,
-        active_issues=active_issues,
     )
 
     return phase, mock_wt, mock_prs
@@ -378,18 +381,18 @@ class TestImplementIncludesPush:
 
     @pytest.mark.asyncio
     async def test_releases_active_issues_for_review(self, config: HydraConfig) -> None:
-        """After implementation, issue should be removed from active_issues
-        so the review loop can pick it up."""
+        """After implementation, mark_complete should be called on the store."""
         issue = make_issue(42)
+        completed: list[int] = []
 
         phase, _, _ = _make_phase(config, [issue])
+        phase._store.mark_complete = completed.append
 
         results, _ = await phase.run_batch()
 
         assert len(results) == 1
         assert results[0].success is True
-        # Issue should have been released from active_issues
-        assert 42 not in phase._active_issues
+        assert 42 in completed
 
 
 # ---------------------------------------------------------------------------
@@ -451,8 +454,9 @@ class TestWorkerExceptionIsolation:
     async def test_worker_exception_releases_active_issues(
         self, config: HydraConfig
     ) -> None:
-        """When worker crashes, issue should be removed from active_issues."""
+        """When worker crashes, mark_complete should be called on the store."""
         issue = make_issue(42)
+        completed: list[int] = []
 
         async def crashing_agent(
             issue: GitHubIssue,
@@ -464,10 +468,11 @@ class TestWorkerExceptionIsolation:
             raise RuntimeError("agent crashed")
 
         phase, _, _ = _make_phase(config, [issue], agent_run=crashing_agent)
+        phase._store.mark_complete = completed.append
 
         await phase.run_batch()
 
-        assert 42 not in phase._active_issues
+        assert 42 in completed
 
     @pytest.mark.asyncio
     async def test_worker_exception_does_not_crash_batch(

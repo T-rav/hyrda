@@ -10,10 +10,12 @@ import { Livestream } from './components/Livestream'
 import { Timeline } from './components/Timeline'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
+import { IntentInput } from './components/IntentInput'
+import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
+const TABS = ['stream', 'transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
 
 function SystemAlertBanner({ alert }) {
   if (!alert) return null
@@ -32,10 +34,10 @@ export default function App() {
     mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
     sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics, systemAlert,
+    backgroundWorkers, metrics, systemAlert, intents, submitIntent,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
-  const [activeTab, setActiveTab] = useState('transcript')
+  const [activeTab, setActiveTab] = useState('stream')
   const handleWorkerSelect = useCallback((worker) => {
     setSelectedWorker(worker)
     setActiveTab('transcript')
@@ -63,6 +65,23 @@ export default function App() {
     try {
       await fetch('/api/control/stop', { method: 'POST' })
     } catch { /* ignore */ }
+  }, [])
+
+  const handleViewTranscript = useCallback((issueNumber) => {
+    // Find the worker key for the given issue number
+    const numKey = Number(issueNumber)
+    if (workers[numKey]) {
+      setSelectedWorker(numKey)
+    } else if (workers[`plan-${issueNumber}`]) {
+      setSelectedWorker(`plan-${issueNumber}`)
+    } else if (workers[`triage-${issueNumber}`]) {
+      setSelectedWorker(`triage-${issueNumber}`)
+    }
+    setActiveTab('transcript')
+  }, [workers])
+
+  const handleRequestChanges = useCallback((issueNumber) => {
+    setActiveTab('hitl')
   }, [])
 
   return (
@@ -94,6 +113,11 @@ export default function App() {
       <div style={styles.main}>
         <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
+        <IntentInput
+          connected={connected}
+          orchestratorStatus={orchestratorStatus}
+          onSubmit={submitIntent}
+        />
 
         <div style={styles.tabs}>
           {TABS.map((tab) => (
@@ -102,16 +126,27 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'prs'
-                ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
-                : tab === 'hitl' ? (
-                <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab === 'timeline' ? 'Timeline' : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'stream' ? 'Stream'
+                : tab === 'prs'
+                  ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
+                  : tab === 'hitl' ? (
+                  <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
+                ) : tab === 'timeline' ? 'Timeline' : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
             </div>
           ))}
         </div>
 
         <div style={styles.tabContent}>
+          {activeTab === 'stream' && (
+            <StreamView
+              events={events}
+              workers={workers}
+              prs={prs}
+              intents={intents}
+              onViewTranscript={handleViewTranscript}
+              onRequestChanges={handleRequestChanges}
+            />
+          )}
           {activeTab === 'transcript' && (
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}

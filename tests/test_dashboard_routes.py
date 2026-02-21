@@ -74,6 +74,7 @@ class TestCreateRouter:
             "/",
             "/api/state",
             "/api/stats",
+            "/api/queue",
             "/api/metrics",
             "/api/events",
             "/api/prs",
@@ -90,6 +91,7 @@ class TestCreateRouter:
             "/api/hitl/{issue_number}/close",
             "/api/timeline",
             "/api/timeline/issue/{issue_num}",
+            "/api/intent",
             "/ws",
             "/{path:path}",
         }
