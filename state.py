@@ -185,6 +185,19 @@ class StateTracker:
         self._data.review_feedback.pop(str(issue_number), None)
         self.save()
 
+    # --- verification issue tracking ---
+
+    def set_verification_issue(
+        self, original_issue: int, verification_issue: int
+    ) -> None:
+        """Record the verification issue number for *original_issue*."""
+        self._data.verification_issues[str(original_issue)] = verification_issue
+        self.save()
+
+    def get_verification_issue(self, original_issue: int) -> int | None:
+        """Return the verification issue number for *original_issue*, or *None*."""
+        return self._data.verification_issues.get(str(original_issue))
+
     # --- worker result metadata ---
 
     def set_worker_result_meta(self, issue_number: int, meta: dict[str, Any]) -> None:

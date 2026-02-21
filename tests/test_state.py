@@ -1382,3 +1382,40 @@ class TestThresholdTracking:
         assert qf_proposal["threshold"] == 0.5
         assert qf_proposal["value"] == pytest.approx(0.8)
         assert "action" in qf_proposal
+
+
+# ---------------------------------------------------------------------------
+# Verification Issue Tracking
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationIssueTracking:
+    """Tests for verification issue state tracking."""
+
+    def test_set_and_get_verification_issue(self, tmp_path: Path) -> None:
+        """Round-trip: set then get returns the verification issue number."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+        assert tracker.get_verification_issue(42) == 500
+
+    def test_get_returns_none_when_not_set(self, tmp_path: Path) -> None:
+        """Returns None when no verification issue is tracked."""
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_verification_issue(42) is None
+
+    def test_persists_across_reload(self, tmp_path: Path) -> None:
+        """Verification issue mapping survives reload from disk."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+
+        tracker2 = make_tracker(tmp_path)
+        assert tracker2.get_verification_issue(42) == 500
+
+    def test_multiple_issues_tracked(self, tmp_path: Path) -> None:
+        """Multiple original issues can each have verification issues."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+        tracker.set_verification_issue(99, 501)
+
+        assert tracker.get_verification_issue(42) == 500
+        assert tracker.get_verification_issue(99) == 501
