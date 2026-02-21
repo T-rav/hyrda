@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from subprocess_util import (
+    AuthenticationError,
+    _is_auth_error,
     _is_retryable_error,
     make_clean_env,
     run_subprocess,
@@ -386,3 +388,60 @@ class TestRunSubprocessWithRetry:
             cwd=Path("/tmp/test"),
             gh_token="ghp_test",
         )
+
+
+# --- AuthenticationError ---
+
+
+class TestAuthenticationError:
+    """Tests for AuthenticationError and _is_auth_error."""
+
+    def test_auth_error_inherits_runtime_error(self) -> None:
+        err = AuthenticationError("auth failed")
+        assert isinstance(err, RuntimeError)
+
+    def test_is_auth_error_detects_401(self) -> None:
+        assert _is_auth_error("HTTP 401 Unauthorized") is True
+
+    def test_is_auth_error_detects_not_logged_in(self) -> None:
+        assert _is_auth_error("gh: not logged in to github.com") is True
+
+    def test_is_auth_error_detects_authentication_required(self) -> None:
+        assert _is_auth_error("authentication required") is True
+
+    def test_is_auth_error_detects_auth_token(self) -> None:
+        assert _is_auth_error("invalid auth token") is True
+
+    def test_is_auth_error_rejects_generic_error(self) -> None:
+        assert _is_auth_error("something else went wrong") is False
+
+    @pytest.mark.asyncio
+    async def test_run_subprocess_raises_auth_error_on_401(self) -> None:
+        proc = _make_proc(returncode=1, stderr=b"HTTP 401 Unauthorized")
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=proc),
+            pytest.raises(AuthenticationError, match="401"),
+        ):
+            await run_subprocess("gh", "pr", "list")
+
+    @pytest.mark.asyncio
+    async def test_run_subprocess_raises_auth_error_on_not_logged_in(self) -> None:
+        proc = _make_proc(returncode=1, stderr=b"not logged in to github.com")
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=proc),
+            pytest.raises(AuthenticationError, match="not logged in"),
+        ):
+            await run_subprocess("gh", "auth", "status")
+
+    @pytest.mark.asyncio
+    async def test_run_subprocess_with_retry_raises_auth_error(self) -> None:
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = AuthenticationError(
+                "Command failed (rc=1): 401 Unauthorized"
+            )
+            with pytest.raises(AuthenticationError, match="401"):
+                await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
+        # Should not retry — only one call
+        mock_run.assert_awaited_once()

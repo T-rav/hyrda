@@ -26,6 +26,7 @@ from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
+from subprocess_util import AuthenticationError
 from triage import TriageRunner
 from worktree import WorktreeManager
 
@@ -79,6 +80,8 @@ class HydraOrchestrator:
         self._running = False
         # Background worker last-known status: {worker_name: status dict}
         self._bg_worker_states: dict[str, dict[str, Any]] = {}
+        # Auth failure flag — set when a loop crashes due to AuthenticationError
+        self._auth_failed = False
 
         # Delegate phases to focused modules
         self._fetcher = IssueFetcher(config)
@@ -132,7 +135,9 @@ class HydraOrchestrator:
 
     @property
     def run_status(self) -> str:
-        """Return the current lifecycle status: idle, running, stopping, or done."""
+        """Return the current lifecycle status: idle, running, stopping, auth_failed, or done."""
+        if self._auth_failed:
+            return "auth_failed"
         if self._stop_event.is_set() and (
             self._running or self._has_active_processes()
         ):
@@ -202,6 +207,7 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
+        self._auth_failed = False
         self._active_impl_issues.clear()
         self._active_review_issues.clear()
         self._active_hitl_issues.clear()
@@ -288,6 +294,29 @@ class HydraOrchestrator:
                         break
                     exc = task.exception()
                     if exc is not None:
+                        if isinstance(exc, AuthenticationError):
+                            logger.error(
+                                "GitHub authentication failed in %r — "
+                                "pausing all loops: %s",
+                                name,
+                                exc,
+                            )
+                            self._auth_failed = True
+                            await self._bus.publish(
+                                HydraEvent(
+                                    type=EventType.SYSTEM_ALERT,
+                                    data={
+                                        "message": (
+                                            "GitHub authentication failed. "
+                                            "Check your gh token and restart."
+                                        ),
+                                        "source": name,
+                                    },
+                                )
+                            )
+                            self._stop_event.set()
+                            break
+
                         logger.error("Loop %r crashed — restarting: %s", name, exc)
                         await self._bus.publish(
                             HydraEvent(
@@ -312,6 +341,8 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 await self._triage_find_issues()
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception("Triage loop iteration failed — will retry next cycle")
                 await self._bus.publish(
@@ -327,6 +358,8 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 await self._plan_issues()
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception("Plan loop iteration failed — will retry next cycle")
                 await self._bus.publish(
@@ -342,6 +375,8 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 await self._implementer.run_batch()
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception(
                     "Implement loop iteration failed — will retry next cycle"
@@ -367,6 +402,8 @@ class HydraOrchestrator:
                     if any_merged:
                         await asyncio.sleep(5)
                         await self._prs.pull_main()
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception("Review loop iteration failed — will retry next cycle")
                 await self._bus.publish(
@@ -382,6 +419,8 @@ class HydraOrchestrator:
         while not self._stop_event.is_set():
             try:
                 await self._process_hitl_corrections()
+            except AuthenticationError:
+                raise
             except Exception:
                 logger.exception("HITL loop iteration failed — will retry next cycle")
                 await self._bus.publish(

@@ -41,7 +41,7 @@ export function Header({
   }, [hasActiveWorkers, orchestratorStatus])
 
   const isStopping = orchestratorStatus === 'stopping' || stoppingHeld
-  const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done') &&
+  const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done' || orchestratorStatus === 'auth_failed') &&
     !stoppingHeld
   const isRunning = orchestratorStatus === 'running'
   const workload = {
