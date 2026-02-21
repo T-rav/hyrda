@@ -219,7 +219,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--config-file",
-        default=None,
+        default=".hydra/config.json",
         help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
     )
     parser.add_argument(
@@ -254,11 +254,11 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     HydraConfig supplies all defaults.
     """
     # 0) Load config file values (lowest priority after defaults)
+    from pathlib import Path  # noqa: PLC0415
+
     config_file_path = getattr(args, "config_file", None)
     file_kwargs: dict[str, Any] = {}
     if config_file_path is not None:
-        from pathlib import Path  # noqa: PLC0415
-
         file_kwargs = load_config_file(Path(config_file_path))
 
     kwargs: dict[str, Any] = {}
@@ -272,9 +272,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
 
     # Store config_file path
     if config_file_path is not None:
-        from pathlib import Path as _P  # noqa: PLC0415
-
-        kwargs["config_file"] = _P(config_file_path)
+        kwargs["config_file"] = Path(config_file_path)
 
     # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
     # CLI args override config file values

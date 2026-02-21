@@ -511,5 +511,8 @@ def save_config_file(path: Path | None, values: dict[str, object]) -> None:
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
     existing.update(values)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(existing, indent=2) + "\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing, indent=2) + "\n")
+    except OSError:
+        logger.warning("Failed to write config file %s", path)
