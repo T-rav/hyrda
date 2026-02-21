@@ -337,6 +337,7 @@ class TestReviewPRs:
     ) -> None:
         """Merge conflict escalation should record review_label as HITL origin."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -364,6 +365,7 @@ class TestReviewPRs:
     ) -> None:
         """Merge conflict escalation should record cause in state."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -391,6 +393,7 @@ class TestReviewPRs:
     ) -> None:
         """When merge fails but agent resolves conflicts, review should proceed."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         phase = _make_phase(config, agents=mock_agents)
         issue = make_issue(42)
@@ -752,6 +755,88 @@ class TestReviewPRs:
         await phase.review_prs([pr], [issue])
 
         phase._prs.submit_review.assert_awaited_once_with(101, verdict, "Looks good.")
+
+    @pytest.mark.asyncio
+    async def test_review_request_changes_self_review_falls_back_gracefully(
+        self, config: HydraConfig
+    ) -> None:
+        """When submit_review raises SelfReviewError, state should still be marked."""
+        from pr_manager import SelfReviewError
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock(
+            side_effect=SelfReviewError(
+                "Can not request changes on your own pull request"
+            )
+        )
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert len(results) == 1
+        # PR should still be marked with request-changes verdict
+        assert phase._state.get_pr_status(101) == "request-changes"
+        # Issue should be marked as reviewed
+        assert phase._state.get_issue_status(42) == "reviewed"
+        # Review summary was posted as PR comment
+        phase._prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+        # No exception propagated — result is returned normally
+        assert results[0].verdict == ReviewVerdict.REQUEST_CHANGES
+
+    @pytest.mark.asyncio
+    async def test_review_self_review_error_does_not_crash_batch(
+        self, config: HydraConfig
+    ) -> None:
+        """With multiple PRs, a SelfReviewError on one should not block others."""
+        from pr_manager import SelfReviewError
+
+        phase = _make_phase(config)
+        issues = [make_issue(1), make_issue(2)]
+        prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
+
+        async def fake_review(pr, issue, wt_path, diff, worker_id=0):
+            return make_review_result(
+                pr.number, issue.number, verdict=ReviewVerdict.REQUEST_CHANGES
+            )
+
+        async def fake_submit_review(pr_number, verdict, summary):
+            if pr_number == 101:
+                raise SelfReviewError(
+                    "Can not request changes on your own pull request"
+                )
+            return True
+
+        phase._reviewers.review = fake_review  # type: ignore[method-assign]
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = fake_submit_review  # type: ignore[method-assign]
+
+        for i in (1, 2):
+            wt = config.worktree_base / f"issue-{i}"
+            wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs(prs, issues)
+
+        # Both PRs should have been processed
+        assert len(results) == 2
+        # Both PRs marked in state
+        assert phase._state.get_pr_status(101) == "request-changes"
+        assert phase._state.get_pr_status(102) == "request-changes"
+        # Both issues marked as reviewed
+        assert phase._state.get_issue_status(1) == "reviewed"
+        assert phase._state.get_issue_status(2) == "reviewed"
 
     @pytest.mark.asyncio
     async def test_review_skips_pr_comment_when_summary_empty(
@@ -1306,6 +1391,7 @@ class TestResolveMergeConflicts:
     ) -> None:
         """Should run the agent and verify quality when there are conflicts."""
         mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         phase = _make_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
@@ -1324,7 +1410,7 @@ class TestResolveMergeConflicts:
 
     @pytest.mark.asyncio
     async def test_aborts_merge_on_agent_exception(self, config: HydraConfig) -> None:
-        """On agent exception, should abort merge and return False."""
+        """On agent exception on all attempts, should abort merge and return False."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
         phase = _make_phase(config, agents=mock_agents)
@@ -1339,6 +1425,180 @@ class TestResolveMergeConflicts:
         )
 
         assert result is False
+        # abort_merge called between retries + final abort
+        assert phase._worktrees.abort_merge.await_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_retries_on_verify_failure(self, config: HydraConfig) -> None:
+        """Should retry when verify fails, and succeed on second attempt."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "quality failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        assert mock_agents._execute.await_count == 2
+        assert mock_agents._verify_result.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_exhausts_all_attempts_then_returns_false(
+        self, config: HydraConfig
+    ) -> None:
+        """When all attempts fail verification, should return False."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        # Default is 3 attempts
+        assert mock_agents._execute.await_count == 3
+        assert mock_agents._verify_result.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_feeds_error_to_retry_prompt(self, config: HydraConfig) -> None:
+        """On retry, the prompt should include the previous error."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "ruff check failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        # Second call to _execute should have received a prompt with the error
+        second_call_args = mock_agents._execute.call_args_list[1]
+        prompt_arg = second_call_args.args[1]
+        assert "ruff check failed" in prompt_arg
+        assert "Previous Attempt Failed" in prompt_arg
+
+    @pytest.mark.asyncio
+    async def test_aborts_merge_between_retries(self, config: HydraConfig) -> None:
+        """abort_merge should be called before attempt 2+."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        # abort_merge called once before attempt 2
+        phase._worktrees.abort_merge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_saves_transcript_per_attempt(self, config: HydraConfig) -> None:
+        """A transcript file should be saved for each attempt."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript content")
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "failed"), (True, "")]
+        )
+        phase = _make_phase(config, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, config.worktree_base / "issue-42", worker_id=0
+        )
+
+        log_dir = config.repo_root / ".hydra" / "logs"
+        assert (log_dir / "conflict-pr-101-attempt-1.txt").exists()
+        assert (log_dir / "conflict-pr-101-attempt-2.txt").exists()
+
+    @pytest.mark.asyncio
+    async def test_respects_config_max_attempts(self, config: HydraConfig) -> None:
+        """Should honor a custom max_merge_conflict_fix_attempts value."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_merge_conflict_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        assert mock_agents._execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_zero_attempts_returns_false(self, config: HydraConfig) -> None:
+        """With max_merge_conflict_fix_attempts=0, should return False without trying."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_merge_conflict_fix_attempts=0,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        mock_agents = AsyncMock()
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        mock_agents._execute.assert_not_awaited()
+        # Final abort_merge should still be called
         phase._worktrees.abort_merge.assert_awaited_once()
 
 
@@ -1971,3 +2231,544 @@ class TestLifecycleMetricRecording:
         assert results[0].merged is True
         stats = phase._state.get_lifetime_stats()
         assert stats["total_ci_fix_rounds"] == 1  # 1 fix attempt before success
+
+
+# ---------------------------------------------------------------------------
+# Review insight integration
+# ---------------------------------------------------------------------------
+
+
+class TestReviewInsightIntegration:
+    """Tests for review insight recording during the review flow."""
+
+    @pytest.mark.asyncio
+    async def test_review_records_insight_after_review(
+        self, config: HydraConfig
+    ) -> None:
+        """After a review, a record should be appended to the insight store."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Check that a review record was written
+        reviews_path = config.repo_root / ".hydra" / "memory" / "reviews.jsonl"
+        assert reviews_path.exists()
+        lines = reviews_path.read_text().strip().splitlines()
+        assert len(lines) == 1
+
+    @pytest.mark.asyncio
+    async def test_review_insight_files_proposal_when_threshold_met(
+        self, config: HydraConfig
+    ) -> None:
+        """When a category crosses the threshold, an improvement issue is filed."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-populate the insight store with records near threshold
+        store = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        for i in range(3):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=90 + i,
+                    issue_number=30 + i,
+                    timestamp="2026-02-20T10:00:00Z",
+                    verdict="request-changes",
+                    summary="Missing test coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        # This review will also have "test" in summary → missing_tests
+        review_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Missing test coverage for edge cases",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.create_issue = AsyncMock(return_value=999)
+        phase._prs.submit_review = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should have filed an improvement issue
+        phase._prs.create_issue.assert_awaited_once()
+        call_args = phase._prs.create_issue.call_args
+        assert "[Review Insight]" in call_args.args[0]
+        assert "hydra-improve" in call_args.args[2]
+        assert "hydra-hitl" in call_args.args[2]
+
+    @pytest.mark.asyncio
+    async def test_review_insight_does_not_refile_proposed_category(
+        self, config: HydraConfig
+    ) -> None:
+        """Once a category has been proposed, it should not be re-filed."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        # Pre-populate and mark as proposed
+        store = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        for i in range(4):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=90 + i,
+                    issue_number=30 + i,
+                    timestamp="2026-02-20T10:00:00Z",
+                    verdict="request-changes",
+                    summary="Missing test coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+        store.mark_category_proposed("missing_tests")
+
+        review_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Missing test coverage",
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.create_issue = AsyncMock(return_value=999)
+        phase._prs.submit_review = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        # Should NOT have filed an improvement issue
+        phase._prs.create_issue.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_review_insight_failure_does_not_crash_review(
+        self, config: HydraConfig
+    ) -> None:
+        """If insight recording fails, the review should still complete."""
+        from unittest.mock import patch
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        # Make the insight store raise
+        with patch.object(
+            phase._insights, "append_review", side_effect=OSError("disk full")
+        ):
+            results = await phase.review_prs([pr], [issue])
+
+        # Review should still succeed
+        assert len(results) == 1
+        assert results[0].merged is True
+
+
+# ---------------------------------------------------------------------------
+# Granular REVIEW_UPDATE status events
+# ---------------------------------------------------------------------------
+
+
+class TestGranularReviewStatusEvents:
+    """Tests that review_phase emits granular status events at each lifecycle stage."""
+
+    @pytest.mark.asyncio
+    async def test_merge_main_status_emitted(self, config: HydraConfig) -> None:
+        """A 'merge_main' event should be published before merging main."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        merge_main_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE
+            and e.data.get("status") == "merge_main"
+        ]
+        assert len(merge_main_events) == 1
+        assert merge_main_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_conflict_resolution_status_emitted(
+        self, config: HydraConfig
+    ) -> None:
+        """A 'conflict_resolution' event should be published when resolving conflicts."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        bus = EventBus()
+        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        conflict_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE
+            and e.data.get("status") == "conflict_resolution"
+        ]
+        # One event from the caller in review_prs, one from the retry loop
+        assert len(conflict_events) >= 1
+        assert conflict_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_escalating_status_emitted_on_conflict_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """An 'escalating' event should be published when conflicts can't be resolved."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        bus = EventBus()
+        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        escalating_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE
+            and e.data.get("status") == "escalating"
+        ]
+        assert len(escalating_events) == 1
+        assert escalating_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_merging_status_emitted_before_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """A 'merging' event should be published before merging the PR."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        merging_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "merging"
+        ]
+        assert len(merging_events) == 1
+        assert merging_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_escalating_status_emitted_on_merge_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """An 'escalating' event should be published when PR merge fails."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        escalating_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE
+            and e.data.get("status") == "escalating"
+        ]
+        assert len(escalating_events) == 1
+        assert escalating_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_ci_wait_status_emitted(self, config: HydraConfig) -> None:
+        """A 'ci_wait' event should be published before waiting for CI."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        bus = EventBus()
+        phase = _make_phase(cfg, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(True, "All checks passed"))
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        ci_wait_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "ci_wait"
+        ]
+        assert len(ci_wait_events) == 1
+        assert ci_wait_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_ci_fix_status_emitted(self, config: HydraConfig) -> None:
+        """A 'ci_fix' event should be published before running the CI fix agent."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=2,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        bus = EventBus()
+        phase = _make_phase(cfg, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        ci_results = [
+            (False, "Failed checks: ci"),
+            (True, "All checks passed"),
+        ]
+        ci_call_count = 0
+
+        async def fake_wait_for_ci(_pr_num, _timeout, _interval, _stop):
+            nonlocal ci_call_count
+            result = ci_results[ci_call_count]
+            ci_call_count += 1
+            return result
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = fake_wait_for_ci
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        ci_fix_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE and e.data.get("status") == "ci_fix"
+        ]
+        assert len(ci_fix_events) == 1
+        assert ci_fix_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_escalating_status_emitted_on_ci_exhaustion(
+        self, config: HydraConfig
+    ) -> None:
+        """An 'escalating' event should be published when CI fix attempts are exhausted."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        bus = EventBus()
+        phase = _make_phase(cfg, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        escalating_events = [
+            e
+            for e in history
+            if e.type == EventType.REVIEW_UPDATE
+            and e.data.get("status") == "escalating"
+        ]
+        assert len(escalating_events) == 1
+        assert escalating_events[0].data["pr"] == 101
+
+    @pytest.mark.asyncio
+    async def test_event_ordering_happy_path(self, config: HydraConfig) -> None:
+        """Events should be emitted in order: start -> merge_main -> reviewing -> merging."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        history = bus.get_history()
+        review_statuses = [
+            e.data["status"] for e in history if e.type == EventType.REVIEW_UPDATE
+        ]
+        assert review_statuses.index("start") < review_statuses.index("merge_main")
+        assert review_statuses.index("merge_main") < review_statuses.index("merging")
+        assert review_statuses[-1] == "done"

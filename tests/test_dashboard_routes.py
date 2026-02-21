@@ -83,6 +83,7 @@ class TestCreateRouter:
             "/api/control/start",
             "/api/control/stop",
             "/api/control/status",
+            "/api/system/workers",
             "/ws",
         }
 
@@ -238,11 +239,11 @@ class TestMetricsEndpoint:
         response = await get_metrics()
         data = json.loads(response.body)
 
-        assert data["quality_fix_rate"] == pytest.approx(0.0)
-        assert data["first_pass_approval_rate"] == pytest.approx(0.0)
-        assert data["hitl_escalation_rate"] == pytest.approx(0.0)
-        assert data["total_issues"] == 0
-        assert data["total_prs"] == 0
+        assert data["rates"].get("quality_fix_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("hitl_escalation_rate", 0.0) == pytest.approx(0.0)
+        assert data["lifetime"]["issues_completed"] == 0
+        assert data["lifetime"]["prs_merged"] == 0
 
     @pytest.mark.asyncio
     async def test_metrics_returns_computed_rates(
@@ -269,13 +270,17 @@ class TestMetricsEndpoint:
         response = await get_metrics()
         data = json.loads(response.body)
 
-        assert data["quality_fix_rate"] == pytest.approx(0.4)  # 4/10
-        assert data["first_pass_approval_rate"] == pytest.approx(2.0 / 3.0)  # 2/3
-        assert data["hitl_escalation_rate"] == pytest.approx(0.2)  # 2/10
-        assert data["avg_implementation_seconds"] == pytest.approx(10.0)  # 100/10
-        assert data["reviewer_fix_rate"] == pytest.approx(1.0 / 3.0)  # 1/3
-        assert data["total_issues"] == 10
-        assert data["total_prs"] == 5
+        assert data["rates"]["quality_fix_rate"] == pytest.approx(0.4)  # 4/10
+        assert data["rates"]["first_pass_approval_rate"] == pytest.approx(
+            2.0 / 3.0
+        )  # 2/3
+        assert data["rates"]["hitl_escalation_rate"] == pytest.approx(0.2)  # 2/10
+        assert data["rates"]["avg_implementation_seconds"] == pytest.approx(
+            10.0
+        )  # 100/10
+        assert data["rates"]["reviewer_fix_rate"] == pytest.approx(1.0 / 3.0)  # 1/3
+        assert data["lifetime"]["issues_completed"] == 10
+        assert data["lifetime"]["prs_merged"] == 5
 
     @pytest.mark.asyncio
     async def test_metrics_no_division_by_zero_on_reviews(
@@ -293,5 +298,5 @@ class TestMetricsEndpoint:
         response = await get_metrics()
         data = json.loads(response.body)
 
-        assert data["first_pass_approval_rate"] == pytest.approx(0.0)
-        assert data["reviewer_fix_rate"] == pytest.approx(0.0)
+        assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
+        assert data["rates"].get("reviewer_fix_rate", 0.0) == pytest.approx(0.0)

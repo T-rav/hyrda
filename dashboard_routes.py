@@ -14,7 +14,14 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import ControlStatusConfig, ControlStatusResponse
+from models import (
+    BackgroundWorkersResponse,
+    BackgroundWorkerStatus,
+    ControlStatusConfig,
+    ControlStatusResponse,
+    LifetimeStats,
+    MetricsResponse,
+)
 from pr_manager import PRManager
 from state import StateTracker
 
@@ -55,35 +62,6 @@ def create_router(
     @router.get("/api/stats")
     async def get_stats() -> JSONResponse:
         return JSONResponse(state.get_lifetime_stats())
-
-    @router.get("/api/metrics")
-    async def get_metrics() -> JSONResponse:
-        stats = state.get_lifetime_stats()
-        total_issues = stats.get("issues_completed", 0)
-        total_prs = stats.get("prs_merged", 0)
-        total_approvals = stats.get("total_review_approvals", 0)
-        total_request_changes = stats.get("total_review_request_changes", 0)
-        total_reviews = total_approvals + total_request_changes
-        total_qf = stats.get("total_quality_fix_rounds", 0)
-        total_fixes = stats.get("total_reviewer_fixes", 0)
-        total_impl_secs = stats.get("total_implementation_seconds", 0.0)
-        total_hitl = stats.get("total_hitl_escalations", 0)
-
-        metrics = {
-            "quality_fix_rate": total_qf / total_issues if total_issues else 0.0,
-            "first_pass_approval_rate": (
-                total_approvals / total_reviews if total_reviews else 0.0
-            ),
-            "hitl_escalation_rate": total_hitl / total_issues if total_issues else 0.0,
-            "avg_quality_fix_rounds": total_qf / total_issues if total_issues else 0.0,
-            "avg_implementation_seconds": (
-                total_impl_secs / total_issues if total_issues else 0.0
-            ),
-            "reviewer_fix_rate": total_fixes / total_reviews if total_reviews else 0.0,
-            "total_issues": total_issues,
-            "total_prs": total_prs,
-        }
-        return JSONResponse(metrics)
 
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:
@@ -270,6 +248,65 @@ def create_router(
             ),
         )
         return JSONResponse(response.model_dump())
+
+    # Known background workers with human-friendly labels
+    _bg_worker_defs = [
+        ("memory_sync", "Memory Sync"),
+        ("retrospective", "Retrospective"),
+        ("metrics", "Metrics"),
+        ("review_insights", "Review Insights"),
+    ]
+
+    @router.get("/api/system/workers")
+    async def get_system_workers() -> JSONResponse:
+        """Return last known status of each background worker."""
+        orch = get_orchestrator()
+        bg_states = orch.get_bg_worker_states() if orch else {}
+        workers = []
+        for name, label in _bg_worker_defs:
+            if name in bg_states:
+                entry = bg_states[name]
+                workers.append(
+                    BackgroundWorkerStatus(
+                        name=name,
+                        label=label,
+                        status=entry["status"],
+                        last_run=entry.get("last_run"),
+                        details=entry.get("details", {}),
+                    )
+                )
+            else:
+                workers.append(BackgroundWorkerStatus(name=name, label=label))
+        return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
+
+    @router.get("/api/metrics")
+    async def get_metrics() -> JSONResponse:
+        """Return lifetime stats and derived rates."""
+        lifetime_data = state.get_lifetime_stats()
+        lifetime = LifetimeStats(**lifetime_data)
+        rates: dict[str, float] = {}
+        total_reviews = (
+            lifetime.total_review_approvals + lifetime.total_review_request_changes
+        )
+        if lifetime.issues_completed > 0:
+            rates["merge_rate"] = lifetime.prs_merged / lifetime.issues_completed
+            rates["quality_fix_rate"] = (
+                lifetime.total_quality_fix_rounds / lifetime.issues_completed
+            )
+            rates["hitl_escalation_rate"] = (
+                lifetime.total_hitl_escalations / lifetime.issues_completed
+            )
+            rates["avg_implementation_seconds"] = (
+                lifetime.total_implementation_seconds / lifetime.issues_completed
+            )
+        if total_reviews > 0:
+            rates["first_pass_approval_rate"] = (
+                lifetime.total_review_approvals / total_reviews
+            )
+            rates["reviewer_fix_rate"] = lifetime.total_reviewer_fixes / total_reviews
+        return JSONResponse(
+            MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
+        )
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:

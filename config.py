@@ -24,12 +24,12 @@ class HydraConfig(BaseModel):
     )
 
     # Worker configuration
-    max_workers: int = Field(default=2, ge=1, le=10, description="Concurrent agents")
+    max_workers: int = Field(default=3, ge=1, le=10, description="Concurrent agents")
     max_planners: int = Field(
         default=1, ge=1, le=10, description="Concurrent planning agents"
     )
     max_reviewers: int = Field(
-        default=3, ge=1, le=10, description="Concurrent review agents"
+        default=5, ge=1, le=10, description="Concurrent review agents"
     )
     max_hitl_workers: int = Field(
         default=1, ge=1, le=5, description="Concurrent HITL correction agents"
@@ -66,6 +66,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_merge_conflict_fix_attempts: int = Field(
+        default=3,
+        ge=0,
+        le=5,
+        description="Max merge conflict resolution retry cycles",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -89,6 +95,10 @@ class HydraConfig(BaseModel):
     fixed_label: list[str] = Field(
         default=["hydra-fixed"],
         description="Labels applied after PR is merged (OR logic)",
+    )
+    improve_label: list[str] = Field(
+        default=["hydra-improve"],
+        description="Labels for review insight improvement proposals (OR logic)",
     )
 
     # Discovery / planner configuration
@@ -139,6 +149,20 @@ class HydraConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description="Alert if HITL escalation rate exceeds this (0.0-1.0)",
+    )
+
+    # Review insight aggregation
+    review_insight_window: int = Field(
+        default=10,
+        ge=3,
+        le=50,
+        description="Number of recent reviews to analyze for patterns",
+    )
+    review_pattern_threshold: int = Field(
+        default=3,
+        ge=2,
+        le=10,
+        description="Minimum category frequency to trigger improvement proposal",
     )
 
     # Git configuration
@@ -283,6 +307,15 @@ class HydraConfig(BaseModel):
             if env_retries is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
+
+        # merge conflict fix attempts override
+        if self.max_merge_conflict_fix_attempts == 3:  # still at default
+            env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
+            if env_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_merge_conflict_fix_attempts", int(env_attempts)
+                    )
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
