@@ -413,7 +413,7 @@ def create_router(
         ("plan", "Plan"),
         ("implement", "Implement"),
         ("review", "Review"),
-        ("memory_sync", "Memory Sync"),
+        ("memory_sync", "Memory Manager"),
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
