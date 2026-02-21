@@ -1229,11 +1229,12 @@ class TestPlanPhase:
 
         await orch._plan_issues()
 
-        mock_prs.post_comment.assert_awaited_once()
-        call_args = mock_prs.post_comment.call_args
-        assert call_args.args[0] == 42
-        assert "Step 1: Do the thing" in call_args.args[1]
-        assert "agent/issue-42" in call_args.args[1]
+        # post_comment called twice: plan comment + analysis comment
+        assert mock_prs.post_comment.await_count >= 1
+        plan_call = mock_prs.post_comment.call_args_list[0]
+        assert plan_call.args[0] == 42
+        assert "Step 1: Do the thing" in plan_call.args[1]
+        assert "agent/issue-42" in plan_call.args[1]
 
     @pytest.mark.asyncio
     async def test_plan_issues_swaps_labels_on_success(
@@ -1640,6 +1641,236 @@ class TestPlanPhase:
         mock_prs.post_comment.assert_not_awaited()
         mock_prs.remove_label.assert_not_awaited()
         mock_prs.add_labels.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_runs_analysis_before_label_swap(
+        self, config: HydraConfig
+    ) -> None:
+        """Analysis comment should be posted after the plan comment."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="## Files to Modify\n\n- `models.py`: change\n\n## Testing Strategy\n\nUse pytest.",
+            summary="Plan done",
+        )
+
+        # Create the files so analysis passes
+        repo = config.repo_root
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "models.py").write_text("# models\n")
+        (repo / "tests").mkdir(exist_ok=True)
+        (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        # Two comments: plan + analysis
+        assert mock_prs.post_comment.await_count == 2
+        analysis_comment = mock_prs.post_comment.call_args_list[1].args[1]
+        assert "Pre-Implementation Analysis" in analysis_comment
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_blocks_on_analysis_block_verdict(
+        self, config: HydraConfig
+    ) -> None:
+        """BLOCK verdict should escalate to HITL, not add hydra-ready."""
+        from unittest.mock import patch as mock_patch
+
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        blocked_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="Conflict Check",
+                    verdict=AnalysisVerdict.BLOCK,
+                    details=["Too many overlaps"],
+                ),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=blocked_result):
+            await orch._plan_issues()
+
+        # Should add HITL label, NOT ready label
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.hitl_label[0]]) in add_calls
+        assert (42, [config.ready_label[0]]) not in add_calls
+
+        # HITL origin and cause tracked
+        assert orch._state.get_hitl_origin(42) == config.planner_label[0]
+        assert orch._state.get_hitl_cause(42) == "Pre-implementation analysis blocked"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_proceeds_on_analysis_pass(
+        self, config: HydraConfig
+    ) -> None:
+        """PASS verdict should proceed with normal label swap."""
+        from unittest.mock import patch as mock_patch
+
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        pass_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="File Validation",
+                    verdict=AnalysisVerdict.PASS,
+                    details=["All good"],
+                ),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=pass_result):
+            await orch._plan_issues()
+
+        # Should add ready label
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.ready_label[0]]) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_proceeds_on_analysis_warn(
+        self, config: HydraConfig
+    ) -> None:
+        """WARN verdict should still proceed with normal label swap."""
+        from unittest.mock import patch as mock_patch
+
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        warn_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="Conflict Check",
+                    verdict=AnalysisVerdict.WARN,
+                    details=["Minor overlap"],
+                ),
+            ],
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=warn_result):
+            await orch._plan_issues()
+
+        # Should add ready label (warn doesn't block)
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.ready_label[0]]) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_posts_cross_reference_on_conflict(
+        self, config: HydraConfig
+    ) -> None:
+        """Overlapping issues should get a cross-reference comment."""
+        from unittest.mock import patch as mock_patch
+
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        warn_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="Conflict Check",
+                    verdict=AnalysisVerdict.WARN,
+                    details=["Overlap with #10"],
+                ),
+            ],
+            overlapping_issues={10: ["models.py", "config.py"]},
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        orch._prs = mock_prs
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=warn_result):
+            await orch._plan_issues()
+
+        # Should post comment to issue #10 about the conflict
+        comment_calls = mock_prs.post_comment.call_args_list
+        cross_ref_calls = [c for c in comment_calls if c.args[0] == 10]
+        assert len(cross_ref_calls) == 1
+        assert "Concurrent Plan Conflict" in cross_ref_calls[0].args[1]
+        assert "`models.py`" in cross_ref_calls[0].args[1]
 
 
 # ---------------------------------------------------------------------------
