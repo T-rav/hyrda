@@ -4358,10 +4358,10 @@ class TestHandleRejectedReview:
 
         await phase._handle_rejected_review(pr, result, 0)
 
-        phase._prs.remove_label.assert_any_await(42, "hydra-review")
-        phase._prs.remove_pr_label.assert_any_await(101, "hydra-review")
-        phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-ready"])
-        phase._prs.add_pr_labels.assert_awaited_once_with(101, ["hydra-ready"])
+        phase._prs.remove_label.assert_any_await(42, config.review_label[0])
+        phase._prs.remove_pr_label.assert_any_await(101, config.review_label[0])
+        phase._prs.add_labels.assert_awaited_once_with(42, [config.ready_label[0]])
+        phase._prs.add_pr_labels.assert_awaited_once_with(101, [config.ready_label[0]])
 
     @pytest.mark.asyncio
     async def test_under_cap_increments_review_attempts(
