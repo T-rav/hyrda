@@ -135,15 +135,22 @@ class TestParseCreditResumeTime:
 
     def test_reset_time_in_past_assumes_tomorrow(self) -> None:
         """If the parsed time is already past, assume tomorrow."""
-        # Use a timezone where we can control the outcome
         now_utc = datetime.now(UTC)
-        # Pick an hour that's definitely in the past (current hour - 2)
-        past_hour = (now_utc.hour - 2) % 12 or 12
-        ampm = "am" if (now_utc.hour - 2) % 24 < 12 else "pm"
-        text = f"reset at {past_hour}{ampm} (UTC)"
+        # Use the current UTC hour — replace() sets minute/second to 0
+        # which is guaranteed <= now, so the function must roll to tomorrow
+        cur = now_utc.hour
+        if cur == 0:
+            h12, ampm = 12, "am"
+        elif cur < 12:
+            h12, ampm = cur, "am"
+        elif cur == 12:
+            h12, ampm = 12, "pm"
+        else:
+            h12, ampm = cur - 12, "pm"
+        text = f"reset at {h12}{ampm} (UTC)"
         result = parse_credit_resume_time(text)
         assert result is not None
-        # Should be tomorrow
+        # Should be tomorrow (since HH:00:00 <= now always)
         assert result > now_utc
 
     def test_returns_none_for_invalid_hour(self) -> None:

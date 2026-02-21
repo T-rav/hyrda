@@ -13,6 +13,7 @@ from events import EventBus, EventType, HydraEvent
 from memory import load_memory_digest
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.reviewer")
 
@@ -84,6 +85,8 @@ class ReviewRunner:
             # Persist to disk
             self._save_transcript(pr.number, transcript)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.verdict = ReviewVerdict.COMMENT
             result.summary = f"Review failed: {exc}"
@@ -159,6 +162,8 @@ class ReviewRunner:
             result.summary = self._extract_summary(transcript)
             result.fixes_made = await self._has_changes(worktree_path, before_sha)
             self._save_transcript(pr.number, transcript)
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.verdict = ReviewVerdict.REQUEST_CHANGES
             result.summary = f"CI fix failed: {exc}"
