@@ -408,25 +408,100 @@ class ReviewPhase:
             )
         )
 
-    def _build_conflict_prompt(
-        self, issue: GitHubIssue, last_error: str | None = None
-    ) -> str:
-        """Build the merge-conflict resolution prompt, optionally with error context."""
-        error_section = ""
-        if last_error:
-            error_section = (
-                "\n## Previous Attempt Failed\n\n"
-                "The last conflict resolution attempt failed quality checks:\n\n"
-                f"```\n{last_error[-3000:]}\n```\n\n"
-                "Fix these issues in addition to resolving the conflicts.\n"
-            )
+    async def _resolve_merge_conflicts(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        worker_id: int,
+    ) -> bool:
+        """Use the implementation agent to resolve merge conflicts.
 
-        return (
+        Retries up to ``config.max_merge_conflict_fix_attempts`` times.
+        Each attempt starts a merge (leaving conflict markers), runs the
+        agent to resolve them, and verifies with ``make quality``.
+
+        Returns *True* if the conflicts were resolved successfully.
+        """
+        if self._agents is None:
+            logger.warning(
+                "No agent runner available for conflict resolution on PR #%d",
+                pr.number,
+            )
+            return False
+
+        max_attempts = self._config.max_merge_conflict_fix_attempts
+        last_error: str | None = None
+
+        for attempt in range(1, max_attempts + 1):
+            # Abort any prior failed merge before retrying
+            if attempt > 1:
+                await self._worktrees.abort_merge(wt_path)
+
+            # Start merge leaving conflict markers in place
+            clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
+            if clean:
+                return True
+
+            logger.info(
+                "Conflict resolution attempt %d/%d for PR #%d",
+                attempt,
+                max_attempts,
+                pr.number,
+            )
+            await self._publish_review_status(pr, worker_id, "conflict_resolution")
+
+            try:
+                prompt = self._build_conflict_prompt(issue, last_error, attempt)
+                cmd = self._agents._build_command(wt_path)
+                transcript = await self._agents._execute(
+                    cmd, prompt, wt_path, issue.number
+                )
+
+                self._save_conflict_transcript(
+                    pr.number, issue.number, attempt, transcript
+                )
+
+                success, error_msg = await self._agents._verify_result(
+                    wt_path, pr.branch
+                )
+                if success:
+                    return True
+
+                last_error = error_msg
+                logger.warning(
+                    "Conflict resolution attempt %d/%d failed for PR #%d: %s",
+                    attempt,
+                    max_attempts,
+                    pr.number,
+                    error_msg[:200] if error_msg else "",
+                )
+            except Exception as exc:
+                logger.error(
+                    "Conflict resolution agent failed for PR #%d (attempt %d/%d): %s",
+                    pr.number,
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+                last_error = str(exc)
+
+        # All attempts exhausted — abort and let caller escalate
+        await self._worktrees.abort_merge(wt_path)
+        return False
+
+    def _build_conflict_prompt(
+        self,
+        issue: GitHubIssue,
+        last_error: str | None,
+        attempt: int,
+    ) -> str:
+        """Build the conflict resolution prompt, adding error context on retries."""
+        prompt = (
             f"The branch for issue #{issue.number} ({issue.title}) has "
             f"merge conflicts with main.\n\n"
             "There is a `git merge` in progress with conflict markers "
             "in the working tree.\n\n"
-            f"{error_section}"
             "## Instructions\n\n"
             "1. Run `git diff --name-only --diff-filter=U` to list "
             "conflicted files.\n"
@@ -443,75 +518,31 @@ class ReviewPhase:
             "- Do NOT push to remote. Do NOT create pull requests.\n"
             "- Ensure `make quality` passes before finishing.\n"
         )
-
-    async def _resolve_merge_conflicts(
-        self,
-        pr: PRInfo,
-        issue: GitHubIssue,
-        wt_path: Path,
-        worker_id: int,
-    ) -> bool:
-        """Use the implementation agent to resolve merge conflicts.
-
-        Retries up to ``max_conflict_fix_attempts`` times if quality
-        verification fails after conflict resolution.  Each retry aborts
-        the failed merge, starts a fresh one, and re-runs the agent with
-        the previous error context.
-
-        Returns *True* if the conflicts were resolved successfully.
-        """
-        if self._agents is None:
-            logger.warning(
-                "No agent runner available for conflict resolution on PR #%d",
-                pr.number,
+        if last_error and attempt > 1:
+            prompt += (
+                f"\n## Previous Attempt Failed\n\n"
+                f"Attempt {attempt - 1} resolved the conflicts but "
+                f"failed verification:\n"
+                f"```\n{last_error[-3000:]}\n```\n"
+                f"Please resolve the conflicts again, paying attention "
+                f"to the above errors.\n"
             )
-            return False
+        return prompt
 
-        max_attempts = self._config.max_conflict_fix_attempts
-        last_error: str | None = None
-
-        for attempt in range(max_attempts + 1):
-            # On retries, abort the prior failed merge before starting fresh
-            if attempt > 0:
-                await self._worktrees.abort_merge(wt_path)
-
-            # Start merge leaving conflict markers in place
-            clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
-            if clean:
-                return True  # No conflicts (race / already resolved)
-
-            try:
-                prompt = self._build_conflict_prompt(issue, last_error)
-                cmd = self._agents._build_command(wt_path)
-                await self._agents._execute(cmd, prompt, wt_path, issue.number)
-
-                # Verify quality passes
-                success, error = await self._agents._verify_result(wt_path, pr.branch)
-                if success:
-                    return True
-
-                last_error = error
-                logger.warning(
-                    "Conflict resolution attempt %d/%d failed for PR #%d: %s",
-                    attempt + 1,
-                    max_attempts + 1,
-                    pr.number,
-                    (error or "")[:200],
-                )
-            except Exception as exc:
-                logger.error(
-                    "Conflict resolution agent failed for PR #%d (attempt %d/%d): %s",
-                    pr.number,
-                    attempt + 1,
-                    max_attempts + 1,
-                    exc,
-                )
-                last_error = str(exc)
-                # On final attempt, abort merge for clean state
-                if attempt >= max_attempts:
-                    await self._worktrees.abort_merge(wt_path)
-                    return False
-
-        # All attempts exhausted — abort merge and let caller escalate
-        await self._worktrees.abort_merge(wt_path)
-        return False
+    def _save_conflict_transcript(
+        self,
+        pr_number: int,
+        issue_number: int,
+        attempt: int,
+        transcript: str,
+    ) -> None:
+        """Save a conflict resolution transcript to ``.hydra/logs/``."""
+        log_dir = self._config.repo_root / ".hydra" / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = log_dir / f"conflict-pr-{pr_number}-attempt-{attempt}.txt"
+        path.write_text(transcript)
+        logger.info(
+            "Conflict resolution transcript saved to %s",
+            path,
+            extra={"issue": issue_number},
+        )

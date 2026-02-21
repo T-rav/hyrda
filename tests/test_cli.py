@@ -57,7 +57,7 @@ class TestParseArgs:
             "ci_check_timeout",
             "ci_poll_interval",
             "max_ci_fix_attempts",
-            "max_conflict_fix_attempts",
+            "max_merge_conflict_fix_attempts",
             "review_label",
             "hitl_label",
             "hitl_active_label",
@@ -271,10 +271,10 @@ class TestBuildConfig:
         assert cfg.ci_poll_interval == 10
         assert cfg.max_ci_fix_attempts == 3
 
-    def test_max_conflict_fix_attempts_passed_through(self) -> None:
-        args = parse_args(["--max-conflict-fix-attempts", "1"])
+    def test_max_merge_conflict_fix_attempts_passed_through(self) -> None:
+        args = parse_args(["--max-merge-conflict-fix-attempts", "1"])
         cfg = build_config(args)
-        assert cfg.max_conflict_fix_attempts == 1
+        assert cfg.max_merge_conflict_fix_attempts == 1
 
     def test_dashboard_port_passed_through(self) -> None:
         args = parse_args(["--dashboard-port", "8080"])
