@@ -13,7 +13,12 @@ from typing import Any
 
 from events import EventBus, EventType, HydraEvent
 from stream_parser import StreamParser
-from subprocess_util import make_clean_env
+from subprocess_util import (
+    CreditExhaustedError,
+    _is_credit_exhaustion,
+    make_clean_env,
+    parse_credit_resume_time,
+)
 
 
 async def stream_claude_process(
@@ -119,13 +124,20 @@ async def stream_claude_process(
         stderr_bytes = await stderr_task
         await proc.wait()
 
+        stderr_text = stderr_bytes.decode(errors="replace").strip()
+
         if not early_killed and proc.returncode != 0:
-            stderr_text = stderr_bytes.decode(errors="replace").strip()
             logger.warning(
                 "Process exited with code %d: %s",
                 proc.returncode,
                 stderr_text[:500],
             )
+
+        # Check for credit exhaustion in both stderr and transcript
+        combined = f"{stderr_text}\n{accumulated_text}"
+        if _is_credit_exhaustion(combined):
+            resume_at = parse_credit_resume_time(combined)
+            raise CreditExhaustedError("API credit limit reached", resume_at=resume_at)
 
         return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
     except asyncio.CancelledError:

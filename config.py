@@ -323,6 +323,14 @@ class HydraConfig(BaseModel):
         description="Number of recent retrospective entries to scan for patterns",
     )
 
+    # Credit pause
+    credit_pause_buffer_minutes: int = Field(
+        default=1,
+        ge=0,
+        le=30,
+        description="Extra minutes to wait after reported credit reset time",
+    )
+
     # Execution mode
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
