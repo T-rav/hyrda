@@ -175,7 +175,7 @@ class PlannerRunner:
     # Maximum characters for issue body and comments in the prompt.
     # Keep conservative to avoid hitting Claude CLI's internal text-splitter
     # limits (RecursiveCharacterTextSplitter fails on very long unsplittable lines).
-    _MAX_BODY_CHARS = 4_000
+    _MAX_BODY_CHARS = 10_000
     _MAX_COMMENT_CHARS = 1_000
     _MAX_LINE_CHARS = 500
 

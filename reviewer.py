@@ -233,6 +233,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
     def _build_review_prompt(self, pr: PRInfo, issue: GitHubIssue, diff: str) -> str:
         """Build the review prompt for the agent."""
         ci_enabled = self._config.max_ci_fix_attempts > 0
+        test_cmd = self._config.test_command
         ui_criteria = ""
         if "ui/" in diff:
             ui_criteria = """
@@ -252,9 +253,26 @@ Then a brief summary on the next line starting with "SUMMARY: ".
             fix_verify = "2. Do NOT run tests locally — CI will verify after push."
         else:
             verify_step = (
-                "5. Run `make lint` and `make test` to verify everything passes."
+                f"5. Run `make lint` and `{test_cmd}` to verify everything passes."
             )
-            fix_verify = "2. Run `make lint` and `make test-fast`."
+            fix_verify = f"2. Run `make lint` and `{test_cmd}`."
+
+        # Truncate diff with warning
+        max_diff = self._config.max_review_diff_chars
+        if len(diff) > max_diff:
+            logger.warning(
+                "PR #%d diff truncated from %d to %d chars",
+                pr.number,
+                len(diff),
+                max_diff,
+            )
+            diff_text = (
+                diff[:max_diff]
+                + f"\n\n[Diff truncated at {max_diff:,} chars"
+                + " — review may be incomplete for large PRs]"
+            )
+        else:
+            diff_text = diff
 
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.number}.
 
@@ -265,7 +283,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 ## PR Diff
 
 ```diff
-{diff[:15000]}
+{diff_text}
 ```
 
 ## Review Instructions
