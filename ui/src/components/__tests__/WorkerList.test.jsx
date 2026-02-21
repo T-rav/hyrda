@@ -4,15 +4,28 @@ import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, sectionHeade
 import { PIPELINE_STAGES } from '../../constants'
 
 const statusColors = {
-  queued:     { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
-  running:    { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
-  planning:   { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
-  testing:    { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
-  committing:  { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
-  quality_fix: { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
-  reviewing:   { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
-  done:        { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
-  failed:     { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
+  queued:              { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
+  running:             { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
+  planning:            { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
+  testing:             { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  committing:          { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  quality_fix:         { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  merge_fix:           { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  reviewing:           { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  start:               { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  merge_main:          { bg: 'var(--accent-subtle)', fg: 'var(--accent)' },
+  ci_wait:             { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
+  ci_fix:              { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  merging:             { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  escalating:          { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
+  escalated:           { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
+  evaluating:          { bg: 'var(--green-subtle)',  fg: 'var(--triage-green)' },
+  validating:          { bg: 'var(--purple-subtle)', fg: 'var(--purple)' },
+  retrying:            { bg: 'var(--yellow-subtle)', fg: 'var(--yellow)' },
+  fixing:              { bg: 'var(--orange-subtle)', fg: 'var(--orange)' },
+  fix_done:            { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  done:                { bg: 'var(--green-subtle)',  fg: 'var(--green)' },
+  failed:              { bg: 'var(--red-subtle)',    fg: 'var(--red)' },
 }
 
 describe('WorkerList pre-computed styles', () => {
@@ -146,6 +159,23 @@ describe('WorkerList component', () => {
     expect(screen.getByText('quality_fix')).toBeInTheDocument()
   })
 
+  it('renders merge_fix worker with correct badge text', () => {
+    const workers = {
+      1: { status: 'merge_fix', title: 'Resolve conflicts', branch: 'fix-branch', worker: 0, role: 'reviewer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('merge_fix')).toBeInTheDocument()
+  })
+
+  it('counts merge_fix workers as active in RoleSection', () => {
+    const workers = {
+      1: { status: 'merge_fix', title: 'Resolve conflicts', branch: 'fix-branch', worker: 0, role: 'reviewer' },
+      2: { status: 'queued', title: 'Queued review', branch: '', worker: 1, role: 'reviewer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+  })
+
   it('counts quality_fix workers as active in RoleSection', () => {
     const workers = {
       1: { status: 'quality_fix', title: 'Fix quality', branch: 'fix-branch', worker: 0, role: 'implementer' },
@@ -153,6 +183,28 @@ describe('WorkerList component', () => {
     }
     render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
     // Implement section should show 1/2 (1 active out of 2 total)
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+  })
+
+  it('renders workers with evaluating, validating, and fixing statuses', () => {
+    const workers = {
+      'triage-1': { status: 'evaluating', title: 'Triage Issue #1', branch: '', worker: 0, role: 'triage' },
+      'plan-2': { status: 'validating', title: 'Plan Issue #2', branch: '', worker: 1, role: 'planner' },
+      'review-3': { status: 'fixing', title: 'PR #3 (Issue #4)', branch: '', worker: 2, role: 'reviewer' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    expect(screen.getByText('evaluating')).toBeInTheDocument()
+    expect(screen.getByText('validating')).toBeInTheDocument()
+    expect(screen.getByText('fixing')).toBeInTheDocument()
+  })
+
+  it('counts evaluating and fixing workers as active in RoleSection', () => {
+    const workers = {
+      'triage-1': { status: 'evaluating', title: 'Triage Issue #1', branch: '', worker: 0, role: 'triage' },
+      'triage-2': { status: 'done', title: 'Triage Issue #2', branch: '', worker: 1, role: 'triage' },
+    }
+    render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
+    // Triage section should show 1/2 (1 active out of 2 total)
     expect(screen.getByText('1/2')).toBeInTheDocument()
   })
 

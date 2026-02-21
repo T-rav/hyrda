@@ -21,11 +21,17 @@ const statusColors = {
   reviewing:           { bg: theme.orangeSubtle, fg: theme.orange },
   start:               { bg: theme.orangeSubtle, fg: theme.orange },
   merge_main:          { bg: theme.accentSubtle, fg: theme.accent },
-  conflict_resolution: { bg: theme.yellowSubtle, fg: theme.yellow },
+  merge_fix:           { bg: theme.orangeSubtle, fg: theme.orange },
   ci_wait:             { bg: theme.purpleSubtle, fg: theme.purple },
   ci_fix:              { bg: theme.yellowSubtle, fg: theme.yellow },
   merging:             { bg: theme.greenSubtle,  fg: theme.green },
   escalating:          { bg: theme.redSubtle,    fg: theme.red },
+  escalated:           { bg: theme.redSubtle,    fg: theme.red },
+  evaluating:          { bg: theme.greenSubtle,  fg: theme.triageGreen },
+  validating:          { bg: theme.purpleSubtle, fg: theme.purple },
+  retrying:            { bg: theme.yellowSubtle, fg: theme.yellow },
+  fixing:              { bg: theme.orangeSubtle, fg: theme.orange },
+  fix_done:            { bg: theme.greenSubtle,  fg: theme.green },
   done:                { bg: theme.greenSubtle,  fg: theme.green },
   failed:              { bg: theme.redSubtle,    fg: theme.red },
 }
@@ -69,6 +75,7 @@ function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputReque
 
   const active = entries.filter(([, w]) => ACTIVE_STATUSES.includes(w.status)).length
   const total = entries.length
+  const stageCards = cardStylesByStage[stage.role] || defaultCardStyles
 
   return (
     <>
@@ -91,7 +98,7 @@ function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputReque
           <div
             key={num}
             onClick={() => onSelect(isNaN(Number(num)) ? num : Number(num))}
-            style={isActive ? cardActiveStyle : cardStyle}
+            style={isActive ? stageCards.active : stageCards.normal}
           >
             <div style={styles.cardHeader}>
               <span style={styles.issue}>
@@ -224,6 +231,15 @@ const styles = {
 // Pre-computed card style variants (avoids object spread in .map())
 export const cardStyle = styles.card
 export const cardActiveStyle = { ...styles.card, ...styles.active }
+const defaultCardStyles = { normal: cardStyle, active: cardActiveStyle }
+
+// Pre-computed card style variants per stage (avoids object spread in .map())
+export const cardStylesByStage = Object.fromEntries(
+  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
+    normal: { ...styles.card, borderLeft: `3px solid ${s.color}` },
+    active: { ...styles.card, ...styles.active, borderLeft: `3px solid ${s.color}` },
+  }])
+)
 
 // Pre-computed status badge styles for each known status
 export const statusBadgeStyles = Object.fromEntries(

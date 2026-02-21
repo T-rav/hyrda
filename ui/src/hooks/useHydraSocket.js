@@ -16,6 +16,7 @@ const initialState = {
   sessionImplemented: 0,
   sessionReviewed: 0,
   lifetimeStats: null,  // { issues_completed, prs_merged, issues_created }
+  queueStats: null,     // { queue_depth, active_count, total_processed, last_poll_timestamp }
   config: null,   // { max_workers, max_planners, max_reviewers }
   events: [],     // HydraEvent[] (most recent first)
   hitlItems: [],  // HITLItem[]
@@ -24,6 +25,7 @@ const initialState = {
   backgroundWorkers: [],  // BackgroundWorkerState[]
   metrics: null,  // MetricsData | null
   systemAlert: null,  // { message, source } | null
+  intents: [],  // IntentData[]
 }
 
 export function reducer(state, action) {
@@ -134,7 +136,7 @@ export function reducer(state, action) {
 
     case 'triage_update': {
       const triageKey = `triage-${action.data.issue}`
-      const triageStatus = action.data.status === 'done' ? 'done' : 'running'
+      const triageStatus = action.data.status
       const triageWorker = {
         status: triageStatus,
         worker: action.data.worker,
@@ -278,6 +280,12 @@ export function reducer(state, action) {
         hitlUpdate: action.data,
       }
 
+    case 'queue_update':
+      return { ...addEvent(state, action), queueStats: action.data }
+
+    case 'QUEUE_STATS':
+      return { ...state, queueStats: action.data }
+
     case 'background_worker_status': {
       const { worker, status, last_run, details } = action.data
       const existing = state.backgroundWorkers.filter(w => w.name !== worker)
@@ -312,6 +320,37 @@ export function reducer(state, action) {
       return { ...state, events: merged }
     }
 
+    case 'INTENT_SUBMITTED':
+      return {
+        ...state,
+        intents: [...state.intents, {
+          text: action.data.text,
+          issueNumber: null,
+          timestamp: new Date().toISOString(),
+          status: 'pending',
+        }],
+      }
+
+    case 'INTENT_CREATED':
+      return {
+        ...state,
+        intents: state.intents.map(i =>
+          i.status === 'pending' && i.text === action.data.text
+            ? { ...i, issueNumber: action.data.issueNumber, status: 'created' }
+            : i
+        ),
+      }
+
+    case 'INTENT_FAILED':
+      return {
+        ...state,
+        intents: state.intents.map(i =>
+          i.status === 'pending' && i.text === action.data.text
+            ? { ...i, status: 'failed' }
+            : i
+        ),
+      }
+
     default:
       return addEvent(state, action)
   }
@@ -340,6 +379,27 @@ export function useHydraSocket() {
       .then(r => r.json())
       .then(data => dispatch({ type: 'HITL_ITEMS', data }))
       .catch(() => {})
+  }, [])
+
+  const submitIntent = useCallback(async (text) => {
+    dispatch({ type: 'INTENT_SUBMITTED', data: { text } })
+    try {
+      const res = await fetch('/api/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      if (!res.ok) {
+        dispatch({ type: 'INTENT_FAILED', data: { text } })
+        return null
+      }
+      const data = await res.json()
+      dispatch({ type: 'INTENT_CREATED', data: { text, issueNumber: data.issue_number } })
+      return data
+    } catch {
+      dispatch({ type: 'INTENT_FAILED', data: { text } })
+      return null
+    }
   }, [])
 
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
@@ -386,6 +446,11 @@ export function useHydraSocket() {
       fetch('/api/system/workers')
         .then(r => r.json())
         .then(data => dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers }))
+        .catch(() => {})
+      // Fetch queue stats on connect
+      fetch('/api/queue')
+        .then(r => r.json())
+        .then(data => dispatch({ type: 'QUEUE_STATS', data }))
         .catch(() => {})
       // Fetch metrics on connect
       fetch('/api/metrics')
@@ -446,5 +511,5 @@ export function useHydraSocket() {
     }
   }, [connect])
 
-  return { ...state, submitHumanInput, refreshHitl: fetchHitlItems }
+  return { ...state, submitIntent, submitHumanInput, refreshHitl: fetchHitlItems }
 }
