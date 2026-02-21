@@ -280,6 +280,34 @@ describe('SystemPanel', () => {
       expect(workerLabels.length).toBe(PIPELINE_LOOPS.length)
     })
 
+    it('shows loop count in stage color when loop is enabled and workers are active', () => {
+      const singleImplementer = {
+        10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
+      }
+      // No bgMap entry for 'implement' → defaults to enabled (state?.enabled !== false)
+      render(<SystemPanel workers={singleImplementer} backgroundWorkers={[]} />)
+      const implementCount = screen.getByTestId('loop-count-implement')
+      expect(implementCount.style.color).toBe('var(--accent)')
+    })
+
+    it('shows loop count in muted color when enabled but no active workers', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      const implementCount = screen.getByTestId('loop-count-implement')
+      expect(implementCount.style.color).toBe('var(--text-muted)')
+    })
+
+    it('shows loop count in muted color when loop is disabled even if workers are active', () => {
+      const singleImplementer = {
+        10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
+      }
+      const disabledBgWorkers = [
+        { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
+      ]
+      render(<SystemPanel workers={singleImplementer} backgroundWorkers={disabledBgWorkers} />)
+      const implementCount = screen.getByTestId('loop-count-implement')
+      expect(implementCount.style.color).toBe('var(--text-muted)')
+    })
+
     it('calls onToggleBgWorker with pipeline loop key when toggled', () => {
       const onToggle = vi.fn()
       mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], orchestratorStatus: 'running', events: [] })
@@ -384,6 +412,7 @@ describe('SystemPanel', () => {
           { issue_number: 2, title: 'Issue 2' },
           { issue_number: 3, title: 'Issue 3' },
         ],
+        orchestratorStatus: 'idle',
         events: [],
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
@@ -394,6 +423,7 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({
         pipelinePollerLastRun: null,
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }],
+        orchestratorStatus: 'idle',
         events: [],
       })
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
@@ -434,6 +464,7 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       expect(screen.queryByText(/\d+ active/)).not.toBeInTheDocument()
       expect(screen.getByText('1 HITL issue')).toBeInTheDocument()
+      expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
     })
   })
 
