@@ -182,7 +182,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
         Last run: {relativeTime(lastRun)}
       </div>
       {hasDetails && (
-        <div style={isError ? styles.detailsError : styles.details}>
+        <div style={isError ? (onViewLog ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
             <div key={k} style={k === 'error' ? styles.errorRow : styles.detailRow}>
               <span style={isError ? styles.detailKeyError : styles.detailKey}>{k.replace(/_/g, ' ')}</span>
@@ -381,6 +381,13 @@ const styles = {
     margin: '0 -16px -16px',
     padding: '8px 16px 16px',
     borderRadius: '0 0 8px 8px',
+  },
+  detailsErrorCompact: {
+    borderTop: `1px solid ${theme.red}`,
+    paddingTop: 8,
+    background: theme.redSubtle,
+    margin: '0 -16px 0',
+    padding: '8px 16px',
   },
   detailRow: {
     display: 'flex',
