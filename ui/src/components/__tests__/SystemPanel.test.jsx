@@ -297,7 +297,7 @@ describe('SystemPanel', () => {
       mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'running' })
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={() => {}} />)
       expect(screen.getByText('Pipeline Poller')).toBeInTheDocument()
-      expect(screen.getByText('Memory Sync')).toBeInTheDocument()
+      expect(screen.getByText('Memory Manager')).toBeInTheDocument()
       expect(screen.getByText('Metrics Manager')).toBeInTheDocument()
       // Count On/Off buttons — should only be loops + non-system bg workers
       const allToggleButtons = [...screen.getAllByText('On'), ...screen.getAllByText('Off')]
