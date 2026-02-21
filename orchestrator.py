@@ -11,6 +11,7 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from issue_store import IssueStore
 from models import (
     GitHubIssue,
     Phase,
@@ -45,10 +46,12 @@ class HydraOrchestrator:
         config: HydraConfig,
         event_bus: EventBus | None = None,
         state: StateTracker | None = None,
+        issue_store: IssueStore | None = None,
     ) -> None:
         self._config = config
         self._bus = event_bus or EventBus()
         self._state = state or StateTracker(config.state_file)
+        self._store = issue_store or IssueStore(config, event_bus=self._bus)
         self._worktrees = WorktreeManager(config)
         self._agents = AgentRunner(config, self._bus)
         self._planners = PlannerRunner(config, self._bus)
@@ -60,8 +63,6 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of issues active in this run (avoids double-processing)
-        self._active_issues: set[int] = set()
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
@@ -75,6 +76,11 @@ class HydraOrchestrator:
     def state(self) -> StateTracker:
         """Expose state for dashboard integration."""
         return self._state
+
+    @property
+    def issue_store(self) -> IssueStore:
+        """Expose issue store for dashboard integration."""
+        return self._store
 
     @property
     def running(self) -> bool:
@@ -114,6 +120,7 @@ class HydraOrchestrator:
         self._planners.terminate()
         self._agents.terminate()
         self._reviewers.terminate()
+        await self._store.stop()
         await self._publish_status()
 
     # Alias for backward compatibility
@@ -123,7 +130,6 @@ class HydraOrchestrator:
         """Reset the stop event so the orchestrator can be started again."""
         self._stop_event.clear()
         self._running = False
-        self._active_issues.clear()
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
@@ -153,6 +159,7 @@ class HydraOrchestrator:
         )
 
         await self._prs.ensure_labels_exist()
+        await self._store.start()
 
         try:
             await asyncio.gather(
@@ -167,15 +174,14 @@ class HydraOrchestrator:
             logger.info("Hydra stopped")
 
     async def _triage_loop(self) -> None:
-        """Continuously poll for find-labeled issues and triage them."""
+        """Continuously consume find-labeled issues from the store and triage them."""
         while not self._stop_event.is_set():
             await self._triage_find_issues()
             await self._sleep_or_stop(self._config.poll_interval)
 
     async def _plan_loop(self) -> None:
-        """Continuously poll for planner-labeled issues."""
+        """Continuously consume planner-labeled issues from the store."""
         while not self._stop_event.is_set():
-            await self._triage_find_issues()
             await self._plan_issues()
             await self._sleep_or_stop(self._config.poll_interval)
 
@@ -204,96 +210,6 @@ class HydraOrchestrator:
 
     # --- Phase implementations ---
 
-    async def _fetch_issues_by_labels(
-        self,
-        labels: list[str],
-        limit: int,
-        exclude_labels: list[str] | None = None,
-    ) -> list[GitHubIssue]:
-        """Fetch open issues matching *any* of *labels*, deduplicated.
-
-        If *labels* is empty but *exclude_labels* is provided, fetch all
-        open issues and filter out those carrying any of the exclude labels.
-        """
-        if self._config.dry_run:
-            logger.info(
-                "[dry-run] Would fetch issues with labels=%r exclude=%r",
-                labels,
-                exclude_labels,
-            )
-            return []
-
-        seen: dict[int, dict] = {}
-
-        async def _query_label(label: str | None) -> None:
-            cmd = [
-                "gh",
-                "issue",
-                "list",
-                "--repo",
-                self._config.repo,
-                "--limit",
-                str(limit),
-                "--json",
-                "number,title,body,labels,comments,url",
-            ]
-            if label is not None:
-                cmd += ["--label", label]
-            try:
-                raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
-                for item in json.loads(raw):
-                    seen.setdefault(item["number"], item)
-            except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
-                logger.error("gh issue list failed for label=%r: %s", label, exc)
-
-        if labels:
-            await asyncio.gather(*[_query_label(lbl) for lbl in labels])
-        elif exclude_labels:
-            await _query_label(None)
-            # Remove issues that carry any of the exclude labels
-            exclude_set = set(exclude_labels)
-            to_remove = []
-            for num, raw in seen.items():
-                raw_labels = {
-                    (rl["name"] if isinstance(rl, dict) else str(rl))
-                    for rl in raw.get("labels", [])
-                }
-                if raw_labels & exclude_set:
-                    to_remove.append(num)
-            for num in to_remove:
-                del seen[num]
-        else:
-            return []
-
-        issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
-        return issues[:limit]
-
-    async def _fetch_plan_issues(self) -> list[GitHubIssue]:
-        """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
-        if not self._config.planner_label:
-            # No planner labels configured — fetch all open issues that are
-            # not already in a downstream pipeline stage.
-            exclude = list(
-                {
-                    *self._config.ready_label,
-                    *self._config.review_label,
-                    *self._config.hitl_label,
-                    *self._config.fixed_label,
-                }
-            )
-            issues = await self._fetch_issues_by_labels(
-                [],
-                self._config.batch_size,
-                exclude_labels=exclude,
-            )
-        else:
-            issues = await self._fetch_issues_by_labels(
-                self._config.planner_label,
-                self._config.batch_size,
-            )
-        logger.info("Fetched %d issues for planning", len(issues))
-        return issues[: self._config.batch_size]
-
     async def _triage_find_issues(self) -> None:
         """Evaluate ``find_label`` issues and route them.
 
@@ -305,9 +221,7 @@ class HydraOrchestrator:
         if not self._config.find_label:
             return
 
-        issues = await self._fetch_issues_by_labels(
-            self._config.find_label, self._config.batch_size
-        )
+        issues = self._store.get_triageable(self._config.batch_size)
         if not issues:
             return
 
@@ -357,8 +271,8 @@ class HydraOrchestrator:
                 )
 
     async def _plan_issues(self) -> list[PlanResult]:
-        """Run planning agents on issues labeled with the planner label."""
-        issues = await self._fetch_plan_issues()
+        """Run planning agents on issues from the plan queue."""
+        issues = self._store.get_plannable(self._config.batch_size)
         if not issues:
             return []
 
@@ -431,41 +345,25 @@ class HydraOrchestrator:
 
         return results
 
-    async def _fetch_ready_issues(self) -> list[GitHubIssue]:
-        """Fetch issues labeled ``hydra-ready`` for the implement phase.
+    def _fetch_ready_issues(self) -> list[GitHubIssue]:
+        """Get issues from the ready queue for the implement phase.
 
         Returns up to ``2 * max_workers`` issues so the worker pool
         stays saturated.
         """
         queue_size = 2 * self._config.max_workers
-
-        all_issues = await self._fetch_issues_by_labels(
-            self._config.ready_label,
-            queue_size,
-        )
-        # Only skip issues already active in this run (GitHub labels are
-        # the source of truth — if it still has hydra-ready, it needs work)
-        issues = [i for i in all_issues if i.number not in self._active_issues]
-        for skipped in all_issues:
-            if skipped.number in self._active_issues:
-                logger.info("Skipping in-progress issue #%d", skipped.number)
-
+        issues = self._store.get_implementable(queue_size)
         logger.info("Fetched %d issues to implement", len(issues))
-        return issues[:queue_size]
+        return issues
 
     async def _fetch_reviewable_prs(
         self,
     ) -> tuple[list[PRInfo], list[GitHubIssue]]:
-        """Fetch issues labeled ``hydra-review`` and resolve their open PRs.
+        """Get review issues from the store and resolve their open PRs.
 
         Returns ``(pr_infos, issues)`` so the reviewer has both.
         """
-        all_issues = await self._fetch_issues_by_labels(
-            self._config.review_label,
-            self._config.batch_size,
-        )
-        # Only skip issues already active in this run
-        issues = [i for i in all_issues if i.number not in self._active_issues]
+        issues = self._store.get_reviewable(self._config.batch_size)
         if not issues:
             return [], []
 
@@ -518,7 +416,7 @@ class HydraOrchestrator:
         to the issue list for downstream phases.  The internal queue
         holds up to ``2 * max_workers`` issues.
         """
-        issues = await self._fetch_ready_issues()
+        issues = self._fetch_ready_issues()
         if not issues:
             return [], []
 
@@ -563,7 +461,7 @@ class HydraOrchestrator:
                 )
 
             branch = self._config.branch_for_issue(issue.number)
-            self._active_issues.add(issue.number)
+            self._store.mark_active(issue.number, "implement")
             self._state.mark_issue(issue.number, "in_progress")
             self._state.set_branch(issue.number, branch)
 
@@ -612,7 +510,7 @@ class HydraOrchestrator:
             status = "success" if result.success else "failed"
             self._state.mark_issue(issue.number, status)
             # Release so the review loop can pick it up
-            self._active_issues.discard(issue.number)
+            self._store.mark_done(issue.number)
             return result
 
     async def _review_prs(
@@ -651,7 +549,7 @@ class HydraOrchestrator:
         merge logic, and worktree cleanup.
         """
         async with semaphore:
-            self._active_issues.add(pr.issue_number)
+            self._store.mark_active(pr.issue_number, "review")
             issue = issue_map.get(pr.issue_number)
             if issue is None:
                 return ReviewResult(
@@ -701,7 +599,7 @@ class HydraOrchestrator:
                     pr.issue_number, [self._config.hitl_label[0]]
                 )
                 await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
-                self._active_issues.discard(pr.issue_number)
+                self._store.mark_done(pr.issue_number)
                 return ReviewResult(
                     pr_number=pr.number,
                     issue_number=pr.issue_number,
@@ -785,7 +683,7 @@ class HydraOrchestrator:
                 )
 
             # Release so issue can be re-reviewed if needed
-            self._active_issues.discard(pr.issue_number)
+            self._store.mark_done(pr.issue_number)
             return result
 
     async def _resolve_merge_conflicts(

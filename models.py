@@ -234,6 +234,15 @@ class HITLItem(BaseModel):
     branch: str = ""
 
 
+class QueueStats(BaseModel):
+    """Live queue statistics from the IssueStore."""
+
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    active_count: dict[str, int] = Field(default_factory=dict)
+    throughput: dict[str, float] = Field(default_factory=dict)
+    total_processed: dict[str, int] = Field(default_factory=dict)
+
+
 class ControlStatusConfig(BaseModel):
     """Config subset returned by GET /api/control/status."""
 

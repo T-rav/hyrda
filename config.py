@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
 
@@ -121,6 +122,12 @@ class HydraConfig(BaseModel):
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
+    store_poll_interval: int = Field(
+        default=60,
+        ge=10,
+        le=300,
+        description="Seconds between IssueStore GitHub polls",
+    )
 
     # Execution mode
     dry_run: bool = Field(
@@ -189,6 +196,12 @@ class HydraConfig(BaseModel):
             env_email = os.environ.get("HYDRA_GIT_USER_EMAIL", "")
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
+
+        # Store poll interval env var override
+        env_store_poll = os.environ.get("HYDRA_STORE_POLL_INTERVAL")
+        if env_store_poll is not None and self.store_poll_interval == 60:
+            with contextlib.suppress(ValueError):
+                self.store_poll_interval = int(env_store_poll)
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

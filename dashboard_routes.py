@@ -53,7 +53,17 @@ def create_router(
 
     @router.get("/api/stats")
     async def get_stats() -> JSONResponse:
-        return JSONResponse(state.get_lifetime_stats())
+        lifetime = state.get_lifetime_stats()
+        orch = get_orchestrator()
+        queue_stats = orch.issue_store.get_stats().model_dump() if orch else {}
+        return JSONResponse({**lifetime, "queues": queue_stats})
+
+    @router.get("/api/queues")
+    async def get_queues() -> JSONResponse:
+        orch = get_orchestrator()
+        if orch:
+            return JSONResponse(orch.issue_store.get_stats().model_dump())
+        return JSONResponse({})
 
     @router.get("/api/events")
     async def get_events() -> JSONResponse:

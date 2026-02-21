@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -122,7 +122,7 @@ def _setup_implement_mocks(
         agent_run = _default_agent_run
 
     orch._agents.run = agent_run  # type: ignore[method-assign]
-    orch._fetch_ready_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+    orch._fetch_ready_issues = MagicMock(return_value=issues)  # type: ignore[method-assign]
 
     mock_wt = AsyncMock()
     mock_wt.create = AsyncMock(
@@ -299,189 +299,35 @@ class TestHumanInput:
 
 
 class TestFetchReadyIssues:
-    """Tests for the _fetch_ready_issues coroutine."""
+    """Tests for the sync _fetch_ready_issues method (delegates to IssueStore)."""
 
-    @pytest.mark.asyncio
-    async def test_returns_parsed_issues_from_gh_output(
-        self, config: HydraConfig
-    ) -> None:
+    def test_delegates_to_store_get_implementable(self, config: HydraConfig) -> None:
+        """_fetch_ready_issues returns whatever _store.get_implementable returns."""
         orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
+        expected = [make_issue(42), make_issue(43)]
+        orch._store.get_implementable = MagicMock(return_value=expected)
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
+        result = orch._fetch_ready_issues()
 
-        assert len(issues) == 1
-        assert issues[0].number == 42
-        assert issues[0].title == "Fix bug"
-        assert issues[0].body == "Details"
-        assert issues[0].labels == ["ready"]
+        assert result == expected
 
-    @pytest.mark.asyncio
-    async def test_parses_label_dict_and_string(self, config: HydraConfig) -> None:
-        raw = json.dumps(
-            [
-                {
-                    "number": 10,
-                    "title": "Test",
-                    "body": "",
-                    "labels": [{"name": "alpha"}, "beta"],
-                    "comments": [],
-                    "url": "",
-                }
-            ]
-        )
+    def test_uses_queue_size_of_2x_max_workers(self, config: HydraConfig) -> None:
+        """get_implementable is called with 2 * max_workers."""
         orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+        orch._store.get_implementable = MagicMock(return_value=[])
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
+        orch._fetch_ready_issues()
 
-        assert "alpha" in issues[0].labels
-        assert "beta" in issues[0].labels
+        orch._store.get_implementable.assert_called_once_with(2 * config.max_workers)
 
-    @pytest.mark.asyncio
-    async def test_parses_comment_dict_and_string(self, config: HydraConfig) -> None:
-        raw = json.dumps(
-            [
-                {
-                    "number": 11,
-                    "title": "T",
-                    "body": "",
-                    "labels": [],
-                    "comments": [{"body": "hello"}, "world"],
-                    "url": "",
-                }
-            ]
-        )
+    def test_returns_empty_when_store_returns_empty(self, config: HydraConfig) -> None:
+        """When store has no issues, return empty list."""
         orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+        orch._store.get_implementable = MagicMock(return_value=[])
 
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
+        result = orch._fetch_ready_issues()
 
-        assert "hello" in issues[0].comments
-        assert "world" in issues[0].comments
-
-    @pytest.mark.asyncio
-    async def test_skips_active_issues(self, config: HydraConfig) -> None:
-        """Issues already active in this run should be skipped."""
-        orch = HydraOrchestrator(config)
-        orch._active_issues.add(42)
-
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_does_not_skip_failed_issues_on_restart(
-        self, config: HydraConfig
-    ) -> None:
-        """Failed issues with hydra-ready label should be retried (no state filter)."""
-        orch = HydraOrchestrator(config)
-        orch._state.mark_issue(42, "failed")
-        # NOT in _active_issues → should be picked up
-
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
-
-        assert len(issues) == 1
-        assert issues[0].number == 42
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 1
-        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_on_json_decode_error(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_when_gh_not_found(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-
-        with patch(
-            "asyncio.create_subprocess_exec",
-            side_effect=FileNotFoundError("gh not found"),
-        ):
-            issues = await orch._fetch_ready_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_respects_queue_size_limit(self, config: HydraConfig) -> None:
-        """Result list is truncated to 2 * max_workers."""
-        raw = json.dumps(
-            [
-                {
-                    "number": i,
-                    "title": f"Issue {i}",
-                    "body": "",
-                    "labels": [],
-                    "comments": [],
-                    "url": "",
-                }
-                for i in range(1, 10)
-            ]
-        )
-        orch = HydraOrchestrator(config)
-        # config has max_workers=2 from conftest → queue_size = 4
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_ready_issues()
-
-        assert len(issues) <= 2 * config.max_workers
-
-    @pytest.mark.asyncio
-    async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
-        from config import HydraConfig
-
-        dry_config = HydraConfig(**{**config.model_dump(), "dry_run": True})
-        orch = HydraOrchestrator(dry_config)
-
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            issues = await orch._fetch_ready_issues()
-
-        assert issues == []
-        mock_exec.assert_not_called()
+        assert result == []
 
 
 # ---------------------------------------------------------------------------
@@ -578,7 +424,7 @@ class TestImplementBatch:
     async def test_returns_empty_when_no_issues(self, config: HydraConfig) -> None:
         """When _fetch_ready_issues returns empty, return ([], [])."""
         orch = HydraOrchestrator(config)
-        orch._fetch_ready_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._fetch_ready_issues = MagicMock(return_value=[])  # type: ignore[method-assign]
 
         results, issues = await orch._implement_batch()
 
@@ -1358,32 +1204,29 @@ class TestReviewOnePr:
 
 
 class TestFetchReviewablePrs:
-    """Tests for _fetch_reviewable_prs: skip logic, parsing, and error handling."""
+    """Tests for _fetch_reviewable_prs: store delegation, PR lookup, and error handling."""
 
     @pytest.mark.asyncio
-    async def test_skips_active_issues(self, config: HydraConfig) -> None:
-        """Issues already active in this run should be skipped."""
+    async def test_returns_empty_when_store_has_no_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When store returns no reviewable issues, return ([], [])."""
         orch = HydraOrchestrator(config)
-        orch._active_issues.add(42)
+        orch._store.get_reviewable = MagicMock(return_value=[])
 
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(RAW_ISSUE_JSON.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            prs, issues = await orch._fetch_reviewable_prs()
+        prs, issues = await orch._fetch_reviewable_prs()
 
         assert prs == []
         assert issues == []
 
     @pytest.mark.asyncio
-    async def test_picks_up_previously_reviewed_issues(
+    async def test_delegates_issue_fetch_to_store_get_reviewable(
         self, config: HydraConfig
     ) -> None:
-        """Issues reviewed in a prior run should be picked up again."""
+        """Issues come from _store.get_reviewable, not subprocess."""
         orch = HydraOrchestrator(config)
-        orch._state.mark_issue(42, "reviewed")
-        # NOT in _active_issues → should be picked up
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         pr_json = json.dumps(
             [
@@ -1396,13 +1239,12 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             return pr_json
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
             prs, issues = await orch._fetch_reviewable_prs()
 
+        orch._store.get_reviewable.assert_called_once_with(config.batch_size)
         assert len(issues) == 1
         assert issues[0].number == 42
 
@@ -1410,6 +1252,8 @@ class TestFetchReviewablePrs:
     async def test_parses_pr_json_into_pr_info(self, config: HydraConfig) -> None:
         """Successfully parses PR JSON and maps to PRInfo objects."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         pr_json = json.dumps(
             [
@@ -1422,8 +1266,6 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             return pr_json
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
@@ -1444,10 +1286,10 @@ class TestFetchReviewablePrs:
     ) -> None:
         """gh CLI failure (RuntimeError) skips that issue's PR but preserves issues."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             raise RuntimeError("Command failed (rc=1): some error")
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
@@ -1463,10 +1305,10 @@ class TestFetchReviewablePrs:
     ) -> None:
         """Invalid JSON from gh CLI skips that issue's PR but preserves issues."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             return "not-valid-json"
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
@@ -1480,6 +1322,8 @@ class TestFetchReviewablePrs:
     async def test_draft_prs_excluded_from_results(self, config: HydraConfig) -> None:
         """Draft PRs are filtered out of the returned PR list."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         pr_json = json.dumps(
             [
@@ -1492,8 +1336,6 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             return pr_json
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
@@ -1509,10 +1351,10 @@ class TestFetchReviewablePrs:
     ) -> None:
         """Empty JSON array from PR lookup means no PRInfo is created."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        orch._store.get_reviewable = MagicMock(return_value=[issue])
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
-                return RAW_ISSUE_JSON
             return "[]"
 
         with patch("orchestrator.run_subprocess", side_effect=fake_run):
@@ -1523,78 +1365,22 @@ class TestFetchReviewablePrs:
         assert issues[0].number == 42
 
     @pytest.mark.asyncio
-    async def test_file_not_found_error_when_gh_missing(
-        self, config: HydraConfig
-    ) -> None:
-        """FileNotFoundError during issue fetch returns ([], []) early."""
-        orch = HydraOrchestrator(config)
-
-        mock_create = AsyncMock(side_effect=FileNotFoundError("No such file: 'gh'"))
-
-        with patch("asyncio.create_subprocess_exec", mock_create):
-            prs, issues = await orch._fetch_reviewable_prs()
-
-        assert prs == []
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_dry_run_returns_empty_tuple(self, dry_config: HydraConfig) -> None:
-        """Dry-run mode returns ([], []) without making subprocess calls."""
-        orch = HydraOrchestrator(dry_config)
-
-        mock_create = AsyncMock()
-
-        with patch("asyncio.create_subprocess_exec", mock_create):
-            prs, issues = await orch._fetch_reviewable_prs()
-
-        assert prs == []
-        assert issues == []
-        mock_create.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_implement_releases_active_issues_for_review(
         self, config: HydraConfig
     ) -> None:
-        """After implementation, issue should be removed from _active_issues
+        """After implementation, issue should be removed from active issues
         so the review loop can pick it up."""
         orch = HydraOrchestrator(config)
+        issue = make_issue(42)
 
-        # Stub fetches to return one issue
-        orch._fetch_ready_issues = AsyncMock(  # type: ignore[method-assign]
-            return_value=[
-                GitHubIssue(
-                    number=42,
-                    title="Test",
-                    body="body",
-                    labels=["test-label"],
-                )
-            ],
-        )
-
-        # Stub worktree creation and agent run
-        orch._worktrees.create = AsyncMock(  # type: ignore[method-assign]
-            return_value=Path("/tmp/wt-42"),
-        )
-        orch._agents.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=WorkerResult(
-                issue_number=42,
-                branch="agent/issue-42",
-                worktree_path="/tmp/wt-42",
-                success=True,
-            ),
-        )
-        orch._prs.push_branch = AsyncMock(return_value=True)  # type: ignore[method-assign]
-        orch._prs.create_pr = AsyncMock(return_value=None)  # type: ignore[method-assign]
-        orch._prs.remove_label = AsyncMock()  # type: ignore[method-assign]
-        orch._prs.add_labels = AsyncMock()  # type: ignore[method-assign]
-        orch._prs.post_comment = AsyncMock()  # type: ignore[method-assign]
+        _setup_implement_mocks(orch, config, [issue])
 
         results, _ = await orch._implement_batch()
 
         assert len(results) == 1
         assert results[0].success is True
-        # Issue should have been released from _active_issues
-        assert 42 not in orch._active_issues
+        # Issue should have been released from active issues in the store
+        assert not orch._store.is_active(42)
 
 
 # ---------------------------------------------------------------------------
@@ -1965,8 +1751,8 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
-            await orch._triage_find_issues()
+        orch._store.get_triageable = MagicMock(return_value=[issue])
+        await orch._triage_find_issues()
 
         mock_triage.evaluate.assert_awaited_once_with(issue)
         mock_prs.remove_label.assert_called_once_with(1, config.find_label[0])
@@ -1998,8 +1784,8 @@ class TestTriageFindIssues:
         )
         orch._triage = mock_triage
 
-        with patch.object(orch, "_fetch_issues_by_labels", return_value=[issue]):
-            await orch._triage_find_issues()
+        orch._store.get_triageable = MagicMock(return_value=[issue])
+        await orch._triage_find_issues()
 
         mock_prs.remove_label.assert_called_once_with(2, config.find_label[0])
         mock_prs.add_labels.assert_called_once_with(2, [config.hitl_label[0]])
@@ -2049,8 +1835,8 @@ class TestTriageFindIssues:
         mock_triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
         orch._triage = mock_triage
 
-        with patch.object(orch, "_fetch_issues_by_labels", return_value=issues):
-            await orch._triage_find_issues()
+        orch._store.get_triageable = MagicMock(return_value=issues)
+        await orch._triage_find_issues()
 
         # Only the first issue should be evaluated; second skipped due to stop
         assert call_count == 1
@@ -2062,172 +1848,10 @@ class TestTriageFindIssues:
         mock_prs = AsyncMock()
         orch._prs = mock_prs
 
-        with patch.object(orch, "_fetch_issues_by_labels", return_value=[]):
-            await orch._triage_find_issues()
+        orch._store.get_triageable = MagicMock(return_value=[])
+        await orch._triage_find_issues()
 
         mock_prs.remove_label.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# _fetch_plan_issues
-# ---------------------------------------------------------------------------
-
-
-RAW_PLAN_ISSUE_JSON = json.dumps(
-    [
-        {
-            "number": 42,
-            "title": "Fix bug",
-            "body": "Details",
-            "labels": [{"name": "hydra-plan"}],
-            "comments": [],
-            "url": "https://github.com/test-org/test-repo/issues/42",
-        }
-    ]
-)
-
-
-class TestFetchPlanIssues:
-    """Tests for the _fetch_plan_issues coroutine."""
-
-    @pytest.mark.asyncio
-    async def test_returns_parsed_issues_from_gh_output(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(
-            return_value=(RAW_PLAN_ISSUE_JSON.encode(), b"")
-        )
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_plan_issues()
-
-        assert len(issues) == 1
-        assert issues[0].number == 42
-        assert issues[0].title == "Fix bug"
-        assert issues[0].labels == ["hydra-plan"]
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_when_gh_fails(self, config: HydraConfig) -> None:
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 1
-        mock_proc.communicate = AsyncMock(return_value=(b"", b"error: not found"))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_plan_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_on_json_decode_error(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(b"not-json", b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_plan_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_returns_empty_list_when_gh_not_found(
-        self, config: HydraConfig
-    ) -> None:
-        orch = HydraOrchestrator(config)
-
-        with patch(
-            "asyncio.create_subprocess_exec",
-            side_effect=FileNotFoundError("gh not found"),
-        ):
-            issues = await orch._fetch_plan_issues()
-
-        assert issues == []
-
-    @pytest.mark.asyncio
-    async def test_respects_batch_size_limit(self, config: HydraConfig) -> None:
-        """Result list is truncated to batch_size."""
-        raw = json.dumps(
-            [
-                {
-                    "number": i,
-                    "title": f"Issue {i}",
-                    "body": "",
-                    "labels": [{"name": "hydra-plan"}],
-                    "comments": [],
-                    "url": "",
-                }
-                for i in range(1, 10)
-            ]
-        )
-        orch = HydraOrchestrator(config)
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_plan_issues()
-
-        assert len(issues) <= config.batch_size
-
-    @pytest.mark.asyncio
-    async def test_dry_run_returns_empty_list(self, config: HydraConfig) -> None:
-        from config import HydraConfig as HC
-
-        dry_config = HC(**{**config.model_dump(), "dry_run": True})
-        orch = HydraOrchestrator(dry_config)
-
-        with patch("asyncio.create_subprocess_exec") as mock_exec:
-            issues = await orch._fetch_plan_issues()
-
-        assert issues == []
-        mock_exec.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_empty_planner_label_fetches_all_excluding_downstream(
-        self, config: HydraConfig
-    ) -> None:
-        """When planner_label is empty, fetch all open issues excluding downstream labels."""
-        from config import HydraConfig as HC
-
-        no_plan_config = HC(**{**config.model_dump(), "planner_label": []})
-        orch = HydraOrchestrator(no_plan_config)
-
-        raw = json.dumps(
-            [
-                {
-                    "number": 1,
-                    "title": "Unlabeled issue",
-                    "body": "Body",
-                    "labels": [],
-                    "comments": [],
-                    "url": "",
-                },
-                {
-                    "number": 2,
-                    "title": "Ready issue",
-                    "body": "Body",
-                    "labels": [{"name": "test-label"}],
-                    "comments": [],
-                    "url": "",
-                },
-            ]
-        )
-        mock_proc = AsyncMock()
-        mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
-
-        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
-            issues = await orch._fetch_plan_issues()
-
-        # Issue #2 has ready_label ("test-label") so it should be filtered out
-        assert len(issues) == 1
-        assert issues[0].number == 1
 
 
 class TestPlanPhase:
@@ -2285,7 +1909,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2316,7 +1940,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2346,7 +1970,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2366,7 +1990,7 @@ class TestPlanPhase:
     ) -> None:
         """When no issues have the planner label, return empty list."""
         orch = HydraOrchestrator(config)
-        orch._fetch_plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[])
 
         results = await orch._plan_issues()
 
@@ -2393,7 +2017,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2427,7 +2051,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2467,7 +2091,7 @@ class TestPlanPhase:
 
         orch = HydraOrchestrator(config)  # max_planners=1 from conftest
         orch._planners.plan = fake_plan  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=issues)
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2493,7 +2117,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2527,7 +2151,7 @@ class TestPlanPhase:
         )
 
         orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=[issue])
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()
@@ -2562,7 +2186,7 @@ class TestPlanPhase:
             )
 
         orch._planners.plan = fake_plan  # type: ignore[method-assign]
-        orch._fetch_plan_issues = AsyncMock(return_value=issues)  # type: ignore[method-assign]
+        orch._store.get_plannable = MagicMock(return_value=issues)
 
         mock_prs = AsyncMock()
         mock_prs.post_comment = AsyncMock()

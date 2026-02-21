@@ -29,6 +29,7 @@ class TestEventTypeEnum:
             "ISSUE_CREATED",
             "BATCH_COMPLETE",
             "ORCHESTRATOR_STATUS",
+            "QUEUE_STATS",
             "ERROR",
         }
         actual = {member.name for member in EventType}

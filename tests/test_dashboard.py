@@ -313,7 +313,11 @@ class TestStatsRoute:
 
         assert response.status_code == 200
         body = response.json()
-        assert body == {"issues_completed": 0, "prs_merged": 0, "issues_created": 0}
+        assert body["issues_completed"] == 0
+        assert body["prs_merged"] == 0
+        assert body["issues_created"] == 0
+        # Queue stats are included when no orchestrator is running
+        assert "queues" in body
 
     def test_stats_endpoint_reflects_incremented_values(
         self, config: HydraConfig, event_bus: EventBus, tmp_path: Path
