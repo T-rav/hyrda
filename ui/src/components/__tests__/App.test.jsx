@@ -230,3 +230,26 @@ describe('System and Metrics tabs', () => {
     expect(screen.getByText('Lifetime Stats')).toBeInTheDocument()
   })
 })
+
+describe('Livestream and Timeline tab labels', () => {
+  it('both Livestream and Timeline labels are present', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    expect(screen.getByText('Livestream')).toBeInTheDocument()
+    expect(screen.getByText('Timeline')).toBeInTheDocument()
+  })
+
+  it('Livestream tab renders Livestream component', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    fireEvent.click(screen.getByText('Livestream'))
+    expect(screen.getByText('Waiting for events...')).toBeInTheDocument()
+  })
+
+  it('Timeline tab renders Timeline component', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    fireEvent.click(screen.getByText('Timeline'))
+    expect(screen.getByText('No issues processed yet')).toBeInTheDocument()
+  })
+})
