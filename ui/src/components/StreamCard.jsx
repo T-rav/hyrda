@@ -30,7 +30,9 @@ function StageRow({ stageKey, stageData, isLast }) {
         ? { ...stageNodeBase, background: theme.red, borderColor: theme.red }
         : stageData.status === 'hitl'
           ? { ...stageNodeBase, background: theme.yellow, borderColor: theme.yellow }
-          : { ...stageNodeBase, background: meta.color, borderColor: meta.color }
+          : stageData.status === 'queued'
+            ? { ...stageNodeBase, background: theme.yellow, borderColor: theme.yellow }
+            : { ...stageNodeBase, background: meta.color, borderColor: meta.color }
 
   const connectorColor = stageData.status !== 'pending' ? meta.color : theme.border
   const connectorDashed = stageData.status === 'pending'

@@ -19,7 +19,7 @@ function PendingIntentCard({ intent }) {
 
 function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
-  const queuedCount = issues.length - activeCount
+  const queuedCount = issues.filter(i => i.overallStatus === 'queued').length
 
   return (
     <div style={styles.section}>
