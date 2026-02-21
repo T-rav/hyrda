@@ -432,6 +432,37 @@ class TestFetchReviewablePrs:
         assert issues == []
 
     @pytest.mark.asyncio
+    async def test_missing_number_key_in_pr_json_skips_pr(
+        self, config: HydraConfig
+    ) -> None:
+        """PR JSON missing 'number' key should be caught by KeyError handler and PR skipped."""
+        fetcher = IssueFetcher(config)
+
+        # PR data is missing the "number" key
+        pr_json_missing_number = json.dumps(
+            [
+                {
+                    "url": "https://github.com/o/r/pull/200",
+                    "isDraft": False,
+                }
+            ]
+        )
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            if "issue" in args:
+                return RAW_ISSUE_JSON
+            return pr_json_missing_number
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, issues = await fetcher.fetch_reviewable_prs(set())
+
+        # PR should be skipped due to KeyError on "number"
+        assert prs == []
+        # Issue should still be returned
+        assert len(issues) == 1
+        assert issues[0].number == 42
+
+    @pytest.mark.asyncio
     async def test_dry_run_returns_empty_tuple(self, dry_config: HydraConfig) -> None:
         """Dry-run mode returns ([], []) without making subprocess calls."""
         fetcher = IssueFetcher(dry_config)
