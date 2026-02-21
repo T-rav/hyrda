@@ -4,7 +4,7 @@ import { ACTIVE_STATUSES } from '../constants'
 
 export function Header({
   connected, orchestratorStatus,
-  onStart, onStop, phase, workers,
+  onStart, onStop, workers,
 }) {
   const workerList = Object.values(workers || {})
   const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))

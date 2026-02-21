@@ -37,10 +37,10 @@ function AppContent() {
   const {
     connected, orchestratorStatus, workers, prs,
     mergedCount, sessionTriaged, sessionPlanned,
-    sessionImplemented, sessionReviewed, config, events,
+    sessionImplemented, sessionReviewed, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
-    lifetimeStats, githubMetrics, metricsHistory, phase, toggleBgWorker,
+    lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -93,7 +93,6 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        phase={phase}
         workers={workers}
       />
 

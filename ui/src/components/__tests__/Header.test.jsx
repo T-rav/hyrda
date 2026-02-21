@@ -46,7 +46,6 @@ describe('Header component', () => {
     orchestratorStatus: 'idle',
     onStart: () => {},
     onStop: () => {},
-    phase: 'idle',
     workers: {},
   }
 
