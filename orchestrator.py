@@ -12,6 +12,7 @@ from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from analysis import PlanAnalyzer
 from config import HydraConfig
+from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraEvent
 from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
@@ -114,6 +115,9 @@ class HydraOrchestrator:
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
         self._verification_judge = VerificationJudge(config, self._bus)
+        self._epic_checker = EpicCompletionChecker(
+            config, self._prs, self._fetcher, self._bus
+        )
         self._reviewer = ReviewPhase(
             config,
             self._state,
@@ -127,6 +131,7 @@ class HydraOrchestrator:
             retrospective=self._retrospective,
             ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
+            epic_checker=self._epic_checker,
         )
 
     @property

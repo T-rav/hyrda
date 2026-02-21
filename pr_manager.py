@@ -42,6 +42,7 @@ class PRManager:
         ("memory_label", "1d76db", "Approved memory suggestion for sync"),
         ("metrics_label", "006b75", "Metrics persistence issue"),
         ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
+        ("epic_label", "5319e7", "Epic tracking issue with linked sub-issues"),
     )
 
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
@@ -448,6 +449,33 @@ class PRManager:
                 issue_number,
                 exc,
             )
+
+    async def update_issue_body(self, issue_number: int, body: str) -> None:
+        """Update the body of a GitHub issue using ``--body-file``."""
+        if self._config.dry_run:
+            return
+        fd, tmp_path = tempfile.mkstemp(suffix=".md", prefix="hydra-body-")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(body)
+            await self._run_gh(
+                "gh",
+                "issue",
+                "edit",
+                str(issue_number),
+                "--repo",
+                self._repo,
+                "--body-file",
+                tmp_path,
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not update body for issue #%d: %s",
+                issue_number,
+                exc,
+            )
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
     async def remove_pr_label(self, pr_number: int, label: str) -> None:
         """Remove *label* from a GitHub pull request."""

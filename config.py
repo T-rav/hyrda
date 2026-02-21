@@ -135,6 +135,10 @@ class HydraConfig(BaseModel):
         default=["hydra-dup"],
         description="Labels applied when issue is already satisfied (no changes needed)",
     )
+    epic_label: list[str] = Field(
+        default=["hydra-epic"],
+        description="Labels for epic tracking issues with linked sub-issues (OR logic)",
+    )
 
     # Discovery / planner configuration
     find_label: list[str] = Field(
@@ -507,6 +511,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
             "HYDRA_LABEL_METRICS": ("metrics_label", ["hydra-metrics"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
+            "HYDRA_LABEL_EPIC": ("epic_label", ["hydra-epic"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)
