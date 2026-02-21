@@ -2224,3 +2224,308 @@ class TestRetryWrapperUsage:
 
         _, kwargs = mock_retry.call_args
         assert kwargs["max_retries"] == 5
+
+
+# ---------------------------------------------------------------------------
+# _status_from_labels
+# ---------------------------------------------------------------------------
+
+
+class TestStatusFromLabels:
+    """Tests for PRManager._status_from_labels."""
+
+    def test_returns_backlog_when_no_labels(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels([]) == "backlog"
+
+    def test_returns_backlog_for_unrecognized_labels(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["bug", "enhancement"]) == "backlog"
+
+    def test_maps_hydra_find_to_triage(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-find"]) == "triage"
+
+    def test_maps_hydra_plan_to_plan(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-plan"]) == "plan"
+
+    def test_maps_hydra_ready_to_implement(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-ready"]) == "implement"
+
+    def test_maps_hydra_review_to_review(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-review"]) == "review"
+
+    def test_maps_hydra_hitl_to_hitl(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-hitl"]) == "hitl"
+
+    def test_maps_hydra_hitl_active_to_hitl(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-hitl-active"]) == "hitl"
+
+    def test_maps_hydra_fixed_to_merged(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-fixed"]) == "merged"
+
+    def test_higher_priority_label_wins(self, config, event_bus):
+        """When an issue has multiple hydra labels, the highest-priority one wins."""
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-find", "hydra-review"]) == "review"
+
+    def test_highest_priority_is_merged(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert mgr._status_from_labels(["hydra-find", "hydra-fixed"]) == "merged"
+
+    def test_ignores_non_hydra_labels_in_mix(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        assert (
+            mgr._status_from_labels(["bug", "hydra-ready", "enhancement"])
+            == "implement"
+        )
+
+
+# ---------------------------------------------------------------------------
+# list_issues_by_labels
+# ---------------------------------------------------------------------------
+
+
+class TestListIssuesByLabels:
+    """Tests for PRManager.list_issues_by_labels."""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_in_dry_run(self, dry_config, event_bus):
+        mgr = _make_manager(dry_config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.list_issues_by_labels(["hydra-ready"])
+
+        mock_create.assert_not_called()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_returns_issues_with_status_and_pr(self, config, event_bus, tmp_path):
+        import json
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        issues_json = json.dumps(
+            [
+                {
+                    "number": 42,
+                    "title": "Fix widget",
+                    "url": "https://github.com/org/repo/issues/42",
+                    "labels": [{"name": "hydra-ready"}],
+                },
+            ]
+        )
+        pr_json = json.dumps(
+            [{"number": 101, "url": "https://github.com/org/repo/pull/101"}]
+        )
+
+        call_count = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_proc = AsyncMock()
+            if call_count == 1:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(
+                    return_value=(issues_json.encode(), b"")
+                )
+            else:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(return_value=(pr_json.encode(), b""))
+            mock_proc.wait = AsyncMock(return_value=0)
+            return mock_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+            result = await mgr.list_issues_by_labels(["hydra-ready"])
+
+        assert len(result) == 1
+        assert result[0].issue == 42
+        assert result[0].title == "Fix widget"
+        assert result[0].status == "implement"
+        assert result[0].pr == 101
+        assert result[0].prUrl == "https://github.com/org/repo/pull/101"
+        assert result[0].labels == ["hydra-ready"]
+
+    @pytest.mark.asyncio
+    async def test_deduplicates_issues_across_labels(self, config, event_bus, tmp_path):
+        import json
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        issues_json = json.dumps(
+            [
+                {
+                    "number": 42,
+                    "title": "Fix widget",
+                    "url": "",
+                    "labels": [{"name": "hydra-ready"}],
+                },
+            ]
+        )
+
+        async def side_effect(*args, **kwargs):
+            mock_proc = AsyncMock()
+            mock_proc.returncode = 0
+            # Return same issue for every gh call (both issue list and pr list)
+            cmd = args
+            if "issue" in cmd:
+                mock_proc.communicate = AsyncMock(
+                    return_value=(issues_json.encode(), b"")
+                )
+            else:
+                mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+            mock_proc.wait = AsyncMock(return_value=0)
+            return mock_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+            result = await mgr.list_issues_by_labels(["label-a", "label-b"])
+
+        assert len(result) == 1
+        assert result[0].issue == 42
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_pr_when_no_pr_found(self, config, event_bus, tmp_path):
+        import json
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        issues_json = json.dumps(
+            [
+                {
+                    "number": 10,
+                    "title": "No PR issue",
+                    "url": "",
+                    "labels": [{"name": "hydra-plan"}],
+                },
+            ]
+        )
+
+        call_count = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_proc = AsyncMock()
+            if call_count == 1:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(
+                    return_value=(issues_json.encode(), b"")
+                )
+            else:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+            mock_proc.wait = AsyncMock(return_value=0)
+            return mock_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+            result = await mgr.list_issues_by_labels(["hydra-plan"])
+
+        assert len(result) == 1
+        assert result[0].pr == 0
+        assert result[0].prUrl == ""
+        assert result[0].status == "plan"
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_failure(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="error")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.list_issues_by_labels(["hydra-ready"])
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_handles_string_labels_in_response(self, config, event_bus, tmp_path):
+        """Labels returned as strings (not dicts) should be handled."""
+        import json
+
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        issues_json = json.dumps(
+            [
+                {
+                    "number": 5,
+                    "title": "String labels",
+                    "url": "",
+                    "labels": ["hydra-review", "bug"],
+                },
+            ]
+        )
+
+        call_count = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_proc = AsyncMock()
+            if call_count == 1:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(
+                    return_value=(issues_json.encode(), b"")
+                )
+            else:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+            mock_proc.wait = AsyncMock(return_value=0)
+            return mock_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
+            result = await mgr.list_issues_by_labels(["hydra-review"])
+
+        assert len(result) == 1
+        assert result[0].labels == ["hydra-review", "bug"]
+        assert result[0].status == "review"
