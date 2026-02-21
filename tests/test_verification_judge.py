@@ -240,6 +240,18 @@ class TestParseCriteria:
         # "Notes" section content should NOT be in instructions
         assert "additional notes" not in instructions
 
+    def test_ignores_checkboxes_outside_criteria_section(self):
+        judge = _make_judge()
+        text = (
+            "## Acceptance Criteria\n\n"
+            "- [ ] Real criterion\n\n"
+            "## Notes\n\n"
+            "- [ ] This is a note checkbox, not a criterion\n"
+        )
+        criteria, _ = judge._parse_criteria(text)
+        assert len(criteria) == 1
+        assert "Real criterion" in criteria[0]
+
 
 # ---------------------------------------------------------------------------
 # _build_code_validation_prompt
@@ -409,6 +421,19 @@ class TestParseInstructionsQuality:
         quality, feedback = judge._parse_instructions_quality("No verdict here.")
         assert quality == InstructionsQuality.NEEDS_REFINEMENT
         assert feedback == ""
+
+    def test_captures_multi_paragraph_feedback(self):
+        judge = _make_judge()
+        transcript = (
+            "INSTRUCTIONS_QUALITY: NEEDS_REFINEMENT\n"
+            "INSTRUCTIONS_FEEDBACK: Step 2 is vague.\n"
+            "\n"
+            "Step 4 needs more detail about expected output."
+        )
+        quality, feedback = judge._parse_instructions_quality(transcript)
+        assert quality == InstructionsQuality.NEEDS_REFINEMENT
+        assert "Step 2" in feedback
+        assert "Step 4" in feedback
 
 
 # ---------------------------------------------------------------------------

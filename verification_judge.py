@@ -63,25 +63,26 @@ class VerificationJudge:
         cmd = self._build_command()
 
         # --- Code validation ---
-        try:
-            code_prompt = self._build_code_validation_prompt(
-                criteria_list, diff, issue_number
-            )
-            transcript = await self._execute(cmd, code_prompt, issue_number)
-            verdict.criteria_results = self._parse_criteria_results(transcript)
-            verdict.all_criteria_pass = (
-                all(
-                    cr.verdict == CriterionVerdict.PASS
-                    for cr in verdict.criteria_results
+        if criteria_list:
+            try:
+                code_prompt = self._build_code_validation_prompt(
+                    criteria_list, diff, issue_number
                 )
-                and len(verdict.criteria_results) > 0
-            )
-        except Exception:
-            logger.warning(
-                "Code validation failed for issue #%d",
-                issue_number,
-                exc_info=True,
-            )
+                transcript = await self._execute(cmd, code_prompt, issue_number)
+                verdict.criteria_results = self._parse_criteria_results(transcript)
+                verdict.all_criteria_pass = (
+                    all(
+                        cr.verdict == CriterionVerdict.PASS
+                        for cr in verdict.criteria_results
+                    )
+                    and len(verdict.criteria_results) > 0
+                )
+            except Exception:
+                logger.warning(
+                    "Code validation failed for issue #%d",
+                    issue_number,
+                    exc_info=True,
+                )
 
         # --- Instructions validation ---
         if instructions_text.strip():
@@ -175,12 +176,19 @@ class VerificationJudge:
         criteria: list[str] = []
         instructions = ""
 
-        # Extract criteria: lines starting with "- [ ]" or "- [x]"
-        for line in criteria_text.splitlines():
-            stripped = line.strip()
-            match = re.match(r"^-\s*\[[ x]\]\s*(.*)", stripped, re.IGNORECASE)
-            if match:
-                criteria.append(match.group(1).strip())
+        # Extract criteria: checkbox items only within the Acceptance Criteria section
+        criteria_match = re.search(
+            r"(?:^|\n)##\s*Acceptance\s+Criteria\s*\n(.*?)(?=\n##|\Z)",
+            criteria_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if criteria_match:
+            section_text = criteria_match.group(1)
+            for line in section_text.splitlines():
+                stripped = line.strip()
+                match = re.match(r"^-\s*\[[ x]\]\s*(.*)", stripped, re.IGNORECASE)
+                if match:
+                    criteria.append(match.group(1).strip())
 
         # Extract instructions section
         instr_match = re.search(
@@ -364,7 +372,7 @@ REFINED_INSTRUCTIONS_END
             quality = InstructionsQuality.NEEDS_REFINEMENT
 
         feedback_match = re.search(
-            r"INSTRUCTIONS_FEEDBACK:\s*(.*?)(?:\n\n|\Z)",
+            r"INSTRUCTIONS_FEEDBACK:\s*(.*)",
             transcript,
             re.DOTALL,
         )
