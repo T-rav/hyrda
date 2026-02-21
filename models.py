@@ -201,6 +201,16 @@ class HITLResult(BaseModel):
 # --- Reviews ---
 
 
+class VerificationCriteria(BaseModel):
+    """Structured acceptance criteria and verification instructions for a merged PR."""
+
+    issue_number: int
+    pr_number: int
+    acceptance_criteria: str
+    verification_instructions: str
+    timestamp: str
+
+
 class ReviewerStatus(StrEnum):
     """Lifecycle status of a reviewer agent."""
 

@@ -79,6 +79,7 @@ def _make_phase(
     *,
     agents: AsyncMock | None = None,
     event_bus: EventBus | None = None,
+    ac_generator: object | None = None,
 ) -> ReviewPhase:
     """Build a ReviewPhase with standard dependencies."""
     state = StateTracker(config.state_file)
@@ -101,6 +102,7 @@ def _make_phase(
         active_issues=active_issues,
         agents=agents,
         event_bus=event_bus or EventBus(),
+        ac_generator=ac_generator,
     )
 
     return phase
@@ -3460,3 +3462,93 @@ class TestCountReviewFindings:
     def test_returns_zero_for_empty_string(self, config: HydraConfig) -> None:
         phase = _make_phase(config)
         assert phase._count_review_findings("") == 0
+
+
+# ---------------------------------------------------------------------------
+# Acceptance Criteria Integration
+# ---------------------------------------------------------------------------
+
+
+class TestAcceptanceCriteriaIntegration:
+    """Tests for AC generator integration in the post-merge flow."""
+
+    @pytest.mark.asyncio
+    async def test_merge_calls_ac_generator(self, config: HydraConfig) -> None:
+        """AC generator is called after successful merge."""
+        mock_ac = AsyncMock()
+        mock_ac.generate = AsyncMock()
+
+        phase = _make_phase(config, ac_generator=mock_ac)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(return_value=make_review_result(101, 42))
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        mock_ac.generate.assert_awaited_once_with(
+            issue_number=42,
+            pr_number=101,
+            issue=issue,
+            diff="diff text",
+        )
+
+    @pytest.mark.asyncio
+    async def test_merge_continues_when_ac_generator_fails(
+        self, config: HydraConfig
+    ) -> None:
+        """AC generation failure does not block the merge/label-swap flow."""
+        mock_ac = AsyncMock()
+        mock_ac.generate = AsyncMock(side_effect=RuntimeError("AC failed"))
+
+        phase = _make_phase(config, ac_generator=mock_ac)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(return_value=make_review_result(101, 42))
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        # Merge should still succeed despite AC failure
+        assert len(results) == 1
+        assert results[0].merged is True
+
+    @pytest.mark.asyncio
+    async def test_merge_skips_ac_when_generator_is_none(
+        self, config: HydraConfig
+    ) -> None:
+        """No error when ac_generator is None."""
+        phase = _make_phase(config)  # No ac_generator
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(return_value=make_review_result(101, 42))
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert len(results) == 1
+        assert results[0].merged is True

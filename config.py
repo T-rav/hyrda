@@ -262,6 +262,15 @@ class HydraConfig(BaseModel):
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
 
+    # Acceptance criteria generation
+    ac_model: str = Field(
+        default="sonnet",
+        description="Model for acceptance criteria generation (post-merge)",
+    )
+    ac_budget_usd: float = Field(
+        default=0, ge=0, description="USD cap for AC generation agent (0 = unlimited)"
+    )
+
     # Retrospective
     retrospective_window: int = Field(
         default=10,
