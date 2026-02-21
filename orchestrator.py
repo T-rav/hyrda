@@ -636,6 +636,7 @@ class HydraOrchestrator:
         labels = list(self._config.improve_label) + list(self._config.hitl_label)
         issue_num = await self._prs.create_issue(title, body, labels)
         if issue_num:
+            self._state.set_hitl_origin(issue_num, self._config.improve_label[0])
             self._state.set_hitl_cause(issue_num, "Memory suggestion")
             logger.info(
                 "Filed memory suggestion as issue #%d: %s",
@@ -723,8 +724,25 @@ class HydraOrchestrator:
                 if result.success:
                     await self._prs.push_branch(wt_path, branch)
 
-                    if origin:
+                    if origin and origin in self._config.improve_label:
+                        # Improve issues go to triage for implementation
+                        for lbl in self._config.improve_label:
+                            await self._prs.remove_label(issue_number, lbl)
+                        if self._config.find_label:
+                            await self._prs.add_labels(
+                                issue_number,
+                                [self._config.find_label[0]],
+                            )
+                        target_stage = (
+                            self._config.find_label[0]
+                            if self._config.find_label
+                            else "pipeline"
+                        )
+                    elif origin:
                         await self._prs.add_labels(issue_number, [origin])
+                        target_stage = origin
+                    else:
+                        target_stage = "pipeline"
 
                     self._state.remove_hitl_origin(issue_number)
                     self._state.remove_hitl_cause(issue_number)
@@ -733,7 +751,7 @@ class HydraOrchestrator:
                     await self._prs.post_comment(
                         issue_number,
                         f"**HITL correction applied successfully.**\n\n"
-                        f"Returning issue to `{origin or 'pipeline'}` stage."
+                        f"Returning issue to `{target_stage}` stage."
                         f"\n\n---\n*Applied by Hydra HITL*",
                     )
                     await self._bus.publish(
