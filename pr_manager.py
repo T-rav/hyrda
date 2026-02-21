@@ -115,22 +115,6 @@ class PRManager:
             logger.error("Push failed for %s: %s", branch, exc)
             return False
 
-    async def remote_branch_exists(self, branch: str) -> bool:
-        """Check whether *branch* exists on the remote."""
-        if self._config.dry_run:
-            return False
-        try:
-            output = await self._run_gh(
-                "git",
-                "ls-remote",
-                "--heads",
-                "origin",
-                branch,
-            )
-            return bool(output.strip())
-        except RuntimeError:
-            return False
-
     async def create_pr(
         self,
         issue: GitHubIssue,
