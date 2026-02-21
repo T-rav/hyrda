@@ -12,6 +12,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from issue_fetcher import IssueFetcher
 from models import GitHubIssue, QueueStats
+from subprocess_util import AuthenticationError
 
 logger = logging.getLogger("hydra.issue_store")
 
@@ -123,6 +124,8 @@ class IssueStore:
         """Fetch all Hydra-labeled issues and re-route into queues."""
         try:
             issues = await self._fetcher.fetch_all_hydra_issues()
+        except AuthenticationError:
+            raise
         except Exception:
             logger.exception("IssueStore refresh failed — will retry next cycle")
             return
