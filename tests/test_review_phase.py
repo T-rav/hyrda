@@ -4266,6 +4266,32 @@ class TestReviewOneInner:
         assert result.merged is True
         assert phase._state.get_pr_status(101) == "approve"
 
+    @pytest.mark.asyncio
+    async def test_returns_merge_conflict_summary_when_merge_fails(
+        self, config: HydraConfig
+    ) -> None:
+        """When merge fails and escalates to HITL, should return early with conflict summary."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        result = await phase._review_one_inner(0, pr, {42: issue})
+
+        assert "Merge conflicts" in result.summary
+        assert result.merged is False
+
 
 # ---------------------------------------------------------------------------
 # _handle_rejected_review unit tests

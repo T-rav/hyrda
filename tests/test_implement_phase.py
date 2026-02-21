@@ -1504,6 +1504,28 @@ class TestHandleImplementationResult:
 
         assert phase._state.get_issue_status(42) == "failed"
 
+    @pytest.mark.asyncio
+    async def test_empty_worktree_path_skips_push_and_pr(
+        self, config: HydraConfig
+    ) -> None:
+        """When result.worktree_path is empty, push and PR creation should be skipped."""
+        issue = make_issue(42)
+        result = WorkerResult(
+            issue_number=42,
+            branch="agent/issue-42",
+            success=True,
+            worktree_path="",
+        )
+
+        phase, _, mock_prs = _make_phase(config, [issue])
+
+        returned = await phase._handle_implementation_result(issue, result, False)
+
+        mock_prs.push_branch.assert_not_awaited()
+        mock_prs.create_pr.assert_not_awaited()
+        assert phase._state.get_issue_status(42) == "success"
+        assert returned is result
+
 
 class TestWorkerInner:
     """Unit tests for the _worker_inner coordinator method."""
