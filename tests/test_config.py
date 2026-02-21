@@ -376,7 +376,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.review_model == "opus"
+        assert cfg.review_model == "sonnet"
 
     def test_review_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
