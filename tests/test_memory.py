@@ -242,14 +242,20 @@ class TestMemorySyncWorkerBuildDigest:
 class TestMemorySyncWorkerCompactDigest:
     """Tests for digest compaction."""
 
-    def test_under_limit_no_truncation(self) -> None:
+    @pytest.mark.asyncio
+    async def test_under_limit_no_truncation(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
         learnings = [
             (1, "Short learning", "2024-01-01"),
         ]
-        result = MemorySyncWorker._compact_digest(learnings, max_chars=10000)
+        result = await worker._compact_digest(learnings, max_chars=10000)
         assert "truncated" not in result
 
-    def test_dedup_removes_near_duplicates(self) -> None:
+    @pytest.mark.asyncio
+    async def test_dedup_removes_near_duplicates(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
         learnings = [
             (
                 1,
@@ -259,11 +265,15 @@ class TestMemorySyncWorkerCompactDigest:
             (2, "Always run make lint before make test to catch issues", "2024-01-02"),
             (3, "Use atomic writes for state persistence", "2024-01-03"),
         ]
-        result = MemorySyncWorker._compact_digest(learnings, max_chars=10000)
+        result = await worker._compact_digest(learnings, max_chars=10000)
         # Should have deduped the similar lint learnings
         assert "compacted" in result
 
-    def test_over_limit_truncates(self) -> None:
+    @pytest.mark.asyncio
+    async def test_over_limit_calls_model(self, tmp_path: Path) -> None:
+        """When dedup isn't enough, the worker calls a cheap model for summarisation."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
         learnings = [
             (
                 i,
@@ -272,8 +282,34 @@ class TestMemorySyncWorkerCompactDigest:
             )
             for i in range(1, 20)
         ]
-        result = MemorySyncWorker._compact_digest(learnings, max_chars=500)
+        # Mock the model call to return a short summary
+        worker._summarise_with_model = AsyncMock(  # type: ignore[method-assign]
+            return_value="## Accumulated Learnings\n*Summarised*\n\n- Condensed.\n"
+        )
+        result = await worker._compact_digest(learnings, max_chars=500)
+        worker._summarise_with_model.assert_called_once()
+        assert "Condensed" in result
+
+    @pytest.mark.asyncio
+    async def test_over_limit_model_failure_falls_back_to_truncation(
+        self, tmp_path: Path
+    ) -> None:
+        """If the model call fails, fall back to truncation."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+        learnings = [
+            (
+                i,
+                f"A very long learning about topic number {i} " * 10,
+                f"2024-01-{i:02d}",
+            )
+            for i in range(1, 20)
+        ]
+        # Mock the model call to return None (failure)
+        worker._summarise_with_model = AsyncMock(return_value=None)  # type: ignore[method-assign]
+        result = await worker._compact_digest(learnings, max_chars=500)
         assert len(result) <= 520  # 500 + truncation marker
+        assert "truncated" in result
 
 
 class TestMemorySyncWorkerSync:
@@ -558,6 +594,137 @@ class TestMemoryModels:
 
         cfg = ControlStatusConfig(memory_label=["hydra-memory"])
         assert cfg.memory_label == ["hydra-memory"]
+
+    def test_github_issue_created_at_from_camel_case(self) -> None:
+        from models import GitHubIssue
+
+        issue = GitHubIssue.model_validate(
+            {
+                "number": 42,
+                "title": "Test",
+                "createdAt": "2024-06-15T12:00:00Z",
+            }
+        )
+        assert issue.created_at == "2024-06-15T12:00:00Z"
+
+    def test_github_issue_created_at_default_empty(self) -> None:
+        from models import GitHubIssue
+
+        issue = GitHubIssue(number=1, title="Test")
+        assert issue.created_at == ""
+
+    def test_github_issue_created_at_snake_case(self) -> None:
+        from models import GitHubIssue
+
+        issue = GitHubIssue(number=1, title="Test", created_at="2024-01-01")
+        assert issue.created_at == "2024-01-01"
+
+
+# --- Config: memory_compaction_model tests ---
+
+
+class TestMemoryCompactionModelConfig:
+    """Tests for the memory_compaction_model config field."""
+
+    def test_default_is_haiku(self) -> None:
+        from config import HydraConfig
+
+        config = HydraConfig(repo="test/repo")
+        assert config.memory_compaction_model == "haiku"
+
+    def test_custom_model(self) -> None:
+        config = ConfigFactory.create(memory_compaction_model="sonnet")
+        assert config.memory_compaction_model == "sonnet"
+
+
+# --- Model-based summarisation tests ---
+
+
+class TestSummariseWithModel:
+    """Tests for _summarise_with_model."""
+
+    @pytest.mark.asyncio
+    async def test_success_returns_wrapped_summary(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(
+            repo_root=tmp_path, memory_compaction_model="haiku"
+        )
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(
+            return_value=(b"- Condensed learning one\n- Condensed learning two\n", b"")
+        )
+
+        import asyncio as _asyncio
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                _asyncio, "create_subprocess_exec", AsyncMock(return_value=mock_proc)
+            )
+            result = await worker._summarise_with_model("long content", 4000)
+
+        assert result is not None
+        assert "Accumulated Learnings" in result
+        assert "Summarised" in result
+        assert "Condensed learning one" in result
+
+    @pytest.mark.asyncio
+    async def test_nonzero_returncode_returns_none(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        mock_proc.communicate = AsyncMock(return_value=(b"", b"error"))
+
+        import asyncio as _asyncio
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                _asyncio, "create_subprocess_exec", AsyncMock(return_value=mock_proc)
+            )
+            result = await worker._summarise_with_model("content", 4000)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_none(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        import asyncio as _asyncio
+
+        async def _raise_timeout(*a, **kw):  # noqa: ANN002, ANN003
+            raise TimeoutError
+
+        mock_proc = AsyncMock()
+        mock_proc.communicate = _raise_timeout
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                _asyncio, "create_subprocess_exec", AsyncMock(return_value=mock_proc)
+            )
+            result = await worker._summarise_with_model("content", 4000)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_file_not_found_returns_none(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        import asyncio as _asyncio
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                _asyncio,
+                "create_subprocess_exec",
+                AsyncMock(side_effect=FileNotFoundError("claude not found")),
+            )
+            result = await worker._summarise_with_model("content", 4000)
+
+        assert result is None
 
 
 # --- PR Manager tests ---

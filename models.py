@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 # --- GitHub ---
 
@@ -19,6 +19,10 @@ class GitHubIssue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str = ""
+    created_at: str = Field(
+        default="",
+        validation_alias=AliasChoices("createdAt", "created_at"),
+    )
 
     @field_validator("labels", mode="before")
     @classmethod

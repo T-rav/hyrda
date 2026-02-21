@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -13,6 +14,7 @@ from typing import Any
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from state import StateTracker
+from subprocess_util import make_clean_env
 
 logger = logging.getLogger("hydra.memory")
 
@@ -142,7 +144,7 @@ class MemorySyncWorker:
         digest = self._build_digest(learnings)
         max_chars = self._config.max_memory_chars
         if len(digest) > max_chars:
-            digest = self._compact_digest(learnings, max_chars)
+            digest = await self._compact_digest(learnings, max_chars)
             compacted = True
 
         # Write individual items
@@ -201,14 +203,18 @@ class MemorySyncWorker:
             sections.append(f"- **#{num}:** {learning}")
         return header + "\n" + "\n---\n".join(sections) + "\n"
 
-    @staticmethod
-    def _compact_digest(learnings: list[tuple[int, str, str]], max_chars: int) -> str:
-        """Deduplicate and truncate learnings to fit within *max_chars*.
+    async def _compact_digest(
+        self, learnings: list[tuple[int, str, str]], max_chars: int
+    ) -> str:
+        """Deduplicate and optionally summarise learnings to fit within *max_chars*.
 
-        Uses keyword overlap for deduplication.  If still over limit
-        after dedup, truncates to fit.
+        Pipeline:
+        1. Keyword-overlap deduplication (>70% overlap → drop duplicate).
+        2. Rebuild digest from unique items.
+        3. If still over *max_chars*: call a cheap model to summarise.
+        4. Final truncation safety-net in case the model returns too much.
         """
-        # Deduplicate by keyword overlap
+        # --- Step 1: Deduplicate by keyword overlap ---
         seen_keywords: list[set[str]] = []
         unique: list[tuple[int, str, str]] = []
 
@@ -228,7 +234,7 @@ class MemorySyncWorker:
                 unique.append((num, learning, created))
                 seen_keywords.append(words)
 
-        # Build with unique learnings
+        # --- Step 2: Build digest from unique items ---
         now = datetime.now(UTC).isoformat()
         header = (
             f"## Accumulated Learnings\n"
@@ -240,11 +246,67 @@ class MemorySyncWorker:
 
         digest = header + "\n" + "\n---\n".join(sections) + "\n"
 
-        # Truncate if still over limit
+        # --- Step 3: Model-based summarisation if still over limit ---
+        if len(digest) > max_chars:
+            summarised = await self._summarise_with_model(digest, max_chars)
+            if summarised:
+                digest = summarised
+
+        # --- Step 4: Final truncation safety-net ---
         if len(digest) > max_chars:
             digest = digest[:max_chars] + "\n\n…(truncated)"
 
         return digest
+
+    async def _summarise_with_model(self, content: str, max_chars: int) -> str | None:
+        """Use a cheap model to condense the digest.
+
+        Returns the summarised text or ``None`` on failure (caller
+        falls back to truncation).
+        """
+        model = self._config.memory_compaction_model
+        prompt = (
+            f"Condense the following agent learnings into at most {max_chars} characters. "
+            "Preserve every distinct insight but merge overlapping ones. "
+            "Output ONLY the condensed markdown list — no preamble.\n\n"
+            f"{content}"
+        )
+        cmd = ["claude", "-p", "--model", model]
+        env = make_clean_env(self._config.gh_token)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=env,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode()), timeout=60
+            )
+            if proc.returncode != 0:
+                logger.warning(
+                    "Memory compaction model failed (rc=%d): %s",
+                    proc.returncode,
+                    stderr.decode().strip()[:200],
+                )
+                return None
+            result = stdout.decode().strip()
+            if not result:
+                return None
+            now = datetime.now(UTC).isoformat()
+            return (
+                f"## Accumulated Learnings\n"
+                f"*Summarised — last synced {now}*\n\n"
+                f"{result}\n"
+            )
+        except TimeoutError:
+            logger.warning("Memory compaction model timed out")
+            return None
+        except (OSError, FileNotFoundError) as exc:
+            logger.warning("Memory compaction model unavailable: %s", exc)
+            return None
 
     def _write_digest(self, content: str) -> None:
         """Write digest to disk atomically."""

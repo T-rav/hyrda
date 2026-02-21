@@ -119,10 +119,6 @@ class HydraConfig(BaseModel):
     )
     memory_label: list[str] = Field(
         default=["hydra-memory"],
-        description="Labels for approved memory items awaiting sync (OR logic)",
-    )
-    memory_label: list[str] = Field(
-        default=["hydra-memory"],
         description="Labels for accepted agent learnings (OR logic)",
     )
     dup_label: list[str] = Field(
@@ -221,6 +217,10 @@ class HydraConfig(BaseModel):
         ge=500,
         le=50_000,
         description="Max characters for memory digest injected into agent prompts",
+    )
+    memory_compaction_model: str = Field(
+        default="haiku",
+        description="Cheap model for summarising memory digest when over size limit",
     )
 
     # Git configuration

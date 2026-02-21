@@ -447,7 +447,7 @@ class HydraOrchestrator:
                         "number": i.number,
                         "title": i.title,
                         "body": i.body,
-                        "createdAt": "",
+                        "createdAt": i.created_at,
                     }
                     for i in issues
                 ]
