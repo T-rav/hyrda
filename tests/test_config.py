@@ -1636,53 +1636,6 @@ class TestHydraConfigMaxMergeConflictFixAttempts:
         assert cfg.max_merge_conflict_fix_attempts == 3
 
 
-class TestHydraConfigMaxPlanFileOverlap:
-    """Tests for max_plan_file_overlap field and HYDRA_MAX_PLAN_FILE_OVERLAP env var."""
-
-    def test_max_plan_file_overlap_default(self, tmp_path: Path) -> None:
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_plan_file_overlap == 3
-
-    def test_max_plan_file_overlap_env_var_override(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("HYDRA_MAX_PLAN_FILE_OVERLAP", "7")
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_plan_file_overlap == 7
-
-    def test_max_plan_file_overlap_env_var_not_applied_when_explicit(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("HYDRA_MAX_PLAN_FILE_OVERLAP", "10")
-        cfg = HydraConfig(
-            max_plan_file_overlap=5,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        # Explicit value of 5 != default 3, so env var should NOT override
-        assert cfg.max_plan_file_overlap == 5
-
-    def test_max_plan_file_overlap_env_var_invalid_ignored(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("HYDRA_MAX_PLAN_FILE_OVERLAP", "not-a-number")
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_plan_file_overlap == 3
-
-
 class TestHydraConfigLitePlanLabels:
     """Tests for lite_plan_labels field and HYDRA_LITE_PLAN_LABELS env var."""
 

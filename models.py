@@ -118,7 +118,6 @@ class AnalysisResult(BaseModel):
 
     issue_number: int
     sections: list[AnalysisSection] = Field(default_factory=list)
-    overlapping_issues: dict[int, list[str]] = Field(default_factory=dict)
 
     @property
     def blocked(self) -> bool:
