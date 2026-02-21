@@ -12,7 +12,7 @@ const mockWorkers = [
 describe('SystemPanel', () => {
   it('renders all 4 worker cards', () => {
     render(<SystemPanel backgroundWorkers={mockWorkers} />)
-    expect(screen.getByText('Memory Sync')).toBeInTheDocument()
+    expect(screen.getByText('Memory Manager')).toBeInTheDocument()
     expect(screen.getByText('Retrospective')).toBeInTheDocument()
     expect(screen.getByText('Metrics')).toBeInTheDocument()
     expect(screen.getByText('Review Insights')).toBeInTheDocument()
@@ -39,7 +39,7 @@ describe('SystemPanel', () => {
   it('shows disabled state when worker has not reported', () => {
     render(<SystemPanel backgroundWorkers={[]} />)
     // All workers should appear from BACKGROUND_WORKERS constant
-    expect(screen.getByText('Memory Sync')).toBeInTheDocument()
+    expect(screen.getByText('Memory Manager')).toBeInTheDocument()
     // All should show disabled status
     const dots = [
       screen.getByTestId('dot-memory_sync'),

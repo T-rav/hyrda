@@ -378,7 +378,7 @@ def create_router(
 
     # Known background workers with human-friendly labels
     _bg_worker_defs = [
-        ("memory_sync", "Memory Sync"),
+        ("memory_sync", "Memory Manager"),
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
