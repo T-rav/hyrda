@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     from config import HydraConfig
 
 from models import ReviewResult, ReviewVerdict
-from retrospective import RetrospectiveCollector, RetrospectiveEntry
+from retrospective import RetrospectiveCollector, RetrospectiveEntry, StatusCallback
 from state import StateTracker
 
 # ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ def _make_collector(
     *,
     diff_names: list[str] | None = None,
     create_issue_return: int = 0,
+    status_callback: StatusCallback | None = None,
 ) -> tuple[RetrospectiveCollector, AsyncMock, StateTracker]:
     """Build a RetrospectiveCollector with mocked PRManager."""
     state = StateTracker(config.state_file)
@@ -37,7 +39,9 @@ def _make_collector(
     mock_prs.get_pr_diff_names = AsyncMock(return_value=diff_names or [])
     mock_prs.create_issue = AsyncMock(return_value=create_issue_return)
 
-    collector = RetrospectiveCollector(config, state, mock_prs)
+    collector = RetrospectiveCollector(
+        config, state, mock_prs, status_callback=status_callback
+    )
     return collector, mock_prs, state
 
 
@@ -685,3 +689,337 @@ class TestRetrospectiveEntry:
         json_str = entry.model_dump_json()
         restored = RetrospectiveEntry.model_validate_json(json_str)
         assert restored == entry
+
+
+# ---------------------------------------------------------------------------
+# Time-based loading tests
+# ---------------------------------------------------------------------------
+
+
+class TestLoadSince:
+    def test_loads_entries_within_window(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        now = datetime.now(UTC)
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp=(now - timedelta(hours=i)).isoformat(),
+            )
+            for i in range(10)
+        ]
+        _write_retro_entries(config, entries)
+
+        result = collector._load_since(5)
+        # Entries at hours 0, 1, 2, 3, 4 are within 5 hours
+        assert len(result) == 5
+        assert result[0].issue_number == 0
+
+    def test_returns_empty_when_no_entries_in_window(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        old_time = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
+        entries = [
+            RetrospectiveEntry(
+                issue_number=1,
+                pr_number=101,
+                timestamp=old_time,
+            )
+        ]
+        _write_retro_entries(config, entries)
+
+        result = collector._load_since(6)
+        assert result == []
+
+    def test_returns_empty_when_no_file(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        result = collector._load_since(6)
+        assert result == []
+
+    def test_handles_entries_without_timezone(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        now = datetime.now(UTC)
+        # Timestamp without timezone info
+        naive_ts = now.replace(tzinfo=None).isoformat()
+        entries = [
+            RetrospectiveEntry(
+                issue_number=1,
+                pr_number=101,
+                timestamp=naive_ts,
+            )
+        ]
+        _write_retro_entries(config, entries)
+
+        result = collector._load_since(1)
+        assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# Stats computation tests
+# ---------------------------------------------------------------------------
+
+
+class TestComputeStats:
+    def test_empty_entries(self) -> None:
+        stats = RetrospectiveCollector.compute_stats([], window_hours=6)
+        assert stats["entry_count"] == 0
+        assert stats["plan_accuracy"] == 0.0
+        assert stats["quality_fix_rate"] == 0.0
+        assert stats["review_pass_rate"] == 0.0
+        assert stats["avg_implementation_seconds"] == 0.0
+        assert stats["ci_stability"] == 0.0
+
+    def test_perfect_stats(self) -> None:
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp="2026-02-20T10:30:00Z",
+                plan_accuracy_pct=100.0,
+                quality_fix_rounds=0,
+                review_verdict="approve",
+                ci_fix_rounds=0,
+                duration_seconds=120.0,
+            )
+            for i in range(5)
+        ]
+        stats = RetrospectiveCollector.compute_stats(entries, window_hours=6)
+        assert stats["entry_count"] == 5
+        assert stats["plan_accuracy"] == 100.0
+        assert stats["quality_fix_rate"] == 0.0
+        assert stats["review_pass_rate"] == 100.0
+        assert stats["ci_stability"] == 100.0
+        assert stats["avg_implementation_seconds"] == 120.0
+
+    def test_mixed_stats(self) -> None:
+        entries = [
+            RetrospectiveEntry(
+                issue_number=1,
+                pr_number=101,
+                timestamp="2026-02-20T10:30:00Z",
+                plan_accuracy_pct=80.0,
+                quality_fix_rounds=1,
+                review_verdict="approve",
+                ci_fix_rounds=0,
+                duration_seconds=200.0,
+            ),
+            RetrospectiveEntry(
+                issue_number=2,
+                pr_number=102,
+                timestamp="2026-02-20T11:30:00Z",
+                plan_accuracy_pct=60.0,
+                quality_fix_rounds=0,
+                review_verdict="request-changes",
+                ci_fix_rounds=2,
+                duration_seconds=400.0,
+            ),
+        ]
+        stats = RetrospectiveCollector.compute_stats(entries, window_hours=6)
+        assert stats["entry_count"] == 2
+        assert stats["plan_accuracy"] == 70.0  # (80+60)/2
+        assert stats["quality_fix_rate"] == 50.0  # 1/2
+        assert stats["review_pass_rate"] == 50.0  # 1/2
+        assert stats["ci_stability"] == 50.0  # 1/2
+        assert stats["avg_implementation_seconds"] == 300.0  # (200+400)/2
+
+    def test_window_hours_in_output(self) -> None:
+        stats = RetrospectiveCollector.compute_stats([], window_hours=12)
+        assert stats["window_hours"] == 12
+
+
+# ---------------------------------------------------------------------------
+# Trend detection tests
+# ---------------------------------------------------------------------------
+
+
+class TestGetStats:
+    def test_stats_with_trends(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        now = datetime.now(UTC)
+
+        # Previous window (6-12 hours ago): low accuracy
+        prev_entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp=(now - timedelta(hours=9 - i)).isoformat(),
+                plan_accuracy_pct=40.0,
+                quality_fix_rounds=1,
+                review_verdict="request-changes",
+                ci_fix_rounds=1,
+                duration_seconds=500.0,
+            )
+            for i in range(3)
+        ]
+        # Current window (0-6 hours ago): better accuracy
+        current_entries = [
+            RetrospectiveEntry(
+                issue_number=10 + i,
+                pr_number=200 + i,
+                timestamp=(now - timedelta(hours=3 - i)).isoformat(),
+                plan_accuracy_pct=80.0,
+                quality_fix_rounds=0,
+                review_verdict="approve",
+                ci_fix_rounds=0,
+                duration_seconds=200.0,
+            )
+            for i in range(3)
+        ]
+        _write_retro_entries(config, prev_entries + current_entries)
+
+        stats = collector.get_stats()
+        assert stats["entry_count"] == 3
+        assert stats["plan_accuracy"] == 80.0
+        # Trends should show improvement
+        trends = stats["trends"]
+        assert isinstance(trends, dict)
+        assert trends["plan_accuracy"] == 40.0  # 80 - 40
+
+    def test_stats_without_previous_window(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        now = datetime.now(UTC)
+
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp=(now - timedelta(hours=i)).isoformat(),
+                plan_accuracy_pct=75.0,
+            )
+            for i in range(3)
+        ]
+        _write_retro_entries(config, entries)
+
+        stats = collector.get_stats()
+        assert stats["entry_count"] == 3
+        assert stats["plan_accuracy"] == 75.0
+        # No previous window data, so trends should be empty
+        assert stats["trends"] == {}
+
+    def test_stats_empty_log(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        stats = collector.get_stats()
+        assert stats["entry_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Load window tests
+# ---------------------------------------------------------------------------
+
+
+class TestLoadWindow:
+    def test_loads_entries_in_range(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        now = datetime.now(UTC)
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp=(now - timedelta(hours=i)).isoformat(),
+            )
+            for i in range(15)
+        ]
+        _write_retro_entries(config, entries)
+
+        # Load entries from 12 to 6 hours ago
+        result = collector._load_window(12, 6)
+        for entry in result:
+            ts = datetime.fromisoformat(entry.timestamp)
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            hours_ago = (now - ts).total_seconds() / 3600
+            assert 6 <= hours_ago <= 12
+
+    def test_empty_when_no_file(self, config: HydraConfig) -> None:
+        collector, _, _ = _make_collector(config)
+        result = collector._load_window(12, 6)
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Status callback tests
+# ---------------------------------------------------------------------------
+
+
+class TestStatusCallback:
+    @pytest.mark.asyncio
+    async def test_reports_ok_on_success(self, config: HydraConfig) -> None:
+        calls: list[tuple[str, str, dict]] = []
+
+        def capture_callback(name: str, status: str, details: dict) -> None:
+            calls.append((name, status, details))
+
+        collector, _, state = _make_collector(
+            config,
+            diff_names=["src/foo.py"],
+            status_callback=capture_callback,
+        )
+        _write_plan(config, 42, "## Files to Modify\n\n- `src/foo.py`\n")
+
+        review = _make_review_result()
+        await collector.record(42, 101, review)
+
+        assert len(calls) == 1
+        assert calls[0][0] == "retrospective"
+        assert calls[0][1] == "ok"
+        assert calls[0][2]["last_issue"] == 42
+
+    @pytest.mark.asyncio
+    async def test_reports_error_on_failure(self, config: HydraConfig) -> None:
+        calls: list[tuple[str, str, dict]] = []
+
+        def capture_callback(name: str, status: str, details: dict) -> None:
+            calls.append((name, status, details))
+
+        collector, mock_prs, _ = _make_collector(
+            config,
+            status_callback=capture_callback,
+        )
+        mock_prs.get_pr_diff_names = AsyncMock(
+            side_effect=RuntimeError("network error")
+        )
+
+        review = _make_review_result()
+        await collector.record(42, 101, review)
+
+        assert len(calls) == 1
+        assert calls[0][0] == "retrospective"
+        assert calls[0][1] == "error"
+
+    @pytest.mark.asyncio
+    async def test_no_callback_no_error(self, config: HydraConfig) -> None:
+        """When no callback is set, record should still work."""
+        collector, _, _ = _make_collector(config, diff_names=["src/foo.py"])
+        review = _make_review_result()
+        # Should not raise
+        await collector.record(42, 101, review)
+
+
+# ---------------------------------------------------------------------------
+# RetrospectiveStats model tests
+# ---------------------------------------------------------------------------
+
+
+class TestRetrospectiveStatsModel:
+    def test_defaults(self) -> None:
+        from models import RetrospectiveStats
+
+        stats = RetrospectiveStats()
+        assert stats.window_hours == 6
+        assert stats.entry_count == 0
+        assert stats.plan_accuracy == 0.0
+        assert stats.quality_fix_rate == 0.0
+        assert stats.review_pass_rate == 0.0
+        assert stats.avg_implementation_seconds == 0.0
+        assert stats.ci_stability == 0.0
+        assert stats.trends == {}
+
+    def test_with_trends(self) -> None:
+        from models import RetrospectiveStats
+
+        stats = RetrospectiveStats(
+            entry_count=5,
+            plan_accuracy=75.0,
+            trends={"plan_accuracy": 10.0, "ci_stability": -5.0},
+        )
+        assert stats.trends["plan_accuracy"] == 10.0
+        assert stats.trends["ci_stability"] == -5.0

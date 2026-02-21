@@ -365,7 +365,7 @@ class BackgroundWorkerStatus(BaseModel):
 
     name: str
     label: str
-    status: str = "disabled"  # ok | error | disabled
+    status: str = "disabled"  # ok | idle | error | disabled
     last_run: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
@@ -374,6 +374,19 @@ class BackgroundWorkersResponse(BaseModel):
     """Response for GET /api/system/workers."""
 
     workers: list[BackgroundWorkerStatus] = Field(default_factory=list)
+
+
+class RetrospectiveStats(BaseModel):
+    """Five key stats computed from the retrospective lookback window."""
+
+    window_hours: int = 6
+    entry_count: int = 0
+    plan_accuracy: float = 0.0
+    quality_fix_rate: float = 0.0
+    review_pass_rate: float = 0.0
+    avg_implementation_seconds: float = 0.0
+    ci_stability: float = 0.0
+    trends: dict[str, float] = Field(default_factory=dict)
 
 
 class MetricsResponse(BaseModel):

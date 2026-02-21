@@ -22,6 +22,7 @@ from models import (
     ControlStatusResponse,
     LifetimeStats,
     MetricsResponse,
+    RetrospectiveStats,
 )
 from pr_manager import PRManager
 from state import StateTracker
@@ -347,6 +348,7 @@ def create_router(
         """Return last known status of each background worker."""
         orch = get_orchestrator()
         bg_states = orch.get_bg_worker_states() if orch else {}
+        is_running = orch is not None and orch.running
         workers = []
         for name, label in _bg_worker_defs:
             if name in bg_states:
@@ -361,8 +363,31 @@ def create_router(
                     )
                 )
             else:
-                workers.append(BackgroundWorkerStatus(name=name, label=label))
+                # Show "idle" when orchestrator is running (services are
+                # available but haven't reported yet), "disabled" otherwise.
+                default_status = "idle" if is_running else "disabled"
+                workers.append(
+                    BackgroundWorkerStatus(
+                        name=name, label=label, status=default_status
+                    )
+                )
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
+
+    @router.get("/api/system/retrospective/stats")
+    async def get_retrospective_stats() -> JSONResponse:
+        """Return 5 key retrospective stats with trends."""
+        orch = get_orchestrator()
+        if orch and hasattr(orch, "_retrospective"):
+            raw = orch._retrospective.get_stats()
+            stats = RetrospectiveStats.model_validate(raw)
+            return JSONResponse(stats.model_dump())
+        # Fallback: construct collector from config to read JSONL directly
+        from retrospective import RetrospectiveCollector
+
+        collector = RetrospectiveCollector(config, state, pr_manager)
+        raw = collector.get_stats()
+        stats = RetrospectiveStats.model_validate(raw)
+        return JSONResponse(stats.model_dump())
 
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:

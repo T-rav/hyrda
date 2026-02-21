@@ -16,6 +16,7 @@ function relativeTime(isoString) {
 function statusColor(status) {
   if (status === 'ok') return theme.green
   if (status === 'error') return theme.red
+  if (status === 'idle') return theme.accent
   return theme.textInactive
 }
 

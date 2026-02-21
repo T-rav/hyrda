@@ -6,7 +6,8 @@ import json
 import logging
 import re
 from collections import Counter
-from datetime import UTC, datetime
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
     from state import StateTracker
 
 logger = logging.getLogger("hydra.retrospective")
+
+# Type alias for the optional status callback used to report worker health.
+StatusCallback = Callable[[str, str, dict[str, object]], None]
 
 
 class RetrospectiveEntry(BaseModel):
@@ -46,16 +50,26 @@ class RetrospectiveCollector:
         config: HydraConfig,
         state: StateTracker,
         prs: PRManager,
+        *,
+        status_callback: StatusCallback | None = None,
     ) -> None:
         self._config = config
         self._state = state
         self._prs = prs
+        self._status_callback = status_callback
         self._retro_path = (
             config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
         )
         self._filed_patterns_path = (
             config.repo_root / ".hydra" / "memory" / "filed_patterns.json"
         )
+
+    def _report_status(
+        self, status: str, details: dict[str, object] | None = None
+    ) -> None:
+        """Report worker health via the optional callback."""
+        if self._status_callback is not None:
+            self._status_callback("retrospective", status, details or {})
 
     async def record(
         self,
@@ -73,12 +87,20 @@ class RetrospectiveCollector:
             self._append_entry(entry)
             recent = self._load_recent(self._config.retrospective_window)
             await self._detect_patterns(recent)
+            self._report_status(
+                "ok",
+                {
+                    "last_issue": issue_number,
+                    "accuracy": entry.plan_accuracy_pct,
+                },
+            )
         except Exception:
             logger.warning(
                 "Retrospective failed for issue #%d — continuing",
                 issue_number,
                 exc_info=True,
             )
+            self._report_status("error", {"last_issue": issue_number})
 
     async def _collect(
         self,
@@ -214,6 +236,137 @@ class RetrospectiveCollector:
             return entries
         except (OSError, json.JSONDecodeError):
             logger.warning("Could not load retrospective log", exc_info=True)
+            return []
+
+    def _load_since(self, hours: int) -> list[RetrospectiveEntry]:
+        """Load entries from the last *hours* hours."""
+        if not self._retro_path.exists():
+            return []
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
+        try:
+            lines = self._retro_path.read_text().strip().splitlines()
+            entries: list[RetrospectiveEntry] = []
+            for line in lines:
+                if not line.strip():
+                    continue
+                entry = RetrospectiveEntry.model_validate_json(line)
+                try:
+                    ts = datetime.fromisoformat(entry.timestamp)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=UTC)
+                    if ts >= cutoff:
+                        entries.append(entry)
+                except (ValueError, TypeError):
+                    entries.append(entry)
+            return entries
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Could not load retrospective log", exc_info=True)
+            return []
+
+    @staticmethod
+    def compute_stats(
+        entries: list[RetrospectiveEntry],
+        window_hours: int = 6,
+    ) -> dict[str, object]:
+        """Compute the 5 key retrospective stats from a set of entries.
+
+        Returns a dict matching the ``RetrospectiveStats`` model fields:
+        ``plan_accuracy``, ``quality_fix_rate``, ``review_pass_rate``,
+        ``avg_implementation_seconds``, and ``ci_stability``.
+        """
+        n = len(entries)
+        if n == 0:
+            return {
+                "window_hours": window_hours,
+                "entry_count": 0,
+                "plan_accuracy": 0.0,
+                "quality_fix_rate": 0.0,
+                "review_pass_rate": 0.0,
+                "avg_implementation_seconds": 0.0,
+                "ci_stability": 0.0,
+                "trends": {},
+            }
+
+        plan_accuracy = round(sum(e.plan_accuracy_pct for e in entries) / n, 1)
+        quality_fix_rate = round(
+            sum(1 for e in entries if e.quality_fix_rounds > 0) / n * 100, 1
+        )
+        review_pass_rate = round(
+            sum(1 for e in entries if e.review_verdict == "approve") / n * 100,
+            1,
+        )
+        avg_impl_seconds = round(sum(e.duration_seconds for e in entries) / n, 1)
+        ci_stability = round(
+            sum(1 for e in entries if e.ci_fix_rounds == 0) / n * 100, 1
+        )
+
+        return {
+            "window_hours": window_hours,
+            "entry_count": n,
+            "plan_accuracy": plan_accuracy,
+            "quality_fix_rate": quality_fix_rate,
+            "review_pass_rate": review_pass_rate,
+            "avg_implementation_seconds": avg_impl_seconds,
+            "ci_stability": ci_stability,
+            "trends": {},
+        }
+
+    def get_stats(self) -> dict[str, object]:
+        """Compute stats for the configured lookback window with trends.
+
+        Compares the current window against the previous window of the
+        same duration to compute trend deltas for each stat.
+        """
+        hours = self._config.retrospective_lookback_hours
+        current = self._load_since(hours)
+        current_stats = self.compute_stats(current, hours)
+
+        # Compute previous window for trend comparison
+        previous = self._load_window(hours * 2, hours)
+        if previous:
+            prev_stats = self.compute_stats(previous, hours)
+            stat_keys = [
+                "plan_accuracy",
+                "quality_fix_rate",
+                "review_pass_rate",
+                "avg_implementation_seconds",
+                "ci_stability",
+            ]
+            trends: dict[str, float] = {}
+            for key in stat_keys:
+                cur_val = float(current_stats.get(key, 0.0))  # type: ignore[arg-type]
+                prev_val = float(prev_stats.get(key, 0.0))  # type: ignore[arg-type]
+                trends[key] = round(cur_val - prev_val, 1)
+            current_stats["trends"] = trends
+
+        return current_stats
+
+    def _load_window(
+        self, hours_ago_start: int, hours_ago_end: int
+    ) -> list[RetrospectiveEntry]:
+        """Load entries between *hours_ago_start* and *hours_ago_end* ago."""
+        if not self._retro_path.exists():
+            return []
+        now = datetime.now(UTC)
+        start = now - timedelta(hours=hours_ago_start)
+        end = now - timedelta(hours=hours_ago_end)
+        try:
+            lines = self._retro_path.read_text().strip().splitlines()
+            entries: list[RetrospectiveEntry] = []
+            for line in lines:
+                if not line.strip():
+                    continue
+                entry = RetrospectiveEntry.model_validate_json(line)
+                try:
+                    ts = datetime.fromisoformat(entry.timestamp)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=UTC)
+                    if start <= ts < end:
+                        entries.append(entry)
+                except (ValueError, TypeError):
+                    pass
+            return entries
+        except (OSError, json.JSONDecodeError):
             return []
 
     async def _detect_patterns(self, entries: list[RetrospectiveEntry]) -> None:

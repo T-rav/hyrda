@@ -222,9 +222,60 @@ class TestSystemWorkersEndpoint:
         assert ms["details"]["item_count"] == 12
         assert ms["last_run"] is not None
 
-        # Others should still be disabled
+        # Orch not running → others should still be disabled
         retro = next(w for w in data["workers"] if w["name"] == "retrospective")
         assert retro["status"] == "disabled"
+
+    @pytest.mark.asyncio
+    async def test_returns_idle_when_orchestrator_running(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """When orchestrator is running but worker hasn't reported, show idle."""
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        # Simulate running state
+        orch._running = True
+
+        router = self._make_router(config, event_bus, tmp_path, orch=orch)
+        endpoint = self._find_endpoint(router, "/api/system/workers")
+        response = await endpoint()
+        data = json.loads(response.body)
+
+        # All unreported workers should show "idle", not "disabled"
+        for w in data["workers"]:
+            assert w["status"] == "idle"
+
+    @pytest.mark.asyncio
+    async def test_running_orch_with_reported_worker(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Reported worker shows its status; unreported shows idle."""
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch._running = True
+        orch.update_bg_worker_status("memory_sync", "ok", {"count": 3})
+
+        router = self._make_router(config, event_bus, tmp_path, orch=orch)
+        endpoint = self._find_endpoint(router, "/api/system/workers")
+        response = await endpoint()
+        data = json.loads(response.body)
+
+        ms = next(w for w in data["workers"] if w["name"] == "memory_sync")
+        assert ms["status"] == "ok"
+
+        retro = next(w for w in data["workers"] if w["name"] == "retrospective")
+        assert retro["status"] == "idle"
+
+    @pytest.mark.asyncio
+    async def test_retrospective_stats_endpoint_registered(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """Verify the retrospective stats endpoint is registered."""
+        router = self._make_router(config, event_bus, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/system/retrospective/stats" in paths
 
 
 class TestMetricsEndpoint:

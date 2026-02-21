@@ -95,7 +95,12 @@ class HydraOrchestrator:
             self._stop_event,
             self._active_impl_issues,
         )
-        self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
+        self._retrospective = RetrospectiveCollector(
+            config,
+            self._state,
+            self._prs,
+            status_callback=self.update_bg_worker_status,
+        )
         self._reviewer = ReviewPhase(
             config,
             self._state,

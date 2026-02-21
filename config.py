@@ -265,6 +265,12 @@ class HydraConfig(BaseModel):
         le=100,
         description="Number of recent retrospective entries to scan for patterns",
     )
+    retrospective_lookback_hours: int = Field(
+        default=6,
+        ge=1,
+        le=168,
+        description="Hours of retrospective data to analyze for trends and stats",
+    )
 
     # Execution mode
     dry_run: bool = Field(
