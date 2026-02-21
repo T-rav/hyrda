@@ -85,7 +85,13 @@ class TestCreateRouter:
             "/api/control/status",
             "/api/control/config",
             "/api/system/workers",
+            "/api/hitl/{issue_number}/correct",
+            "/api/hitl/{issue_number}/skip",
+            "/api/hitl/{issue_number}/close",
+            "/api/timeline",
+            "/api/timeline/issue/{issue_num}",
             "/ws",
+            "/{path:path}",
         }
 
         assert expected_paths.issubset(paths)

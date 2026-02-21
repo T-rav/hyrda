@@ -9,8 +9,8 @@ from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, Response, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
 from config import HydraConfig, save_config_file
@@ -47,8 +47,8 @@ def create_router(
     """Create an APIRouter with all dashboard route handlers."""
     router = APIRouter()
 
-    @router.get("/", response_class=HTMLResponse)
-    async def index() -> HTMLResponse:
+    def _serve_spa_index() -> HTMLResponse:
+        """Serve the SPA index.html, falling back to template or placeholder."""
         react_index = ui_dist_dir / "index.html"
         if react_index.exists():
             return HTMLResponse(react_index.read_text())
@@ -56,6 +56,10 @@ def create_router(
         if template_path.exists():
             return HTMLResponse(template_path.read_text())
         return HTMLResponse("<h1>Hydra Dashboard</h1><p>Run 'make ui' to build.</p>")
+
+    @router.get("/", response_class=HTMLResponse)
+    async def index() -> HTMLResponse:
+        return _serve_spa_index()
 
     @router.get("/api/state")
     async def get_state() -> JSONResponse:
@@ -432,5 +436,20 @@ def create_router(
                 pass
             except Exception:
                 logger.warning("WebSocket error during live streaming", exc_info=True)
+
+    # SPA catch-all: serve index.html for any path not matched above.
+    # This must be registered LAST so it doesn't shadow API/WS routes.
+    @router.get("/{path:path}", response_model=None)
+    async def spa_catchall(path: str) -> Response:
+        # Don't catch API, WebSocket, or static-asset paths
+        if path.startswith(("api/", "ws/", "assets/", "static/")) or path == "ws":
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        # Serve root-level static files from ui/dist/ (e.g. logos, favicon)
+        static_file = (ui_dist_dir / path).resolve()
+        if static_file.is_relative_to(ui_dist_dir.resolve()) and static_file.is_file():
+            return FileResponse(static_file)
+
+        return _serve_spa_index()
 
     return router
