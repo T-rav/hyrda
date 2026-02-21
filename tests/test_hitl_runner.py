@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events import EventBus, EventType
+from events import EventType
 from hitl_runner import HITLRunner, _classify_cause
 from models import HITLResult
 from tests.conftest import IssueFactory
-
-if TYPE_CHECKING:
-    from config import HydraConfig
-
 
 # ---------------------------------------------------------------------------
 # Cause classification
@@ -64,62 +59,58 @@ class TestClassifyCause:
 class TestBuildPrompt:
     """Tests for HITLRunner._build_prompt."""
 
-    def test_prompt_includes_issue_title(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_includes_issue_title(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42, title="Fix the widget")
-        prompt = runner._build_prompt(issue, "Try mocking the DB", "CI failed")
+        prompt = hitl_runner._build_prompt(issue, "Try mocking the DB", "CI failed")
         assert "Fix the widget" in prompt
 
-    def test_prompt_includes_correction_text(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_includes_correction_text(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(issue, "Mock the database layer", "CI failed")
+        prompt = hitl_runner._build_prompt(
+            issue, "Mock the database layer", "CI failed"
+        )
         assert "Mock the database layer" in prompt
 
-    def test_prompt_includes_cause(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_includes_cause(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(issue, "Fix it", "CI failed after 2 attempts")
+        prompt = hitl_runner._build_prompt(
+            issue, "Fix it", "CI failed after 2 attempts"
+        )
         assert "CI failed after 2 attempts" in prompt
 
-    def test_prompt_uses_ci_instructions_for_ci_cause(
-        self, config: HydraConfig
-    ) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_uses_ci_instructions_for_ci_cause(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(issue, "Fix", "CI failed after 2 fix attempt(s)")
+        prompt = hitl_runner._build_prompt(
+            issue, "Fix", "CI failed after 2 fix attempt(s)"
+        )
         assert "make quality" in prompt
         assert "do NOT skip or disable tests" in prompt
 
     def test_prompt_uses_merge_instructions_for_conflict_cause(
-        self, config: HydraConfig
+        self, hitl_runner
     ) -> None:
-        runner = HITLRunner(config, EventBus())
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(issue, "Fix", "Merge conflict with main branch")
+        prompt = hitl_runner._build_prompt(
+            issue, "Fix", "Merge conflict with main branch"
+        )
         assert "git status" in prompt
         assert "conflict" in prompt.lower()
 
-    def test_prompt_uses_needs_info_instructions(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_uses_needs_info_instructions(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(
+        prompt = hitl_runner._build_prompt(
             issue, "Add logging", "Insufficient issue detail for triage"
         )
         assert "TDD" in prompt
 
-    def test_prompt_includes_issue_number_in_commit_message(
-        self, config: HydraConfig
-    ) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_includes_issue_number_in_commit_message(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=99)
-        prompt = runner._build_prompt(issue, "Fix it", "Unknown")
+        prompt = hitl_runner._build_prompt(issue, "Fix it", "Unknown")
         assert "#99" in prompt
 
-    def test_prompt_includes_no_push_rule(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_prompt_includes_no_push_rule(self, hitl_runner) -> None:
         issue = IssueFactory.create(number=42)
-        prompt = runner._build_prompt(issue, "Fix", "CI failed")
+        prompt = hitl_runner._build_prompt(issue, "Fix", "CI failed")
         assert "Do NOT push to remote" in prompt
 
 
@@ -131,29 +122,26 @@ class TestBuildPrompt:
 class TestBuildCommand:
     """Tests for HITLRunner._build_command."""
 
-    def test_command_includes_claude(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
-        cmd = runner._build_command(Path("/tmp/wt"))
+    def test_command_includes_claude(self, hitl_runner) -> None:
+        cmd = hitl_runner._build_command(Path("/tmp/wt"))
         assert cmd[0] == "claude"
         assert "-p" in cmd
 
-    def test_command_includes_model(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
-        cmd = runner._build_command(Path("/tmp/wt"))
+    def test_command_includes_model(self, hitl_runner, config) -> None:
+        cmd = hitl_runner._build_command(Path("/tmp/wt"))
         assert "--model" in cmd
         idx = cmd.index("--model")
         assert cmd[idx + 1] == config.model
 
-    def test_command_includes_budget_when_set(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
-        cmd = runner._build_command(Path("/tmp/wt"))
+    def test_command_includes_budget_when_set(self, hitl_runner) -> None:
+        cmd = hitl_runner._build_command(Path("/tmp/wt"))
         assert "--max-budget-usd" in cmd
 
-    def test_command_omits_budget_when_zero(self) -> None:
+    def test_command_omits_budget_when_zero(self, event_bus) -> None:
         from tests.helpers import ConfigFactory
 
         cfg = ConfigFactory.create(max_budget_usd=0)
-        runner = HITLRunner(cfg, EventBus())
+        runner = HITLRunner(cfg, event_bus)
         cmd = runner._build_command(Path("/tmp/wt"))
         assert "--max-budget-usd" not in cmd
 
@@ -167,21 +155,20 @@ class TestRunDryMode:
     """Tests for HITLRunner.run in dry-run mode."""
 
     @pytest.mark.asyncio
-    async def test_dry_run_returns_success(self, dry_config: HydraConfig) -> None:
-        runner = HITLRunner(dry_config, EventBus())
+    async def test_dry_run_returns_success(self, dry_config, event_bus) -> None:
+        runner = HITLRunner(dry_config, event_bus)
         issue = IssueFactory.create(number=42)
         result = await runner.run(issue, "correction", "cause", Path("/tmp/wt"))
         assert result.success is True
         assert result.issue_number == 42
 
     @pytest.mark.asyncio
-    async def test_dry_run_publishes_event(self, dry_config: HydraConfig) -> None:
-        bus = EventBus()
-        runner = HITLRunner(dry_config, bus)
+    async def test_dry_run_publishes_event(self, dry_config, event_bus) -> None:
+        runner = HITLRunner(dry_config, event_bus)
         issue = IssueFactory.create(number=42)
         await runner.run(issue, "correction", "cause", Path("/tmp/wt"))
 
-        events = [e for e in bus.get_history() if e.type == EventType.HITL_UPDATE]
+        events = [e for e in event_bus.get_history() if e.type == EventType.HITL_UPDATE]
         assert len(events) >= 1
         assert events[0].data["status"] == "running"
 
@@ -195,9 +182,8 @@ class TestRunExecution:
     """Tests for HITLRunner.run with mocked execution."""
 
     @pytest.mark.asyncio
-    async def test_run_success_returns_result(self, config: HydraConfig) -> None:
-        bus = EventBus()
-        runner = HITLRunner(config, bus)
+    async def test_run_success_returns_result(self, config, event_bus) -> None:
+        runner = HITLRunner(config, event_bus)
         issue = IssueFactory.create(number=42)
 
         runner._execute = AsyncMock(return_value="transcript text")  # type: ignore[method-assign]
@@ -212,9 +198,8 @@ class TestRunExecution:
         assert result.duration_seconds > 0
 
     @pytest.mark.asyncio
-    async def test_run_failure_sets_error(self, config: HydraConfig) -> None:
-        bus = EventBus()
-        runner = HITLRunner(config, bus)
+    async def test_run_failure_sets_error(self, config, event_bus) -> None:
+        runner = HITLRunner(config, event_bus)
         issue = IssueFactory.create(number=42)
 
         runner._execute = AsyncMock(return_value="transcript text")  # type: ignore[method-assign]
@@ -230,9 +215,8 @@ class TestRunExecution:
         assert "make quality" in result.error
 
     @pytest.mark.asyncio
-    async def test_run_exception_sets_error(self, config: HydraConfig) -> None:
-        bus = EventBus()
-        runner = HITLRunner(config, bus)
+    async def test_run_exception_sets_error(self, config, event_bus) -> None:
+        runner = HITLRunner(config, event_bus)
         issue = IssueFactory.create(number=42)
 
         runner._execute = AsyncMock(side_effect=RuntimeError("boom"))  # type: ignore[method-assign]
@@ -243,11 +227,8 @@ class TestRunExecution:
         assert result.error == "boom"
 
     @pytest.mark.asyncio
-    async def test_run_publishes_start_and_end_events(
-        self, config: HydraConfig
-    ) -> None:
-        bus = EventBus()
-        runner = HITLRunner(config, bus)
+    async def test_run_publishes_start_and_end_events(self, config, event_bus) -> None:
+        runner = HITLRunner(config, event_bus)
         issue = IssueFactory.create(number=42)
 
         runner._execute = AsyncMock(return_value="transcript")  # type: ignore[method-assign]
@@ -256,17 +237,16 @@ class TestRunExecution:
 
         await runner.run(issue, "fix it", "CI failed", Path("/tmp/wt"))
 
-        hitl_events = [e for e in bus.get_history() if e.type == EventType.HITL_UPDATE]
+        hitl_events = [
+            e for e in event_bus.get_history() if e.type == EventType.HITL_UPDATE
+        ]
         statuses = [e.data["status"] for e in hitl_events]
         assert "running" in statuses
         assert "done" in statuses
 
     @pytest.mark.asyncio
-    async def test_run_failure_publishes_failed_status(
-        self, config: HydraConfig
-    ) -> None:
-        bus = EventBus()
-        runner = HITLRunner(config, bus)
+    async def test_run_failure_publishes_failed_status(self, config, event_bus) -> None:
+        runner = HITLRunner(config, event_bus)
         issue = IssueFactory.create(number=42)
 
         runner._execute = AsyncMock(return_value="transcript")  # type: ignore[method-assign]
@@ -277,7 +257,9 @@ class TestRunExecution:
 
         await runner.run(issue, "fix it", "CI failed", Path("/tmp/wt"))
 
-        hitl_events = [e for e in bus.get_history() if e.type == EventType.HITL_UPDATE]
+        hitl_events = [
+            e for e in event_bus.get_history() if e.type == EventType.HITL_UPDATE
+        ]
         statuses = [e.data["status"] for e in hitl_events]
         assert "failed" in statuses
 
@@ -290,10 +272,9 @@ class TestRunExecution:
 class TestSaveTranscript:
     """Tests for HITLRunner._save_transcript."""
 
-    def test_saves_transcript_to_disk(self, config: HydraConfig) -> None:
+    def test_saves_transcript_to_disk(self, hitl_runner, config) -> None:
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        runner = HITLRunner(config, EventBus())
-        runner._save_transcript(42, "test transcript content")
+        hitl_runner._save_transcript(42, "test transcript content")
 
         path = config.repo_root / ".hydra" / "logs" / "hitl-issue-42.txt"
         assert path.exists()
@@ -308,15 +289,13 @@ class TestSaveTranscript:
 class TestTerminate:
     """Tests for HITLRunner.terminate."""
 
-    def test_terminate_with_no_active_procs(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
-        runner.terminate()  # Should not raise
+    def test_terminate_with_no_active_procs(self, hitl_runner) -> None:
+        hitl_runner.terminate()  # Should not raise
 
-    def test_terminate_calls_terminate_processes(self, config: HydraConfig) -> None:
-        runner = HITLRunner(config, EventBus())
+    def test_terminate_calls_terminate_processes(self, hitl_runner) -> None:
         with patch("hitl_runner.terminate_processes") as mock_term:
-            runner.terminate()
-            mock_term.assert_called_once_with(runner._active_procs)
+            hitl_runner.terminate()
+            mock_term.assert_called_once_with(hitl_runner._active_procs)
 
 
 # ---------------------------------------------------------------------------

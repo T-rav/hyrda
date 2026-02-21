@@ -16,8 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import HydraConfig
 
-from events import EventBus, EventType
-from issue_store import IssueStore
+from events import EventType
 from models import (
     GitHubIssue,
     JudgeResult,
@@ -27,7 +26,7 @@ from models import (
     VerificationCriterion,
 )
 from review_phase import ReviewPhase
-from state import StateTracker
+from tests.helpers import make_review_phase
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -77,44 +76,6 @@ def make_review_result(
     )
 
 
-def _make_phase(
-    config: HydraConfig,
-    *,
-    agents: AsyncMock | None = None,
-    event_bus: EventBus | None = None,
-    ac_generator: object | None = None,
-) -> ReviewPhase:
-    """Build a ReviewPhase with standard dependencies."""
-    state = StateTracker(config.state_file)
-    stop_event = asyncio.Event()
-
-    mock_wt = AsyncMock()
-    mock_wt.destroy = AsyncMock()
-
-    mock_reviewers = AsyncMock()
-    mock_prs = AsyncMock()
-
-    mock_store = AsyncMock(spec=IssueStore)
-    mock_store.mark_active = lambda num, stage: None
-    mock_store.mark_complete = lambda num: None
-    mock_store.is_active = lambda num: False
-
-    phase = ReviewPhase(
-        config=config,
-        state=state,
-        worktrees=mock_wt,
-        reviewers=mock_reviewers,
-        prs=mock_prs,
-        stop_event=stop_event,
-        store=mock_store,
-        agents=agents,
-        event_bus=event_bus or EventBus(),
-        ac_generator=ac_generator,
-    )
-
-    return phase
-
-
 # ---------------------------------------------------------------------------
 # review_prs
 # ---------------------------------------------------------------------------
@@ -125,13 +86,13 @@ class TestReviewPRs:
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_when_no_prs(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         results = await phase.review_prs([], [make_issue()])
         assert results == []
 
     @pytest.mark.asyncio
     async def test_reviews_non_draft_prs(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -153,7 +114,7 @@ class TestReviewPRs:
 
     @pytest.mark.asyncio
     async def test_marks_pr_status_in_state(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -190,7 +151,7 @@ class TestReviewPRs:
             concurrency_counter["current"] -= 1
             return make_review_result(pr.number, issue.number)
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._reviewers.review = fake_review  # type: ignore[method-assign]
 
         phase._prs.get_pr_diff = AsyncMock(return_value="diff")
@@ -214,7 +175,7 @@ class TestReviewPRs:
     async def test_returns_comment_verdict_when_issue_missing(
         self, config: HydraConfig
     ) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         # PR with issue_number not in issue_map
         pr = make_pr_info(101, 999, draft=False)
 
@@ -233,7 +194,7 @@ class TestReviewPRs:
     @pytest.mark.asyncio
     async def test_review_merges_approved_pr(self, config: HydraConfig) -> None:
         """review_prs should merge PRs that the reviewer approves."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -257,7 +218,7 @@ class TestReviewPRs:
     @pytest.mark.asyncio
     async def test_review_does_not_merge_rejected_pr(self, config: HydraConfig) -> None:
         """review_prs should not merge PRs with REQUEST_CHANGES verdict."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -283,7 +244,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """review_prs should merge main and push before reviewing."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -314,7 +275,7 @@ class TestReviewPRs:
         """When merge fails and agent can't resolve, should escalate to HITL."""
         mock_agents = AsyncMock()
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -349,7 +310,7 @@ class TestReviewPRs:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -377,7 +338,7 @@ class TestReviewPRs:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -405,7 +366,7 @@ class TestReviewPRs:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -435,7 +396,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """When no agent runner is configured, conflicts escalate directly to HITL."""
-        phase = _make_phase(config)  # No agents passed
+        phase = make_review_phase(config)  # No agents passed
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -460,7 +421,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """When merge fails after successful merge-main, should escalate to HITL."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -498,7 +459,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Merge failure escalation should record review_label as HITL origin."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -527,7 +488,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Merge failure escalation should record cause in state."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -556,7 +517,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Merging a PR should record both pr_merged and issue_completed."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -584,7 +545,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Merging a PR should swap label from hydra-review to hydra-fixed."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -613,7 +574,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Failed merge should not increment lifetime stats."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -638,7 +599,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Successful merge should mark issue status as 'merged'."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -663,7 +624,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """Failed merge should leave issue as 'reviewed', not 'merged'."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -686,7 +647,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """post_pr_comment should be called with the review summary."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -713,7 +674,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """submit_review should NOT be called for approve to avoid self-approval errors."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -744,7 +705,7 @@ class TestReviewPRs:
         self, config: HydraConfig, verdict: ReviewVerdict
     ) -> None:
         """submit_review should be called for request-changes and comment verdicts."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -773,7 +734,7 @@ class TestReviewPRs:
         """When submit_review raises SelfReviewError, state should still be marked."""
         from pr_manager import SelfReviewError
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -811,7 +772,7 @@ class TestReviewPRs:
         """With multiple PRs, a SelfReviewError on one should not block others."""
         from pr_manager import SelfReviewError
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issues = [make_issue(1), make_issue(2)]
         prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
 
@@ -853,7 +814,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """post_pr_comment should NOT be called when summary is empty."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -886,7 +847,7 @@ class TestReviewPRs:
     @pytest.mark.asyncio
     async def test_review_comment_before_merge(self, config: HydraConfig) -> None:
         """post_pr_comment should be called before merge; submit_review skipped for approve."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -924,7 +885,7 @@ class TestReviewPRs:
         self, config: HydraConfig
     ) -> None:
         """post_pr_comment should be called regardless of merge outcome."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -970,7 +931,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1006,7 +967,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1051,7 +1012,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1087,7 +1048,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1123,7 +1084,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1181,7 +1142,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1229,7 +1190,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1280,7 +1241,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1323,7 +1284,7 @@ class TestWaitAndFixCI:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1365,7 +1326,7 @@ class TestResolveMergeConflicts:
     @pytest.mark.asyncio
     async def test_returns_false_when_no_agents(self, config: HydraConfig) -> None:
         """Without an agent runner, should return False immediately."""
-        phase = _make_phase(config)  # No agents
+        phase = make_review_phase(config)  # No agents
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1381,7 +1342,7 @@ class TestResolveMergeConflicts:
     ) -> None:
         """If start_merge_main returns True (no conflicts), return True."""
         mock_agents = AsyncMock()
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1403,7 +1364,7 @@ class TestResolveMergeConflicts:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1423,7 +1384,7 @@ class TestResolveMergeConflicts:
         """On agent exception on all attempts, should abort merge and return False."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1446,7 +1407,7 @@ class TestResolveMergeConflicts:
         mock_agents._verify_result = AsyncMock(
             side_effect=[(False, "quality failed"), (True, "")]
         )
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1469,7 +1430,7 @@ class TestResolveMergeConflicts:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1493,7 +1454,7 @@ class TestResolveMergeConflicts:
         mock_agents._verify_result = AsyncMock(
             side_effect=[(False, "ruff check failed"), (True, "")]
         )
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1518,7 +1479,7 @@ class TestResolveMergeConflicts:
         mock_agents._verify_result = AsyncMock(
             side_effect=[(False, "failed"), (True, "")]
         )
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1540,7 +1501,7 @@ class TestResolveMergeConflicts:
         mock_agents._verify_result = AsyncMock(
             side_effect=[(False, "failed"), (True, "")]
         )
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1569,7 +1530,7 @@ class TestResolveMergeConflicts:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
-        phase = _make_phase(cfg, agents=mock_agents)
+        phase = make_review_phase(cfg, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1595,7 +1556,7 @@ class TestResolveMergeConflicts:
             state_file=config.state_file,
         )
         mock_agents = AsyncMock()
-        phase = _make_phase(cfg, agents=mock_agents)
+        phase = make_review_phase(cfg, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1625,7 +1586,7 @@ class TestReviewExceptionIsolation:
         self, config: HydraConfig
     ) -> None:
         """When reviewer.review raises, should return ReviewResult with error summary."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -1649,7 +1610,7 @@ class TestReviewExceptionIsolation:
         self, config: HydraConfig
     ) -> None:
         """When review crashes, issue should be removed from active_issues."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -1671,7 +1632,7 @@ class TestReviewExceptionIsolation:
         self, config: HydraConfig
     ) -> None:
         """With 2 PRs, first review crashing should not prevent the second."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issues = [make_issue(1), make_issue(2)]
         prs = [make_pr_info(101, 1, draft=False), make_pr_info(102, 2, draft=False)]
 
@@ -1725,7 +1686,7 @@ class TestActiveIssuesCleanup:
         self, config: HydraConfig
     ) -> None:
         """When issue is not in issue_map, store must mark_complete."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 999)
 
         wt = config.worktree_base / "issue-999"
@@ -1742,7 +1703,7 @@ class TestActiveIssuesCleanup:
         self, config: HydraConfig
     ) -> None:
         """If merge_main raises, store must still mark_complete."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1765,7 +1726,7 @@ class TestActiveIssuesCleanup:
         self, config: HydraConfig
     ) -> None:
         """If reviewers.review raises, store must still mark_complete."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1788,7 +1749,7 @@ class TestActiveIssuesCleanup:
         self, config: HydraConfig
     ) -> None:
         """If worktrees.create raises, store must still mark_complete."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1809,7 +1770,7 @@ class TestActiveIssuesCleanup:
         self, config: HydraConfig
     ) -> None:
         """On the happy path, store must mark_complete after review_prs."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1840,11 +1801,10 @@ class TestReviewUpdateStartEvent:
 
     @pytest.mark.asyncio
     async def test_review_update_start_event_published_before_review(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """A REVIEW_UPDATE 'start' event should be published when _review_one() starts."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1863,7 +1823,7 @@ class TestReviewUpdateStartEvent:
         await phase.review_prs([pr], [issue])
 
         # Check that a REVIEW_UPDATE event with status "start" was published
-        history = bus.get_history()
+        history = event_bus.get_history()
         start_events = [
             e
             for e in history
@@ -1876,11 +1836,10 @@ class TestReviewUpdateStartEvent:
 
     @pytest.mark.asyncio
     async def test_review_update_start_event_published_even_when_issue_not_found(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """A REVIEW_UPDATE 'start' event is published even if the issue is missing."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         pr = make_pr_info(101, 999)
 
         wt = config.worktree_base / "issue-999"
@@ -1888,7 +1847,7 @@ class TestReviewUpdateStartEvent:
 
         await phase.review_prs([pr], [])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         start_events = [
             e
             for e in history
@@ -1900,11 +1859,10 @@ class TestReviewUpdateStartEvent:
 
     @pytest.mark.asyncio
     async def test_review_update_start_event_includes_worker_id(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """The start event should include the worker ID."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1922,7 +1880,7 @@ class TestReviewUpdateStartEvent:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         start_events = [
             e
             for e in history
@@ -1943,7 +1901,7 @@ class TestLifecycleMetricRecording:
     @pytest.mark.asyncio
     async def test_records_review_verdict_approve(self, config: HydraConfig) -> None:
         """Approving a PR should record an approval verdict in state."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1970,7 +1928,7 @@ class TestLifecycleMetricRecording:
         self, config: HydraConfig
     ) -> None:
         """Request-changes verdict should record in state."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -1997,7 +1955,7 @@ class TestLifecycleMetricRecording:
     @pytest.mark.asyncio
     async def test_records_reviewer_fixes(self, config: HydraConfig) -> None:
         """When reviewer makes fixes, it should be counted."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2026,7 +1984,7 @@ class TestLifecycleMetricRecording:
     @pytest.mark.asyncio
     async def test_records_review_duration(self, config: HydraConfig) -> None:
         """Review duration should be recorded when positive."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2057,7 +2015,7 @@ class TestLifecycleMetricRecording:
         self, config: HydraConfig
     ) -> None:
         """Zero duration should not be recorded."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2090,7 +2048,7 @@ class TestLifecycleMetricRecording:
         """Merge conflict HITL escalation should increment the hitl counter."""
         mock_agents = AsyncMock()
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2116,7 +2074,7 @@ class TestLifecycleMetricRecording:
         self, config: HydraConfig
     ) -> None:
         """PR merge failure should increment the hitl counter."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2154,7 +2112,7 @@ class TestLifecycleMetricRecording:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2199,7 +2157,7 @@ class TestLifecycleMetricRecording:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        phase = _make_phase(cfg)
+        phase = make_review_phase(cfg)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2257,7 +2215,7 @@ class TestRetrospectiveIntegration:
     ) -> None:
         """retrospective.record() should be called when PR is merged."""
         mock_retro = AsyncMock()
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._retrospective = mock_retro
 
         issue = make_issue(42)
@@ -2289,7 +2247,7 @@ class TestRetrospectiveIntegration:
     ) -> None:
         """retrospective.record() should NOT be called when merge fails."""
         mock_retro = AsyncMock()
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._retrospective = mock_retro
 
         issue = make_issue(42)
@@ -2322,7 +2280,7 @@ class TestRetrospectiveIntegration:
         """If retrospective.record() raises, it should not crash the review."""
         mock_retro = AsyncMock()
         mock_retro.record = AsyncMock(side_effect=RuntimeError("retro boom"))
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._retrospective = mock_retro
 
         issue = make_issue(42)
@@ -2350,7 +2308,7 @@ class TestRetrospectiveIntegration:
         self, config: HydraConfig
     ) -> None:
         """When no retrospective is set, merge should work normally."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         # phase._retrospective is None by default
 
         issue = make_issue(42)
@@ -2386,7 +2344,7 @@ class TestReviewInsightIntegration:
         self, config: HydraConfig
     ) -> None:
         """After a review, a record should be appended to the insight store."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2417,7 +2375,7 @@ class TestReviewInsightIntegration:
         """When a category crosses the threshold, an improvement issue is filed."""
         from review_insights import ReviewInsightStore, ReviewRecord
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2469,7 +2427,7 @@ class TestReviewInsightIntegration:
         """Once a category has been proposed, it should not be re-filed."""
         from review_insights import ReviewInsightStore, ReviewRecord
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2517,7 +2475,7 @@ class TestReviewInsightIntegration:
         """If insight recording fails, the review should still complete."""
         from unittest.mock import patch
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2553,10 +2511,11 @@ class TestGranularReviewStatusEvents:
     """Tests that review_phase emits granular status events at each lifecycle stage."""
 
     @pytest.mark.asyncio
-    async def test_merge_main_status_emitted(self, config: HydraConfig) -> None:
+    async def test_merge_main_status_emitted(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """A 'merge_main' event should be published before merging main."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2574,7 +2533,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         merge_main_events = [
             e
             for e in history
@@ -2585,13 +2544,14 @@ class TestGranularReviewStatusEvents:
         assert merge_main_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_merge_fix_status_emitted(self, config: HydraConfig) -> None:
+    async def test_merge_fix_status_emitted(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """A 'merge_fix' event should be published when resolving conflicts."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
-        bus = EventBus()
-        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        phase = make_review_phase(config, agents=mock_agents, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2611,7 +2571,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         conflict_events = [
             e
             for e in history
@@ -2623,14 +2583,13 @@ class TestGranularReviewStatusEvents:
 
     @pytest.mark.asyncio
     async def test_escalating_status_emitted_on_conflict_failure(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """An 'escalating' event should be published when conflicts can't be resolved."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        bus = EventBus()
-        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        phase = make_review_phase(config, agents=mock_agents, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2648,7 +2607,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         escalating_events = [
             e
             for e in history
@@ -2660,11 +2619,10 @@ class TestGranularReviewStatusEvents:
 
     @pytest.mark.asyncio
     async def test_merging_status_emitted_before_merge(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """A 'merging' event should be published before merging the PR."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2682,7 +2640,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         merging_events = [
             e
             for e in history
@@ -2693,11 +2651,10 @@ class TestGranularReviewStatusEvents:
 
     @pytest.mark.asyncio
     async def test_escalating_status_emitted_on_merge_failure(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """An 'escalating' event should be published when PR merge fails."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2718,7 +2675,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         escalating_events = [
             e
             for e in history
@@ -2729,7 +2686,7 @@ class TestGranularReviewStatusEvents:
         assert escalating_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_ci_wait_status_emitted(self, config: HydraConfig) -> None:
+    async def test_ci_wait_status_emitted(self, config: HydraConfig, event_bus) -> None:
         """A 'ci_wait' event should be published before waiting for CI."""
         from tests.helpers import ConfigFactory
 
@@ -2739,8 +2696,7 @@ class TestGranularReviewStatusEvents:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        bus = EventBus()
-        phase = _make_phase(cfg, event_bus=bus)
+        phase = make_review_phase(cfg, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2759,7 +2715,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         ci_wait_events = [
             e
             for e in history
@@ -2769,7 +2725,7 @@ class TestGranularReviewStatusEvents:
         assert ci_wait_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_ci_fix_status_emitted(self, config: HydraConfig) -> None:
+    async def test_ci_fix_status_emitted(self, config: HydraConfig, event_bus) -> None:
         """A 'ci_fix' event should be published before running the CI fix agent."""
         from tests.helpers import ConfigFactory
 
@@ -2779,8 +2735,7 @@ class TestGranularReviewStatusEvents:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        bus = EventBus()
-        phase = _make_phase(cfg, event_bus=bus)
+        phase = make_review_phase(cfg, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2819,7 +2774,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         ci_fix_events = [
             e
             for e in history
@@ -2830,7 +2785,7 @@ class TestGranularReviewStatusEvents:
 
     @pytest.mark.asyncio
     async def test_escalating_status_emitted_on_ci_exhaustion(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """An 'escalating' event should be published when CI fix attempts are exhausted."""
         from tests.helpers import ConfigFactory
@@ -2841,8 +2796,7 @@ class TestGranularReviewStatusEvents:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        bus = EventBus()
-        phase = _make_phase(cfg, event_bus=bus)
+        phase = make_review_phase(cfg, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2870,7 +2824,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         escalating_events = [
             e
             for e in history
@@ -2881,10 +2835,11 @@ class TestGranularReviewStatusEvents:
         assert escalating_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_event_ordering_happy_path(self, config: HydraConfig) -> None:
+    async def test_event_ordering_happy_path(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """Events should be emitted in order: start -> merge_main -> reviewing -> merging."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -2902,7 +2857,7 @@ class TestGranularReviewStatusEvents:
 
         await phase.review_prs([pr], [issue])
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         review_statuses = [
             e.data["status"] for e in history if e.type == EventType.REVIEW_UPDATE
         ]
@@ -2916,14 +2871,13 @@ class TestHITLEscalationEvents:
 
     @pytest.mark.asyncio
     async def test_merge_conflict_escalation_emits_hitl_event(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Merge conflict escalation should emit HITL_ESCALATION with cause merge_conflict."""
-        bus = EventBus()
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(False, ""))
-        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        phase = make_review_phase(config, agents=mock_agents, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2942,7 +2896,7 @@ class TestHITLEscalationEvents:
         await phase.review_prs([pr], [issue])
 
         escalation_events = [
-            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+            e for e in event_bus.get_history() if e.type == EventType.HITL_ESCALATION
         ]
         assert len(escalation_events) == 1
         data = escalation_events[0].data
@@ -2954,11 +2908,10 @@ class TestHITLEscalationEvents:
 
     @pytest.mark.asyncio
     async def test_merge_failure_escalation_emits_hitl_event(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Merge failure escalation should emit HITL_ESCALATION with cause merge_failed."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -2981,7 +2934,7 @@ class TestHITLEscalationEvents:
         await phase.review_prs([pr], [issue])
 
         escalation_events = [
-            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+            e for e in event_bus.get_history() if e.type == EventType.HITL_ESCALATION
         ]
         assert len(escalation_events) == 1
         data = escalation_events[0].data
@@ -2993,7 +2946,7 @@ class TestHITLEscalationEvents:
 
     @pytest.mark.asyncio
     async def test_ci_failure_escalation_emits_hitl_event(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """CI failure escalation should emit HITL_ESCALATION with cause ci_failed."""
         from tests.helpers import ConfigFactory
@@ -3004,8 +2957,7 @@ class TestHITLEscalationEvents:
             worktree_base=config.worktree_base,
             state_file=config.state_file,
         )
-        bus = EventBus()
-        phase = _make_phase(cfg, event_bus=bus)
+        phase = make_review_phase(cfg, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3037,7 +2989,7 @@ class TestHITLEscalationEvents:
         await phase.review_prs([pr], [issue])
 
         escalation_events = [
-            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+            e for e in event_bus.get_history() if e.type == EventType.HITL_ESCALATION
         ]
         assert len(escalation_events) == 1
         data = escalation_events[0].data
@@ -3050,11 +3002,10 @@ class TestHITLEscalationEvents:
 
     @pytest.mark.asyncio
     async def test_successful_merge_does_not_emit_hitl_escalation(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Happy path (approve + merge) should NOT emit HITL_ESCALATION."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3074,17 +3025,16 @@ class TestHITLEscalationEvents:
         await phase.review_prs([pr], [issue])
 
         escalation_events = [
-            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+            e for e in event_bus.get_history() if e.type == EventType.HITL_ESCALATION
         ]
         assert len(escalation_events) == 0
 
     @pytest.mark.asyncio
     async def test_review_fix_cap_exceeded_emits_hitl_event(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Review fix cap exceeded should emit HITL_ESCALATION with cause review_fix_cap_exceeded."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3114,7 +3064,7 @@ class TestHITLEscalationEvents:
         await phase.review_prs([pr], [issue])
 
         escalation_events = [
-            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+            e for e in event_bus.get_history() if e.type == EventType.HITL_ESCALATION
         ]
         assert len(escalation_events) == 1
         data = escalation_events[0].data
@@ -3137,7 +3087,7 @@ class TestRequestChangesRetry:
         self, config: HydraConfig
     ) -> tuple[ReviewPhase, PRInfo, GitHubIssue]:
         """Helper to set up a ReviewPhase ready for retry tests."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3242,7 +3192,7 @@ class TestRequestChangesRetry:
         self, config: HydraConfig
     ) -> None:
         """COMMENT verdict should trigger the same retry flow as REQUEST_CHANGES."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3272,7 +3222,7 @@ class TestRequestChangesRetry:
     @pytest.mark.asyncio
     async def test_approve_resets_review_attempts(self, config: HydraConfig) -> None:
         """APPROVE should reset review attempt counter on successful merge."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3298,7 +3248,7 @@ class TestRequestChangesRetry:
     @pytest.mark.asyncio
     async def test_approve_clears_review_feedback(self, config: HydraConfig) -> None:
         """APPROVE should clear stored review feedback on successful merge."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3335,7 +3285,7 @@ class TestAdversarialReview:
         self, config: HydraConfig
     ) -> None:
         """APPROVE with >= min_review_findings should be accepted without re-review."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3367,7 +3317,7 @@ class TestAdversarialReview:
         self, config: HydraConfig
     ) -> None:
         """APPROVE with THOROUGH_REVIEW_COMPLETE block should be accepted."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3399,7 +3349,7 @@ class TestAdversarialReview:
         self, config: HydraConfig
     ) -> None:
         """APPROVE with too few findings and no justification should trigger re-review."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42, draft=False)
 
@@ -3446,28 +3396,28 @@ class TestCountReviewFindings:
     """Tests for ReviewPhase._count_review_findings."""
 
     def test_counts_bullet_points(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         assert phase._count_review_findings("- Fix A\n- Fix B\n- Fix C") == 3
 
     def test_counts_numbered_items(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         assert phase._count_review_findings("1. Fix A\n2. Fix B") == 2
 
     def test_counts_asterisk_bullets(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         assert phase._count_review_findings("* Fix A\n* Fix B") == 2
 
     def test_counts_mixed_formats(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         summary = "- Bullet item\n1. Numbered item\n* Star item"
         assert phase._count_review_findings(summary) == 3
 
     def test_returns_zero_for_no_findings(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         assert phase._count_review_findings("All looks good.") == 0
 
     def test_returns_zero_for_empty_string(self, config: HydraConfig) -> None:
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         assert phase._count_review_findings("") == 0
 
 
@@ -3517,7 +3467,7 @@ class TestCreateVerificationIssue:
     @pytest.mark.asyncio
     async def test_creates_issue_all_criteria_passed(self, config: HydraConfig) -> None:
         """Judge with all criteria passing creates issue with correct title and label."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42, title="Fix the frobnicator")
         pr = make_pr_info(101, 42)
         judge = _make_judge_result()
@@ -3544,7 +3494,7 @@ class TestCreateVerificationIssue:
         self, config: HydraConfig
     ) -> None:
         """Judge with mixed results highlights failures in the body."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         judge = _make_judge_result(all_pass=False)
@@ -3563,7 +3513,7 @@ class TestCreateVerificationIssue:
         self, config: HydraConfig
     ) -> None:
         """Body includes the verification instructions from judge result."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         judge = _make_judge_result(
@@ -3582,7 +3532,7 @@ class TestCreateVerificationIssue:
     @pytest.mark.asyncio
     async def test_creates_issue_includes_links(self, config: HydraConfig) -> None:
         """Body contains references to the original issue and PR."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(99, title="Add auth")
         pr = make_pr_info(200, 99)
         judge = _make_judge_result(issue_number=99, pr_number=200)
@@ -3598,7 +3548,7 @@ class TestCreateVerificationIssue:
     @pytest.mark.asyncio
     async def test_returns_zero_on_failure(self, config: HydraConfig) -> None:
         """When create_issue returns 0, method returns 0."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         judge = _make_judge_result()
@@ -3612,7 +3562,7 @@ class TestCreateVerificationIssue:
     @pytest.mark.asyncio
     async def test_state_tracked_on_success(self, config: HydraConfig) -> None:
         """After successful creation, state tracks the verification issue."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         judge = _make_judge_result()
@@ -3626,7 +3576,7 @@ class TestCreateVerificationIssue:
     @pytest.mark.asyncio
     async def test_state_not_tracked_on_failure(self, config: HydraConfig) -> None:
         """When create_issue returns 0, state is not updated."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         judge = _make_judge_result()
@@ -3644,7 +3594,7 @@ class TestGetJudgeResult:
     @pytest.mark.asyncio
     async def test_returns_none(self, config: HydraConfig) -> None:
         """Stub returns None until #268 is implemented."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3661,7 +3611,7 @@ class TestVerificationIssuePostMerge:
         self, config: HydraConfig
     ) -> None:
         """When _get_judge_result returns a result, _create_verification_issue is called."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3690,7 +3640,7 @@ class TestVerificationIssuePostMerge:
         self, config: HydraConfig
     ) -> None:
         """When _get_judge_result returns None, _create_verification_issue is NOT called."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3714,7 +3664,7 @@ class TestVerificationIssuePostMerge:
     @pytest.mark.asyncio
     async def test_verification_failure_non_blocking(self, config: HydraConfig) -> None:
         """When _create_verification_issue raises, the merge still succeeds."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3752,7 +3702,7 @@ class TestEscalateToHitl:
     @pytest.mark.asyncio
     async def test_sets_hitl_origin_and_cause(self, config: HydraConfig) -> None:
         """Should set HITL origin label and cause in state."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3773,7 +3723,7 @@ class TestEscalateToHitl:
     @pytest.mark.asyncio
     async def test_records_hitl_escalation_counter(self, config: HydraConfig) -> None:
         """Should increment the HITL escalation counter."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3794,7 +3744,7 @@ class TestEscalateToHitl:
     @pytest.mark.asyncio
     async def test_swaps_labels_on_issue_and_pr(self, config: HydraConfig) -> None:
         """Should remove review labels and add HITL labels."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3817,7 +3767,7 @@ class TestEscalateToHitl:
     @pytest.mark.asyncio
     async def test_posts_comment_on_pr_by_default(self, config: HydraConfig) -> None:
         """By default, the comment is posted on the PR."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3841,7 +3791,7 @@ class TestEscalateToHitl:
         self, config: HydraConfig
     ) -> None:
         """When post_on_pr=False, comment is posted on the issue."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3862,10 +3812,11 @@ class TestEscalateToHitl:
         phase._prs.post_pr_comment.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_publishes_hitl_escalation_event(self, config: HydraConfig) -> None:
+    async def test_publishes_hitl_escalation_event(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """Should publish an HITL_ESCALATION event."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3881,7 +3832,7 @@ class TestEscalateToHitl:
             event_cause="test_event",
         )
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         hitl_events = [e for e in history if e.type == EventType.HITL_ESCALATION]
         assert len(hitl_events) == 1
         assert hitl_events[0].data["issue"] == 42
@@ -3889,10 +3840,11 @@ class TestEscalateToHitl:
         assert hitl_events[0].data["cause"] == "test_event"
 
     @pytest.mark.asyncio
-    async def test_extra_event_data_included(self, config: HydraConfig) -> None:
+    async def test_extra_event_data_included(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """Extra event data should be merged into the HITL event."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         phase._prs.remove_label = AsyncMock()
         phase._prs.remove_pr_label = AsyncMock()
         phase._prs.add_labels = AsyncMock()
@@ -3908,7 +3860,7 @@ class TestEscalateToHitl:
             extra_event_data={"ci_fix_attempts": 3},
         )
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         hitl_events = [e for e in history if e.type == EventType.HITL_ESCALATION]
         assert hitl_events[0].data["ci_fix_attempts"] == 3
 
@@ -3919,7 +3871,7 @@ class TestMergeWithMain:
     @pytest.mark.asyncio
     async def test_returns_true_on_clean_merge(self, config: HydraConfig) -> None:
         """When merge_main succeeds, should push and return True."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3941,7 +3893,7 @@ class TestMergeWithMain:
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = make_review_phase(config, agents=mock_agents)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3957,11 +3909,10 @@ class TestMergeWithMain:
 
     @pytest.mark.asyncio
     async def test_returns_false_and_escalates_on_failure(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """When conflict resolution fails, should escalate and return False."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -3987,7 +3938,7 @@ class TestRunAndPostReview:
     @pytest.mark.asyncio
     async def test_pushes_fixes_when_made(self, config: HydraConfig) -> None:
         """When reviewer makes fixes, branch should be pushed."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4013,7 +3964,7 @@ class TestRunAndPostReview:
     @pytest.mark.asyncio
     async def test_posts_summary_as_pr_comment(self, config: HydraConfig) -> None:
         """Review summary should be posted as a PR comment."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4031,7 +3982,7 @@ class TestRunAndPostReview:
     @pytest.mark.asyncio
     async def test_skips_submit_review_for_approve(self, config: HydraConfig) -> None:
         """submit_review should not be called for APPROVE verdicts."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4052,7 +4003,7 @@ class TestRunAndPostReview:
         self, config: HydraConfig
     ) -> None:
         """submit_review should be called for REQUEST_CHANGES verdicts."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4073,7 +4024,7 @@ class TestRunAndPostReview:
         """SelfReviewError should be caught gracefully."""
         from pr_manager import SelfReviewError
 
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4098,7 +4049,7 @@ class TestHandleApprovedMerge:
     @pytest.mark.asyncio
     async def test_merge_success_marks_merged(self, config: HydraConfig) -> None:
         """Successful merge should set result.merged and update state."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42)
@@ -4116,10 +4067,11 @@ class TestHandleApprovedMerge:
         assert phase._state.get_issue_status(42) == "merged"
 
     @pytest.mark.asyncio
-    async def test_merge_failure_escalates(self, config: HydraConfig) -> None:
+    async def test_merge_failure_escalates(
+        self, config: HydraConfig, event_bus
+    ) -> None:
         """Failed merge should escalate to HITL."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42)
@@ -4142,7 +4094,7 @@ class TestHandleApprovedMerge:
     @pytest.mark.asyncio
     async def test_merge_success_swaps_labels(self, config: HydraConfig) -> None:
         """Successful merge should swap review label to fixed label."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42)
@@ -4169,7 +4121,7 @@ class TestRunPostMergeHooks:
     async def test_calls_ac_generator(self, config: HydraConfig) -> None:
         """Should call ac_generator.generate when configured."""
         mock_ac = AsyncMock()
-        phase = _make_phase(config, ac_generator=mock_ac)
+        phase = make_review_phase(config, ac_generator=mock_ac)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
         result = make_review_result(101, 42)
@@ -4182,7 +4134,7 @@ class TestRunPostMergeHooks:
     async def test_calls_retrospective(self, config: HydraConfig) -> None:
         """Should call retrospective.record when configured."""
         mock_retro = AsyncMock()
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         phase._retrospective = mock_retro
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
@@ -4200,7 +4152,7 @@ class TestRunPostMergeHooks:
         mock_ac = AsyncMock()
         mock_ac.generate = AsyncMock(side_effect=RuntimeError("AC failed"))
         mock_retro = AsyncMock()
-        phase = _make_phase(config, ac_generator=mock_ac)
+        phase = make_review_phase(config, ac_generator=mock_ac)
         phase._retrospective = mock_retro
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
@@ -4215,7 +4167,7 @@ class TestRunPostMergeHooks:
     @pytest.mark.asyncio
     async def test_no_hooks_configured(self, config: HydraConfig) -> None:
         """When no hooks are configured, should complete without errors."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
         result = make_review_result(101, 42)
@@ -4230,7 +4182,7 @@ class TestReviewOneInner:
     @pytest.mark.asyncio
     async def test_returns_issue_not_found(self, config: HydraConfig) -> None:
         """When issue is not in the map, should return 'Issue not found'."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 999)
 
         wt = config.worktree_base / "issue-999"
@@ -4245,7 +4197,7 @@ class TestReviewOneInner:
         self, config: HydraConfig
     ) -> None:
         """Should coordinate merge, review, state recording, and verdict handling."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4268,11 +4220,10 @@ class TestReviewOneInner:
 
     @pytest.mark.asyncio
     async def test_returns_merge_conflict_summary_when_merge_fails(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """When merge fails and escalates to HITL, should return early with conflict summary."""
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         issue = make_issue(42)
         pr = make_pr_info(101, 42)
 
@@ -4304,7 +4255,7 @@ class TestHandleRejectedReview:
     @pytest.mark.asyncio
     async def test_under_cap_returns_true(self, config: HydraConfig) -> None:
         """When under the review fix cap, should return True (preserve worktree)."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4322,7 +4273,7 @@ class TestHandleRejectedReview:
     @pytest.mark.asyncio
     async def test_under_cap_stores_review_feedback(self, config: HydraConfig) -> None:
         """When under cap, review summary should be saved as feedback for re-implementation."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = ReviewResult(
             pr_number=101,
@@ -4346,7 +4297,7 @@ class TestHandleRejectedReview:
         self, config: HydraConfig
     ) -> None:
         """When under cap, should swap labels from review→ready on both issue and PR."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4368,7 +4319,7 @@ class TestHandleRejectedReview:
         self, config: HydraConfig
     ) -> None:
         """When under cap, should increment the review attempt counter."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4393,7 +4344,7 @@ class TestHandleRejectedReview:
             worktree_base=tmp_path / "worktrees",
             state_file=tmp_path / "state.json",
         )
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4413,7 +4364,9 @@ class TestHandleRejectedReview:
         assert returned is False
 
     @pytest.mark.asyncio
-    async def test_cap_exceeded_escalates_to_hitl(self, tmp_path: Path) -> None:
+    async def test_cap_exceeded_escalates_to_hitl(
+        self, tmp_path: Path, event_bus
+    ) -> None:
         """When cap is exceeded, should escalate issue to HITL and set state."""
         from tests.helpers import ConfigFactory
 
@@ -4423,8 +4376,7 @@ class TestHandleRejectedReview:
             worktree_base=tmp_path / "worktrees",
             state_file=tmp_path / "state.json",
         )
-        bus = EventBus()
-        phase = _make_phase(config, event_bus=bus)
+        phase = make_review_phase(config, event_bus=event_bus)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4454,7 +4406,7 @@ class TestHandleRejectedReview:
             worktree_base=tmp_path / "worktrees",
             state_file=tmp_path / "state.json",
         )
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 
@@ -4478,7 +4430,7 @@ class TestHandleRejectedReview:
     @pytest.mark.asyncio
     async def test_under_cap_posts_requeue_comment(self, config: HydraConfig) -> None:
         """When under cap, should post a re-queue notification on the issue."""
-        phase = _make_phase(config)
+        phase = make_review_phase(config)
         pr = make_pr_info(101, 42)
         result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
 

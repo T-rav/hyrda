@@ -27,16 +27,11 @@ def make_issue(
 
 
 @pytest.fixture
-def bus() -> EventBus:
-    return EventBus()
-
-
-@pytest.fixture
-def runner(bus: EventBus) -> TriageRunner:
+def runner(event_bus: EventBus) -> TriageRunner:
     from tests.helpers import ConfigFactory
 
     config = ConfigFactory.create()
-    return TriageRunner(config, bus)
+    return TriageRunner(config, event_bus)
 
 
 # ---------------------------------------------------------------------------
@@ -105,11 +100,11 @@ class TestTriageEvents:
 
     @pytest.mark.asyncio
     async def test_evaluate_publishes_evaluating_and_done_events(
-        self, runner: TriageRunner, bus: EventBus
+        self, runner: TriageRunner, event_bus: EventBus
     ) -> None:
         issue = make_issue(title="A descriptive title", body="A" * 100)
         received: list = []
-        queue = bus.subscribe()
+        queue = event_bus.subscribe()
 
         await runner.evaluate(issue)
 
@@ -125,11 +120,11 @@ class TestTriageEvents:
 
     @pytest.mark.asyncio
     async def test_evaluate_events_carry_issue_number(
-        self, runner: TriageRunner, bus: EventBus
+        self, runner: TriageRunner, event_bus: EventBus
     ) -> None:
         issue = make_issue(number=99, title="A descriptive title", body="A" * 100)
         received: list = []
-        queue = bus.subscribe()
+        queue = event_bus.subscribe()
 
         await runner.evaluate(issue)
 
@@ -141,7 +136,7 @@ class TestTriageEvents:
 
     @pytest.mark.asyncio
     async def test_evaluate_emits_transcript_lines(
-        self, runner: TriageRunner, bus: EventBus
+        self, runner: TriageRunner, event_bus: EventBus
     ) -> None:
         issue = make_issue(
             number=42,
@@ -149,7 +144,7 @@ class TestTriageEvents:
             body="Detailed description of what needs to happen. " * 3,
         )
         received: list = []
-        queue = bus.subscribe()
+        queue = event_bus.subscribe()
 
         await runner.evaluate(issue)
 
@@ -164,11 +159,11 @@ class TestTriageEvents:
 
     @pytest.mark.asyncio
     async def test_not_ready_transcript_shows_reasons(
-        self, runner: TriageRunner, bus: EventBus
+        self, runner: TriageRunner, event_bus: EventBus
     ) -> None:
         issue = make_issue(number=7, title="Bug", body="short")
         received: list = []
-        queue = bus.subscribe()
+        queue = event_bus.subscribe()
 
         await runner.evaluate(issue)
 
@@ -189,11 +184,11 @@ class TestTriageDryRun:
     """Tests for dry-run mode in TriageRunner."""
 
     @pytest.mark.asyncio
-    async def test_dry_run_returns_ready_true(self, bus: EventBus) -> None:
+    async def test_dry_run_returns_ready_true(self, event_bus: EventBus) -> None:
         from tests.helpers import ConfigFactory
 
         config = ConfigFactory.create(dry_run=True)
-        runner = TriageRunner(config, bus)
+        runner = TriageRunner(config, event_bus)
         issue = make_issue(title="Bug", body="")
 
         result = await runner.evaluate(issue)

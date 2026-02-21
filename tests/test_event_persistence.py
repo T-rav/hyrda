@@ -311,20 +311,18 @@ class TestEventBusWithPersistence:
         assert history[0].data == {"i": 0}
 
     @pytest.mark.asyncio
-    async def test_publish_without_event_log_works(self) -> None:
-        bus = EventBus()  # No event_log
+    async def test_publish_without_event_log_works(self, event_bus) -> None:
         event = _make_event(data={"no_log": True})
-        await bus.publish(event)
+        await event_bus.publish(event)
 
-        history = bus.get_history()
+        history = event_bus.get_history()
         assert len(history) == 1
         assert history[0].data == {"no_log": True}
 
     @pytest.mark.asyncio
-    async def test_load_history_without_event_log_is_noop(self) -> None:
-        bus = EventBus()  # No event_log
-        await bus.load_history_from_disk()
-        assert bus.get_history() == []
+    async def test_load_history_without_event_log_is_noop(self, event_bus) -> None:
+        await event_bus.load_history_from_disk()
+        assert event_bus.get_history() == []
 
     @pytest.mark.asyncio
     async def test_publish_does_not_block_subscribers(self, tmp_path: Path) -> None:
@@ -366,9 +364,8 @@ class TestEventBusWithPersistence:
         assert events[0].data == {"age": "new"}
 
     @pytest.mark.asyncio
-    async def test_load_events_since_returns_none_without_log(self) -> None:
-        bus = EventBus()
-        result = await bus.load_events_since(datetime.now(UTC))
+    async def test_load_events_since_returns_none_without_log(self, event_bus) -> None:
+        result = await event_bus.load_events_since(datetime.now(UTC))
         assert result is None
 
     @pytest.mark.asyncio
@@ -385,10 +382,9 @@ class TestEventBusWithPersistence:
         assert loaded[0].data == {"new": True}
 
     @pytest.mark.asyncio
-    async def test_rotate_log_noop_without_log(self) -> None:
-        bus = EventBus()
+    async def test_rotate_log_noop_without_log(self, event_bus) -> None:
         # Should not raise
-        await bus.rotate_log(max_size_bytes=1, max_age_days=7)
+        await event_bus.rotate_log(max_size_bytes=1, max_age_days=7)
 
     @pytest.mark.asyncio
     async def test_persist_event_logs_error_on_failure(
