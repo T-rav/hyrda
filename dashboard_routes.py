@@ -208,10 +208,23 @@ def create_router(
         orch = get_orchestrator()
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
+
+        # Read origin before clearing state
+        origin = state.get_hitl_origin(issue_number)
+
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
+        state.remove_hitl_cause(issue_number)
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
+
+        # If this was an improve issue, transition to triage for implementation
+        if origin and origin in config.improve_label:
+            for lbl in config.improve_label:
+                await pr_manager.remove_label(issue_number, lbl)
+            if config.find_label:
+                await pr_manager.add_labels(issue_number, [config.find_label[0]])
+
         await event_bus.publish(
             HydraEvent(
                 type=EventType.HITL_UPDATE,

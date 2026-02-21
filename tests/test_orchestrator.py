@@ -3380,3 +3380,241 @@ class TestMemorySuggestionFiling:
         await orch._review_loop()  # must not raise
 
         orch._file_memory_suggestion.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# HITL improve→triage transition on correction success
+# ---------------------------------------------------------------------------
+
+
+class TestHITLImproveTransition:
+    """Tests that improve-origin HITL corrections transition to triage."""
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_success_improve_origin_transitions_to_triage(
+        self, config: HydraConfig
+    ) -> None:
+        """On success with improve origin, should remove improve and add find label."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Improve: test", body="Details")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-improve")
+        orch._state.set_hitl_cause(42, "Memory suggestion")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Improve the prompt", semaphore)
+
+        # Verify improve label was removed
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        assert (42, "hydra-improve") in remove_calls
+
+        # Verify find/triage label was added (not the improve label)
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.find_label[0]]) in add_calls
+        # Ensure hydra-improve was NOT restored as a label
+        assert (42, ["hydra-improve"]) not in add_calls
+
+        # Verify HITL state was cleaned up
+        assert orch._state.get_hitl_origin(42) is None
+        assert orch._state.get_hitl_cause(42) is None
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_success_non_improve_origin_restores_label(
+        self, config: HydraConfig
+    ) -> None:
+        """Non-improve origins should still restore the original label (existing behavior)."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Test", body="Details")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-review")
+        orch._state.set_hitl_cause(42, "CI failed")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix the tests", semaphore)
+
+        # Verify review label was restored (existing behavior)
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, ["hydra-review"]) in add_calls
+
+        # Verify find label was NOT added
+        assert (42, [config.find_label[0]]) not in add_calls
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_failure_improve_origin_preserves_state(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, improve origin state should be preserved for retry."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Improve: test", body="Details")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-improve")
+        orch._state.set_hitl_cause(42, "Memory suggestion")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(
+                issue_number=42, success=False, error="quality failed"
+            )
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Improve the prompt", semaphore)
+
+        # Verify HITL label was re-applied
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert (42, [config.hitl_label[0]]) in add_calls
+
+        # Verify improve origin state is preserved for retry
+        assert orch._state.get_hitl_origin(42) == "hydra-improve"
+        assert orch._state.get_hitl_cause(42) == "Memory suggestion"
+
+    @pytest.mark.asyncio
+    async def test_process_one_hitl_improve_success_comment_mentions_find_label(
+        self, config: HydraConfig
+    ) -> None:
+        """Success comment for improve origin should mention the find/triage stage."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42, title="Improve: test", body="Details")
+
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
+        orch._state.set_hitl_origin(42, "hydra-improve")
+
+        mock_prs = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.push_branch = AsyncMock(return_value=True)
+        mock_prs.post_comment = AsyncMock()
+        orch._prs = mock_prs
+
+        mock_wt = AsyncMock()
+        mock_wt.create = AsyncMock(return_value=config.worktree_base / "issue-42")
+        mock_wt.destroy = AsyncMock()
+        orch._worktrees = mock_wt
+
+        orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
+            return_value=HITLResult(issue_number=42, success=True)
+        )
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Improve it", semaphore)
+
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert config.find_label[0] in comment
+
+
+# ---------------------------------------------------------------------------
+# Memory suggestion filing sets hitl_origin
+# ---------------------------------------------------------------------------
+
+
+class TestMemorySuggestionSetsOrigin:
+    """Tests that _file_memory_suggestion sets hitl_origin on created issues."""
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_sets_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """When a memory suggestion is filed, hitl_origin should be set to improve label."""
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+        orch._prs = mock_prs
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something useful\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await orch._file_memory_suggestion(transcript, "implementer", "issue #42")
+
+        # Verify issue was created with improve + hitl labels
+        mock_prs.create_issue.assert_awaited_once()
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
+
+        # Verify hitl_origin was set
+        assert orch._state.get_hitl_origin(99) == config.improve_label[0]
+        assert orch._state.get_hitl_cause(99) == "Memory suggestion"
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_no_origin_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """When create_issue returns 0, no hitl_origin should be set."""
+        orch = HydraOrchestrator(config)
+
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=0)
+        orch._prs = mock_prs
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await orch._file_memory_suggestion(transcript, "implementer", "issue #42")
+
+        # No hitl_origin should be set when create_issue fails
+        assert orch._state.get_hitl_origin(0) is None

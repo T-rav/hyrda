@@ -685,3 +685,60 @@ class TestRetrospectiveEntry:
         json_str = entry.model_dump_json()
         restored = RetrospectiveEntry.model_validate_json(json_str)
         assert restored == entry
+
+
+# ---------------------------------------------------------------------------
+# _file_improvement_issue sets hitl_origin
+# ---------------------------------------------------------------------------
+
+
+class TestFileImprovementIssueSetsOrigin:
+    """Tests that _file_improvement_issue sets hitl_origin for created issues."""
+
+    @pytest.mark.asyncio
+    async def test_file_improvement_issue_sets_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Filing an improvement issue should set hitl_origin to improve label."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=99)
+
+        await collector._file_improvement_issue("Pattern: test", "Some body text")
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(99) == config.improve_label[0]
+        assert state.get_hitl_cause(99) == "Retrospective pattern detected"
+
+    @pytest.mark.asyncio
+    async def test_file_improvement_issue_no_origin_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """When create_issue returns 0, no hitl_origin should be set."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=0)
+
+        await collector._file_improvement_issue("Pattern: test", "Some body text")
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(0) is None
+
+    @pytest.mark.asyncio
+    async def test_pattern_detection_sets_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """When pattern detection files an issue, hitl_origin should be set."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=77)
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp="2026-02-20T10:30:00Z",
+                quality_fix_rounds=1,  # >50% → triggers pattern
+                plan_accuracy_pct=90,
+            )
+            for i in range(10)
+        ]
+
+        await collector._detect_patterns(entries)
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(77) == config.improve_label[0]
+        assert state.get_hitl_cause(77) == "Retrospective pattern detected"
