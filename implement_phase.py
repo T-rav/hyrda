@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraConfig
+from escalation import Escalator
 from issue_store import IssueStore
 from models import GitHubIssue, WorkerResult
 from pr_manager import PRManager
@@ -108,26 +109,23 @@ class ImplementPhase:
                         last_meta.get("error", "No error details available")
                         or "No error details available"
                     )
-                    await self._prs.post_comment(
-                        issue.number,
-                        f"**Implementation attempt cap exceeded** — "
-                        f"{attempts - 1} attempt(s) exhausted "
-                        f"(max {self._config.max_issue_attempts}).\n\n"
-                        f"Last error: {last_error}\n\n"
-                        f"Escalating to human review.",
-                    )
-                    self._state.set_hitl_origin(
-                        issue.number, self._config.ready_label[0]
-                    )
-                    self._state.set_hitl_cause(
-                        issue.number,
-                        f"Implementation attempt cap exceeded after {attempts - 1} attempt(s)",
-                    )
-                    self._state.record_hitl_escalation()
-                    for lbl in self._config.ready_label:
-                        await self._prs.remove_label(issue.number, lbl)
-                    await self._prs.add_labels(
-                        issue.number, [self._config.hitl_label[0]]
+                    await Escalator(
+                        self._config, self._state, self._prs
+                    ).escalate_to_hitl(
+                        issue_number=issue.number,
+                        cause=(
+                            f"Implementation attempt cap exceeded "
+                            f"after {attempts - 1} attempt(s)"
+                        ),
+                        origin_label=self._config.ready_label[0],
+                        current_labels=self._config.ready_label,
+                        comment=(
+                            f"**Implementation attempt cap exceeded** — "
+                            f"{attempts - 1} attempt(s) exhausted "
+                            f"(max {self._config.max_issue_attempts}).\n\n"
+                            f"Last error: {last_error}\n\n"
+                            f"Escalating to human review."
+                        ),
                     )
                     self._state.mark_issue(issue.number, "failed")
                     return WorkerResult(

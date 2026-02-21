@@ -11,6 +11,7 @@ from pathlib import Path
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from config import HydraConfig
+from escalation import Escalator
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
 from models import (
@@ -150,32 +151,22 @@ class ReviewPhase:
                             pr.number,
                         )
                         await self._publish_review_status(pr, idx, "escalating")
-                        await self._prs.post_pr_comment(
-                            pr.number,
-                            f"**Merge conflicts** with "
-                            f"`{self._config.main_branch}` could not be "
-                            "resolved automatically. "
-                            "Escalating to human review.",
-                        )
-                        self._state.set_hitl_origin(
-                            pr.issue_number, self._config.review_label[0]
-                        )
-                        self._state.set_hitl_cause(
-                            pr.issue_number,
-                            "Merge conflict with main branch",
-                        )
-                        self._state.record_hitl_escalation()
-                        for lbl in self._config.review_label:
-                            await self._prs.remove_label(pr.issue_number, lbl)
-                            await self._prs.remove_pr_label(pr.number, lbl)
-                        await self._prs.add_labels(
-                            pr.issue_number, [self._config.hitl_label[0]]
-                        )
-                        await self._prs.add_pr_labels(
-                            pr.number, [self._config.hitl_label[0]]
-                        )
-                        await self._bus.publish(
-                            HydraEvent(
+                        await Escalator(
+                            self._config, self._state, self._prs, self._bus
+                        ).escalate_to_hitl(
+                            issue_number=pr.issue_number,
+                            cause="Merge conflict with main branch",
+                            origin_label=self._config.review_label[0],
+                            current_labels=self._config.review_label,
+                            pr_number=pr.number,
+                            comment=(
+                                f"**Merge conflicts** with "
+                                f"`{self._config.main_branch}` could not be "
+                                "resolved automatically. "
+                                "Escalating to human review."
+                            ),
+                            comment_on_pr=True,
+                            event=HydraEvent(
                                 type=EventType.HITL_ESCALATION,
                                 data={
                                     "issue": pr.issue_number,
@@ -184,7 +175,7 @@ class ReviewPhase:
                                     "role": "reviewer",
                                     "cause": "merge_conflict",
                                 },
-                            )
+                            ),
                         )
                         return ReviewResult(
                             pr_number=pr.number,
@@ -336,32 +327,20 @@ class ReviewPhase:
                                     pr.number,
                                 )
                                 await self._publish_review_status(pr, idx, "escalating")
-                                await self._prs.post_pr_comment(
-                                    pr.number,
-                                    "**Merge failed** — PR could not be merged. "
-                                    "Escalating to human review.",
-                                )
-                                self._state.set_hitl_origin(
-                                    pr.issue_number, self._config.review_label[0]
-                                )
-                                self._state.set_hitl_cause(
-                                    pr.issue_number,
-                                    "PR merge failed on GitHub",
-                                )
-                                self._state.record_hitl_escalation()
-                                for lbl in self._config.review_label:
-                                    await self._prs.remove_label(pr.issue_number, lbl)
-                                    await self._prs.remove_pr_label(pr.number, lbl)
-                                await self._prs.add_labels(
-                                    pr.issue_number,
-                                    [self._config.hitl_label[0]],
-                                )
-                                await self._prs.add_pr_labels(
-                                    pr.number,
-                                    [self._config.hitl_label[0]],
-                                )
-                                await self._bus.publish(
-                                    HydraEvent(
+                                await Escalator(
+                                    self._config, self._state, self._prs, self._bus
+                                ).escalate_to_hitl(
+                                    issue_number=pr.issue_number,
+                                    cause="PR merge failed on GitHub",
+                                    origin_label=self._config.review_label[0],
+                                    current_labels=self._config.review_label,
+                                    pr_number=pr.number,
+                                    comment=(
+                                        "**Merge failed** — PR could not be merged. "
+                                        "Escalating to human review."
+                                    ),
+                                    comment_on_pr=True,
+                                    event=HydraEvent(
                                         type=EventType.HITL_ESCALATION,
                                         data={
                                             "issue": pr.issue_number,
@@ -370,7 +349,7 @@ class ReviewPhase:
                                             "role": "reviewer",
                                             "cause": "merge_failed",
                                         },
-                                    )
+                                    ),
                                 )
 
                     elif result.verdict in (
@@ -474,27 +453,22 @@ class ReviewPhase:
         # CI failed after all attempts — escalate to human
         result.ci_passed = False
         self._state.record_ci_fix_rounds(result.ci_fix_attempts)
-        self._state.record_hitl_escalation()
         await self._publish_review_status(pr, worker_id, "escalating")
-        await self._prs.post_pr_comment(
-            pr.number,
-            f"**CI failed** after {result.ci_fix_attempts} fix attempt(s).\n\n"
-            f"Last failure: {summary}\n\n"
-            f"PR not merged — escalating to human review.",
-        )
-        # Swap to HITL label so the dashboard HITL tab picks it up
-        self._state.set_hitl_origin(issue.number, self._config.review_label[0])
-        self._state.set_hitl_cause(
-            issue.number,
-            f"CI failed after {result.ci_fix_attempts} fix attempt(s)",
-        )
-        for lbl in self._config.review_label:
-            await self._prs.remove_label(issue.number, lbl)
-            await self._prs.remove_pr_label(pr.number, lbl)
-        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
-        await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
-        await self._bus.publish(
-            HydraEvent(
+        await Escalator(
+            self._config, self._state, self._prs, self._bus
+        ).escalate_to_hitl(
+            issue_number=issue.number,
+            cause=f"CI failed after {result.ci_fix_attempts} fix attempt(s)",
+            origin_label=self._config.review_label[0],
+            current_labels=self._config.review_label,
+            pr_number=pr.number,
+            comment=(
+                f"**CI failed** after {result.ci_fix_attempts} fix attempt(s).\n\n"
+                f"Last failure: {summary}\n\n"
+                f"PR not merged — escalating to human review."
+            ),
+            comment_on_pr=True,
+            event=HydraEvent(
                 type=EventType.HITL_ESCALATION,
                 data={
                     "issue": issue.number,
@@ -504,7 +478,7 @@ class ReviewPhase:
                     "cause": "ci_failed",
                     "ci_fix_attempts": result.ci_fix_attempts,
                 },
-            )
+            ),
         )
         return False
 
@@ -691,24 +665,19 @@ class ReviewPhase:
                 pr.issue_number,
             )
             await self._publish_review_status(pr, worker_id, "escalating")
-            await self._prs.post_comment(
-                pr.issue_number,
-                f"**Review fix cap exceeded** — {max_attempts} review fix "
-                f"attempt(s) exhausted. Escalating to human review.",
-            )
-            self._state.set_hitl_origin(pr.issue_number, self._config.review_label[0])
-            self._state.set_hitl_cause(
-                pr.issue_number,
-                f"Review fix cap exceeded after {max_attempts} attempt(s)",
-            )
-            self._state.record_hitl_escalation()
-            for lbl in self._config.review_label:
-                await self._prs.remove_label(pr.issue_number, lbl)
-                await self._prs.remove_pr_label(pr.number, lbl)
-            await self._prs.add_labels(pr.issue_number, [self._config.hitl_label[0]])
-            await self._prs.add_pr_labels(pr.number, [self._config.hitl_label[0]])
-            await self._bus.publish(
-                HydraEvent(
+            await Escalator(
+                self._config, self._state, self._prs, self._bus
+            ).escalate_to_hitl(
+                issue_number=pr.issue_number,
+                cause=f"Review fix cap exceeded after {max_attempts} attempt(s)",
+                origin_label=self._config.review_label[0],
+                current_labels=self._config.review_label,
+                pr_number=pr.number,
+                comment=(
+                    f"**Review fix cap exceeded** — {max_attempts} review fix "
+                    f"attempt(s) exhausted. Escalating to human review."
+                ),
+                event=HydraEvent(
                     type=EventType.HITL_ESCALATION,
                     data={
                         "issue": pr.issue_number,
@@ -717,7 +686,7 @@ class ReviewPhase:
                         "role": "reviewer",
                         "cause": "review_fix_cap_exceeded",
                     },
-                )
+                ),
             )
             return False  # Destroy worktree
 
