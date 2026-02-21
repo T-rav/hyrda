@@ -1,14 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
-
-const toUpper = s => ({ ...s, label: s.label.toUpperCase() })
-
-const SESSION_STAGES = PIPELINE_STAGES.map(toUpper)
+import { ACTIVE_STATUSES } from '../constants'
 
 export function Header({
-  sessionCounts, connected, orchestratorStatus,
-  onStart, onStop, phase, workers,
+  connected, orchestratorStatus,
+  onStart, onStop, workers,
 }) {
   const workerList = Object.values(workers || {})
   const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))
@@ -64,17 +60,6 @@ export function Header({
       <div style={styles.center}>
         <div style={styles.sessionBox}>
           <span style={styles.sessionLabel}>Session</span>
-          <div style={styles.sessionPills}>
-            {SESSION_STAGES.map((stage, i) => (
-              <React.Fragment key={stage.key}>
-                {i > 0 && <div data-testid="session-connector" style={sessionConnectorStyles[stage.key]} />}
-                <span style={sessionPillStyles[stage.key]}>
-                  {stage.label}
-                  <span style={styles.sessionCount}>{sessionCounts[stage.key] || 0}</span>
-                </span>
-              </React.Fragment>
-            ))}
-          </div>
           <div style={styles.workload}>
             <span>{workload.total} total</span>
             <span style={styles.workloadSep}>|</span>
@@ -151,36 +136,6 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
-  sessionPills: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    flexWrap: 'wrap',
-  },
-  sessionPill: {
-    padding: '3px 10px',
-    borderRadius: 10,
-    fontSize: 12,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    border: '1px solid',
-    whiteSpace: 'nowrap',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sessionCount: {
-    background: theme.overlay,
-    borderRadius: 6,
-    padding: '1px 6px',
-    fontSize: 11,
-    fontWeight: 700,
-  },
-  sessionConnector: {
-    width: 12,
-    height: 1,
-    flexShrink: 0,
-  },
   workload: {
     display: 'flex',
     alignItems: 'center',
@@ -226,24 +181,6 @@ const styles = {
 // Pre-computed connection dot variants
 export const dotConnected = { ...styles.dot, background: theme.green }
 export const dotDisconnected = { ...styles.dot, background: theme.red }
-
-// Pre-computed session pill styles per stage
-export const sessionPillStyles = Object.fromEntries(
-  SESSION_STAGES.map(s => [s.key, {
-    ...styles.sessionPill,
-    background: s.color + '20',
-    color: s.color,
-    borderColor: s.color + '44',
-  }])
-)
-
-// Pre-computed session connector styles per stage (thinner than process connectors)
-export const sessionConnectorStyles = Object.fromEntries(
-  SESSION_STAGES.map(s => [s.key, {
-    ...styles.sessionConnector,
-    background: s.color + '55',
-  }])
-)
 
 // Pre-computed start button variants
 export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
