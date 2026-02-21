@@ -82,6 +82,8 @@ class TestCreateRouter:
             "/api/control/start",
             "/api/control/stop",
             "/api/control/status",
+            "/api/system/workers",
+            "/api/metrics",
             "/ws",
         }
 
