@@ -172,10 +172,9 @@ class PlannerRunner:
             cmd.extend(["--max-budget-usd", str(self._config.planner_budget_usd)])
         return cmd
 
-    # Maximum characters for issue body and comments in the prompt.
+    # Maximum characters for comments in the prompt.
     # Keep conservative to avoid hitting Claude CLI's internal text-splitter
     # limits (RecursiveCharacterTextSplitter fails on very long unsplittable lines).
-    _MAX_BODY_CHARS = 4_000
     _MAX_COMMENT_CHARS = 1_000
     _MAX_LINE_CHARS = 500
 
@@ -220,7 +219,7 @@ class PlannerRunner:
             comments_section = f"\n\n## Discussion\n{formatted}"
 
         body = self._truncate_text(
-            issue.body or "", self._MAX_BODY_CHARS, self._MAX_LINE_CHARS
+            issue.body or "", self._config.max_issue_body_chars, self._MAX_LINE_CHARS
         )
 
         # Detect attached images and add a note for the planner.

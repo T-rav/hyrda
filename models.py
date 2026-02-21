@@ -136,7 +136,7 @@ class PRInfo(BaseModel):
     draft: bool = False
 
 
-# --- Reviews ---
+# --- HITL ---
 
 
 class HITLResult(BaseModel):
@@ -150,6 +150,16 @@ class HITLResult(BaseModel):
 
 
 # --- Reviews ---
+
+
+class ReviewerStatus(StrEnum):
+    """Lifecycle status of a reviewer agent."""
+
+    REVIEWING = "reviewing"
+    DONE = "done"
+    FAILED = "failed"
+    FIXING = "fixing"
+    FIX_DONE = "fix_done"
 
 
 class ReviewVerdict(StrEnum):
@@ -225,6 +235,7 @@ class StateData(BaseModel):
     reviewed_prs: dict[str, str] = Field(default_factory=dict)
     hitl_origins: dict[str, str] = Field(default_factory=dict)
     hitl_causes: dict[str, str] = Field(default_factory=dict)
+    worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
     last_updated: str | None = None
 
@@ -279,6 +290,7 @@ class ControlStatusConfig(BaseModel):
     hitl_label: list[str] = Field(default_factory=list)
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
+    improve_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0
@@ -292,3 +304,29 @@ class ControlStatusResponse(BaseModel):
 
     status: str = "idle"
     config: ControlStatusConfig = Field(default_factory=ControlStatusConfig)
+
+
+# --- Background Worker Status ---
+
+
+class BackgroundWorkerStatus(BaseModel):
+    """Status of a single background worker."""
+
+    name: str
+    label: str
+    status: str = "disabled"  # ok | error | disabled
+    last_run: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class BackgroundWorkersResponse(BaseModel):
+    """Response for GET /api/system/workers."""
+
+    workers: list[BackgroundWorkerStatus] = Field(default_factory=list)
+
+
+class MetricsResponse(BaseModel):
+    """Response for GET /api/metrics."""
+
+    lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
+    rates: dict[str, float] = Field(default_factory=dict)

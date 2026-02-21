@@ -7,10 +7,12 @@ import { IssueTable } from './components/IssueTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { Livestream } from './components/Livestream'
+import { SystemPanel } from './components/SystemPanel'
+import { MetricsPanel } from './components/MetricsPanel'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'issues', 'hitl', 'livestream', 'timeline']
+const TABS = ['transcript', 'issues', 'hitl', 'livestream', 'timeline', 'system', 'metrics']
 
 export default function App() {
   const {
@@ -18,6 +20,7 @@ export default function App() {
     mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
     sessionImplemented, sessionReviewed, lifetimeStats, config, events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
+    backgroundWorkers, metrics,
   } = useHydraSocket()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('transcript')
@@ -115,6 +118,8 @@ export default function App() {
               ))}
             </div>
           )}
+          {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} />}
+          {activeTab === 'metrics' && <MetricsPanel metrics={metrics} lifetimeStats={lifetimeStats} />}
         </div>
       </div>
 
