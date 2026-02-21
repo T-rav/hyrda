@@ -20,6 +20,8 @@ const { mockSocketState } = vi.hoisted(() => ({
     humanInputRequests: {},
     submitHumanInput: () => {},
     refreshHitl: () => {},
+    backgroundWorkers: [],
+    metrics: null,
   },
 }))
 
@@ -199,5 +201,32 @@ describe('PR tab badge rendering', () => {
     render(<App />)
     const tab2 = screen.getByText('Pull Requests').closest('div')
     expect(tab2.querySelector('span')).toBeNull()
+  })
+})
+
+describe('System and Metrics tabs', () => {
+  it('renders System and Metrics tabs', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    expect(screen.getByText('System')).toBeInTheDocument()
+    expect(screen.getByText('Metrics')).toBeInTheDocument()
+  })
+
+  it('clicking System tab shows SystemPanel content', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    fireEvent.click(screen.getByText('System'))
+    expect(screen.getByText('Background Workers')).toBeInTheDocument()
+  })
+
+  it('clicking Metrics tab shows MetricsPanel content', async () => {
+    mockSocketState.metrics = {
+      lifetime: { issues_completed: 5, prs_merged: 3, issues_created: 1 },
+      rates: {},
+    }
+    const { default: App } = await import('../../App')
+    render(<App />)
+    fireEvent.click(screen.getByText('Metrics'))
+    expect(screen.getByText('Lifetime Stats')).toBeInTheDocument()
   })
 })
