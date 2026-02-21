@@ -86,7 +86,7 @@ function RoleSection({ label, role, entries, selectedWorker, onSelect, humanInpu
 
   const active = entries.filter(([, w]) => ACTIVE_STATUSES.includes(w.status)).length
   const total = entries.length
-  const stageCards = cardStylesByStage[role]
+  const stageCards = cardStylesByStage[role] || defaultCardStyles
 
   return (
     <>
@@ -214,6 +214,7 @@ const styles = {
 // Pre-computed card style variants (avoids object spread in .map())
 export const cardStyle = styles.card
 export const cardActiveStyle = { ...styles.card, ...styles.active }
+const defaultCardStyles = { normal: cardStyle, active: cardActiveStyle }
 
 // Pre-computed card style variants per stage (avoids object spread in .map())
 export const cardStylesByStage = Object.fromEntries(
