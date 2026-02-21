@@ -254,7 +254,7 @@ class HydraOrchestrator:
         recovered = set(self._state.get_active_issue_numbers())
         if recovered:
             self._recovered_issues = recovered
-            # Add to all active sets so they're skipped for one poll cycle
+            # Add to implementation active set so they're skipped for one poll cycle
             self._active_impl_issues.update(recovered)
             logger.info(
                 "Crash recovery: loaded %d active issue(s) from state: %s",
@@ -393,7 +393,11 @@ class HydraOrchestrator:
                 self._active_impl_issues -= self._recovered_issues
                 self._recovered_issues.clear()
                 self._state.set_active_issue_numbers(
-                    list(self._active_impl_issues | self._active_review_issues)
+                    list(
+                        self._active_impl_issues
+                        | self._active_review_issues
+                        | self._active_hitl_issues
+                    )
                 )
             try:
                 await self._implementer.run_batch()
