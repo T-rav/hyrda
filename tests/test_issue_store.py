@@ -624,7 +624,9 @@ class TestFetchAllHydraIssues:
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_fetch_all_hydra_issues_deduplicates(self) -> None:
+    async def test_fetch_all_hydra_issues_deduplicates(
+        self,
+    ) -> None:
         from issue_fetcher import IssueFetcher
 
         config = ConfigFactory.create()
@@ -641,3 +643,94 @@ class TestFetchAllHydraIssues:
             result = await fetcher.fetch_all_hydra_issues()
             assert len(result) == 1
             assert result[0].number == 42
+
+
+# ── Pipeline Snapshot ───────────────────────────────────────────────
+
+
+class TestPipelineSnapshot:
+    """Tests for get_pipeline_snapshot()."""
+
+    def test_empty_store_returns_empty_stages(self) -> None:
+        store = _make_store()
+        snapshot = store.get_pipeline_snapshot()
+
+        for stage in [STAGE_FIND, STAGE_PLAN, STAGE_READY, STAGE_REVIEW]:
+            assert snapshot[stage] == []
+        assert snapshot[STAGE_HITL] == []
+
+    def test_queued_issues_appear_in_snapshot(self) -> None:
+        store = _make_store()
+        store._route_issues(
+            [
+                _make_issue(1, ["hydra-find"]),
+                _make_issue(2, ["hydra-plan"]),
+            ]
+        )
+
+        snapshot = store.get_pipeline_snapshot()
+        assert len(snapshot[STAGE_FIND]) == 1
+        assert snapshot[STAGE_FIND][0]["issue_number"] == 1
+        assert snapshot[STAGE_FIND][0]["status"] == "queued"
+        assert len(snapshot[STAGE_PLAN]) == 1
+        assert snapshot[STAGE_PLAN][0]["issue_number"] == 2
+
+    def test_active_issues_appear_with_active_status(self) -> None:
+        store = _make_store()
+        store._route_issues([_make_issue(10, ["hydra-find"])])
+        store.get_triageable(1)  # Remove from queue
+        store.mark_active(10, STAGE_FIND)
+
+        snapshot = store.get_pipeline_snapshot()
+        find_issues = snapshot[STAGE_FIND]
+        assert len(find_issues) == 1
+        assert find_issues[0]["issue_number"] == 10
+        assert find_issues[0]["status"] == "active"
+
+    def test_hitl_issues_appear_in_snapshot(self) -> None:
+        store = _make_store()
+        store._route_issues([_make_issue(50, ["hydra-hitl"])])
+
+        snapshot = store.get_pipeline_snapshot()
+        assert len(snapshot[STAGE_HITL]) == 1
+        assert snapshot[STAGE_HITL][0]["issue_number"] == 50
+        assert snapshot[STAGE_HITL][0]["status"] == "hitl"
+
+    def test_cached_details_used_for_active_issues(self) -> None:
+        store = _make_store()
+        issue = IssueFactory.create(
+            number=42,
+            title="Fix the frobnicator",
+            labels=["test-label"],
+            url="https://github.com/org/repo/issues/42",
+        )
+        store._route_issues([issue])
+        store.get_implementable(1)
+        store.mark_active(42, STAGE_READY)
+
+        snapshot = store.get_pipeline_snapshot()
+        ready_issues = snapshot[STAGE_READY]
+        assert len(ready_issues) == 1
+        assert ready_issues[0]["title"] == "Fix the frobnicator"
+        assert ready_issues[0]["url"] == "https://github.com/org/repo/issues/42"
+
+    def test_issue_cache_populated_on_route(self) -> None:
+        store = _make_store()
+        issue = IssueFactory.create(
+            number=99, title="Cache test", labels=["hydra-find"]
+        )
+        store._route_issues([issue])
+
+        assert 99 in store._issue_cache
+        assert store._issue_cache[99].title == "Cache test"
+
+    def test_active_issue_without_cache_uses_fallback(self) -> None:
+        store = _make_store()
+        # Mark active without routing (no cache entry)
+        store.mark_active(999, STAGE_PLAN)
+
+        snapshot = store.get_pipeline_snapshot()
+        plan_issues = snapshot[STAGE_PLAN]
+        assert len(plan_issues) == 1
+        assert plan_issues[0]["title"] == "Issue #999"
+        assert plan_issues[0]["url"] == ""

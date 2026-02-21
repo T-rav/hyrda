@@ -125,9 +125,6 @@ function AppContent() {
         <div style={styles.tabContent}>
           {activeTab === 'issues' && (
             <StreamView
-              events={events}
-              workers={workers}
-              prs={prs}
               intents={intents}
               expandedStages={expandedStages}
               onToggleStage={setExpandedStages}

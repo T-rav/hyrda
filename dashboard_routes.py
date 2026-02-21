@@ -24,6 +24,8 @@ from models import (
     IntentResponse,
     LifetimeStats,
     MetricsResponse,
+    PipelineIssue,
+    PipelineSnapshot,
     QueueStats,
 )
 from pr_manager import PRManager
@@ -83,6 +85,34 @@ def create_router(
         if orch:
             return JSONResponse(orch.issue_store.get_queue_stats().model_dump())
         return JSONResponse(QueueStats().model_dump())
+
+    # Backend stage keys → frontend stage names
+    _STAGE_NAME_MAP = {
+        "find": "triage",
+        "plan": "plan",
+        "ready": "implement",
+        "review": "review",
+        "hitl": "hitl",
+    }
+
+    @router.get("/api/pipeline")
+    async def get_pipeline() -> JSONResponse:
+        """Return current pipeline snapshot with issues per stage."""
+        orch = get_orchestrator()
+        if orch:
+            raw = orch.issue_store.get_pipeline_snapshot()
+            mapped: dict[str, list[dict[str, object]]] = {}
+            for backend_stage, issues in raw.items():
+                frontend_stage = _STAGE_NAME_MAP.get(backend_stage, backend_stage)
+                mapped[frontend_stage] = issues
+            snapshot = PipelineSnapshot(
+                stages={
+                    k: [PipelineIssue(**i) for i in v]  # type: ignore[arg-type]
+                    for k, v in mapped.items()
+                }
+            )
+            return JSONResponse(snapshot.model_dump())
+        return JSONResponse(PipelineSnapshot().model_dump())
 
     @router.get("/api/events")
     async def get_events(since: str | None = None) -> JSONResponse:

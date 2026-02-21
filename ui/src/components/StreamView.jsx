@@ -1,8 +1,9 @@
 import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
-import { useTimeline } from '../hooks/useTimeline'
+import { useHydra } from '../context/HydraContext'
 import { StreamCard } from './StreamCard'
 import { PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { STAGE_KEYS } from '../hooks/useTimeline'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -48,8 +49,47 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
   )
 }
 
-export function StreamView({ events, workers, prs, intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { issues } = useTimeline(events, workers, prs)
+/** Map pipeline stage key to its index in STAGE_KEYS for building synthetic stages. */
+const STAGE_INDEX = Object.fromEntries(STAGE_KEYS.map((k, i) => [k, i]))
+
+/**
+ * Convert a PipelineIssue from the server into a StreamCard-compatible shape.
+ * Builds a synthetic `stages` object based on current pipeline position.
+ */
+function toStreamIssue(pipeIssue, stageKey, prs) {
+  const currentIdx = STAGE_INDEX[stageKey] ?? 0
+  const isActive = pipeIssue.status === 'active'
+  const stages = {}
+  for (let i = 0; i < STAGE_KEYS.length; i++) {
+    const k = STAGE_KEYS[i]
+    if (i < currentIdx) {
+      stages[k] = { status: 'done', startTime: null, endTime: null, transcript: [] }
+    } else if (i === currentIdx) {
+      stages[k] = { status: isActive ? 'active' : 'pending', startTime: null, endTime: null, transcript: [] }
+    } else {
+      stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
+    }
+  }
+
+  // Match PR from prs array
+  const matchedPr = (prs || []).find(p => p.issue === pipeIssue.issue_number)
+  const pr = matchedPr ? { number: matchedPr.pr, url: matchedPr.url || null } : null
+
+  return {
+    issueNumber: pipeIssue.issue_number,
+    title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    currentStage: stageKey,
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isActive ? 'active' : 'active',
+    startTime: null,
+    endTime: null,
+    pr,
+    branch: `agent/issue-${pipeIssue.issue_number}`,
+    stages,
+  }
+}
+
+export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
+  const { pipelineIssues, workers, prs } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -68,22 +108,43 @@ export function StreamView({ events, workers, prs, intents, expandedStages, onTo
     [intents]
   )
 
-  // Group issues by currentStage, sorted active-first within each group
+  // Build stage groups from pipelineIssues
   const stageGroups = useMemo(() => {
+    // Build merged issues from PRs that are merged
+    const mergedFromPrs = (prs || [])
+      .filter(p => p.merged && p.issue)
+      .map(p => toStreamIssue(
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        'merged',
+        prs,
+      ))
+    // Dedupe by issue number (pipeline may also have merged entries)
+    const mergedSet = new Set(mergedFromPrs.map(i => i.issueNumber))
+
     return PIPELINE_STAGES.map(stage => {
-      const stageIssues = issues
-        .filter(i => i.currentStage === stage.key)
-        .sort((a, b) => {
-          const aActive = a.overallStatus === 'active' ? 1 : 0
-          const bActive = b.overallStatus === 'active' ? 1 : 0
-          if (aActive !== bActive) return bActive - aActive
-          const aTime = a.endTime || a.startTime || ''
-          const bTime = b.endTime || b.startTime || ''
-          return bTime.localeCompare(aTime)
-        })
+      let stageIssues
+      if (stage.key === 'merged') {
+        // Combine pipelineIssues.merged (if any) + merged PRs
+        const pipelineMerged = (pipelineIssues.merged || []).map(pi => toStreamIssue(pi, 'merged', prs))
+        const combined = [...pipelineMerged]
+        for (const m of mergedFromPrs) {
+          if (!combined.some(i => i.issueNumber === m.issueNumber)) {
+            combined.push(m)
+          }
+        }
+        stageIssues = combined
+      } else {
+        stageIssues = (pipelineIssues[stage.key] || []).map(pi => toStreamIssue(pi, stage.key, prs))
+      }
+      // Sort active-first
+      stageIssues.sort((a, b) => {
+        const aActive = a.overallStatus === 'active' ? 1 : 0
+        const bActive = b.overallStatus === 'active' ? 1 : 0
+        return bActive - aActive
+      })
       return { stage, issues: stageIssues }
     })
-  }, [issues])
+  }, [pipelineIssues, prs])
 
   // Count active pipeline workers per stage role
   const workerCounts = useMemo(() => {
@@ -101,7 +162,8 @@ export function StreamView({ events, workers, prs, intents, expandedStages, onTo
     onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
   }, [onToggleStage])
 
-  const hasAnyIssues = issues.length > 0 || pendingIntents.length > 0
+  const totalIssues = stageGroups.reduce((sum, g) => sum + g.issues.length, 0)
+  const hasAnyIssues = totalIssues > 0 || pendingIntents.length > 0
 
   return (
     <div style={styles.container}>
@@ -125,7 +187,7 @@ export function StreamView({ events, workers, prs, intents, expandedStages, onTo
 
       {!hasAnyIssues && (
         <div style={styles.empty}>
-          No active work. Type an intent above to get started.
+          No active work.
         </div>
       )}
     </div>

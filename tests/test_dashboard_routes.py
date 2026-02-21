@@ -75,6 +75,7 @@ class TestCreateRouter:
             "/api/state",
             "/api/stats",
             "/api/queue",
+            "/api/pipeline",
             "/api/metrics",
             "/api/metrics/github",
             "/api/events",
@@ -790,3 +791,109 @@ class TestBgWorkerToggleEndpoint:
         router = self._make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
         assert "/api/control/bg-worker" in paths
+
+
+# ---------------------------------------------------------------------------
+# /api/pipeline endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineEndpoint:
+    """Tests for the GET /api/pipeline endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=get_orch or (lambda: None),
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    def test_pipeline_route_is_registered(self, config, event_bus, tmp_path) -> None:
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/pipeline" in paths
+
+    @pytest.mark.asyncio
+    async def test_pipeline_returns_empty_without_orchestrator(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
+        get_pipeline = self._find_endpoint(router, "/api/pipeline")
+        assert get_pipeline is not None
+
+        response = await get_pipeline()
+        data = json.loads(response.body)
+        assert "stages" in data
+        assert data["stages"] == {}
+
+    @pytest.mark.asyncio
+    async def test_pipeline_maps_backend_stage_names_to_frontend(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        import json
+
+        state = make_state(tmp_path)
+
+        mock_orch = MagicMock()
+        mock_orch.issue_store = MagicMock()
+        mock_orch.issue_store.get_pipeline_snapshot = MagicMock(
+            return_value={
+                "find": [
+                    {
+                        "issue_number": 1,
+                        "title": "Triage me",
+                        "url": "",
+                        "status": "queued",
+                    }
+                ],
+                "ready": [
+                    {
+                        "issue_number": 2,
+                        "title": "Implement me",
+                        "url": "",
+                        "status": "active",
+                    }
+                ],
+                "hitl": [],
+            }
+        )
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        get_pipeline = self._find_endpoint(router, "/api/pipeline")
+        assert get_pipeline is not None
+
+        response = await get_pipeline()
+        data = json.loads(response.body)
+
+        # "find" → "triage", "ready" → "implement"
+        assert "triage" in data["stages"]
+        assert "implement" in data["stages"]
+        assert len(data["stages"]["triage"]) == 1
+        assert data["stages"]["triage"][0]["issue_number"] == 1
+        assert len(data["stages"]["implement"]) == 1
+        assert data["stages"]["implement"][0]["status"] == "active"

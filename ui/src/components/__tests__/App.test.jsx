@@ -31,6 +31,14 @@ const { mockState } = vi.hoisted(() => ({
     submitIntent: () => {},
     toggleBgWorker: () => {},
     systemAlert: null,
+    pipelineIssues: {
+      triage: [],
+      plan: [],
+      implement: [],
+      review: [],
+      hitl: [],
+    },
+    pipelinePollerLastRun: null,
   },
 }))
 

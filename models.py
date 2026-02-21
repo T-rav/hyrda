@@ -401,6 +401,21 @@ class StateData(BaseModel):
 # --- Dashboard API Responses ---
 
 
+class PipelineIssue(BaseModel):
+    """A single issue in a pipeline stage snapshot."""
+
+    issue_number: int
+    title: str = ""
+    url: str = ""
+    status: str = "queued"  # "queued" | "active" | "hitl"
+
+
+class PipelineSnapshot(BaseModel):
+    """Snapshot of all pipeline stages with their issues."""
+
+    stages: dict[str, list[PipelineIssue]] = Field(default_factory=dict)
+
+
 class IntentRequest(BaseModel):
     """Request body for POST /api/intent."""
 

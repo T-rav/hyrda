@@ -2,6 +2,14 @@ import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { reducer } from '../HydraContext'
 
+const emptyPipeline = {
+  triage: [],
+  plan: [],
+  implement: [],
+  review: [],
+  hitl: [],
+}
+
 const initialState = {
   connected: false,
   batchNum: 0,
@@ -28,6 +36,8 @@ const initialState = {
   systemAlert: null,
   intents: [],
   githubMetrics: null,
+  pipelineIssues: { ...emptyPipeline },
+  pipelinePollerLastRun: null,
 }
 
 describe('HydraContext reducer', () => {
@@ -87,6 +97,117 @@ describe('HydraContext reducer', () => {
     })
     expect(next.sessionTriaged).toBe(0)
     expect(next.githubMetrics).toEqual({ open_by_label: { 'hydra-plan': 2 }, total_closed: 1, total_merged: 1 })
+  })
+})
+
+describe('PIPELINE_SNAPSHOT reducer', () => {
+  it('fully replaces pipelineIssues with server data', () => {
+    const data = {
+      triage: [{ issue_number: 1, title: 'Bug', url: '', status: 'queued' }],
+      plan: [],
+      implement: [{ issue_number: 2, title: 'Feature', url: '', status: 'active' }],
+      review: [],
+      hitl: [],
+    }
+    const next = reducer(initialState, { type: 'PIPELINE_SNAPSHOT', data })
+    expect(next.pipelineIssues.triage).toHaveLength(1)
+    expect(next.pipelineIssues.triage[0].issue_number).toBe(1)
+    expect(next.pipelineIssues.implement).toHaveLength(1)
+    expect(next.pipelineIssues.implement[0].status).toBe('active')
+  })
+
+  it('fills missing stages with empty arrays', () => {
+    const data = { triage: [{ issue_number: 3, title: 'X', url: '', status: 'queued' }] }
+    const next = reducer(initialState, { type: 'PIPELINE_SNAPSHOT', data })
+    expect(next.pipelineIssues.triage).toHaveLength(1)
+    expect(next.pipelineIssues.plan).toEqual([])
+    expect(next.pipelineIssues.implement).toEqual([])
+    expect(next.pipelineIssues.review).toEqual([])
+    expect(next.pipelineIssues.hitl).toEqual([])
+  })
+})
+
+describe('WS_PIPELINE_UPDATE reducer', () => {
+  it('moves issue between stages on stage transition', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        triage: [{ issue_number: 5, title: 'Test', url: '', status: 'active' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 5, fromStage: 'triage', toStage: 'plan', status: 'queued' },
+    })
+    expect(next.pipelineIssues.triage).toHaveLength(0)
+    expect(next.pipelineIssues.plan).toHaveLength(1)
+    expect(next.pipelineIssues.plan[0].issue_number).toBe(5)
+    expect(next.pipelineIssues.plan[0].status).toBe('queued')
+  })
+
+  it('updates status without moving when no fromStage', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        implement: [{ issue_number: 7, title: 'Impl', url: '', status: 'queued' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 7, fromStage: null, toStage: null, status: 'active' },
+    })
+    expect(next.pipelineIssues.implement).toHaveLength(1)
+    expect(next.pipelineIssues.implement[0].status).toBe('active')
+  })
+
+  it('does not add unknown issues (no-op for missing issue)', () => {
+    const next = reducer(initialState, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 999, fromStage: 'triage', toStage: 'plan', status: 'queued' },
+    })
+    // Issue 999 not found in triage, should not appear in plan
+    expect(next.pipelineIssues.plan).toHaveLength(0)
+    expect(next.pipelineIssues.triage).toHaveLength(0)
+  })
+})
+
+describe('TOGGLE_BG_WORKER reducer', () => {
+  it('updates enabled flag on existing worker', () => {
+    const state = {
+      ...initialState,
+      backgroundWorkers: [
+        { name: 'triage', status: 'ok', enabled: true, last_run: null, details: {} },
+      ],
+    }
+    const next = reducer(state, { type: 'TOGGLE_BG_WORKER', data: { name: 'triage', enabled: false } })
+    expect(next.backgroundWorkers[0].enabled).toBe(false)
+    expect(next.backgroundWorkers[0].status).toBe('ok')
+  })
+
+  it('creates stub entry for unknown worker', () => {
+    const next = reducer(initialState, { type: 'TOGGLE_BG_WORKER', data: { name: 'plan', enabled: false } })
+    expect(next.backgroundWorkers).toHaveLength(1)
+    expect(next.backgroundWorkers[0].name).toBe('plan')
+    expect(next.backgroundWorkers[0].enabled).toBe(false)
+  })
+})
+
+describe('BACKGROUND_WORKERS preserves local overrides', () => {
+  it('keeps local enabled flag when backend sends different value', () => {
+    const state = {
+      ...initialState,
+      backgroundWorkers: [
+        { name: 'triage', status: 'ok', enabled: false, last_run: null, details: {} },
+      ],
+    }
+    const backendData = [
+      { name: 'triage', status: 'ok', enabled: true, last_run: null, details: {} },
+    ]
+    const next = reducer(state, { type: 'BACKGROUND_WORKERS', data: backendData })
+    // Local override (false) should win over backend (true)
+    expect(next.backgroundWorkers[0].enabled).toBe(false)
   })
 })
 

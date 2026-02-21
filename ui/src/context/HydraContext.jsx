@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react'
 import { MAX_EVENTS } from '../constants'
 
+const emptyPipeline = {
+  triage: [],
+  plan: [],
+  implement: [],
+  review: [],
+  hitl: [],
+}
+
 const initialState = {
   connected: false,
   batchNum: 0,
@@ -27,6 +35,8 @@ const initialState = {
   systemAlert: null,
   intents: [],
   githubMetrics: null,
+  pipelineIssues: { ...emptyPipeline },
+  pipelinePollerLastRun: null,
 }
 
 function addEvent(state, action) {
@@ -293,15 +303,45 @@ export function reducer(state, action) {
 
     case 'background_worker_status': {
       const { worker, status, last_run, details } = action.data
-      const existing = state.backgroundWorkers.filter(w => w.name !== worker)
+      const prev = state.backgroundWorkers.find(w => w.name === worker)
+      const rest = state.backgroundWorkers.filter(w => w.name !== worker)
+      // Preserve local enabled flag if backend doesn't send one
+      const enabled = action.data.enabled !== undefined ? action.data.enabled : (prev?.enabled ?? true)
       return {
         ...addEvent(state, action),
-        backgroundWorkers: [...existing, { name: worker, status, last_run, details }],
+        backgroundWorkers: [...rest, { name: worker, status, last_run, details, enabled }],
       }
     }
 
-    case 'BACKGROUND_WORKERS':
-      return { ...state, backgroundWorkers: action.data }
+    case 'TOGGLE_BG_WORKER': {
+      const { name: toggleName, enabled: toggleEnabled } = action.data
+      const existingWorker = state.backgroundWorkers.find(w => w.name === toggleName)
+      if (existingWorker) {
+        return {
+          ...state,
+          backgroundWorkers: state.backgroundWorkers.map(w =>
+            w.name === toggleName ? { ...w, enabled: toggleEnabled } : w
+          ),
+        }
+      }
+      // Worker not yet in state — create a stub entry
+      return {
+        ...state,
+        backgroundWorkers: [...state.backgroundWorkers, { name: toggleName, status: 'ok', enabled: toggleEnabled, last_run: null, details: {} }],
+      }
+    }
+
+    case 'BACKGROUND_WORKERS': {
+      // Merge backend data with local toggle overrides
+      const localOverrides = Object.fromEntries(
+        state.backgroundWorkers.map(w => [w.name, w.enabled])
+      )
+      const merged = action.data.map(w => ({
+        ...w,
+        enabled: localOverrides[w.name] !== undefined ? localOverrides[w.name] : w.enabled,
+      }))
+      return { ...state, backgroundWorkers: merged }
+    }
 
     case 'METRICS':
       return { ...state, metrics: action.data }
@@ -326,6 +366,48 @@ export function reducer(state, action) {
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
         .slice(0, MAX_EVENTS)
       return { ...state, events: merged }
+    }
+
+    case 'PIPELINE_SNAPSHOT':
+      return {
+        ...state,
+        pipelineIssues: {
+          ...emptyPipeline,
+          ...action.data,
+        },
+        pipelinePollerLastRun: new Date().toISOString(),
+      }
+
+    case 'WS_PIPELINE_UPDATE': {
+      const { issueNumber, fromStage, toStage, status: pipeStatus } = action.data
+      const next = { ...state.pipelineIssues }
+
+      // Remove from source stage if specified
+      if (fromStage && next[fromStage]) {
+        const idx = next[fromStage].findIndex(i => i.issue_number === issueNumber)
+        if (idx >= 0) {
+          next[fromStage] = next[fromStage].filter((_, i) => i !== idx)
+          // Add to target stage if specified
+          if (toStage && next[toStage] !== undefined) {
+            const moved = { issue_number: issueNumber, title: '', url: '', status: pipeStatus || 'queued' }
+            next[toStage] = [...next[toStage], moved]
+          }
+        }
+        // If issue wasn't found in fromStage, don't add — let poller discover it
+      } else if (!fromStage && pipeStatus) {
+        // Status-only update: find the issue in any stage and update its status
+        for (const stageKey of Object.keys(next)) {
+          const idx = next[stageKey].findIndex(i => i.issue_number === issueNumber)
+          if (idx >= 0) {
+            next[stageKey] = next[stageKey].map(i =>
+              i.issue_number === issueNumber ? { ...i, status: pipeStatus } : i
+            )
+            break
+          }
+        }
+      }
+
+      return { ...state, pipelineIssues: next }
     }
 
     case 'INTENT_SUBMITTED':
@@ -371,6 +453,9 @@ export function HydraProvider({ children }) {
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
   const lastEventTsRef = useRef(null)
+  const bgWorkersRef = useRef(state.backgroundWorkers)
+
+  bgWorkersRef.current = state.backgroundWorkers
 
   const fetchLifetimeStats = useCallback(() => {
     fetch('/api/stats')
@@ -383,6 +468,13 @@ export function HydraProvider({ children }) {
     fetch('/api/hitl')
       .then(r => r.json())
       .then(data => dispatch({ type: 'HITL_ITEMS', data }))
+      .catch(() => {})
+  }, [])
+
+  const fetchPipeline = useCallback(() => {
+    fetch('/api/pipeline')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'PIPELINE_SNAPSHOT', data: data.stages || {} }))
       .catch(() => {})
   }, [])
 
@@ -415,13 +507,15 @@ export function HydraProvider({ children }) {
   }, [])
 
   const toggleBgWorker = useCallback(async (name, enabled) => {
+    // Optimistic local update — works even when backend is down
+    dispatch({ type: 'TOGGLE_BG_WORKER', data: { name, enabled } })
     try {
       await fetch('/api/control/bg-worker', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, enabled }),
       })
-    } catch { /* ignore */ }
+    } catch { /* ignore — local state already updated */ }
   }, [])
 
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
@@ -462,7 +556,23 @@ export function HydraProvider({ children }) {
       fetchHitlItems()
       fetch('/api/system/workers')
         .then(r => r.json())
-        .then(data => dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers }))
+        .then(data => {
+          // Sync local toggle overrides to backend
+          const localWorkers = bgWorkersRef.current
+          if (localWorkers.length > 0 && data.workers) {
+            const backendMap = Object.fromEntries(data.workers.map(w => [w.name, w.enabled]))
+            for (const lw of localWorkers) {
+              if (lw.enabled !== undefined && backendMap[lw.name] !== undefined && lw.enabled !== backendMap[lw.name]) {
+                fetch('/api/control/bg-worker', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name: lw.name, enabled: lw.enabled }),
+                }).catch(() => {})
+              }
+            }
+          }
+          dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers })
+        })
         .catch(() => {})
       fetch('/api/queue')
         .then(r => r.json())
@@ -473,6 +583,7 @@ export function HydraProvider({ children }) {
         .then(data => dispatch({ type: 'METRICS', data }))
         .catch(() => {})
       fetchGithubMetrics()
+      fetchPipeline()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
           .then(r => r.json())
@@ -488,6 +599,30 @@ export function HydraProvider({ children }) {
         if (event.timestamp && (!lastEventTsRef.current || event.timestamp > lastEventTsRef.current)) {
           lastEventTsRef.current = event.timestamp
         }
+        // Dispatch WS pipeline updates for stage transitions
+        const issueNum = event.data?.issue != null ? Number(event.data.issue) : null
+        if (issueNum != null) {
+          if (event.type === 'triage_update' && event.data?.status === 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'triage', toStage: 'plan', status: 'queued' } })
+          } else if (event.type === 'triage_update' && event.data?.status && event.data.status !== 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
+          } else if (event.type === 'planner_update' && event.data?.status === 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'plan', toStage: 'implement', status: 'queued' } })
+          } else if (event.type === 'planner_update' && event.data?.status && event.data.status !== 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
+          } else if (event.type === 'worker_update' && event.data?.status === 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'implement', toStage: 'review', status: 'queued' } })
+          } else if (event.type === 'worker_update' && event.data?.status && event.data.status !== 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
+          } else if (event.type === 'review_update' && event.data?.status === 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'review', toStage: null, status: 'done' } })
+          } else if (event.type === 'review_update' && event.data?.status && event.data.status !== 'done') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: null, toStage: null, status: 'active' } })
+          } else if (event.type === 'merge_update' && event.data?.status === 'merged') {
+            dispatch({ type: 'WS_PIPELINE_UPDATE', data: { issueNumber: issueNum, fromStage: 'review', toStage: null, status: 'done' } })
+          }
+        }
+
         if (event.type === 'batch_complete') {
           fetchLifetimeStats()
           fetch('/api/metrics').then(r => r.json()).then(data => dispatch({ type: 'METRICS', data })).catch(() => {})
@@ -504,7 +639,7 @@ export function HydraProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchPipeline])
 
   useEffect(() => {
     const poll = () => {
@@ -517,6 +652,13 @@ export function HydraProvider({ children }) {
     const interval = setInterval(poll, 3000)
     return () => clearInterval(interval)
   }, [])
+
+  // Pipeline polling — authoritative source every 5s
+  useEffect(() => {
+    fetchPipeline()
+    const interval = setInterval(fetchPipeline, 5000)
+    return () => clearInterval(interval)
+  }, [fetchPipeline])
 
   useEffect(() => {
     connect()
