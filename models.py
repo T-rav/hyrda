@@ -238,6 +238,43 @@ class ReviewResult(BaseModel):
     duration_seconds: float = 0.0
 
 
+# --- Verification Judge ---
+
+
+class CriterionVerdict(StrEnum):
+    """Verdict for a single acceptance criterion."""
+
+    PASS = "pass"
+    FAIL = "fail"
+
+
+class CriterionResult(BaseModel):
+    """Result of evaluating a single acceptance criterion against the code."""
+
+    criterion: str
+    verdict: CriterionVerdict = CriterionVerdict.FAIL
+    reasoning: str = ""
+
+
+class InstructionsQuality(StrEnum):
+    """Quality verdict for human verification instructions."""
+
+    READY = "ready"
+    NEEDS_REFINEMENT = "needs_refinement"
+
+
+class JudgeVerdict(BaseModel):
+    """Full result of the verification judge evaluation."""
+
+    issue_number: int
+    criteria_results: list[CriterionResult] = Field(default_factory=list)
+    all_criteria_pass: bool = False
+    instructions_quality: InstructionsQuality = InstructionsQuality.NEEDS_REFINEMENT
+    instructions_feedback: str = ""
+    refined: bool = False
+    summary: str = ""
+
+
 # --- Batch ---
 
 
@@ -321,6 +358,21 @@ class StateData(BaseModel):
 
 
 # --- Dashboard API Responses ---
+
+
+class IntentRequest(BaseModel):
+    """Request body for POST /api/intent."""
+
+    text: str = Field(..., min_length=1, max_length=5000)
+
+
+class IntentResponse(BaseModel):
+    """Response for POST /api/intent."""
+
+    issue_number: int
+    title: str
+    url: str = ""
+    status: str = "created"
 
 
 class PRListItem(BaseModel):

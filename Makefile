@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels hot
+.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels hot
 
 help:
 	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
@@ -43,12 +43,14 @@ help:
 	@echo "  make dry-run        Dry run (log actions without executing)"
 	@echo "  make clean          Remove all worktrees and state"
 	@echo "  make status         Show current Hydra state"
-	@echo "  make test           Run unit tests"
+	@echo "  make test           Run unit tests (parallel)"
+	@echo "  make test-cov       Run tests with coverage report"
 	@echo "  make lint           Auto-fix linting"
 	@echo "  make lint-check     Check linting (no fix)"
 	@echo "  make typecheck      Run Pyright type checks"
 	@echo "  make security       Run Bandit security scan"
-	@echo "  make quality        Lint + typecheck + security + test"
+	@echo "  make quality        Lint + typecheck + test (parallel)"
+	@echo "  make quality-full   quality + security scan"
 	@echo "  make ensure-labels  Create Hydra labels in GitHub repo"
 	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
 	@echo "  make install        Install dashboard dependencies"
@@ -120,11 +122,16 @@ status:
 
 test:
 	@echo "$(BLUE)Running Hydra unit tests...$(RESET)"
-	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/
 	@echo "$(GREEN)All tests passed$(RESET)"
 
 test-fast:
-	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x -q --tb=short
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x --tb=short
+
+test-cov:
+	@echo "$(BLUE)Running Hydra tests with coverage...$(RESET)"
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v --cov=. --cov-fail-under=70 --cov-report=term-missing --cov-report=html:htmlcov -p no:xdist
+	@echo "$(GREEN)All tests passed with coverage$(RESET)"
 
 lint:
 	@echo "$(BLUE)Linting Hydra (auto-fix)...$(RESET)"
@@ -146,8 +153,20 @@ security:
 	@cd $(HYDRA_DIR) && $(UV) bandit -c pyproject.toml -r . --severity-level medium
 	@echo "$(GREEN)Security scan passed$(RESET)"
 
-quality: lint-check typecheck security test
+quality:
+	@echo "$(BLUE)Running quality checks in parallel...$(RESET)"
+	@cd $(HYDRA_DIR) && ( \
+		$(UV) ruff check . && $(UV) ruff format . --check && echo "[lint OK]" & \
+		$(UV) pyright && echo "[typecheck OK]" & \
+		PYTHONPATH=. $(UV) pytest tests/ && echo "[tests OK]" & \
+		wait_result=0; \
+		for job in $$(jobs -p); do wait $$job || wait_result=1; done; \
+		exit $$wait_result; \
+	)
 	@echo "$(GREEN)Hydra quality pipeline passed$(RESET)"
+
+quality-full: quality security
+	@echo "$(GREEN)Hydra full quality pipeline passed$(RESET)"
 
 install:
 	@echo "$(BLUE)Installing Hydra dashboard dependencies...$(RESET)"

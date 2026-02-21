@@ -51,12 +51,14 @@ make run            # Start backend + Vite frontend dev server
 make dry-run        # Dry run (log actions without executing)
 make clean          # Remove all worktrees and state
 make status         # Show current Hydra state
-make test           # Run unit tests
+make test           # Run unit tests (parallel)
+make test-cov       # Run tests with coverage report
 make lint           # Auto-fix linting
 make lint-check     # Check linting (no fix)
 make typecheck      # Run Pyright type checks
 make security       # Run Bandit security scan
-make quality        # Lint + typecheck + security + test
+make quality        # Lint + typecheck + test (parallel, fast)
+make quality-full   # quality + security scan
 make setup          # Install git hooks (pre-commit, pre-push)
 make ui             # Build React dashboard
 make ui-dev         # Start React dashboard dev server
