@@ -563,6 +563,11 @@ class TestUpdateCriteriaFile:
         assert "New refined instructions here" in updated
         # Original criteria should still be present
         assert "Acceptance Criteria" in updated
+        # Content after the instructions section should be preserved
+        assert "## Notes" in updated
+        assert "additional notes" in updated
+        # Original instructions should be gone
+        assert "Open the sidebar" not in updated
 
     def test_noop_when_file_missing(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
@@ -794,7 +799,13 @@ class TestJudgeIntegration:
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
+        call_count = 0
+
         async def mock_execute(cmd, prompt, issue_number):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return SAMPLE_CODE_VALIDATION_TRANSCRIPT
             return SAMPLE_INSTRUCTIONS_READY_TRANSCRIPT
 
         with patch.object(judge, "_execute", side_effect=mock_execute):
@@ -804,6 +815,10 @@ class TestJudgeIntegration:
         assert report_path.exists()
         content = report_path.read_text()
         assert "Issue #42" in content
+        assert "| AC-1 | PASS |" in content
+        assert "| AC-2 | FAIL |" in content
+        assert "criteria passed" in content
+        assert "ready" in content
 
     @pytest.mark.asyncio
     async def test_publishes_event(self, tmp_path):

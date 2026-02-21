@@ -458,7 +458,7 @@ REFINED_INSTRUCTIONS_END
                 + match.group(1)
                 + refined_instructions
                 + "\n"
-                + match.group(3)
+                + content[match.start(3) :]
             )
             path.write_text(new_content)
         else:
