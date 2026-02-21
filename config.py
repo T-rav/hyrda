@@ -296,6 +296,15 @@ class HydraConfig(BaseModel):
         description="Seconds between centralized GitHub issue store polls",
     )
 
+    # Acceptance criteria generation
+    ac_model: str = Field(
+        default="sonnet",
+        description="Model for acceptance criteria generation (post-merge)",
+    )
+    ac_budget_usd: float = Field(
+        default=0, ge=0, description="USD cap for AC generation agent (0 = unlimited)"
+    )
+
     # Retrospective
     retrospective_window: int = Field(
         default=10,

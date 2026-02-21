@@ -8,6 +8,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
@@ -46,6 +47,7 @@ class ReviewPhase:
         agents: AgentRunner | None = None,
         event_bus: EventBus | None = None,
         retrospective: RetrospectiveCollector | None = None,
+        ac_generator: AcceptanceCriteriaGenerator | None = None,
         verification_judge: VerificationJudge | None = None,
     ) -> None:
         self._config = config
@@ -58,6 +60,7 @@ class ReviewPhase:
         self._agents = agents
         self._bus = event_bus or EventBus()
         self._retrospective = retrospective
+        self._ac_generator = ac_generator
         self._verification_judge = verification_judge
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
         self._active_issues: set[int] = set()
@@ -261,6 +264,22 @@ class ReviewPhase:
                                     pr.issue_number,
                                     [self._config.fixed_label[0]],
                                 )
+                                # Generate acceptance criteria (non-blocking)
+                                if self._ac_generator:
+                                    try:
+                                        await self._ac_generator.generate(
+                                            issue_number=pr.issue_number,
+                                            pr_number=pr.number,
+                                            issue=issue,
+                                            diff=diff,
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Acceptance criteria generation failed "
+                                            "for issue #%d",
+                                            pr.issue_number,
+                                            exc_info=True,
+                                        )
                                 # Run post-merge retrospective (non-blocking)
                                 if self._retrospective:
                                     try:

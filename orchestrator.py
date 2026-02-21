@@ -8,6 +8,7 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from analysis import PlanAnalyzer
 from config import HydraConfig
@@ -104,6 +105,7 @@ class HydraOrchestrator:
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
+        self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
         self._verification_judge = VerificationJudge(config, self._bus)
         self._reviewer = ReviewPhase(
             config,
@@ -116,6 +118,7 @@ class HydraOrchestrator:
             agents=self._agents,
             event_bus=self._bus,
             retrospective=self._retrospective,
+            ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
         )
 
