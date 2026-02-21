@@ -26,6 +26,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.review_phase")
@@ -47,6 +48,7 @@ class ReviewPhase:
         event_bus: EventBus | None = None,
         retrospective: RetrospectiveCollector | None = None,
         ac_generator: AcceptanceCriteriaGenerator | None = None,
+        verification_judge: VerificationJudge | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -59,7 +61,9 @@ class ReviewPhase:
         self._bus = event_bus or EventBus()
         self._retrospective = retrospective
         self._ac_generator = ac_generator
+        self._verification_judge = verification_judge
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._active_issues: set[int] = set()
 
     async def review_prs(
         self,
@@ -76,6 +80,8 @@ class ReviewPhase:
 
         async def _review_one(idx: int, pr: PRInfo) -> ReviewResult:
             async with semaphore:
+                self._active_issues.add(pr.issue_number)
+                self._state.set_active_issue_numbers(list(self._active_issues))
                 self._store.mark_active(pr.issue_number, "review")
 
                 try:
@@ -250,6 +256,7 @@ class ReviewPhase:
                                         result.ci_fix_attempts
                                     )
                                 self._state.reset_review_attempts(pr.issue_number)
+                                self._state.reset_issue_attempts(pr.issue_number)
                                 self._state.clear_review_feedback(pr.issue_number)
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
@@ -284,6 +291,20 @@ class ReviewPhase:
                                     except Exception:  # noqa: BLE001
                                         logger.warning(
                                             "Retrospective record failed for issue #%d",
+                                            pr.issue_number,
+                                            exc_info=True,
+                                        )
+                                # Run verification judge (non-blocking)
+                                if self._verification_judge:
+                                    try:
+                                        await self._verification_judge.judge(
+                                            issue_number=pr.issue_number,
+                                            pr_number=pr.number,
+                                            diff=diff,
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Verification judge failed for issue #%d",
                                             pr.issue_number,
                                             exc_info=True,
                                         )
@@ -364,6 +385,8 @@ class ReviewPhase:
                     )
                 finally:
                     await self._publish_review_status(pr, idx, "done")
+                    self._active_issues.discard(pr.issue_number)
+                    self._state.set_active_issue_numbers(list(self._active_issues))
                     self._store.mark_complete(pr.issue_number)
 
         tasks = [asyncio.create_task(_review_one(i, pr)) for i, pr in enumerate(prs)]

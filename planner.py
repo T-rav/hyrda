@@ -10,6 +10,7 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_memory_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from runner_utils import stream_claude_process, terminate_processes
 
@@ -246,6 +247,12 @@ class PlannerRunner:
                 "the surrounding text describes what they show."
             )
 
+        # Memory digest injection
+        memory_section = ""
+        digest = load_memory_digest(self._config)
+        if digest:
+            memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
+
         find_label = (
             self._config.find_label[0] if self._config.find_label else "hydra-find"
         )
@@ -298,7 +305,7 @@ class PlannerRunner:
 
 ## Issue: {issue.title}
 
-{body}{image_note}{comments_section}
+{body}{image_note}{comments_section}{memory_section}
 
 ## Instructions
 
@@ -403,6 +410,18 @@ ALREADY_SATISFIED_END
 
 This will close the issue automatically. Only use this when you are **certain** the
 requirements are already implemented — not when the issue is unclear or you are unsure.
+
+## Optional: Memory Suggestion
+
+If you discover a reusable pattern or insight during exploration that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: Short descriptive title
+learning: What was learned and why it matters
+context: How it was discovered (reference issue/PR numbers)
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely valuable learnings — not trivial observations.
 """
 
     # Required plan sections — each must appear as a ## header.

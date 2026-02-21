@@ -37,6 +37,7 @@ class ImplementPhase:
         self._prs = prs
         self._store = store
         self._stop_event = stop_event
+        self._active_issues: set[int] = set()
 
     async def _close_as_already_satisfied(self, issue: GitHubIssue) -> None:
         """Close an issue as already satisfied (no changes needed)."""
@@ -93,9 +94,47 @@ class ImplementPhase:
                     )
 
                 branch = f"agent/issue-{issue.number}"
+                self._active_issues.add(issue.number)
+                self._state.set_active_issue_numbers(list(self._active_issues))
                 self._store.mark_active(issue.number, "implement")
                 self._state.mark_issue(issue.number, "in_progress")
                 self._state.set_branch(issue.number, branch)
+
+                # Check per-issue attempt cap
+                attempts = self._state.increment_issue_attempts(issue.number)
+                if attempts > self._config.max_issue_attempts:
+                    last_meta = self._state.get_worker_result_meta(issue.number)
+                    last_error = (
+                        last_meta.get("error", "No error details available")
+                        or "No error details available"
+                    )
+                    await self._prs.post_comment(
+                        issue.number,
+                        f"**Implementation attempt cap exceeded** — "
+                        f"{attempts - 1} attempt(s) exhausted "
+                        f"(max {self._config.max_issue_attempts}).\n\n"
+                        f"Last error: {last_error}\n\n"
+                        f"Escalating to human review.",
+                    )
+                    self._state.set_hitl_origin(
+                        issue.number, self._config.ready_label[0]
+                    )
+                    self._state.set_hitl_cause(
+                        issue.number,
+                        f"Implementation attempt cap exceeded after {attempts - 1} attempt(s)",
+                    )
+                    self._state.record_hitl_escalation()
+                    for lbl in self._config.ready_label:
+                        await self._prs.remove_label(issue.number, lbl)
+                    await self._prs.add_labels(
+                        issue.number, [self._config.hitl_label[0]]
+                    )
+                    self._state.mark_issue(issue.number, "failed")
+                    return WorkerResult(
+                        issue_number=issue.number,
+                        branch=branch,
+                        error=f"Implementation attempt cap exceeded ({attempts - 1} attempts)",
+                    )
 
                 try:
                     # Resume: reuse existing worktree if present
@@ -151,6 +190,7 @@ class ImplementPhase:
                             "quality_fix_attempts": result.quality_fix_attempts,
                             "duration_seconds": result.duration_seconds,
                             "error": result.error,
+                            "commits": result.commits,
                         },
                     )
 
@@ -206,6 +246,8 @@ class ImplementPhase:
                         error=f"Worker exception for issue #{issue.number}",
                     )
                 finally:
+                    self._active_issues.discard(issue.number)
+                    self._state.set_active_issue_numbers(list(self._active_issues))
                     self._store.mark_complete(issue.number)
 
         all_tasks = [

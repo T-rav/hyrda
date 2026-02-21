@@ -2049,3 +2049,43 @@ class TestHydraConfigMaxReviewDiffChars:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_review_diff_chars == 25_000
+
+
+# ---------------------------------------------------------------------------
+# max_issue_attempts
+# ---------------------------------------------------------------------------
+
+
+class TestMaxIssueAttempts:
+    """Tests for max_issue_attempts config field."""
+
+    def test_default_is_three(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 3
+
+    def test_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_ATTEMPTS", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 5
+
+    def test_explicit_value_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_ATTEMPTS", "7")
+        cfg = HydraConfig(
+            max_issue_attempts=4,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_attempts == 4

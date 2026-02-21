@@ -20,6 +20,8 @@ from models import (
     BackgroundWorkerStatus,
     ControlStatusConfig,
     ControlStatusResponse,
+    IntentRequest,
+    IntentResponse,
     LifetimeStats,
     MetricsResponse,
     QueueStats,
@@ -297,6 +299,7 @@ def create_router(
                 hitl_active_label=config.hitl_active_label,
                 fixed_label=config.fixed_label,
                 improve_label=config.improve_label,
+                memory_label=config.memory_label,
                 max_workers=config.max_workers,
                 max_planners=config.max_planners,
                 max_reviewers=config.max_reviewers,
@@ -445,6 +448,24 @@ def create_router(
         if timeline is None:
             return JSONResponse({"error": "Issue not found"}, status_code=404)
         return JSONResponse(timeline.model_dump())
+
+    @router.post("/api/intent")
+    async def submit_intent(request: IntentRequest) -> JSONResponse:
+        """Create a GitHub issue from a user intent typed in the dashboard."""
+        title = request.text[:120]
+        body = request.text
+        labels = list(config.planner_label)
+
+        issue_number = await pr_manager.create_issue(
+            title=title, body=body, labels=labels
+        )
+
+        if issue_number == 0:
+            return JSONResponse({"error": "Failed to create issue"}, status_code=500)
+
+        url = f"https://github.com/{config.repo}/issues/{issue_number}"
+        response = IntentResponse(issue_number=issue_number, title=title, url=url)
+        return JSONResponse(response.model_dump())
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:
