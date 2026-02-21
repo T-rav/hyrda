@@ -29,7 +29,7 @@ export function TranscriptView({ workers, selectedWorker }) {
           <div style={styles.waiting}>Waiting for output...</div>
         ) : (
           w.transcript.map((line, i) => (
-            <div key={i} style={styles.line}>
+            <div key={`${selectedWorker}-${i}`} style={styles.line}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{line}</ReactMarkdown>
             </div>
           ))
@@ -62,7 +62,7 @@ export function TranscriptView({ workers, selectedWorker }) {
         <span style={styles.lines}>{allLines.length} lines</span>
       </div>
       {allLines.map((item, i) => (
-        <div key={i} style={styles.line}>
+        <div key={`${item.key}-${i}`} style={styles.line}>
           <span style={styles.linePrefix}>[{item.role} #{item.key}]</span>
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{item.line}</ReactMarkdown>
         </div>

@@ -1,29 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { reducer } from '../useHydraSocket'
+import { reducer, initialState } from '../useHydraSocket'
 import { MAX_EVENTS } from '../../constants'
-
-const initialState = {
-  connected: false,
-  batchNum: 0,
-  phase: 'idle',
-  orchestratorStatus: 'idle',
-  workers: {},
-  prs: [],
-  reviews: [],
-  mergedCount: 0,
-  sessionPrsCount: 0,
-  sessionTriaged: 0,
-  sessionPlanned: 0,
-  sessionImplemented: 0,
-  sessionReviewed: 0,
-  lifetimeStats: null,
-  config: null,
-  events: [],
-  hitlItems: [],
-  humanInputRequests: {},
-  backgroundWorkers: [],
-  metrics: null,
-}
 
 describe('useHydraSocket reducer', () => {
   it('initial state includes hitlItems and humanInputRequests', () => {
@@ -653,6 +630,152 @@ describe('useHydraSocket reducer', () => {
       expect(next.orchestratorStatus).toBe('stopping')
       expect(next.workers).toEqual({})
       expect(next.sessionImplemented).toBe(0)
+    })
+  })
+
+  describe('event deduplication on reconnect', () => {
+    it('initialState includes lastSeenId at -1', () => {
+      expect(initialState.lastSeenId).toBe(-1)
+    })
+
+    it('deduplicates events on reconnect by event ID', () => {
+      let state = initialState
+      // Dispatch events with ids 1, 2, 3 (use 'error' type which goes through addEvent)
+      for (let i = 1; i <= 3; i++) {
+        state = reducer(state, {
+          type: 'error',
+          data: { message: `msg ${i}` },
+          timestamp: `2024-01-01T00:00:0${i}Z`,
+          id: i,
+        })
+      }
+      expect(state.events).toHaveLength(3)
+      expect(state.lastSeenId).toBe(3)
+
+      // Simulate reconnect: replay same events
+      for (let i = 1; i <= 3; i++) {
+        state = reducer(state, {
+          type: 'error',
+          data: { message: `msg ${i}` },
+          timestamp: `2024-01-01T00:00:0${i}Z`,
+          id: i,
+        })
+      }
+      // Should still have exactly 3 events (no duplicates)
+      expect(state.events).toHaveLength(3)
+    })
+
+    it('skips duplicate transcript_line events', () => {
+      // Set up a worker
+      let state = reducer(initialState, {
+        type: 'worker_update',
+        data: { issue: 10, status: 'running', worker: 1, role: 'implementer' },
+        id: 1,
+      })
+      // Add a transcript line
+      state = reducer(state, {
+        type: 'transcript_line',
+        data: { issue: 10, line: 'hello world' },
+        timestamp: '2024-01-01T00:00:01Z',
+        id: 5,
+      })
+      expect(state.workers[10].transcript).toHaveLength(1)
+
+      // Replay same transcript_line (duplicate id)
+      state = reducer(state, {
+        type: 'transcript_line',
+        data: { issue: 10, line: 'hello world' },
+        timestamp: '2024-01-01T00:00:01Z',
+        id: 5,
+      })
+      // Should still have exactly 1 transcript line
+      expect(state.workers[10].transcript).toHaveLength(1)
+    })
+
+    it('allows new events after reconnect replays duplicates', () => {
+      let state = initialState
+      // First connection: events 1-3
+      for (let i = 1; i <= 3; i++) {
+        state = reducer(state, {
+          type: 'error',
+          data: { message: `msg ${i}` },
+          timestamp: `2024-01-01T00:00:0${i}Z`,
+          id: i,
+        })
+      }
+      expect(state.events).toHaveLength(3)
+
+      // Reconnect replay: 1-3 (skipped) + 4-5 (new)
+      for (let i = 1; i <= 5; i++) {
+        state = reducer(state, {
+          type: 'error',
+          data: { message: `msg ${i}` },
+          timestamp: `2024-01-01T00:00:0${i}Z`,
+          id: i,
+        })
+      }
+      expect(state.events).toHaveLength(5)
+    })
+
+    it('tracks lastSeenId as highest seen event ID', () => {
+      let state = initialState
+      state = reducer(state, {
+        type: 'error',
+        data: { message: 'a' },
+        timestamp: '2024-01-01T00:00:01Z',
+        id: 10,
+      })
+      expect(state.lastSeenId).toBe(10)
+
+      state = reducer(state, {
+        type: 'error',
+        data: { message: 'b' },
+        timestamp: '2024-01-01T00:00:02Z',
+        id: 20,
+      })
+      expect(state.lastSeenId).toBe(20)
+    })
+
+    it('resets lastSeenId on new run phase_change', () => {
+      let state = {
+        ...initialState,
+        phase: 'idle',
+        lastSeenId: 50,
+      }
+      state = reducer(state, {
+        type: 'phase_change',
+        data: { phase: 'plan' },
+        timestamp: '2024-01-01T00:00:01Z',
+        id: 51,
+      })
+      expect(state.lastSeenId).toBe(-1)
+      expect(state.phase).toBe('plan')
+    })
+
+    it('accepts events without id field (legacy/internal)', () => {
+      let state = initialState
+      state = reducer(state, {
+        type: 'error',
+        data: { message: 'no id' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(state.events).toHaveLength(1)
+      // lastSeenId should remain -1 since event had no id
+      expect(state.lastSeenId).toBe(-1)
+
+      // Another event without id should also be accepted
+      state = reducer(state, {
+        type: 'error',
+        data: { message: 'also no id' },
+        timestamp: '2024-01-01T00:00:02Z',
+      })
+      expect(state.events).toHaveLength(2)
+    })
+
+    it('does not reset lastSeenId on DISCONNECTED', () => {
+      let state = { ...initialState, lastSeenId: 42 }
+      state = reducer(state, { type: 'DISCONNECTED' })
+      expect(state.lastSeenId).toBe(42)
     })
   })
 })

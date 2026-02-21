@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import logging
 import os
 import tempfile
@@ -14,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+_event_counter = itertools.count()
 
 logger = logging.getLogger("hydra.events")
 
@@ -47,6 +50,7 @@ class EventType(StrEnum):
 class HydraEvent(BaseModel):
     """A single event published on the bus."""
 
+    id: int = Field(default_factory=lambda: next(_event_counter))
     type: EventType
     timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     data: dict[str, Any] = Field(default_factory=dict)
