@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 # conftest.py already inserts the hydra package directory into sys.path
-from config import HydraConfig, _detect_repo_slug, _find_repo_root
+from config import (
+    _ENV_INT_OVERRIDES,
+    _ENV_STR_OVERRIDES,
+    HydraConfig,
+    _detect_repo_slug,
+    _find_repo_root,
+)
 
 # ---------------------------------------------------------------------------
 # _find_repo_root
@@ -2136,3 +2142,136 @@ class TestMaxIssueAttempts:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_issue_attempts == 4
+
+
+# ---------------------------------------------------------------------------
+# Data-driven env-var override table validation
+# ---------------------------------------------------------------------------
+
+
+class TestEnvVarOverrideTable:
+    """Tests for the _ENV_INT_OVERRIDES and _ENV_STR_OVERRIDES tables."""
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Each int override should apply when the field is at its default."""
+        override_value = default + 1
+        monkeypatch.setenv(env_key, str(override_value))
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == override_value
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Explicit values should take precedence over env var overrides."""
+        # Use default + 1 to stay within Pydantic field constraints
+        explicit = default + 1
+        monkeypatch.setenv(env_key, str(default + 2))
+        cfg = HydraConfig(
+            **{field: explicit},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == explicit
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_invalid_value_ignored(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Non-numeric env var values should be silently ignored."""
+        monkeypatch.setenv(env_key, "not-a-number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == default
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_STR_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_STR_OVERRIDES],
+    )
+    def test_env_str_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: str,
+    ) -> None:
+        """Each str override should apply when the field is at its default."""
+        monkeypatch.setenv(env_key, "custom-value")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == "custom-value"
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_STR_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_STR_OVERRIDES],
+    )
+    def test_env_str_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: str,
+    ) -> None:
+        """Explicit values should take precedence over str env var overrides."""
+        monkeypatch.setenv(env_key, "env-value")
+        cfg = HydraConfig(
+            **{field: "explicit-value"},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == "explicit-value"
+
+    def test_override_table_field_names_are_valid(self) -> None:
+        """Every field in the override tables should be a real HydraConfig attribute."""
+        all_fields = {f for f, _, _ in _ENV_INT_OVERRIDES} | {
+            f for f, _, _ in _ENV_STR_OVERRIDES
+        }
+        config_fields = set(HydraConfig.model_fields.keys())
+        invalid = all_fields - config_fields
+        assert not invalid, f"Invalid field names in override tables: {invalid}"

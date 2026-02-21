@@ -411,226 +411,188 @@ class HydraOrchestrator:
                 task.cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)
 
-    async def _triage_loop(self) -> None:
-        """Continuously poll for find-labeled issues and triage them."""
+    async def _polling_loop(
+        self,
+        name: str,
+        work_fn: Callable[[], Coroutine[Any, Any, Any]],
+        interval: int,
+        enabled_name: str | None = None,
+    ) -> None:
+        """Generic polling loop: check enabled -> try work -> except -> sleep."""
         while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("triage"):
-                await self._sleep_or_stop(self._config.poll_interval)
+            if enabled_name and not self.is_bg_worker_enabled(enabled_name):
+                await self._sleep_or_stop(interval)
                 continue
             try:
-                await self._triage_find_issues()
+                await work_fn()
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
-                logger.exception("Triage loop iteration failed — will retry next cycle")
+                logger.exception(
+                    "%s loop iteration failed — will retry next cycle",
+                    name.capitalize(),
+                )
                 await self._bus.publish(
                     HydraEvent(
                         type=EventType.ERROR,
-                        data={"message": "Triage loop error", "source": "triage"},
+                        data={
+                            "message": f"{name.capitalize()} loop error",
+                            "source": name,
+                        },
                     )
                 )
-            await self._sleep_or_stop(self._config.poll_interval)
+            await self._sleep_or_stop(interval)
+
+    async def _triage_loop(self) -> None:
+        """Continuously poll for find-labeled issues and triage them."""
+        await self._polling_loop(
+            "triage",
+            self._triage_find_issues,
+            self._config.poll_interval,
+            enabled_name="triage",
+        )
 
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("plan"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            try:
-                await self._plan_issues()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("Plan loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Plan loop error", "source": "plan"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "plan",
+            self._plan_issues,
+            self._config.poll_interval,
+            enabled_name="plan",
+        )
 
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("implement"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            # After one poll cycle, release crash-recovered issues
-            if self._recovered_issues:
-                self._active_impl_issues -= self._recovered_issues
-                self._recovered_issues.clear()
-                self._state.set_active_issue_numbers(
-                    list(
-                        self._active_impl_issues
-                        | self._active_review_issues
-                        | self._active_hitl_issues
-                    )
-                )
-            try:
-                results, _issues = await self._implementer.run_batch()
-                for result in results:
-                    if result.transcript:
-                        try:
-                            await self._file_memory_suggestion(
-                                result.transcript,
-                                "implementer",
-                                f"issue #{result.issue_number}",
-                            )
-                        except Exception:
-                            logger.exception(
-                                "Failed to file memory suggestion for issue #%d",
-                                result.issue_number,
-                            )
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception(
-                    "Implement loop iteration failed — will retry next cycle"
-                )
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Implement loop error", "source": "implement"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "implement",
+            self._do_implement_work,
+            self._config.poll_interval,
+            enabled_name="implement",
+        )
 
     async def _review_loop(self) -> None:
         """Continuously consume reviewable issues from the store and review their PRs."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("review"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            try:
-                review_issues = self._store.get_reviewable(
-                    self._config.batch_size,
-                )
-                if review_issues:
-                    # Resolve PRs for the issues obtained from the store.
-                    # We still need per-issue gh pr list calls for PR metadata,
-                    # but issue discovery is centralized via the store.
-                    active_in_store = set(self._store.get_active_issues().keys())
-                    prs, issues = await self._fetcher.fetch_reviewable_prs(
-                        active_in_store, prefetched_issues=review_issues
-                    )
-                    if prs:
-                        review_results = await self._reviewer.review_prs(prs, issues)
-                        for result in review_results:
-                            if result.transcript:
-                                try:
-                                    await self._file_memory_suggestion(
-                                        result.transcript,
-                                        "reviewer",
-                                        f"PR #{result.pr_number}",
-                                    )
-                                except Exception:
-                                    logger.exception(
-                                        "Failed to file memory suggestion for PR #%d",
-                                        result.pr_number,
-                                    )
-                        any_merged = any(r.merged for r in review_results)
-                        if any_merged:
-                            await asyncio.sleep(5)
-                            await self._prs.pull_main()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("Review loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Review loop error", "source": "review"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "review",
+            self._do_review_work,
+            self._config.poll_interval,
+            enabled_name="review",
+        )
 
     async def _hitl_loop(self) -> None:
         """Continuously process HITL corrections submitted via the dashboard."""
-        while not self._stop_event.is_set():
-            try:
-                await self._process_hitl_corrections()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("HITL loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "HITL loop error", "source": "hitl"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "hitl",
+            self._process_hitl_corrections,
+            self._config.poll_interval,
+        )
 
     async def _memory_sync_loop(self) -> None:
         """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("memory_sync"):
-                await self._sleep_or_stop(self._config.memory_sync_interval)
-                continue
-            try:
-                issues = await self._fetcher.fetch_issues_by_labels(
-                    self._config.memory_label, limit=100
-                )
-                # Convert to dicts for the sync worker
-                issue_dicts = [
-                    {
-                        "number": i.number,
-                        "title": i.title,
-                        "body": i.body,
-                        "createdAt": i.created_at,
-                    }
-                    for i in issues
-                ]
-                stats = await self._memory_sync.sync(issue_dicts)
-                await self._memory_sync.publish_sync_event(stats)
-                self.update_bg_worker_status("memory_sync", "ok", details=stats)
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception(
-                    "Memory sync loop iteration failed — will retry next cycle"
-                )
-                self.update_bg_worker_status("memory_sync", "error")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={
-                            "message": "Memory sync loop error",
-                            "source": "memory_sync",
-                        },
-                    )
-                )
-            await self._sleep_or_stop(self._config.memory_sync_interval)
+        await self._polling_loop(
+            "memory_sync",
+            self._do_memory_sync_work,
+            self._config.memory_sync_interval,
+            enabled_name="memory_sync",
+        )
 
     async def _metrics_sync_loop(self) -> None:
         """Continuously aggregate and persist metrics snapshots."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("metrics"):
-                await self._sleep_or_stop(self._config.metrics_sync_interval)
-                continue
-            try:
-                queue_stats = self._store.get_queue_stats()
-                stats = await self._metrics_manager.sync(queue_stats)
-                self.update_bg_worker_status("metrics", "ok", details=stats)
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception(
-                    "Metrics sync loop iteration failed — will retry next cycle"
+        await self._polling_loop(
+            "metrics",
+            self._do_metrics_sync_work,
+            self._config.metrics_sync_interval,
+            enabled_name="metrics",
+        )
+
+    async def _do_implement_work(self) -> None:
+        """Work function for the implement loop."""
+        # After one poll cycle, release crash-recovered issues
+        if self._recovered_issues:
+            self._active_impl_issues -= self._recovered_issues
+            self._recovered_issues.clear()
+            self._state.set_active_issue_numbers(
+                list(
+                    self._active_impl_issues
+                    | self._active_review_issues
+                    | self._active_hitl_issues
                 )
-                self.update_bg_worker_status("metrics", "error")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={
-                            "message": "Metrics sync loop error",
-                            "source": "metrics",
-                        },
+            )
+        results, _issues = await self._implementer.run_batch()
+        for result in results:
+            if result.transcript:
+                try:
+                    await self._file_memory_suggestion(
+                        result.transcript,
+                        "implementer",
+                        f"issue #{result.issue_number}",
                     )
-                )
-            await self._sleep_or_stop(self._config.metrics_sync_interval)
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for issue #%d",
+                        result.issue_number,
+                    )
+
+    async def _do_review_work(self) -> None:
+        """Work function for the review loop."""
+        review_issues = self._store.get_reviewable(self._config.batch_size)
+        if not review_issues:
+            return
+        active_in_store = set(self._store.get_active_issues().keys())
+        prs, issues = await self._fetcher.fetch_reviewable_prs(
+            active_in_store, prefetched_issues=review_issues
+        )
+        if not prs:
+            return
+        review_results = await self._reviewer.review_prs(prs, issues)
+        for result in review_results:
+            if result.transcript:
+                try:
+                    await self._file_memory_suggestion(
+                        result.transcript,
+                        "reviewer",
+                        f"PR #{result.pr_number}",
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for PR #%d",
+                        result.pr_number,
+                    )
+        if any(r.merged for r in review_results):
+            await asyncio.sleep(5)
+            await self._prs.pull_main()
+
+    async def _do_memory_sync_work(self) -> None:
+        """Work function for the memory sync loop."""
+        try:
+            issues = await self._fetcher.fetch_issues_by_labels(
+                self._config.memory_label, limit=100
+            )
+            issue_dicts = [
+                {
+                    "number": i.number,
+                    "title": i.title,
+                    "body": i.body,
+                    "createdAt": i.created_at,
+                }
+                for i in issues
+            ]
+            stats = await self._memory_sync.sync(issue_dicts)
+            await self._memory_sync.publish_sync_event(stats)
+            self.update_bg_worker_status("memory_sync", "ok", details=stats)
+        except Exception:
+            self.update_bg_worker_status("memory_sync", "error")
+            raise
+
+    async def _do_metrics_sync_work(self) -> None:
+        """Work function for the metrics sync loop."""
+        try:
+            queue_stats = self._store.get_queue_stats()
+            stats = await self._metrics_manager.sync(queue_stats)
+            self.update_bg_worker_status("metrics", "ok", details=stats)
+        except Exception:
+            self.update_bg_worker_status("metrics", "error")
+            raise
 
     async def _file_memory_suggestion(
         self, transcript: str, source: str, reference: str
@@ -715,14 +677,12 @@ class HydraOrchestrator:
                 cause = self._state.get_hitl_cause(issue_number) or "Unknown escalation"
                 origin = self._state.get_hitl_origin(issue_number)
 
-                # Get or create worktree
                 branch = self._config.branch_for_issue(issue_number)
                 wt_path = self._config.worktree_path_for_issue(issue_number)
                 if not wt_path.is_dir():
                     wt_path = await self._worktrees.create(issue_number, branch)
                 self._state.set_worktree(issue_number, str(wt_path))
 
-                # Swap to active label
                 for lbl in self._config.hitl_label:
                     await self._prs.remove_label(issue_number, lbl)
                 await self._prs.add_labels(
@@ -731,96 +691,15 @@ class HydraOrchestrator:
 
                 result = await self._hitl_runner.run(issue, correction, cause, wt_path)
 
-                # Remove active label
                 for lbl in self._config.hitl_active_label:
                     await self._prs.remove_label(issue_number, lbl)
 
                 if result.success:
-                    await self._prs.push_branch(wt_path, branch)
-
-                    if origin and origin in self._config.improve_label:
-                        # Improve issues go to triage for implementation
-                        for lbl in self._config.improve_label:
-                            await self._prs.remove_label(issue_number, lbl)
-                        if self._config.find_label:
-                            await self._prs.add_labels(
-                                issue_number,
-                                [self._config.find_label[0]],
-                            )
-                        target_stage = (
-                            self._config.find_label[0]
-                            if self._config.find_label
-                            else "pipeline"
-                        )
-                    elif origin:
-                        await self._prs.add_labels(issue_number, [origin])
-                        target_stage = origin
-                    else:
-                        target_stage = "pipeline"
-
-                    self._state.remove_hitl_origin(issue_number)
-                    self._state.remove_hitl_cause(issue_number)
-                    self._state.reset_issue_attempts(issue_number)
-
-                    await self._prs.post_comment(
-                        issue_number,
-                        f"**HITL correction applied successfully.**\n\n"
-                        f"Returning issue to `{target_stage}` stage."
-                        f"\n\n---\n*Applied by Hydra HITL*",
-                    )
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.HITL_UPDATE,
-                            data={
-                                "issue": issue_number,
-                                "action": "resolved",
-                                "status": "resolved",
-                            },
-                        )
-                    )
-                    logger.info(
-                        "HITL correction succeeded for issue #%d — returning to %s",
-                        issue_number,
-                        origin,
+                    await self._hitl_handle_success(
+                        issue_number, origin, wt_path, branch
                     )
                 else:
-                    await self._prs.add_labels(
-                        issue_number, [self._config.hitl_label[0]]
-                    )
-                    await self._prs.post_comment(
-                        issue_number,
-                        f"**HITL correction failed.**\n\n"
-                        f"Error: {result.error or 'No details available'}"
-                        f"\n\nPlease retry with different guidance."
-                        f"\n\n---\n*Applied by Hydra HITL*",
-                    )
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.HITL_UPDATE,
-                            data={
-                                "issue": issue_number,
-                                "action": "failed",
-                                "status": "pending",
-                            },
-                        )
-                    )
-                    logger.warning(
-                        "HITL correction failed for issue #%d: %s",
-                        issue_number,
-                        result.error,
-                    )
-
-                # Clean up worktree on success; keep on failure for retry
-                if result.success:
-                    try:
-                        await self._worktrees.destroy(issue_number)
-                        self._state.remove_worktree(issue_number)
-                    except RuntimeError as exc:
-                        logger.warning(
-                            "Could not destroy worktree for issue #%d: %s",
-                            issue_number,
-                            exc,
-                        )
+                    await self._hitl_handle_failure(issue_number, result)
             except Exception:
                 logger.exception("HITL processing failed for issue #%d", issue_number)
             finally:
@@ -832,6 +711,92 @@ class HydraOrchestrator:
                         | self._active_hitl_issues
                     )
                 )
+
+    async def _hitl_handle_success(
+        self,
+        issue_number: int,
+        origin: str | None,
+        wt_path: Any,
+        branch: str,
+    ) -> None:
+        """Handle a successful HITL correction: push, re-label, clean up."""
+        await self._prs.push_branch(wt_path, branch)
+
+        if origin and origin in self._config.improve_label:
+            for lbl in self._config.improve_label:
+                await self._prs.remove_label(issue_number, lbl)
+            if self._config.find_label:
+                await self._prs.add_labels(issue_number, [self._config.find_label[0]])
+            target_stage = (
+                self._config.find_label[0] if self._config.find_label else "pipeline"
+            )
+        elif origin:
+            await self._prs.add_labels(issue_number, [origin])
+            target_stage = origin
+        else:
+            target_stage = "pipeline"
+
+        self._state.remove_hitl_origin(issue_number)
+        self._state.remove_hitl_cause(issue_number)
+        self._state.reset_issue_attempts(issue_number)
+
+        await self._prs.post_comment(
+            issue_number,
+            f"**HITL correction applied successfully.**\n\n"
+            f"Returning issue to `{target_stage}` stage."
+            f"\n\n---\n*Applied by Hydra HITL*",
+        )
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "action": "resolved",
+                    "status": "resolved",
+                },
+            )
+        )
+        logger.info(
+            "HITL correction succeeded for issue #%d — returning to %s",
+            issue_number,
+            origin,
+        )
+
+        try:
+            await self._worktrees.destroy(issue_number)
+            self._state.remove_worktree(issue_number)
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not destroy worktree for issue #%d: %s",
+                issue_number,
+                exc,
+            )
+
+    async def _hitl_handle_failure(self, issue_number: int, result: Any) -> None:
+        """Handle a failed HITL correction: re-add label, post comment."""
+        await self._prs.add_labels(issue_number, [self._config.hitl_label[0]])
+        await self._prs.post_comment(
+            issue_number,
+            f"**HITL correction failed.**\n\n"
+            f"Error: {result.error or 'No details available'}"
+            f"\n\nPlease retry with different guidance."
+            f"\n\n---\n*Applied by Hydra HITL*",
+        )
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={
+                    "issue": issue_number,
+                    "action": "failed",
+                    "status": "pending",
+                },
+            )
+        )
+        logger.warning(
+            "HITL correction failed for issue #%d: %s",
+            issue_number,
+            result.error,
+        )
 
     async def _sleep_or_stop(self, seconds: int | float) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -907,13 +872,18 @@ class HydraOrchestrator:
         await self._sleep_or_stop(pause_seconds)
 
         if self._stop_event.is_set():
-            # Stop was requested during the pause — clear the credit hold so that
-            # run_status correctly returns "idle" rather than "credits_paused" after
-            # the orchestrator has fully shut down.
             self._credits_paused_until = None
             return
 
-        # Resume: clear pause state and restart all loops
+        await self._resume_loops_after_credit_pause(tasks, loop_factories, source)
+
+    async def _resume_loops_after_credit_pause(
+        self,
+        tasks: dict[str, asyncio.Task[None]],
+        loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]],
+        source: str,
+    ) -> None:
+        """Clear pause state and restart all loops after credit pause."""
         self._credits_paused_until = None
         logger.info("Credit pause ended — restarting all loops")
         await self._bus.publish(
@@ -925,7 +895,6 @@ class HydraOrchestrator:
                 },
             )
         )
-
         for loop_name, factory in loop_factories:
             tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
 
@@ -973,46 +942,40 @@ class HydraOrchestrator:
                         self._config.planner_label[0],
                     )
                 else:
-                    self._state.set_hitl_origin(
-                        issue.number, self._config.find_label[0]
-                    )
-                    self._state.set_hitl_cause(
-                        issue.number,
-                        "Insufficient issue detail for triage",
-                    )
-                    self._state.record_hitl_escalation()
-                    await self._prs.add_labels(
-                        issue.number, [self._config.hitl_label[0]]
-                    )
-                    note = (
-                        "## Needs More Information\n\n"
-                        "This issue was picked up by Hydra but doesn't have "
-                        "enough detail to begin planning.\n\n"
-                        "**Missing:**\n"
-                        + "\n".join(f"- {r}" for r in result.reasons)
-                        + "\n\n"
-                        "Please update the issue with more context and re-apply "
-                        f"the `{self._config.find_label[0]}` label when ready.\n\n"
-                        "---\n*Generated by Hydra Triage*"
-                    )
-                    await self._prs.post_comment(issue.number, note)
-                    await self._bus.publish(
-                        HydraEvent(
-                            type=EventType.HITL_UPDATE,
-                            data={
-                                "issue": issue.number,
-                                "action": "escalated",
-                            },
-                        )
-                    )
-                    logger.info(
-                        "Issue #%d triaged → %s (needs attention: %s)",
-                        issue.number,
-                        self._config.hitl_label[0],
-                        "; ".join(result.reasons),
-                    )
+                    await self._escalate_triage_to_hitl(issue, result.reasons)
             finally:
                 self._store.mark_complete(issue.number)
+
+    async def _escalate_triage_to_hitl(
+        self, issue: GitHubIssue, reasons: list[str]
+    ) -> None:
+        """Escalate a triage issue to HITL with missing-info comment."""
+        self._state.set_hitl_origin(issue.number, self._config.find_label[0])
+        self._state.set_hitl_cause(issue.number, "Insufficient issue detail for triage")
+        self._state.record_hitl_escalation()
+        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+        note = (
+            "## Needs More Information\n\n"
+            "This issue was picked up by Hydra but doesn't have "
+            "enough detail to begin planning.\n\n"
+            "**Missing:**\n" + "\n".join(f"- {r}" for r in reasons) + "\n\n"
+            "Please update the issue with more context and re-apply "
+            f"the `{self._config.find_label[0]}` label when ready.\n\n"
+            "---\n*Generated by Hydra Triage*"
+        )
+        await self._prs.post_comment(issue.number, note)
+        await self._bus.publish(
+            HydraEvent(
+                type=EventType.HITL_UPDATE,
+                data={"issue": issue.number, "action": "escalated"},
+            )
+        )
+        logger.info(
+            "Issue #%d triaged → %s (needs attention: %s)",
+            issue.number,
+            self._config.hitl_label[0],
+            "; ".join(reasons),
+        )
 
     async def _plan_issues(self) -> list[PlanResult]:
         """Run planning agents on issues from the plan queue."""
@@ -1023,161 +986,145 @@ class HydraOrchestrator:
         semaphore = asyncio.Semaphore(self._config.max_planners)
         results: list[PlanResult] = []
 
-        async def _plan_one(idx: int, issue: GitHubIssue) -> PlanResult:
-            if self._stop_event.is_set():
-                return PlanResult(issue_number=issue.number, error="stopped")
-
-            async with semaphore:
-                if self._stop_event.is_set():
-                    return PlanResult(issue_number=issue.number, error="stopped")
-
-                self._store.mark_active(issue.number, "plan")
-                try:
-                    result = await self._planners.plan(issue, worker_id=idx)
-
-                    if result.already_satisfied:
-                        # Issue is already satisfied — close with dup label
-                        for lbl in self._config.planner_label:
-                            await self._prs.remove_label(issue.number, lbl)
-                        await self._prs.add_labels(issue.number, self._config.dup_label)
-                        await self._prs.post_comment(
-                            issue.number,
-                            f"## Already Satisfied\n\n"
-                            f"The planner determined that this issue's requirements "
-                            f"are already met by the existing codebase.\n\n"
-                            f"{result.summary}\n\n"
-                            f"---\n"
-                            f"*Generated by Hydra Planner*",
-                        )
-                        await self._prs.close_issue(issue.number)
-                        logger.info(
-                            "Issue #%d closed as already satisfied",
-                            issue.number,
-                        )
-                        return result
-
-                    if result.success and result.plan:
-                        # Post plan + branch as comment on the issue
-                        branch = self._config.branch_for_issue(issue.number)
-                        comment_body = (
-                            f"## Implementation Plan\n\n"
-                            f"{result.plan}\n\n"
-                            f"**Branch:** `{branch}`\n\n"
-                            f"---\n"
-                            f"*Generated by Hydra Planner*"
-                        )
-                        await self._prs.post_comment(issue.number, comment_body)
-
-                        # Run pre-implementation analysis
-                        analyzer = PlanAnalyzer(
-                            repo_root=self._config.repo_root,
-                        )
-                        analysis = analyzer.analyze(result.plan, issue.number)
-
-                        # Post analysis comment
-                        await self._prs.post_comment(
-                            issue.number, analysis.format_comment()
-                        )
-
-                        # Swap labels: remove planner label(s), add implementation label
-                        for lbl in self._config.planner_label:
-                            await self._prs.remove_label(issue.number, lbl)
-                        await self._prs.add_labels(
-                            issue.number, [self._config.ready_label[0]]
-                        )
-
-                        # File new issues discovered during planning
-                        for new_issue in result.new_issues:
-                            if len(new_issue.body) < 50:
-                                logger.warning(
-                                    "Skipping discovered issue %r — body too short "
-                                    "(%d chars, need ≥50)",
-                                    new_issue.title,
-                                    len(new_issue.body),
-                                )
-                                continue
-                            labels = new_issue.labels or (
-                                [self._config.planner_label[0]]
-                                if self._config.planner_label
-                                else []
-                            )
-                            await self._prs.create_issue(
-                                new_issue.title, new_issue.body, labels
-                            )
-                            self._state.record_issue_created()
-
-                        logger.info(
-                            "Plan posted and labels swapped for issue #%d",
-                            issue.number,
-                        )
-                    elif result.retry_attempted:
-                        # Both plan attempts failed validation — escalate to HITL
-                        error_list = "\n".join(
-                            f"- {e}" for e in result.validation_errors
-                        )
-                        hitl_comment = (
-                            f"## Plan Validation Failed\n\n"
-                            f"The planner was unable to produce a valid plan "
-                            f"after two attempts for issue #{issue.number}.\n\n"
-                            f"**Validation errors:**\n{error_list}\n\n"
-                            f"---\n"
-                            f"*Generated by Hydra Planner*"
-                        )
-                        await self._prs.post_comment(issue.number, hitl_comment)
-                        for lbl in self._config.planner_label:
-                            await self._prs.remove_label(issue.number, lbl)
-                        self._state.set_hitl_origin(
-                            issue.number, self._config.planner_label[0]
-                        )
-                        self._state.set_hitl_cause(
-                            issue.number,
-                            "Plan validation failed after retry",
-                        )
-                        self._state.record_hitl_escalation()
-                        await self._prs.add_labels(
-                            issue.number, [self._config.hitl_label[0]]
-                        )
-                        logger.warning(
-                            "Planning failed validation for issue #%d after retry — "
-                            "escalated to HITL",
-                            issue.number,
-                        )
-                    else:
-                        logger.warning(
-                            "Planning failed for issue #%d — skipping label swap",
-                            issue.number,
-                        )
-
-                    # File memory suggestion if present in transcript
-                    if result.transcript:
-                        try:
-                            await self._file_memory_suggestion(
-                                result.transcript,
-                                "planner",
-                                f"issue #{issue.number}",
-                            )
-                        except Exception:
-                            logger.exception(
-                                "Failed to file memory suggestion for issue #%d",
-                                issue.number,
-                            )
-
-                    return result
-                finally:
-                    self._store.mark_complete(issue.number)
-
         all_tasks = [
-            asyncio.create_task(_plan_one(i, issue)) for i, issue in enumerate(issues)
+            asyncio.create_task(self._plan_one(i, issue, semaphore))
+            for i, issue in enumerate(issues)
         ]
         for task in asyncio.as_completed(all_tasks):
             results.append(await task)
-            # Cancel remaining tasks if stop requested
             if self._stop_event.is_set():
                 for t in all_tasks:
                     t.cancel()
                 break
 
         return results
+
+    async def _plan_one(
+        self, idx: int, issue: GitHubIssue, semaphore: asyncio.Semaphore
+    ) -> PlanResult:
+        """Plan a single issue under the given semaphore."""
+        if self._stop_event.is_set():
+            return PlanResult(issue_number=issue.number, error="stopped")
+
+        async with semaphore:
+            if self._stop_event.is_set():
+                return PlanResult(issue_number=issue.number, error="stopped")
+
+            self._store.mark_active(issue.number, "plan")
+            try:
+                result = await self._planners.plan(issue, worker_id=idx)
+
+                if result.already_satisfied:
+                    await self._handle_plan_already_satisfied(issue, result)
+                    return result
+
+                if result.success and result.plan:
+                    await self._handle_plan_success(issue, result)
+                elif result.retry_attempted:
+                    await self._handle_plan_retry_failure(issue, result)
+                else:
+                    logger.warning(
+                        "Planning failed for issue #%d — skipping label swap",
+                        issue.number,
+                    )
+
+                if result.transcript:
+                    try:
+                        await self._file_memory_suggestion(
+                            result.transcript, "planner", f"issue #{issue.number}"
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to file memory suggestion for issue #%d",
+                            issue.number,
+                        )
+
+                return result
+            finally:
+                self._store.mark_complete(issue.number)
+
+    async def _handle_plan_already_satisfied(
+        self, issue: GitHubIssue, result: PlanResult
+    ) -> None:
+        """Handle a plan result where the issue is already satisfied."""
+        for lbl in self._config.planner_label:
+            await self._prs.remove_label(issue.number, lbl)
+        await self._prs.add_labels(issue.number, self._config.dup_label)
+        await self._prs.post_comment(
+            issue.number,
+            f"## Already Satisfied\n\n"
+            f"The planner determined that this issue's requirements "
+            f"are already met by the existing codebase.\n\n"
+            f"{result.summary}\n\n"
+            f"---\n"
+            f"*Generated by Hydra Planner*",
+        )
+        await self._prs.close_issue(issue.number)
+        logger.info("Issue #%d closed as already satisfied", issue.number)
+
+    async def _handle_plan_success(
+        self, issue: GitHubIssue, result: PlanResult
+    ) -> None:
+        """Post plan comment, run analysis, swap labels, file new issues."""
+        branch = self._config.branch_for_issue(issue.number)
+        comment_body = (
+            f"## Implementation Plan\n\n"
+            f"{result.plan}\n\n"
+            f"**Branch:** `{branch}`\n\n"
+            f"---\n"
+            f"*Generated by Hydra Planner*"
+        )
+        await self._prs.post_comment(issue.number, comment_body)
+
+        analyzer = PlanAnalyzer(repo_root=self._config.repo_root)
+        analysis = analyzer.analyze(result.plan, issue.number)
+        await self._prs.post_comment(issue.number, analysis.format_comment())
+
+        for lbl in self._config.planner_label:
+            await self._prs.remove_label(issue.number, lbl)
+        await self._prs.add_labels(issue.number, [self._config.ready_label[0]])
+
+        for new_issue in result.new_issues:
+            if len(new_issue.body) < 50:
+                logger.warning(
+                    "Skipping discovered issue %r — body too short "
+                    "(%d chars, need ≥50)",
+                    new_issue.title,
+                    len(new_issue.body),
+                )
+                continue
+            labels = new_issue.labels or (
+                [self._config.planner_label[0]] if self._config.planner_label else []
+            )
+            await self._prs.create_issue(new_issue.title, new_issue.body, labels)
+            self._state.record_issue_created()
+
+        logger.info("Plan posted and labels swapped for issue #%d", issue.number)
+
+    async def _handle_plan_retry_failure(
+        self, issue: GitHubIssue, result: PlanResult
+    ) -> None:
+        """Escalate to HITL after plan validation failed on retry."""
+        error_list = "\n".join(f"- {e}" for e in result.validation_errors)
+        hitl_comment = (
+            f"## Plan Validation Failed\n\n"
+            f"The planner was unable to produce a valid plan "
+            f"after two attempts for issue #{issue.number}.\n\n"
+            f"**Validation errors:**\n{error_list}\n\n"
+            f"---\n"
+            f"*Generated by Hydra Planner*"
+        )
+        await self._prs.post_comment(issue.number, hitl_comment)
+        for lbl in self._config.planner_label:
+            await self._prs.remove_label(issue.number, lbl)
+        self._state.set_hitl_origin(issue.number, self._config.planner_label[0])
+        self._state.set_hitl_cause(issue.number, "Plan validation failed after retry")
+        self._state.record_hitl_escalation()
+        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+        logger.warning(
+            "Planning failed validation for issue #%d after retry — escalated to HITL",
+            issue.number,
+        )
 
     async def _set_phase(self, phase: Phase) -> None:
         """Update the current phase and broadcast."""

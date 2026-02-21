@@ -2788,7 +2788,7 @@ class TestHITLLoop:
         error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
         assert len(error_events) == 1
         assert error_events[0].data["source"] == "hitl"
-        assert "HITL loop error" in error_events[0].data["message"]
+        assert "Hitl loop error" in error_events[0].data["message"]
 
     @pytest.mark.asyncio
     async def test_stop_terminates_hitl_runner(self, config: HydraConfig) -> None:
@@ -3618,3 +3618,143 @@ class TestMemorySuggestionSetsOrigin:
 
         # No hitl_origin should be set when create_issue fails
         assert orch._state.get_hitl_origin(0) is None
+
+
+# ---------------------------------------------------------------------------
+# _polling_loop
+# ---------------------------------------------------------------------------
+
+
+class TestPollingLoop:
+    """Tests for the generic _polling_loop() method."""
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_calls_work_fn_each_cycle(
+        self, config: HydraConfig
+    ) -> None:
+        """Work function should be called on each loop iteration."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 2:
+                orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count >= 2
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_stops_on_stop_event(self, config: HydraConfig) -> None:
+        """Loop should exit when stop event is set."""
+        orch = HydraOrchestrator(config)
+        orch._stop_event.set()
+
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_skips_when_disabled(self, config: HydraConfig) -> None:
+        """Work function should not be called when worker is disabled."""
+        orch = HydraOrchestrator(config)
+        orch.set_bg_worker_enabled("test_worker", False)
+
+        call_count = 0
+        cycle_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+
+        original_sleep = orch._sleep_or_stop
+
+        async def counting_sleep(seconds: int | float) -> None:
+            nonlocal cycle_count
+            cycle_count += 1
+            if cycle_count >= 2:
+                orch._stop_event.set()
+            await original_sleep(0)
+
+        orch._sleep_or_stop = counting_sleep  # type: ignore[method-assign]
+
+        await orch._polling_loop("test", work_fn, 1, enabled_name="test_worker")
+        assert call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_reraises_auth_error(self, config: HydraConfig) -> None:
+        """AuthenticationError should propagate out of the loop."""
+        orch = HydraOrchestrator(config)
+
+        async def work_fn() -> None:
+            raise AuthenticationError("bad token")
+
+        with pytest.raises(AuthenticationError):
+            await orch._polling_loop("test", work_fn, 0)
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_reraises_credit_error(
+        self, config: HydraConfig
+    ) -> None:
+        """CreditExhaustedError should propagate out of the loop."""
+        from subprocess_util import CreditExhaustedError
+
+        orch = HydraOrchestrator(config)
+
+        async def work_fn() -> None:
+            raise CreditExhaustedError("out of credits")
+
+        with pytest.raises(CreditExhaustedError):
+            await orch._polling_loop("test", work_fn, 0)
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_publishes_error_on_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Non-fatal exceptions should be logged and published as error events."""
+        orch = HydraOrchestrator(config)
+        queue = orch._bus.subscribe()
+
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("oops")
+            orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+
+        error_events: list[HydraEvent] = []
+        while not queue.empty():
+            event = queue.get_nowait()
+            if event.type == EventType.ERROR:
+                error_events.append(event)
+
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "test"
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Loop should continue running after a non-fatal exception."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("first call fails")
+            orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count >= 2
