@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventLog, EventType, HydraEvent
 
 # ---------------------------------------------------------------------------
 # EventType enum
@@ -486,3 +488,42 @@ class TestEventBusSubscription:
             await bus.publish(event2)
             assert q1.get_nowait() is event2
             assert q2.empty()
+
+
+# ---------------------------------------------------------------------------
+# EventLog._rotate_sync delegates to atomic_write
+# ---------------------------------------------------------------------------
+
+
+class TestRotateSyncUsesAtomicWrite:
+    def test_rotate_sync_calls_atomic_write(self, tmp_path: Path) -> None:
+        """_rotate_sync should delegate file writing to atomic_write."""
+        log_path = tmp_path / "events.jsonl"
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        # Write enough data to exceed max_size_bytes
+        log_path.write_text((event.model_dump_json() + "\n") * 100)
+
+        event_log = EventLog(log_path)
+        with patch("events.atomic_write") as mock_aw:
+            event_log._rotate_sync(max_size_bytes=10, max_age_days=365)
+
+        mock_aw.assert_called_once()
+        call_args = mock_aw.call_args[0]
+        assert call_args[0] == log_path
+
+    def test_rotate_sync_passes_joined_content(self, tmp_path: Path) -> None:
+        """_rotate_sync should pass newline-joined kept lines to atomic_write."""
+        log_path = tmp_path / "events.jsonl"
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        log_path.write_text((event.model_dump_json() + "\n") * 5)
+
+        event_log = EventLog(log_path)
+        with patch("events.atomic_write") as mock_aw:
+            event_log._rotate_sync(max_size_bytes=10, max_age_days=365)
+
+        call_args = mock_aw.call_args[0]
+        content = call_args[1]
+        # Content should end with newline and contain valid JSON lines
+        assert content.endswith("\n")
+        lines = [line for line in content.split("\n") if line.strip()]
+        assert len(lines) == 5
