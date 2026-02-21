@@ -3739,3 +3739,529 @@ class TestVerificationIssuePostMerge:
         # Merge still succeeded despite verification failure
         assert len(results) == 1
         assert results[0].merged is True
+
+
+# ---------------------------------------------------------------------------
+# Extracted method unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestEscalateToHitl:
+    """Unit tests for the shared _escalate_to_hitl helper."""
+
+    @pytest.mark.asyncio
+    async def test_sets_hitl_origin_and_cause(self, config: HydraConfig) -> None:
+        """Should set HITL origin label and cause in state."""
+        phase = _make_phase(config)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test failure",
+            origin_label="hydra-review",
+            comment="Escalation comment",
+        )
+
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
+        assert phase._state.get_hitl_cause(42) == "Test failure"
+
+    @pytest.mark.asyncio
+    async def test_records_hitl_escalation_counter(self, config: HydraConfig) -> None:
+        """Should increment the HITL escalation counter."""
+        phase = _make_phase(config)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test",
+            origin_label="hydra-review",
+            comment="comment",
+        )
+
+        stats = phase._state.get_lifetime_stats()
+        assert stats["total_hitl_escalations"] == 1
+
+    @pytest.mark.asyncio
+    async def test_swaps_labels_on_issue_and_pr(self, config: HydraConfig) -> None:
+        """Should remove review labels and add HITL labels."""
+        phase = _make_phase(config)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test",
+            origin_label="hydra-review",
+            comment="comment",
+        )
+
+        phase._prs.remove_label.assert_any_await(42, "hydra-review")
+        phase._prs.remove_pr_label.assert_any_await(101, "hydra-review")
+        phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-hitl"])
+        phase._prs.add_pr_labels.assert_awaited_once_with(101, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_posts_comment_on_pr_by_default(self, config: HydraConfig) -> None:
+        """By default, the comment is posted on the PR."""
+        phase = _make_phase(config)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test",
+            origin_label="hydra-review",
+            comment="Escalation!",
+        )
+
+        phase._prs.post_pr_comment.assert_awaited_once_with(101, "Escalation!")
+        phase._prs.post_comment.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_posts_comment_on_issue_when_post_on_pr_false(
+        self, config: HydraConfig
+    ) -> None:
+        """When post_on_pr=False, comment is posted on the issue."""
+        phase = _make_phase(config)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test",
+            origin_label="hydra-review",
+            comment="Escalation!",
+            post_on_pr=False,
+        )
+
+        phase._prs.post_comment.assert_awaited_once_with(42, "Escalation!")
+        phase._prs.post_pr_comment.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_publishes_hitl_escalation_event(self, config: HydraConfig) -> None:
+        """Should publish an HITL_ESCALATION event."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="Test cause",
+            origin_label="hydra-review",
+            comment="comment",
+            event_cause="test_event",
+        )
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type == EventType.HITL_ESCALATION]
+        assert len(hitl_events) == 1
+        assert hitl_events[0].data["issue"] == 42
+        assert hitl_events[0].data["pr"] == 101
+        assert hitl_events[0].data["cause"] == "test_event"
+
+    @pytest.mark.asyncio
+    async def test_extra_event_data_included(self, config: HydraConfig) -> None:
+        """Extra event data should be merged into the HITL event."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._escalate_to_hitl(
+            42,
+            101,
+            cause="CI failed",
+            origin_label="hydra-review",
+            comment="comment",
+            extra_event_data={"ci_fix_attempts": 3},
+        )
+
+        history = bus.get_history()
+        hitl_events = [e for e in history if e.type == EventType.HITL_ESCALATION]
+        assert hitl_events[0].data["ci_fix_attempts"] == 3
+
+
+class TestMergeWithMain:
+    """Unit tests for the _merge_with_main helper."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_on_clean_merge(self, config: HydraConfig) -> None:
+        """When merge_main succeeds, should push and return True."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        result = await phase._merge_with_main(
+            pr, issue, config.worktree_base / "issue-42", 0
+        )
+
+        assert result is True
+        phase._prs.push_branch.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_true_after_conflict_resolution(
+        self, config: HydraConfig
+    ) -> None:
+        """When merge fails but conflict resolution succeeds, should return True."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = _make_phase(config, agents=mock_agents)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._prs.push_branch = AsyncMock(return_value=True)
+
+        result = await phase._merge_with_main(
+            pr, issue, config.worktree_base / "issue-42", 0
+        )
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_returns_false_and_escalates_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """When conflict resolution fails, should escalate and return False."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+
+        result = await phase._merge_with_main(
+            pr, issue, config.worktree_base / "issue-42", 0
+        )
+
+        assert result is False
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
+
+
+class TestRunAndPostReview:
+    """Unit tests for the _run_and_post_review helper."""
+
+    @pytest.mark.asyncio
+    async def test_pushes_fixes_when_made(self, config: HydraConfig) -> None:
+        """When reviewer makes fixes, branch should be pushed."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        review = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.APPROVE,
+            summary="Fixed.",
+            fixes_made=True,
+            transcript="THOROUGH_REVIEW_COMPLETE",
+        )
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+
+        result = await phase._run_and_post_review(
+            pr, issue, config.worktree_base / "issue-42", "diff", 0
+        )
+
+        assert result.fixes_made is True
+        phase._prs.push_branch.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_posts_summary_as_pr_comment(self, config: HydraConfig) -> None:
+        """Review summary should be posted as a PR comment."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        review = make_review_result(101, 42)
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        await phase._run_and_post_review(
+            pr, issue, config.worktree_base / "issue-42", "diff", 0
+        )
+
+        phase._prs.post_pr_comment.assert_awaited_once_with(101, "Looks good.")
+
+    @pytest.mark.asyncio
+    async def test_skips_submit_review_for_approve(self, config: HydraConfig) -> None:
+        """submit_review should not be called for APPROVE verdicts."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+
+        await phase._run_and_post_review(
+            pr, issue, config.worktree_base / "issue-42", "diff", 0
+        )
+
+        phase._prs.submit_review.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_submits_review_for_request_changes(
+        self, config: HydraConfig
+    ) -> None:
+        """submit_review should be called for REQUEST_CHANGES verdicts."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+
+        await phase._run_and_post_review(
+            pr, issue, config.worktree_base / "issue-42", "diff", 0
+        )
+
+        phase._prs.submit_review.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_handles_self_review_error(self, config: HydraConfig) -> None:
+        """SelfReviewError should be caught gracefully."""
+        from pr_manager import SelfReviewError
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        review = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+        phase._reviewers.review = AsyncMock(return_value=review)
+        phase._prs.push_branch = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock(
+            side_effect=SelfReviewError("cannot review own PR")
+        )
+
+        result = await phase._run_and_post_review(
+            pr, issue, config.worktree_base / "issue-42", "diff", 0
+        )
+
+        assert result.verdict == ReviewVerdict.REQUEST_CHANGES
+
+
+class TestHandleApprovedMerge:
+    """Unit tests for the _handle_approved_merge helper."""
+
+    @pytest.mark.asyncio
+    async def test_merge_success_marks_merged(self, config: HydraConfig) -> None:
+        """Successful merge should set result.merged and update state."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42)
+
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase._handle_approved_merge(pr, issue, result, "diff", 0)
+
+        assert result.merged is True
+        assert phase._state.get_issue_status(42) == "merged"
+
+    @pytest.mark.asyncio
+    async def test_merge_failure_escalates(self, config: HydraConfig) -> None:
+        """Failed merge should escalate to HITL."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42)
+
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase._handle_approved_merge(pr, issue, result, "diff", 0)
+
+        assert result.merged is False
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
+
+    @pytest.mark.asyncio
+    async def test_merge_success_swaps_labels(self, config: HydraConfig) -> None:
+        """Successful merge should swap review label to fixed label."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42)
+
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase._handle_approved_merge(pr, issue, result, "diff", 0)
+
+        remove_calls = [c.args for c in phase._prs.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+        add_calls = [c.args for c in phase._prs.add_labels.call_args_list]
+        assert (42, ["hydra-fixed"]) in add_calls
+
+
+class TestRunPostMergeHooks:
+    """Unit tests for the _run_post_merge_hooks helper."""
+
+    @pytest.mark.asyncio
+    async def test_calls_ac_generator(self, config: HydraConfig) -> None:
+        """Should call ac_generator.generate when configured."""
+        mock_ac = AsyncMock()
+        phase = _make_phase(config, ac_generator=mock_ac)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42)
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_ac.generate.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_calls_retrospective(self, config: HydraConfig) -> None:
+        """Should call retrospective.record when configured."""
+        mock_retro = AsyncMock()
+        phase = _make_phase(config)
+        phase._retrospective = mock_retro
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42)
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_retro.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_hook_failure_does_not_block_others(
+        self, config: HydraConfig
+    ) -> None:
+        """If one hook fails, others should still be called."""
+        mock_ac = AsyncMock()
+        mock_ac.generate = AsyncMock(side_effect=RuntimeError("AC failed"))
+        mock_retro = AsyncMock()
+        phase = _make_phase(config, ac_generator=mock_ac)
+        phase._retrospective = mock_retro
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42)
+
+        # Should not raise
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        # AC failed but retrospective still called
+        mock_retro.record.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_hooks_configured(self, config: HydraConfig) -> None:
+        """When no hooks are configured, should complete without errors."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+        result = make_review_result(101, 42)
+
+        # Should not raise
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+
+class TestReviewOneInner:
+    """Unit tests for the _review_one_inner coordinator method."""
+
+    @pytest.mark.asyncio
+    async def test_returns_issue_not_found(self, config: HydraConfig) -> None:
+        """When issue is not in the map, should return 'Issue not found'."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 999)
+
+        wt = config.worktree_base / "issue-999"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        result = await phase._review_one_inner(0, pr, {})
+
+        assert result.summary == "Issue not found"
+
+    @pytest.mark.asyncio
+    async def test_coordinates_merge_review_and_verdict(
+        self, config: HydraConfig
+    ) -> None:
+        """Should coordinate merge, review, state recording, and verdict handling."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        result = await phase._review_one_inner(0, pr, {42: issue})
+
+        assert result.merged is True
+        assert phase._state.get_pr_status(101) == "approve"
