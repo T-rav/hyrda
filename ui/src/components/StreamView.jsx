@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
 import { useTimeline } from '../hooks/useTimeline'
 import { StreamCard } from './StreamCard'
@@ -16,8 +16,7 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, defaultOpen }) {
-  const [open, setOpen] = useState(defaultOpen)
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const queuedCount = issues.length - activeCount
 
@@ -25,7 +24,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
     <div style={styles.section}>
       <div
         style={sectionHeaderStyles[stage.key]}
-        onClick={() => setOpen(!open)}
+        onClick={onToggle}
       >
         <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
         <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
@@ -49,7 +48,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
   )
 }
 
-export function StreamView({ events, workers, prs, intents, onViewTranscript, onRequestChanges }) {
+export function StreamView({ events, workers, prs, intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
   const { issues } = useTimeline(events, workers, prs)
 
   // Match intents to issues by issueNumber
@@ -98,6 +97,10 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
     return counts
   }, [workers])
 
+  const handleToggleStage = useCallback((key) => {
+    onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
+  }, [onToggleStage])
+
   const hasAnyIssues = issues.length > 0 || pendingIntents.length > 0
 
   return (
@@ -115,7 +118,8 @@ export function StreamView({ events, workers, prs, intents, onViewTranscript, on
           intentMap={intentMap}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
-          defaultOpen={stageIssues.some(i => i.overallStatus === 'active')}
+          open={!!expandedStages[stage.key]}
+          onToggle={() => handleToggleStage(stage.key)}
         />
       ))}
 

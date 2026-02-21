@@ -45,6 +45,7 @@ function AppContent() {
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
+  const [expandedStages, setExpandedStages] = useState({})
   const handleWorkerSelect = useCallback((worker) => {
     setSelectedWorker(worker)
     setActiveTab('transcript')
@@ -141,6 +142,8 @@ function AppContent() {
               workers={workers}
               prs={prs}
               intents={intents}
+              expandedStages={expandedStages}
+              onToggleStage={setExpandedStages}
               onViewTranscript={handleViewTranscript}
               onRequestChanges={handleRequestChanges}
             />
