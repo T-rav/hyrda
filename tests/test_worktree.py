@@ -657,6 +657,42 @@ class TestSetupEnv:
         manager._setup_env(wt_path)
         assert env_dst.is_symlink()
 
+    def test_setup_env_handles_symlink_oserror(self, config, tmp_path: Path) -> None:
+        """_setup_env should handle OSError on symlink and continue."""
+        manager = WorktreeManager(config)
+        repo_root = config.repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create .env source so the symlink path is entered
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+
+        # Also create node_modules source under a real _UI_DIRS entry
+        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        ui_nm_src.mkdir(parents=True)
+
+        with patch.object(Path, "symlink_to", side_effect=OSError("perm denied")):
+            manager._setup_env(wt_path)  # should not raise
+
+    def test_setup_env_handles_copy_oserror(self, config, tmp_path: Path) -> None:
+        """_setup_env should handle OSError when copying settings and continue."""
+        manager = WorktreeManager(config)
+        repo_root = config.repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create settings source
+        claude_dir = repo_root / ".claude"
+        claude_dir.mkdir()
+        settings_src = claude_dir / "settings.local.json"
+        settings_src.write_text('{"allowed": []}')
+
+        with patch.object(Path, "write_text", side_effect=OSError("read-only")):
+            manager._setup_env(wt_path)  # should not raise
+
 
 # ---------------------------------------------------------------------------
 # WorktreeManager._configure_git_identity
@@ -834,6 +870,19 @@ class TestCreateVenv:
         with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
             # Should not raise
             await manager._create_venv(tmp_path)
+
+    @pytest.mark.asyncio
+    async def test_create_venv_swallows_file_not_found_error(
+        self, config, tmp_path: Path
+    ) -> None:
+        """_create_venv should handle missing uv binary (FileNotFoundError)."""
+        manager = WorktreeManager(config)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("uv"),
+        ):
+            await manager._create_venv(tmp_path)  # should not raise
 
 
 # ---------------------------------------------------------------------------
