@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { PIPELINE_STAGES } from '../../constants'
+import { STAGE_KEYS } from '../../hooks/useTimeline'
 
 const mockUseHydra = vi.fn()
 
@@ -8,7 +9,7 @@ vi.mock('../../context/HydraContext', () => ({
   useHydra: (...args) => mockUseHydra(...args),
 }))
 
-const { StreamView } = await import('../StreamView')
+const { StreamView, toStreamIssue } = await import('../StreamView')
 
 const defaultHydra = {
   pipelineIssues: { triage: [], plan: [], implement: [], review: [] },
@@ -179,5 +180,86 @@ describe('StreamView stage indicators', () => {
       expect(screen.getByTestId('stage-section-implement').style.opacity).toBe('0.5')
       expect(screen.getByTestId('stage-section-triage').style.opacity).toBe('1')
     })
+  })
+})
+
+describe('toStreamIssue', () => {
+  it('sets all stages to done for merged/done items', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'done' },
+      'merged',
+      []
+    )
+    for (const key of STAGE_KEYS) {
+      expect(result.stages[key].status).toBe('done')
+    }
+    expect(result.overallStatus).toBe('done')
+  })
+
+  it('sets current stage to active for active items', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'active' },
+      'implement',
+      []
+    )
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('done')
+    expect(result.stages.implement.status).toBe('active')
+    expect(result.stages.review.status).toBe('pending')
+    expect(result.stages.merged.status).toBe('pending')
+    expect(result.overallStatus).toBe('active')
+  })
+
+  it('sets current stage to pending for queued items', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'queued' },
+      'plan',
+      []
+    )
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('pending')
+    expect(result.stages.implement.status).toBe('pending')
+    expect(result.stages.review.status).toBe('pending')
+    expect(result.stages.merged.status).toBe('pending')
+    expect(result.overallStatus).toBe('active')
+  })
+
+  it('sets overallStatus to hitl for hitl items', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'hitl' },
+      'review',
+      []
+    )
+    expect(result.overallStatus).toBe('hitl')
+  })
+
+  it('matches PR from prs array', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'active' },
+      'review',
+      [{ pr: 42, issue: 10, url: 'https://github.com/test/pr/42' }]
+    )
+    expect(result.pr).toEqual({ number: 42, url: 'https://github.com/test/pr/42' })
+  })
+
+  it('returns null pr when no match found', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'active' },
+      'implement',
+      [{ pr: 42, issue: 99, url: 'https://github.com/test/pr/42' }]
+    )
+    expect(result.pr).toBeNull()
+  })
+})
+
+describe('Merged stage rendering', () => {
+  it('renders merged PR issues in the merged stage section', () => {
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
+    })
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByText('#10')).toBeInTheDocument()
+    expect(screen.getByText('Fix bug')).toBeInTheDocument()
   })
 })
