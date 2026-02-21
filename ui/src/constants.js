@@ -25,6 +25,9 @@ export const PIPELINE_STAGES = [
   { key: 'merged',    label: 'Merged',    color: theme.green,       subtleColor: theme.greenSubtle,  role: null,           configKey: null },
 ]
 
+/** Valid overall statuses for stream cards. */
+export const STREAM_CARD_STATUSES = ['active', 'done', 'failed', 'hitl']
+
 /**
  * Background worker definitions — system maintenance loops that run independently of the pipeline.
  */

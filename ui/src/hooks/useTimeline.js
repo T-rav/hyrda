@@ -40,6 +40,7 @@ function extractIssueNumber(event) {
   const d = event.data
   if (!d) return null
   if (d.issue != null) return Number(d.issue)
+  if (d.number != null) return Number(d.number)
   return null
 }
 
@@ -101,6 +102,15 @@ export function deriveIssueTimelines(events, workers, prs) {
   for (const event of chronological) {
     const stage = EVENT_TO_STAGE[event.type]
     const issueNum = extractIssueNumber(event)
+
+    if (event.type === 'issue_created' && issueNum != null) {
+      const entry = getOrCreate(issueNum)
+      if (event.data.title) entry.title = event.data.title
+      if (event.timestamp && (!entry.startTime || event.timestamp < entry.startTime)) {
+        entry.startTime = event.timestamp
+      }
+      continue
+    }
 
     if (event.type === 'pr_created' && issueNum != null) {
       const entry = getOrCreate(issueNum)

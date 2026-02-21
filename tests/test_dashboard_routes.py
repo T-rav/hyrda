@@ -90,6 +90,7 @@ class TestCreateRouter:
             "/api/hitl/{issue_number}/close",
             "/api/timeline",
             "/api/timeline/issue/{issue_num}",
+            "/api/intent",
             "/ws",
             "/{path:path}",
         }
