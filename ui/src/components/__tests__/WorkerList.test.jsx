@@ -102,6 +102,13 @@ describe('cardStylesByStage pre-computed styles', () => {
     }
   })
 
+  it('active variant inherits base card properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(cardStylesByStage[role].active).toHaveProperty('padding')
+      expect(cardStylesByStage[role].active).toHaveProperty('cursor', 'pointer')
+    }
+  })
+
   it('style objects are referentially stable', () => {
     expect(cardStylesByStage.triage.normal).toBe(cardStylesByStage.triage.normal)
     expect(cardStylesByStage.implementer.active).toBe(cardStylesByStage.implementer.active)
@@ -128,6 +135,14 @@ describe('sectionHeaderByRole pre-computed styles', () => {
       expect(sectionHeaderByRole[role].borderBottom).toBe(`2px solid ${color}`)
     }
   })
+
+  it('each entry inherits base sectionHeader properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionHeaderByRole[role]).toHaveProperty('display', 'flex')
+      expect(sectionHeaderByRole[role]).toHaveProperty('cursor', 'pointer')
+      expect(sectionHeaderByRole[role]).toHaveProperty('userSelect', 'none')
+    }
+  })
 })
 
 describe('sectionLabelByRole pre-computed styles', () => {
@@ -146,6 +161,13 @@ describe('sectionLabelByRole pre-computed styles', () => {
   it('each entry has fontSize 12', () => {
     for (const role of Object.keys(expectedStageColors)) {
       expect(sectionLabelByRole[role].fontSize).toBe(12)
+    }
+  })
+
+  it('each entry inherits base sectionLabel properties', () => {
+    for (const role of Object.keys(expectedStageColors)) {
+      expect(sectionLabelByRole[role]).toHaveProperty('fontWeight', 600)
+      expect(sectionLabelByRole[role]).toHaveProperty('textTransform', 'uppercase')
     }
   })
 })
