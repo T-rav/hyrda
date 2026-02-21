@@ -2267,7 +2267,7 @@ class TestCreatePrEdgeCases:
     @pytest.mark.asyncio
     async def test_create_pr_unparseable_url_returns_zero_pr(
         self, config, event_bus, issue
-    ):
+    ) -> None:
         """create_pr should return PRInfo(number=0) when gh output is not a parseable URL."""
         manager = _make_manager(config, event_bus)
         # gh pr create returns non-URL text (unparseable)
@@ -2289,7 +2289,7 @@ class TestWaitForCiEdgeCases:
     @pytest.mark.asyncio
     async def test_wait_for_ci_partial_completion_keeps_polling(
         self, config, event_bus
-    ):
+    ) -> None:
         """When some checks pass and some are pending, should poll again."""
         mgr = _make_manager(config, event_bus)
         stop = asyncio.Event()
@@ -2297,7 +2297,7 @@ class TestWaitForCiEdgeCases:
         # First call: mix of SUCCESS and PENDING; second call: all SUCCESS
         call_count = 0
 
-        async def fake_checks(_pr_num):
+        async def fake_checks(_pr_num: int) -> list[dict[str, str]]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
@@ -2317,13 +2317,13 @@ class TestWaitForCiEdgeCases:
         )
 
         assert passed is True
-        assert "2 checks passed" in summary
+        assert summary == "All 2 checks passed"
         assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_wait_for_ci_cancelled_check_treated_as_failure(
         self, config, event_bus
-    ):
+    ) -> None:
         """CANCELLED check state should be treated as failure (not in _PASSING_STATES)."""
         mgr = _make_manager(config, event_bus)
         stop = asyncio.Event()
@@ -2348,7 +2348,7 @@ class TestListOpenPrsEdgeCases:
     @pytest.mark.asyncio
     async def test_list_open_prs_missing_headRefName_uses_empty_default(
         self, config, event_bus
-    ):
+    ) -> None:
         """PR JSON missing headRefName should use empty string fallback."""
         mgr = _make_manager(config, event_bus)
 

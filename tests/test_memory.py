@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -487,8 +488,6 @@ class TestMemorySyncWorkerSync:
         self, tmp_path: Path
     ) -> None:
         """Two concurrent sync() calls should both complete without corruption."""
-        import asyncio
-
         config = ConfigFactory.create(repo_root=tmp_path)
         state = MagicMock()
         state.get_memory_state.return_value = ([], "", None)

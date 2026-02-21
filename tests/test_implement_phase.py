@@ -547,11 +547,7 @@ class TestWorktreeCreationFailure:
         """First worktree.create failure should not prevent second worker from completing."""
         issues = [make_issue(1), make_issue(2)]
 
-        call_count = 0
-
-        async def create_side_effect(num, branch):
-            nonlocal call_count
-            call_count += 1
+        async def create_side_effect(num: int, branch: str) -> Path:
             if num == 1:
                 raise RuntimeError("disk full")
             return config.worktree_base / f"issue-{num}"
