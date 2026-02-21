@@ -10,20 +10,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType
-from models import GitHubIssue, TriageResult
+from models import TriageResult
+from tests.conftest import IssueFactory
 from triage import TriageRunner
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def make_issue(
-    number: int = 1, title: str = "Fix bug", body: str = "Details"
-) -> GitHubIssue:
-    return GitHubIssue(
-        number=number, title=title, body=body, labels=[], comments=[], url=""
-    )
 
 
 @pytest.fixture
@@ -51,9 +40,12 @@ class TestEvaluateReadiness:
     async def test_ready_when_title_and_body_sufficient(
         self, runner: TriageRunner
     ) -> None:
-        issue = make_issue(
+        issue = IssueFactory.create(
+            number=1,
             title="Implement feature X for module Y",
             body="Detailed description of what needs to happen. " * 3,
+            labels=[],
+            url="",
         )
         result = await runner.evaluate(issue)
         assert result.ready is True
@@ -61,35 +53,45 @@ class TestEvaluateReadiness:
 
     @pytest.mark.asyncio
     async def test_not_ready_when_body_empty(self, runner: TriageRunner) -> None:
-        issue = make_issue(title="A good descriptive title", body="")
+        issue = IssueFactory.create(
+            number=1, title="A good descriptive title", body="", labels=[], url=""
+        )
         result = await runner.evaluate(issue)
         assert result.ready is False
         assert any("Body" in r for r in result.reasons)
 
     @pytest.mark.asyncio
     async def test_not_ready_when_body_too_short(self, runner: TriageRunner) -> None:
-        issue = make_issue(title="A good descriptive title", body="Fix it")
+        issue = IssueFactory.create(
+            number=1, title="A good descriptive title", body="Fix it", labels=[], url=""
+        )
         result = await runner.evaluate(issue)
         assert result.ready is False
         assert any("Body" in r for r in result.reasons)
 
     @pytest.mark.asyncio
     async def test_not_ready_when_title_too_short(self, runner: TriageRunner) -> None:
-        issue = make_issue(title="Fix", body="A" * 100)
+        issue = IssueFactory.create(
+            number=1, title="Fix", body="A" * 100, labels=[], url=""
+        )
         result = await runner.evaluate(issue)
         assert result.ready is False
         assert any("Title" in r for r in result.reasons)
 
     @pytest.mark.asyncio
     async def test_not_ready_when_both_insufficient(self, runner: TriageRunner) -> None:
-        issue = make_issue(title="Bug", body="short")
+        issue = IssueFactory.create(
+            number=1, title="Bug", body="short", labels=[], url=""
+        )
         result = await runner.evaluate(issue)
         assert result.ready is False
         assert len(result.reasons) == 2
 
     @pytest.mark.asyncio
     async def test_returns_triage_result_type(self, runner: TriageRunner) -> None:
-        issue = make_issue(title="A descriptive title", body="A" * 100)
+        issue = IssueFactory.create(
+            number=1, title="A descriptive title", body="A" * 100, labels=[], url=""
+        )
         result = await runner.evaluate(issue)
         assert isinstance(result, TriageResult)
         assert result.issue_number == 1
@@ -107,7 +109,9 @@ class TestTriageEvents:
     async def test_evaluate_publishes_evaluating_and_done_events(
         self, runner: TriageRunner, bus: EventBus
     ) -> None:
-        issue = make_issue(title="A descriptive title", body="A" * 100)
+        issue = IssueFactory.create(
+            number=1, title="A descriptive title", body="A" * 100, labels=[], url=""
+        )
         received: list = []
         queue = bus.subscribe()
 
@@ -127,7 +131,9 @@ class TestTriageEvents:
     async def test_evaluate_events_carry_issue_number(
         self, runner: TriageRunner, bus: EventBus
     ) -> None:
-        issue = make_issue(number=99, title="A descriptive title", body="A" * 100)
+        issue = IssueFactory.create(
+            number=99, title="A descriptive title", body="A" * 100, labels=[], url=""
+        )
         received: list = []
         queue = bus.subscribe()
 
@@ -143,10 +149,12 @@ class TestTriageEvents:
     async def test_evaluate_emits_transcript_lines(
         self, runner: TriageRunner, bus: EventBus
     ) -> None:
-        issue = make_issue(
+        issue = IssueFactory.create(
             number=42,
             title="Implement feature X for module Y",
             body="Detailed description of what needs to happen. " * 3,
+            labels=[],
+            url="",
         )
         received: list = []
         queue = bus.subscribe()
@@ -166,7 +174,9 @@ class TestTriageEvents:
     async def test_not_ready_transcript_shows_reasons(
         self, runner: TriageRunner, bus: EventBus
     ) -> None:
-        issue = make_issue(number=7, title="Bug", body="short")
+        issue = IssueFactory.create(
+            number=7, title="Bug", body="short", labels=[], url=""
+        )
         received: list = []
         queue = bus.subscribe()
 
@@ -194,7 +204,7 @@ class TestTriageDryRun:
 
         config = ConfigFactory.create(dry_run=True)
         runner = TriageRunner(config, bus)
-        issue = make_issue(title="Bug", body="")
+        issue = IssueFactory.create(number=1, title="Bug", body="", labels=[], url="")
 
         result = await runner.evaluate(issue)
         assert result.ready is True

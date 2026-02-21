@@ -18,33 +18,28 @@ from state import StateTracker
 
 if TYPE_CHECKING:
     from config import HydraConfig
+    from models import TriageResult
 from models import (
     GitHubIssue,
     PlanResult,
     PRInfo,
-    ReviewResult,
-    ReviewVerdict,
     WorkerResult,
 )
 from orchestrator import HydraOrchestrator
 from subprocess_util import AuthenticationError
+from tests.conftest import (
+    AnalysisResultFactory,
+    HITLResultFactory,
+    IssueFactory,
+    PRInfoFactory,
+    ReviewResultFactory,
+    TriageResultFactory,
+    WorkerResultFactory,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def make_issue(
-    number: int = 42, title: str = "Fix bug", body: str = "Details"
-) -> GitHubIssue:
-    return GitHubIssue(
-        number=number,
-        title=title,
-        body=body,
-        labels=["ready"],
-        comments=[],
-        url=f"https://github.com/test-org/test-repo/issues/{number}",
-    )
 
 
 def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
@@ -60,54 +55,6 @@ def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
     orch._store.get_active_issues = lambda: {}  # type: ignore[method-assign]
     orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
     orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
-
-
-def make_worker_result(
-    issue_number: int = 42,
-    branch: str = "agent/issue-42",
-    success: bool = True,
-    worktree_path: str = "/tmp/worktrees/issue-42",
-    transcript: str = "Implemented the feature.",
-) -> WorkerResult:
-    return WorkerResult(
-        issue_number=issue_number,
-        branch=branch,
-        success=success,
-        transcript=transcript,
-        commits=1,
-        worktree_path=worktree_path,
-    )
-
-
-def make_pr_info(
-    number: int = 101,
-    issue_number: int = 42,
-    branch: str = "agent/issue-42",
-    draft: bool = False,
-) -> PRInfo:
-    return PRInfo(
-        number=number,
-        issue_number=issue_number,
-        branch=branch,
-        url=f"https://github.com/test-org/test-repo/pull/{number}",
-        draft=draft,
-    )
-
-
-def make_review_result(
-    pr_number: int = 101,
-    issue_number: int = 42,
-    verdict: ReviewVerdict = ReviewVerdict.APPROVE,
-    transcript: str = "",
-) -> ReviewResult:
-    return ReviewResult(
-        pr_number=pr_number,
-        issue_number=issue_number,
-        verdict=verdict,
-        summary="Looks good.",
-        fixes_made=False,
-        transcript=transcript,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -729,7 +676,7 @@ class TestStopMechanism:
             nonlocal call_count
             call_count += 1
             await orch.request_stop()
-            return [make_worker_result(42)], [make_issue(42)]
+            return [WorkerResultFactory.create()], [IssueFactory.create()]
 
         orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
         orch._implementer.run_batch = counting_implement  # type: ignore[method-assign]
@@ -772,7 +719,7 @@ class TestStopMechanism:
 
         async def stop_on_implement() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             await orch.request_stop()
-            return [make_worker_result(42)], [make_issue(42)]
+            return [WorkerResultFactory.create()], [IssueFactory.create()]
 
         orch._plan_issues = AsyncMock(return_value=[])  # type: ignore[method-assign]
         orch._implementer.run_batch = stop_on_implement  # type: ignore[method-assign]
@@ -984,10 +931,11 @@ class TestTriageFindIssues:
     async def test_triage_promotes_ready_issue_to_planning(
         self, config: HydraConfig
     ) -> None:
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(1, title="Implement feature X", body="A" * 100)
+        issue = IssueFactory.create(
+            number=1, title="Implement feature X", body="A" * 100
+        )
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
@@ -997,7 +945,7 @@ class TestTriageFindIssues:
 
         mock_triage = AsyncMock()
         mock_triage.evaluate = AsyncMock(
-            return_value=TriageResult(issue_number=1, ready=True)
+            return_value=TriageResultFactory.create(issue_number=1)
         )
         orch._triage = mock_triage
 
@@ -1013,10 +961,9 @@ class TestTriageFindIssues:
     async def test_triage_escalates_unready_issue_to_hitl(
         self, config: HydraConfig
     ) -> None:
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(2, title="Fix the bug please", body="")
+        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
@@ -1026,7 +973,7 @@ class TestTriageFindIssues:
 
         mock_triage = AsyncMock()
         mock_triage.evaluate = AsyncMock(
-            return_value=TriageResult(
+            return_value=TriageResultFactory.create(
                 issue_number=2,
                 ready=False,
                 reasons=["Body is too short or empty (minimum 50 characters)"],
@@ -1049,10 +996,9 @@ class TestTriageFindIssues:
         self, config: HydraConfig
     ) -> None:
         """Escalating an unready issue should record find_label as HITL origin."""
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(2, title="Fix the bug please", body="")
+        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
@@ -1062,7 +1008,7 @@ class TestTriageFindIssues:
 
         mock_triage = AsyncMock()
         mock_triage.evaluate = AsyncMock(
-            return_value=TriageResult(
+            return_value=TriageResultFactory.create(
                 issue_number=2,
                 ready=False,
                 reasons=["Body is too short or empty (minimum 50 characters)"],
@@ -1078,10 +1024,9 @@ class TestTriageFindIssues:
     @pytest.mark.asyncio
     async def test_triage_escalation_sets_hitl_cause(self, config: HydraConfig) -> None:
         """Escalating an unready issue should record cause in state."""
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(2, title="Fix the bug please", body="")
+        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
@@ -1091,7 +1036,7 @@ class TestTriageFindIssues:
 
         mock_triage = AsyncMock()
         mock_triage.evaluate = AsyncMock(
-            return_value=TriageResult(
+            return_value=TriageResultFactory.create(
                 issue_number=2,
                 ready=False,
                 reasons=["Body is too short or empty (minimum 50 characters)"],
@@ -1120,12 +1065,15 @@ class TestTriageFindIssues:
 
     @pytest.mark.asyncio
     async def test_triage_stops_when_stop_event_set(self, config: HydraConfig) -> None:
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
         issues = [
-            make_issue(1, title="Issue one long enough", body="A" * 100),
-            make_issue(2, title="Issue two long enough", body="B" * 100),
+            IssueFactory.create(
+                number=1, title="Issue one long enough", body="A" * 100
+            ),
+            IssueFactory.create(
+                number=2, title="Issue two long enough", body="B" * 100
+            ),
         ]
 
         mock_prs = AsyncMock()
@@ -1139,7 +1087,7 @@ class TestTriageFindIssues:
             nonlocal call_count
             call_count += 1
             orch._stop_event.set()  # Stop after first evaluation
-            return TriageResult(issue_number=1, ready=True)
+            return TriageResultFactory.create(issue_number=1)
 
         mock_triage = AsyncMock()
         mock_triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
@@ -1168,17 +1116,16 @@ class TestTriageFindIssues:
         self, config: HydraConfig
     ) -> None:
         """Triage should mark issues active to prevent re-queuing by refresh."""
-        from models import TriageResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(1, title="Triage test", body="A" * 100)
+        issue = IssueFactory.create(number=1, title="Triage test", body="A" * 100)
 
         was_active_during_evaluate = False
 
         async def check_active(issue_obj: object) -> TriageResult:
             nonlocal was_active_during_evaluate
             was_active_during_evaluate = orch._store.is_active(1)
-            return TriageResult(issue_number=1, ready=True)
+            return TriageResultFactory.create(issue_number=1)
 
         mock_prs = AsyncMock()
         mock_prs.remove_label = AsyncMock()
@@ -1248,7 +1195,7 @@ class TestPlanPhase:
     ) -> None:
         """On successful plan, post_comment should be called."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1280,7 +1227,7 @@ class TestPlanPhase:
     ) -> None:
         """On success, planner_label should be removed and config.ready_label added."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1311,7 +1258,7 @@ class TestPlanPhase:
     ) -> None:
         """On failure, no label changes should be made."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=False,
@@ -1353,7 +1300,7 @@ class TestPlanPhase:
         from models import NewIssueSpec
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1396,7 +1343,7 @@ class TestPlanPhase:
         from models import NewIssueSpec
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1452,7 +1399,7 @@ class TestPlanPhase:
                 summary="Done",
             )
 
-        issues = [make_issue(i) for i in range(1, 6)]
+        issues = [IssueFactory.create(number=i) for i in range(1, 6)]
 
         orch = HydraOrchestrator(config)  # max_planners=1 from conftest
         orch._planners.plan = fake_plan  # type: ignore[method-assign]
@@ -1474,7 +1421,7 @@ class TestPlanPhase:
     ) -> None:
         """Plan should mark issues active to prevent re-queuing by refresh."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         was_active_during_plan = False
 
@@ -1507,7 +1454,7 @@ class TestPlanPhase:
     ) -> None:
         """Plan failure (success=False) should still return the result."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=False,
@@ -1537,7 +1484,7 @@ class TestPlanPhase:
         from models import NewIssueSpec
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1579,7 +1526,7 @@ class TestPlanPhase:
         from models import NewIssueSpec
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1611,7 +1558,11 @@ class TestPlanPhase:
     ) -> None:
         """Setting stop_event after first plan should cancel remaining."""
         orch = HydraOrchestrator(config)
-        issues = [make_issue(1), make_issue(2), make_issue(3)]
+        issues = [
+            IssueFactory.create(number=1),
+            IssueFactory.create(number=2),
+            IssueFactory.create(number=3),
+        ]
         call_count = {"n": 0}
 
         async def fake_plan(issue: GitHubIssue, worker_id: int = 0) -> PlanResult:
@@ -1644,7 +1595,7 @@ class TestPlanPhase:
     ) -> None:
         """Failed retry triggers HITL label swap and comment."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=False,
@@ -1690,7 +1641,7 @@ class TestPlanPhase:
     ) -> None:
         """Normal failure (no retry) should NOT escalate to HITL."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=False,
@@ -1719,7 +1670,7 @@ class TestPlanPhase:
     ) -> None:
         """Analysis comment should be posted after the plan comment."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1758,10 +1709,10 @@ class TestPlanPhase:
         from unittest.mock import patch as mock_patch
 
         from analysis import PlanAnalyzer
-        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+        from models import AnalysisSection, AnalysisVerdict
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1769,8 +1720,7 @@ class TestPlanPhase:
             summary="Done",
         )
 
-        pass_result = AnalysisResult(
-            issue_number=42,
+        pass_result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="File Validation",
@@ -1804,10 +1754,10 @@ class TestPlanPhase:
         from unittest.mock import patch as mock_patch
 
         from analysis import PlanAnalyzer
-        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+        from models import AnalysisSection, AnalysisVerdict
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1815,8 +1765,7 @@ class TestPlanPhase:
             summary="Done",
         )
 
-        warn_result = AnalysisResult(
-            issue_number=42,
+        warn_result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="Conflict Check",
@@ -1857,7 +1806,7 @@ class TestPlanPhaseAlreadySatisfied:
     ) -> None:
         """When planner returns already_satisfied, issue should be closed with dup label."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -1900,7 +1849,7 @@ class TestPlanPhaseAlreadySatisfied:
     ) -> None:
         """When already_satisfied, issue should NOT get hydra-ready label."""
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
         plan_result = PlanResult(
             issue_number=42,
             success=True,
@@ -2341,7 +2290,7 @@ class TestStoreBasedActiveIssueTracking:
     ) -> None:
         """_review_loop should pass store active issues to fetch_reviewable_prs."""
         orch = HydraOrchestrator(config)
-        review_issue = make_issue(42)
+        review_issue = IssueFactory.create()
         captured_active: set[int] | None = None
 
         orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
@@ -2436,10 +2385,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """On success, the origin label should be restored."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Test HITL", body="Fix it")
+        issue = IssueFactory.create(title="Test HITL", body="Fix it")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2458,7 +2406,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2477,10 +2425,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """On failure, the hydra-hitl label should be re-applied."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Test HITL", body="Fix it")
+        issue = IssueFactory.create(title="Test HITL", body="Fix it")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2497,9 +2444,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(
-                issue_number=42, success=False, error="quality failed"
-            )
+            return_value=HITLResultFactory.create(success=False, error="quality failed")
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2517,10 +2462,9 @@ class TestHITLLoop:
     async def test_process_one_hitl_posts_success_comment(
         self, config: HydraConfig
     ) -> None:
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2538,7 +2482,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2552,10 +2496,9 @@ class TestHITLLoop:
     async def test_process_one_hitl_posts_failure_comment(
         self, config: HydraConfig
     ) -> None:
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2571,8 +2514,8 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(
-                issue_number=42, success=False, error="make quality failed"
+            return_value=HITLResultFactory.create(
+                success=False, error="make quality failed"
             )
         )
 
@@ -2604,10 +2547,9 @@ class TestHITLLoop:
     async def test_process_one_hitl_publishes_resolved_event_on_success(
         self, config: HydraConfig
     ) -> None:
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2625,7 +2567,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2643,10 +2585,9 @@ class TestHITLLoop:
     async def test_process_one_hitl_publishes_failed_event_on_failure(
         self, config: HydraConfig
     ) -> None:
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2662,7 +2603,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=False, error="fail")
+            return_value=HITLResultFactory.create(success=False, error="fail")
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2681,10 +2622,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """Issue should be removed from _active_issues after processing."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
 
@@ -2701,7 +2641,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2714,10 +2654,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """Processing should swap to hitl-active label before running agent."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2735,7 +2674,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2824,10 +2763,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """On success, the worktree should be destroyed."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2845,7 +2783,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -2858,10 +2796,9 @@ class TestHITLLoop:
         self, config: HydraConfig
     ) -> None:
         """On failure, the worktree should be kept for retry."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42)
+        issue = IssueFactory.create()
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -2878,7 +2815,7 @@ class TestHITLLoop:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=False, error="fail")
+            return_value=HITLResultFactory.create(success=False, error="fail")
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -3070,8 +3007,6 @@ class TestHITLResetsAttempts:
         self, config: HydraConfig
     ) -> None:
         """On successful HITL correction, issue_attempts should be reset."""
-        from models import HITLResult
-
         orch = HydraOrchestrator(config)
         _mock_fetcher_noop(orch)
 
@@ -3081,19 +3016,16 @@ class TestHITLResetsAttempts:
         assert orch._state.get_issue_attempts(42) == 2
 
         # Mock HITL runner to succeed
-        orch._hitl_runner.run = AsyncMock(
-            return_value=HITLResult(
-                issue_number=42,
-                success=True,
-            )
-        )
+        orch._hitl_runner.run = AsyncMock(return_value=HITLResultFactory.create())
 
         # Set HITL origin/cause
         orch._state.set_hitl_origin(42, "hydra-ready")
         orch._state.set_hitl_cause(42, "Cap exceeded")
 
         # Mock fetcher and PR manager
-        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=make_issue(42))
+        orch._fetcher.fetch_issue_by_number = AsyncMock(
+            return_value=IssueFactory.create()
+        )
         orch._prs = AsyncMock()
         orch._prs.push_branch = AsyncMock()
         orch._prs.add_labels = AsyncMock()
@@ -3137,11 +3069,11 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Implementer transcripts with MEMORY_SUGGESTION blocks trigger filing."""
         orch = HydraOrchestrator(config)
-        result = make_worker_result(issue_number=42, transcript=MEMORY_TRANSCRIPT)
+        result = WorkerResultFactory.create(transcript=MEMORY_TRANSCRIPT)
 
         async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             orch._stop_event.set()
-            return [result], [make_issue(42)]
+            return [result], [IssueFactory.create()]
 
         orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
         orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
@@ -3160,11 +3092,11 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Implementer results with empty transcripts should not trigger filing."""
         orch = HydraOrchestrator(config)
-        result = make_worker_result(issue_number=42, transcript="")
+        result = WorkerResultFactory.create(transcript="")
 
         async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             orch._stop_event.set()
-            return [result], [make_issue(42)]
+            return [result], [IssueFactory.create()]
 
         orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
         orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
@@ -3179,13 +3111,17 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Multiple implementer results: only those with transcripts trigger filing."""
         orch = HydraOrchestrator(config)
-        r1 = make_worker_result(issue_number=10, transcript=MEMORY_TRANSCRIPT)
-        r2 = make_worker_result(issue_number=20, transcript="")
-        r3 = make_worker_result(issue_number=30, transcript=MEMORY_TRANSCRIPT)
+        r1 = WorkerResultFactory.create(issue_number=10, transcript=MEMORY_TRANSCRIPT)
+        r2 = WorkerResultFactory.create(issue_number=20, transcript="")
+        r3 = WorkerResultFactory.create(issue_number=30, transcript=MEMORY_TRANSCRIPT)
 
         async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             orch._stop_event.set()
-            return [r1, r2, r3], [make_issue(10), make_issue(20), make_issue(30)]
+            return [r1, r2, r3], [
+                IssueFactory.create(number=10),
+                IssueFactory.create(number=20),
+                IssueFactory.create(number=30),
+            ]
 
         orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
         orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
@@ -3206,11 +3142,9 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Reviewer transcripts with MEMORY_SUGGESTION blocks trigger filing."""
         orch = HydraOrchestrator(config)
-        review_issue = make_issue(42)
-        pr = make_pr_info(number=101, issue_number=42)
-        review_result = make_review_result(
-            pr_number=101, issue_number=42, transcript=MEMORY_TRANSCRIPT
-        )
+        review_issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        review_result = ReviewResultFactory.create(transcript=MEMORY_TRANSCRIPT)
 
         orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
         orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
@@ -3246,11 +3180,9 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Reviewer results with empty transcripts should not trigger filing."""
         orch = HydraOrchestrator(config)
-        review_issue = make_issue(42)
-        pr = make_pr_info(number=101, issue_number=42)
-        review_result = make_review_result(
-            pr_number=101, issue_number=42, transcript=""
-        )
+        review_issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        review_result = ReviewResultFactory.create(transcript="")
 
         orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
         orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
@@ -3283,14 +3215,14 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Multiple reviewer results: only those with transcripts trigger filing."""
         orch = HydraOrchestrator(config)
-        issue_a = make_issue(10)
-        issue_b = make_issue(20)
-        pr_a = make_pr_info(number=201, issue_number=10)
-        pr_b = make_pr_info(number=202, issue_number=20)
-        r1 = make_review_result(
+        issue_a = IssueFactory.create(number=10)
+        issue_b = IssueFactory.create(number=20)
+        pr_a = PRInfoFactory.create(number=201, issue_number=10)
+        pr_b = PRInfoFactory.create(number=202, issue_number=20)
+        r1 = ReviewResultFactory.create(
             pr_number=201, issue_number=10, transcript=MEMORY_TRANSCRIPT
         )
-        r2 = make_review_result(pr_number=202, issue_number=20, transcript="")
+        r2 = ReviewResultFactory.create(pr_number=202, issue_number=20, transcript="")
 
         orch._store.get_reviewable = lambda _max_count: [issue_a, issue_b]  # type: ignore[method-assign]
         orch._store.get_active_issues = lambda: {10: "review", 20: "review"}  # type: ignore[method-assign]
@@ -3327,12 +3259,15 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Memory filing failure in implementer must not crash the loop."""
         orch = HydraOrchestrator(config)
-        r1 = make_worker_result(issue_number=10, transcript=MEMORY_TRANSCRIPT)
-        r2 = make_worker_result(issue_number=20, transcript=MEMORY_TRANSCRIPT)
+        r1 = WorkerResultFactory.create(issue_number=10, transcript=MEMORY_TRANSCRIPT)
+        r2 = WorkerResultFactory.create(issue_number=20, transcript=MEMORY_TRANSCRIPT)
 
         async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
             orch._stop_event.set()
-            return [r1, r2], [make_issue(10), make_issue(20)]
+            return [r1, r2], [
+                IssueFactory.create(number=10),
+                IssueFactory.create(number=20),
+            ]
 
         orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
         orch._file_memory_suggestion = AsyncMock(  # type: ignore[method-assign]
@@ -3349,9 +3284,9 @@ class TestMemorySuggestionFiling:
     ) -> None:
         """Memory filing failure in reviewer must not crash the loop."""
         orch = HydraOrchestrator(config)
-        issue_a = make_issue(10)
-        pr_a = make_pr_info(number=201, issue_number=10)
-        r1 = make_review_result(
+        issue_a = IssueFactory.create(number=10)
+        pr_a = PRInfoFactory.create(number=201, issue_number=10)
+        r1 = ReviewResultFactory.create(
             pr_number=201, issue_number=10, transcript=MEMORY_TRANSCRIPT
         )
 
@@ -3395,10 +3330,9 @@ class TestHITLImproveTransition:
         self, config: HydraConfig
     ) -> None:
         """On success with improve origin, should remove improve and add find label."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Improve: test", body="Details")
+        issue = IssueFactory.create(title="Improve: test", body="Details")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-improve")
@@ -3417,7 +3351,7 @@ class TestHITLImproveTransition:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -3442,10 +3376,9 @@ class TestHITLImproveTransition:
         self, config: HydraConfig
     ) -> None:
         """Non-improve origins should still restore the original label (existing behavior)."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Test", body="Details")
+        issue = IssueFactory.create(title="Test", body="Details")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-review")
@@ -3464,7 +3397,7 @@ class TestHITLImproveTransition:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -3482,10 +3415,9 @@ class TestHITLImproveTransition:
         self, config: HydraConfig
     ) -> None:
         """On failure, improve origin state should be preserved for retry."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Improve: test", body="Details")
+        issue = IssueFactory.create(title="Improve: test", body="Details")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-improve")
@@ -3502,9 +3434,7 @@ class TestHITLImproveTransition:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(
-                issue_number=42, success=False, error="quality failed"
-            )
+            return_value=HITLResultFactory.create(success=False, error="quality failed")
         )
 
         semaphore = asyncio.Semaphore(1)
@@ -3523,10 +3453,9 @@ class TestHITLImproveTransition:
         self, config: HydraConfig
     ) -> None:
         """Success comment for improve origin should mention the find/triage stage."""
-        from models import HITLResult
 
         orch = HydraOrchestrator(config)
-        issue = make_issue(42, title="Improve: test", body="Details")
+        issue = IssueFactory.create(title="Improve: test", body="Details")
 
         orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)  # type: ignore[method-assign]
         orch._state.set_hitl_origin(42, "hydra-improve")
@@ -3544,7 +3473,7 @@ class TestHITLImproveTransition:
         orch._worktrees = mock_wt
 
         orch._hitl_runner.run = AsyncMock(  # type: ignore[method-assign]
-            return_value=HITLResult(issue_number=42, success=True)
+            return_value=HITLResultFactory.create()
         )
 
         semaphore = asyncio.Semaphore(1)

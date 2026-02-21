@@ -19,9 +19,8 @@ from models import (
     InstructionsQuality,
     JudgeVerdict,
     PRInfo,
-    ReviewResult,
-    ReviewVerdict,
 )
+from tests.conftest import ReviewResultFactory
 from tests.helpers import ConfigFactory
 from verification_judge import VerificationJudge
 
@@ -988,12 +987,8 @@ class TestReviewPhaseWiring:
 
         mock_reviewers = AsyncMock()
         mock_reviewers.review = AsyncMock(
-            return_value=ReviewResult(
-                pr_number=101,
-                issue_number=42,
-                verdict=ReviewVerdict.APPROVE,
+            return_value=ReviewResultFactory.create(
                 summary="LGTM",
-                fixes_made=False,
                 transcript="THOROUGH_REVIEW_COMPLETE\nVERDICT: APPROVE",
             )
         )
@@ -1062,12 +1057,8 @@ class TestReviewPhaseWiring:
 
         mock_reviewers = AsyncMock()
         mock_reviewers.review = AsyncMock(
-            return_value=ReviewResult(
-                pr_number=101,
-                issue_number=42,
-                verdict=ReviewVerdict.APPROVE,
+            return_value=ReviewResultFactory.create(
                 summary="LGTM",
-                fixes_made=False,
                 transcript="THOROUGH_REVIEW_COMPLETE\nVERDICT: APPROVE",
             )
         )
