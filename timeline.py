@@ -25,6 +25,7 @@ SOURCE_TO_STAGE: dict[str, str] = {
     "triage": "triage",
     "planner": "plan",
     "reviewer": "review",
+    "hitl": "implement",
 }
 
 # Statuses that indicate a stage is terminal
@@ -113,7 +114,8 @@ class TimelineBuilder:
             if stage_events[stage_name]:
                 stages.append(self._build_stage(stage_name, stage_events[stage_name]))
 
-        # Extract PR info
+        # Extract title and PR info
+        title = self._extract_title(events)
         pr_number, pr_url, branch = self._extract_pr_info(events)
 
         # Determine current stage (last non-empty stage)
@@ -137,6 +139,7 @@ class TimelineBuilder:
 
         return IssueTimeline(
             issue_number=issue_number,
+            title=title,
             current_stage=current_stage,
             stages=stages,
             total_duration_seconds=total_duration,
@@ -223,6 +226,13 @@ class TimelineBuilder:
         first_n = max_lines // 2
         last_n = max_lines - first_n
         return lines[:first_n] + lines[-last_n:]
+
+    def _extract_title(self, events: list[HydraEvent]) -> str:
+        for event in events:
+            title = event.data.get("title")
+            if isinstance(title, str) and title:
+                return title
+        return ""
 
     def _extract_pr_info(self, events: list[HydraEvent]) -> tuple[int | None, str, str]:
         for event in events:

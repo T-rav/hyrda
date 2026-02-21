@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType, HydraEvent
 from state import StateTracker
@@ -470,6 +467,58 @@ class TestEdgeCases:
         assert len(timelines) == 2
         assert timelines[0].issue_number == 42
         assert timelines[1].issue_number == 99
+
+    @pytest.mark.asyncio
+    async def test_title_extracted_from_issue_created(
+        self, event_bus: EventBus
+    ) -> None:
+        await event_bus.publish(
+            _event(EventType.ISSUE_CREATED, 0, number=42, title="Fix the widget")
+        )
+        await event_bus.publish(
+            _event(EventType.TRIAGE_UPDATE, 5, issue=42, status="done")
+        )
+
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(42)
+        assert timeline is not None
+        assert timeline.title == "Fix the widget"
+
+    @pytest.mark.asyncio
+    async def test_title_empty_when_no_title_in_events(
+        self, event_bus: EventBus
+    ) -> None:
+        await event_bus.publish(
+            _event(EventType.TRIAGE_UPDATE, 0, issue=42, status="done")
+        )
+
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(42)
+        assert timeline is not None
+        assert timeline.title == ""
+
+    @pytest.mark.asyncio
+    async def test_hitl_transcript_mapped_to_implement(
+        self, event_bus: EventBus
+    ) -> None:
+        await event_bus.publish(
+            _event(EventType.WORKER_UPDATE, 0, issue=42, status="running")
+        )
+        await event_bus.publish(
+            _event(
+                EventType.TRANSCRIPT_LINE,
+                5,
+                issue=42,
+                line="HITL fix",
+                source="hitl",
+            )
+        )
+
+        builder = TimelineBuilder(event_bus)
+        timeline = builder.build_for_issue(42)
+        assert timeline is not None
+        stage_names = [s.stage for s in timeline.stages]
+        assert "implement" in stage_names
 
     @pytest.mark.asyncio
     async def test_ci_check_correlated_via_pr(self, event_bus: EventBus) -> None:
