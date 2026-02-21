@@ -779,6 +779,7 @@ class TestAlreadySatisfiedZeroCommit:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -817,6 +818,7 @@ class TestAlreadySatisfiedZeroCommit:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -844,6 +846,7 @@ class TestAlreadySatisfiedZeroCommit:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
@@ -875,6 +878,7 @@ class TestAlreadySatisfiedZeroCommit:
             wt_path: Path,
             branch: str,
             worker_id: int = 0,
+            review_feedback: str = "",
         ) -> WorkerResult:
             return WorkerResult(
                 issue_number=issue.number,
