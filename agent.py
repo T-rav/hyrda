@@ -285,12 +285,19 @@ class AgentRunner:
 
 1. Read the issue carefully and understand what needs to be done.
 2. Explore the codebase to understand the relevant code.
-3. Write comprehensive tests FIRST (TDD approach).
+3. Write comprehensive tests FIRST (TDD approach):
+   - Test the happy path AND edge cases (empty inputs, None values, boundary conditions).
+   - Test error handling paths (invalid input, missing data, exceptions).
+   - Aim for complete branch coverage of new code.
 4. Implement the solution.
-5. Run `make lint` to auto-fix formatting issues.
-6. Run `{test_cmd}` to quickly check for test failures.
-7. Run `make quality` to verify the full quality gate (lint + typecheck + security + tests).
-8. Commit your changes with a message: "Fixes #{issue.number}: <concise summary>"
+5. Self-review your changes before running quality checks:
+   - **Correctness**: Check for off-by-one errors, unhandled edge cases, and missing error handling.
+   - **Completeness**: Re-read the issue and verify EVERY requirement is addressed — do not silently drop any.
+   - **Quality**: Ensure type annotations on all public functions, clear naming, and no code duplication.
+6. Run `make lint` to auto-fix formatting issues.
+7. Run `{test_cmd}` to quickly check for test failures.
+8. Run `make quality` to verify the full quality gate (lint + typecheck + security + tests).
+9. Commit your changes with a message: "Fixes #{issue.number}: <concise summary>"
 {feedback_section}
 ## UI Guidelines
 

@@ -258,6 +258,27 @@ class TestBuildPrompt:
 
         assert "Follow this plan closely" not in prompt
 
+    def test_prompt_includes_self_review_checklist(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include a self-review step with correctness, completeness, and quality."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Self-review" in prompt
+        assert "**Correctness**" in prompt
+        assert "**Completeness**" in prompt
+        assert "**Quality**" in prompt
+
+    def test_prompt_includes_tdd_edge_case_guidance(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include specific TDD guidance for edge cases and error paths."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "edge cases" in prompt.lower()
+        assert "error handling" in prompt.lower()
+        assert "branch coverage" in prompt.lower()
+
     def test_prompt_includes_ui_guidelines(
         self, config, event_bus: EventBus, issue
     ) -> None:
