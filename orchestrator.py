@@ -115,9 +115,7 @@ class HydraOrchestrator:
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
         self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
         self._verification_judge = VerificationJudge(config, self._bus)
-        self._epic_checker = EpicCompletionChecker(
-            config, self._prs, self._fetcher, self._bus
-        )
+        self._epic_checker = EpicCompletionChecker(config, self._prs, self._fetcher)
         self._reviewer = ReviewPhase(
             config,
             self._state,

@@ -6,7 +6,6 @@ import logging
 import re
 
 from config import HydraConfig
-from events import EventBus
 from issue_fetcher import IssueFetcher
 from pr_manager import PRManager
 
@@ -34,12 +33,10 @@ class EpicCompletionChecker:
         config: HydraConfig,
         prs: PRManager,
         fetcher: IssueFetcher,
-        event_bus: EventBus | None = None,
     ) -> None:
         self._config = config
         self._prs = prs
         self._fetcher = fetcher
-        self._bus = event_bus or EventBus()
 
     async def check_and_close_epics(self, completed_issue_number: int) -> None:
         """Check all open epics and close any whose sub-issues are all completed."""
