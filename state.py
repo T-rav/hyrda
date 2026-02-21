@@ -185,6 +185,36 @@ class StateTracker:
         self._data.review_feedback.pop(str(issue_number), None)
         self.save()
 
+    # --- issue attempt tracking ---
+
+    def get_issue_attempts(self, issue_number: int) -> int:
+        """Return the current implementation attempt count for *issue_number* (default 0)."""
+        return self._data.issue_attempts.get(str(issue_number), 0)
+
+    def increment_issue_attempts(self, issue_number: int) -> int:
+        """Increment and return the new implementation attempt count for *issue_number*."""
+        key = str(issue_number)
+        current = self._data.issue_attempts.get(key, 0)
+        self._data.issue_attempts[key] = current + 1
+        self.save()
+        return current + 1
+
+    def reset_issue_attempts(self, issue_number: int) -> None:
+        """Clear the implementation attempt counter for *issue_number*."""
+        self._data.issue_attempts.pop(str(issue_number), None)
+        self.save()
+
+    # --- active issue numbers ---
+
+    def get_active_issue_numbers(self) -> list[int]:
+        """Return the persisted list of active issue numbers."""
+        return list(self._data.active_issue_numbers)
+
+    def set_active_issue_numbers(self, numbers: list[int]) -> None:
+        """Persist the current set of active issue numbers."""
+        self._data.active_issue_numbers = numbers
+        self.save()
+
     # --- worker result metadata ---
 
     def set_worker_result_meta(self, issue_number: int, meta: dict[str, Any]) -> None:

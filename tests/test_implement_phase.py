@@ -1034,3 +1034,177 @@ class TestAlreadySatisfiedZeroCommit:
         # Should NOT close the issue
         mock_prs.close_issue.assert_not_awaited()
         assert phase._state.get_issue_status(42) == "failed"
+
+
+# ---------------------------------------------------------------------------
+# Retry cap escalation
+# ---------------------------------------------------------------------------
+
+
+class TestRetryCapEscalation:
+    """Tests that issues exceeding max_issue_attempts escalate to HITL."""
+
+    @pytest.mark.asyncio
+    async def test_issue_under_cap_proceeds_normally(self, tmp_path: Path) -> None:
+        """Issues under the cap should proceed to agent run."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_issue_attempts=3,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(config, [issue])
+
+        # Pre-set 1 attempt (will be incremented to 2, still under cap of 3)
+        phase._state.increment_issue_attempts(42)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is True
+        assert phase._state.get_issue_attempts(42) == 2
+
+    @pytest.mark.asyncio
+    async def test_issue_at_cap_escalates_to_hitl(self, tmp_path: Path) -> None:
+        """Issues at the cap should escalate to HITL without running the agent."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_issue_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        issue = make_issue(42)
+
+        agent_called = False
+
+        async def tracking_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            nonlocal agent_called
+            agent_called = True
+            return make_worker_result(
+                issue_number=issue.number,
+                success=True,
+                worktree_path=str(wt_path),
+            )
+
+        phase, _, mock_prs = _make_phase(config, [issue], agent_run=tracking_agent)
+
+        # Pre-set attempts to match cap (2), so next increment = 3 > 2
+        phase._state.increment_issue_attempts(42)
+        phase._state.increment_issue_attempts(42)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert "attempt cap exceeded" in (results[0].error or "")
+        assert not agent_called
+
+        # Labels should be swapped to HITL
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        assert any(c[1] == ["hydra-hitl"] for c in add_calls)
+
+        # Comment should mention attempt cap
+        comment_calls = [c.args for c in mock_prs.post_comment.call_args_list]
+        assert any("attempt cap exceeded" in c[1] for c in comment_calls)
+
+        # HITL origin and cause should be set
+        assert phase._state.get_hitl_origin(42) is not None
+        assert phase._state.get_hitl_cause(42) is not None
+
+    @pytest.mark.asyncio
+    async def test_boundary_attempt_proceeds(self, tmp_path: Path) -> None:
+        """With max_issue_attempts=3, the 3rd attempt should proceed (not escalate)."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_issue_attempts=3,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(config, [issue])
+
+        # Pre-set 2 attempts; next increment = 3 == max, should proceed
+        phase._state.increment_issue_attempts(42)
+        phase._state.increment_issue_attempts(42)
+
+        results, _ = await phase.run_batch()
+
+        assert len(results) == 1
+        assert results[0].success is True
+        assert phase._state.get_issue_attempts(42) == 3
+
+
+# ---------------------------------------------------------------------------
+# Commits persisted in worker result metadata
+# ---------------------------------------------------------------------------
+
+
+class TestCommitsPersistedInMeta:
+    """Tests that commits field is included in worker_result_meta."""
+
+    @pytest.mark.asyncio
+    async def test_commits_in_worker_result_meta(self, config: HydraConfig) -> None:
+        """After agent run, worker_result_meta should contain 'commits' key."""
+        issue = make_issue(42)
+
+        async def agent_with_commits(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                commits=3,
+                quality_fix_attempts=1,
+                duration_seconds=90.0,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=agent_with_commits)
+
+        await phase.run_batch()
+
+        meta = phase._state.get_worker_result_meta(42)
+        assert meta["commits"] == 3
+        assert meta["quality_fix_attempts"] == 1
+        assert meta["duration_seconds"] == 90.0
+
+
+# ---------------------------------------------------------------------------
+# Active issue persistence
+# ---------------------------------------------------------------------------
+
+
+class TestActiveIssuePersistence:
+    """Tests that active issues are persisted to state."""
+
+    @pytest.mark.asyncio
+    async def test_active_issue_persisted_and_removed(
+        self, config: HydraConfig
+    ) -> None:
+        """After run_batch, active_issue_numbers should be cleared."""
+        issue = make_issue(42)
+        phase, _, _ = _make_phase(config, [issue])
+
+        await phase.run_batch()
+
+        # After completion, issue should not be in active list
+        active = phase._state.get_active_issue_numbers()
+        assert 42 not in active

@@ -72,8 +72,12 @@ class HydraOrchestrator:
         self._human_input_requests: dict[int, str] = {}
         # Fulfilled human-input responses: {issue_number: answer}
         self._human_input_responses: dict[int, str] = {}
-        # In-memory tracking of HITL-active issues (avoids double-processing)
+        # In-memory tracking of active issues (avoids double-processing)
+        self._active_impl_issues: set[int] = set()
+        self._active_review_issues: set[int] = set()
         self._active_hitl_issues: set[int] = set()
+        # Issues recovered from persisted state on startup (one-cycle grace period)
+        self._recovered_issues: set[int] = set()
         # HITL corrections: {issue_number: correction_text}
         self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
@@ -219,6 +223,8 @@ class HydraOrchestrator:
         self._running = False
         self._auth_failed = False
         self._store.clear_active()
+        self._active_impl_issues.clear()
+        self._active_review_issues.clear()
         self._active_hitl_issues.clear()
 
     def update_bg_worker_status(
@@ -256,6 +262,19 @@ class HydraOrchestrator:
         """
         self._stop_event.clear()
         self._running = True
+
+        # Restore active issues from persisted state for crash recovery
+        recovered = set(self._state.get_active_issue_numbers())
+        if recovered:
+            self._recovered_issues = recovered
+            # Add to implementation active set so they're skipped for one poll cycle
+            self._active_impl_issues.update(recovered)
+            logger.info(
+                "Crash recovery: loaded %d active issue(s) from state: %s",
+                len(recovered),
+                recovered,
+            )
+
         await self._publish_status()
         logger.info(
             "Hydra starting — repo=%s label=%s workers=%d poll=%ds",
@@ -388,6 +407,17 @@ class HydraOrchestrator:
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
         while not self._stop_event.is_set():
+            # After one poll cycle, release crash-recovered issues
+            if self._recovered_issues:
+                self._active_impl_issues -= self._recovered_issues
+                self._recovered_issues.clear()
+                self._state.set_active_issue_numbers(
+                    list(
+                        self._active_impl_issues
+                        | self._active_review_issues
+                        | self._active_hitl_issues
+                    )
+                )
             try:
                 await self._implementer.run_batch()
             except AuthenticationError:
@@ -555,6 +585,13 @@ class HydraOrchestrator:
                 return
 
             self._active_hitl_issues.add(issue_number)
+            self._state.set_active_issue_numbers(
+                list(
+                    self._active_impl_issues
+                    | self._active_review_issues
+                    | self._active_hitl_issues
+                )
+            )
             try:
                 issue = await self._fetcher.fetch_issue_by_number(issue_number)
                 if not issue:
@@ -595,6 +632,7 @@ class HydraOrchestrator:
 
                     self._state.remove_hitl_origin(issue_number)
                     self._state.remove_hitl_cause(issue_number)
+                    self._state.reset_issue_attempts(issue_number)
 
                     await self._prs.post_comment(
                         issue_number,
@@ -659,6 +697,13 @@ class HydraOrchestrator:
                 logger.exception("HITL processing failed for issue #%d", issue_number)
             finally:
                 self._active_hitl_issues.discard(issue_number)
+                self._state.set_active_issue_numbers(
+                    list(
+                        self._active_impl_issues
+                        | self._active_review_issues
+                        | self._active_hitl_issues
+                    )
+                )
 
     async def _sleep_or_stop(self, seconds: int) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""

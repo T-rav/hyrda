@@ -89,6 +89,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max merge conflict resolution retry cycles",
     )
+    max_issue_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max total implementation attempts per issue before HITL escalation",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -427,6 +433,15 @@ class HydraConfig(BaseModel):
             if env_retries is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
+
+        # issue attempt cap override
+        if self.max_issue_attempts == 3:  # still at default
+            env_issue_attempts = os.environ.get("HYDRA_MAX_ISSUE_ATTEMPTS")
+            if env_issue_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_issue_attempts", int(env_issue_attempts)
+                    )
 
         # Memory sync interval override
         if self.memory_sync_interval == 120:  # still at default

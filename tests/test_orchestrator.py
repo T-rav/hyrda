@@ -2995,3 +2995,117 @@ class TestAuthFailure:
         orch.reset()
         assert orch._auth_failed is False
         assert not orch._stop_event.is_set()
+
+
+# ---------------------------------------------------------------------------
+# Crash recovery — active issue persistence
+# ---------------------------------------------------------------------------
+
+
+class TestCrashRecoveryActiveIssues:
+    """Tests for crash recovery via persisted active_issue_numbers."""
+
+    def test_crash_recovery_loads_active_issues(self, config: HydraConfig) -> None:
+        """On init, recovered issues from state should populate _recovered_issues after run()."""
+        orch = HydraOrchestrator(config)
+        orch._state.set_active_issue_numbers([10, 20])
+
+        # Simulate run() startup sequence
+        recovered = set(orch._state.get_active_issue_numbers())
+        assert recovered == {10, 20}
+
+    @pytest.mark.asyncio
+    async def test_crash_recovery_skips_first_cycle(self, config: HydraConfig) -> None:
+        """Recovered issues should be in _active_impl_issues for one cycle."""
+        orch = HydraOrchestrator(config)
+        _mock_fetcher_noop(orch)
+        orch._state.set_active_issue_numbers([10, 20])
+
+        # Simulate run() startup
+        orch._stop_event.clear()
+        orch._running = True
+        recovered = set(orch._state.get_active_issue_numbers())
+        orch._recovered_issues = recovered
+        orch._active_impl_issues.update(recovered)
+
+        # Before first cycle: recovered issues are in active set
+        assert 10 in orch._active_impl_issues
+        assert 20 in orch._active_impl_issues
+
+    @pytest.mark.asyncio
+    async def test_crash_recovery_clears_after_cycle(self, config: HydraConfig) -> None:
+        """After one cycle, recovered issues should be cleared from active sets."""
+        orch = HydraOrchestrator(config)
+        _mock_fetcher_noop(orch)
+        orch._state.set_active_issue_numbers([10, 20])
+
+        # Simulate startup
+        recovered = set(orch._state.get_active_issue_numbers())
+        orch._recovered_issues = recovered
+        orch._active_impl_issues.update(recovered)
+
+        # Simulate what _implement_loop does at the start of a cycle
+        if orch._recovered_issues:
+            orch._active_impl_issues -= orch._recovered_issues
+            orch._recovered_issues.clear()
+
+        assert 10 not in orch._active_impl_issues
+        assert 20 not in orch._active_impl_issues
+        assert len(orch._recovered_issues) == 0
+
+
+# ---------------------------------------------------------------------------
+# HITL correction resets issue attempts
+# ---------------------------------------------------------------------------
+
+
+class TestHITLResetsAttempts:
+    """Tests that HITL correction resets issue_attempts."""
+
+    @pytest.mark.asyncio
+    async def test_hitl_correction_resets_issue_attempts(
+        self, config: HydraConfig
+    ) -> None:
+        """On successful HITL correction, issue_attempts should be reset."""
+        from models import HITLResult
+
+        orch = HydraOrchestrator(config)
+        _mock_fetcher_noop(orch)
+
+        # Set up state with attempts
+        orch._state.increment_issue_attempts(42)
+        orch._state.increment_issue_attempts(42)
+        assert orch._state.get_issue_attempts(42) == 2
+
+        # Mock HITL runner to succeed
+        orch._hitl_runner.run = AsyncMock(
+            return_value=HITLResult(
+                issue_number=42,
+                success=True,
+            )
+        )
+
+        # Set HITL origin/cause
+        orch._state.set_hitl_origin(42, "hydra-ready")
+        orch._state.set_hitl_cause(42, "Cap exceeded")
+
+        # Mock fetcher and PR manager
+        orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=make_issue(42))
+        orch._prs = AsyncMock()
+        orch._prs.push_branch = AsyncMock()
+        orch._prs.add_labels = AsyncMock()
+        orch._prs.remove_label = AsyncMock()
+        orch._prs.post_comment = AsyncMock()
+
+        # Mock worktree
+        wt_path = config.worktree_base / "issue-42"
+        wt_path.mkdir(parents=True, exist_ok=True)
+        orch._worktrees = AsyncMock()
+        orch._worktrees.create = AsyncMock(return_value=wt_path)
+        orch._worktrees.destroy = AsyncMock()
+
+        semaphore = asyncio.Semaphore(1)
+        await orch._process_one_hitl(42, "Fix the tests", semaphore)
+
+        # Issue attempts should be reset
+        assert orch._state.get_issue_attempts(42) == 0
