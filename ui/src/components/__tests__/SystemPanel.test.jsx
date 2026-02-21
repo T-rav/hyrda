@@ -12,7 +12,7 @@ vi.mock('../../context/HydraContext', () => ({
 const { SystemPanel } = await import('../SystemPanel')
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'idle' })
+  mockUseHydra.mockReturnValue({ pipelinePollerLastRun: null, hitlItems: [], pipelineIssues: {}, orchestratorStatus: 'idle', events: [] })
 })
 
 const mockBgWorkers = [
@@ -418,6 +418,44 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       const dot = screen.getByTestId('dot-pipeline_poller')
       expect(dot.style.background).toBe('var(--red)')
+    })
+  })
+
+  describe('Sub-tab Navigation', () => {
+    it('shows Workers and Livestream sub-tab labels', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.getByText('Workers')).toBeInTheDocument()
+      expect(screen.getByText('Livestream')).toBeInTheDocument()
+    })
+
+    it('Workers sub-tab is active by default showing pipeline content', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
+      expect(screen.getByText('Background Workers')).toBeInTheDocument()
+    })
+
+    it('clicking Livestream sub-tab shows event stream', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.getByText('Waiting for events...')).toBeInTheDocument()
+      // Pipeline content should not be visible
+      expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
+    })
+
+    it('clicking Workers sub-tab returns to worker content', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Workers'))
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
+    })
+
+    it('active sub-tab has accent color styling', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      const workersTab = screen.getByText('Workers')
+      expect(workersTab.style.color).toBe('var(--accent)')
+      const livestreamTab = screen.getByText('Livestream')
+      expect(livestreamTab.style.color).toBe('var(--text-muted)')
     })
   })
 })
