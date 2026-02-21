@@ -39,6 +39,7 @@ class PRManager:
         ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
         ("fixed_label", "0075ca", "PR merged — issue completed"),
         ("improve_label", "7057ff", "Review insight improvement proposal"),
+        ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
     )
 
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:

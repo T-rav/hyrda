@@ -433,6 +433,91 @@ def test_extract_summary_empty_transcript(config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# _extract_already_satisfied
+# ---------------------------------------------------------------------------
+
+
+def test_extract_already_satisfied_with_markers():
+    transcript = (
+        "Analysis complete.\n"
+        "ALREADY_SATISFIED_START\n"
+        "The feature described in this issue is already implemented "
+        "in src/models.py lines 10-25.\n"
+        "ALREADY_SATISFIED_END\n"
+        "Done."
+    )
+    result = PlannerRunner._extract_already_satisfied(transcript)
+    assert "already implemented" in result
+    assert "src/models.py" in result
+
+
+def test_extract_already_satisfied_without_markers():
+    transcript = "Analysis complete.\nPLAN_START\nStep 1\nPLAN_END\nSUMMARY: Done"
+    result = PlannerRunner._extract_already_satisfied(transcript)
+    assert result == ""
+
+
+def test_extract_already_satisfied_empty_transcript():
+    result = PlannerRunner._extract_already_satisfied("")
+    assert result == ""
+
+
+def test_extract_already_satisfied_strips_whitespace():
+    transcript = (
+        "ALREADY_SATISFIED_START\n"
+        "  The code already handles this.  \n"
+        "ALREADY_SATISFIED_END"
+    )
+    result = PlannerRunner._extract_already_satisfied(transcript)
+    assert result == "The code already handles this."
+
+
+def test_extract_already_satisfied_multiline():
+    transcript = (
+        "ALREADY_SATISFIED_START\n"
+        "Line 1 of explanation.\n"
+        "Line 2 of explanation.\n"
+        "Line 3 of explanation.\n"
+        "ALREADY_SATISFIED_END"
+    )
+    result = PlannerRunner._extract_already_satisfied(transcript)
+    assert "Line 1" in result
+    assert "Line 2" in result
+    assert "Line 3" in result
+
+
+# ---------------------------------------------------------------------------
+# _build_prompt - already satisfied markers
+# ---------------------------------------------------------------------------
+
+
+def test_build_prompt_includes_already_satisfied_markers(config, event_bus, issue):
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "ALREADY_SATISFIED_START" in prompt
+    assert "ALREADY_SATISFIED_END" in prompt
+
+
+def test_build_prompt_lite_includes_already_satisfied_markers(config, event_bus):
+    """Lite prompt (for bug/typo labels) should also include markers."""
+    from models import GitHubIssue
+
+    issue = GitHubIssue(
+        number=42,
+        title="Fix typo",
+        body="There's a typo in the docs.",
+        labels=["bug"],
+        comments=[],
+    )
+    runner = _make_runner(config, event_bus)
+    prompt = runner._build_prompt(issue)
+
+    assert "ALREADY_SATISFIED_START" in prompt
+    assert "ALREADY_SATISFIED_END" in prompt
+
+
+# ---------------------------------------------------------------------------
 # _significant_words
 # ---------------------------------------------------------------------------
 
@@ -745,6 +830,58 @@ async def test_plan_dry_run(dry_config, event_bus, issue, tmp_path):
     mock_create.assert_not_called()
     assert result.success is True
     assert result.summary == "Dry-run: plan skipped"
+
+
+# ---------------------------------------------------------------------------
+# plan - already_satisfied path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_plan_already_satisfied_sets_flag_and_skips_validation(
+    config, event_bus, issue
+):
+    """When transcript contains ALREADY_SATISFIED markers, plan() should
+    set already_satisfied=True, success=True, and skip plan extraction."""
+    runner = _make_runner(config, event_bus)
+    transcript = (
+        "Analysis complete.\n"
+        "ALREADY_SATISFIED_START\n"
+        "The feature is already implemented in src/models.py lines 10-25.\n"
+        "ALREADY_SATISFIED_END\n"
+    )
+
+    mock_execute = AsyncMock(return_value=transcript)
+
+    with (
+        patch.object(runner, "_execute", mock_execute),
+        patch.object(runner, "_save_transcript"),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.already_satisfied is True
+    assert result.success is True
+    assert result.plan == ""  # no plan extracted
+    assert "already implemented" in result.summary
+
+
+@pytest.mark.asyncio
+async def test_plan_already_satisfied_does_not_extract_plan(config, event_bus, issue):
+    """When already_satisfied markers are present, _extract_plan should NOT be called."""
+    runner = _make_runner(config, event_bus)
+    transcript = "ALREADY_SATISFIED_START\nAlready done.\nALREADY_SATISFIED_END\n"
+
+    mock_execute = AsyncMock(return_value=transcript)
+
+    with (
+        patch.object(runner, "_execute", mock_execute),
+        patch.object(runner, "_save_transcript"),
+        patch.object(runner, "_extract_plan") as mock_extract,
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    mock_extract.assert_not_called()
+    assert result.already_satisfied is True
 
 
 # ---------------------------------------------------------------------------

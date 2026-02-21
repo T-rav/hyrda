@@ -1643,6 +1643,89 @@ class TestPlanPhase:
 
 
 # ---------------------------------------------------------------------------
+# Plan phase — already_satisfied
+# ---------------------------------------------------------------------------
+
+
+class TestPlanPhaseAlreadySatisfied:
+    """Tests for already_satisfied handling in the plan loop."""
+
+    @pytest.mark.asyncio
+    async def test_plan_already_satisfied_closes_issue_with_dup_label(
+        self, config: HydraConfig
+    ) -> None:
+        """When planner returns already_satisfied, issue should be closed with dup label."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            already_satisfied=True,
+            summary="The feature is already implemented in src/models.py",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.close_issue = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        # Planner labels should be removed
+        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+
+        # Dup labels should be added
+        mock_prs.add_labels.assert_awaited_once_with(42, config.dup_label)
+
+        # Comment should be posted
+        mock_prs.post_comment.assert_awaited_once()
+        comment = mock_prs.post_comment.call_args.args[1]
+        assert "Already Satisfied" in comment
+        assert "Hydra Planner" in comment
+
+        # Issue should be closed
+        mock_prs.close_issue.assert_awaited_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_plan_already_satisfied_does_not_swap_to_ready(
+        self, config: HydraConfig
+    ) -> None:
+        """When already_satisfied, issue should NOT get hydra-ready label."""
+        orch = HydraOrchestrator(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            already_satisfied=True,
+            summary="Already met",
+        )
+
+        orch._planners.plan = AsyncMock(return_value=plan_result)  # type: ignore[method-assign]
+        orch._fetcher.fetch_plan_issues = AsyncMock(return_value=[issue])  # type: ignore[method-assign]
+
+        mock_prs = AsyncMock()
+        mock_prs.post_comment = AsyncMock()
+        mock_prs.remove_label = AsyncMock()
+        mock_prs.add_labels = AsyncMock()
+        mock_prs.close_issue = AsyncMock()
+        orch._prs = mock_prs
+
+        await orch._plan_issues()
+
+        # Should NOT add ready label
+        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
+        ready_calls = [c for c in add_calls if config.ready_label[0] in c[1]]
+        assert len(ready_calls) == 0
+
+
+# ---------------------------------------------------------------------------
 # HITL correction tracking
 # ---------------------------------------------------------------------------
 

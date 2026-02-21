@@ -1418,6 +1418,50 @@ class TestHydraConfigHitlActiveLabel:
 # ---------------------------------------------------------------------------
 
 
+class TestHydraConfigDupLabel:
+    """Tests for dup_label default, custom value, and env var override."""
+
+    def test_dup_label_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["hydra-dup"]
+
+    def test_dup_label_custom_value(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            dup_label=["my-dup"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["my-dup"]
+
+    def test_dup_label_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_DUP", "custom-dup")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["custom-dup"]
+
+    def test_dup_label_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_LABEL_DUP", "env-dup")
+        cfg = HydraConfig(
+            dup_label=["explicit-dup"],
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.dup_label == ["explicit-dup"]
+
+
 class TestHydraConfigImproveLabel:
     """Tests for improve_label env var override."""
 
