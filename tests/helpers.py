@@ -52,7 +52,7 @@ class ConfigFactory:
         max_reviewers: int = 1,
         max_budget_usd: float = 1.0,
         model: str = "sonnet",
-        review_model: str = "opus",
+        review_model: str = "sonnet",
         review_budget_usd: float = 1.0,
         ci_check_timeout: int = 600,
         ci_poll_interval: int = 30,

@@ -469,7 +469,20 @@ class HydraOrchestrator:
                     )
                 )
             try:
-                await self._implementer.run_batch()
+                results, _issues = await self._implementer.run_batch()
+                for result in results:
+                    if result.transcript:
+                        try:
+                            await self._file_memory_suggestion(
+                                result.transcript,
+                                "implementer",
+                                f"issue #{result.issue_number}",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to file memory suggestion for issue #%d",
+                                result.issue_number,
+                            )
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
@@ -504,6 +517,19 @@ class HydraOrchestrator:
                     )
                     if prs:
                         review_results = await self._reviewer.review_prs(prs, issues)
+                        for result in review_results:
+                            if result.transcript:
+                                try:
+                                    await self._file_memory_suggestion(
+                                        result.transcript,
+                                        "reviewer",
+                                        f"PR #{result.pr_number}",
+                                    )
+                                except Exception:
+                                    logger.exception(
+                                        "Failed to file memory suggestion for PR #%d",
+                                        result.pr_number,
+                                    )
                         any_merged = any(r.merged for r in review_results)
                         if any_merged:
                             await asyncio.sleep(5)
@@ -1102,11 +1128,17 @@ class HydraOrchestrator:
 
                     # File memory suggestion if present in transcript
                     if result.transcript:
-                        await self._file_memory_suggestion(
-                            result.transcript,
-                            "planner",
-                            f"issue #{issue.number}",
-                        )
+                        try:
+                            await self._file_memory_suggestion(
+                                result.transcript,
+                                "planner",
+                                f"issue #{issue.number}",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to file memory suggestion for issue #%d",
+                                issue.number,
+                            )
 
                     return result
                 finally:

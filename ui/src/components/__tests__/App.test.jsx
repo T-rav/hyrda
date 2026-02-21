@@ -175,42 +175,27 @@ describe('System and Metrics tabs', () => {
   })
 })
 
-describe('Livestream and Work Stream tab labels', () => {
-  it('both Livestream and Work Stream labels are present', async () => {
+describe('Main tab bar', () => {
+  it('has exactly 5 main tabs', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    expect(screen.getByText('Livestream')).toBeInTheDocument()
-    expect(screen.getByText('Work Stream')).toBeInTheDocument()
+    const tabLabels = ['Work Stream', 'Transcript', 'HITL', 'Metrics', 'System']
+    for (const label of tabLabels) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
   })
 
-  it('Livestream tab renders Livestream component', async () => {
+  it('does not include Livestream in the main tab bar', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    fireEvent.click(screen.getByText('Livestream'))
-    expect(screen.getByText('Waiting for events...')).toBeInTheDocument()
+    // Livestream is now a sub-tab inside System, not a top-level tab
+    expect(screen.queryByText('Livestream')).not.toBeInTheDocument()
   })
 
   it('Work Stream is the default tab', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    // Work Stream tab should be active by default (has active tab styling)
     const issueStreamTab = screen.getByText('Work Stream')
     expect(issueStreamTab.style.color).toBe('var(--accent)')
-  })
-})
-
-describe('Tab label correctness', () => {
-  it('Livestream tab label matches the Livestream component', async () => {
-    mockState.events = [
-      { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1 } },
-    ]
-    const { default: App } = await import('../../App')
-    render(<App />)
-
-    // Click the tab labeled "Livestream"
-    fireEvent.click(screen.getByText('Livestream'))
-
-    // The inline event livestream renders — shows raw event types
-    expect(screen.getByText('worker update')).toBeInTheDocument()
   })
 })
