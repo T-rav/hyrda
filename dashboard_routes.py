@@ -376,8 +376,12 @@ def create_router(
 
         return JSONResponse({"status": "ok", "updated": applied})
 
-    # Known background workers with human-friendly labels
+    # Known workers with human-friendly labels (pipeline loops + background)
     _bg_worker_defs = [
+        ("triage", "Triage"),
+        ("plan", "Plan"),
+        ("implement", "Implement"),
+        ("review", "Review"),
         ("memory_sync", "Memory Sync"),
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
@@ -391,6 +395,7 @@ def create_router(
         bg_states = orch.get_bg_worker_states() if orch else {}
         workers = []
         for name, label in _bg_worker_defs:
+            enabled = orch.is_bg_worker_enabled(name) if orch else True
             if name in bg_states:
                 entry = bg_states[name]
                 workers.append(
@@ -398,12 +403,15 @@ def create_router(
                         name=name,
                         label=label,
                         status=entry["status"],
+                        enabled=enabled,
                         last_run=entry.get("last_run"),
                         details=entry.get("details", {}),
                     )
                 )
             else:
-                workers.append(BackgroundWorkerStatus(name=name, label=label))
+                workers.append(
+                    BackgroundWorkerStatus(name=name, label=label, enabled=enabled)
+                )
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
 
     @router.post("/api/control/bg-worker")

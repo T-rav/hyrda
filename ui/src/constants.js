@@ -30,11 +30,21 @@ export const PIPELINE_STAGES = [
 export const STREAM_CARD_STATUSES = ['active', 'done', 'failed', 'hitl']
 
 /**
+ * Pipeline loop definitions — core processing loops that can be toggled on/off.
+ */
+export const PIPELINE_LOOPS = [
+  { key: 'triage',    label: 'Triage',    color: theme.triageGreen },
+  { key: 'plan',      label: 'Plan',      color: theme.purple },
+  { key: 'implement', label: 'Implement', color: theme.accent },
+  { key: 'review',    label: 'Review',    color: theme.orange },
+]
+
+/**
  * Background worker definitions — system maintenance loops that run independently of the pipeline.
  */
 export const BACKGROUND_WORKERS = [
-  { key: 'memory_sync',     label: 'Memory Sync',     color: theme.accent },
-  { key: 'retrospective',   label: 'Retrospective',   color: theme.purple },
-  { key: 'metrics',         label: 'Metrics',          color: theme.yellow },
-  { key: 'review_insights', label: 'Review Insights',  color: theme.orange },
+  { key: 'memory_sync',     label: 'Memory Sync',      color: theme.accent },
+  { key: 'retrospective',   label: 'Retrospective',    color: theme.purple },
+  { key: 'metrics',         label: 'Metrics',           color: theme.yellow },
+  { key: 'review_insights', label: 'Review Insights',   color: theme.orange },
 ]

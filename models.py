@@ -478,6 +478,7 @@ class BackgroundWorkerStatus(BaseModel):
     name: str
     label: str
     status: str = "disabled"  # ok | error | disabled
+    enabled: bool = True
     last_run: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 

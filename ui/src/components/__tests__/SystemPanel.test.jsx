@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { SystemPanel } from '../SystemPanel'
+import { BACKGROUND_WORKERS, PIPELINE_LOOPS } from '../../constants'
 
 const mockBgWorkers = [
-  { name: 'memory_sync', status: 'ok', last_run: new Date().toISOString(), details: { item_count: 12, digest_chars: 2400 } },
-  { name: 'retrospective', status: 'error', last_run: '2026-02-20T10:28:00Z', details: { last_issue: 42 } },
-  { name: 'metrics', status: 'ok', last_run: '2026-02-20T10:25:00Z', details: {} },
-  { name: 'review_insights', status: 'disabled', last_run: null, details: {} },
+  { name: 'triage', status: 'ok', enabled: true, last_run: null, details: {} },
+  { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
+  { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
+  { name: 'review', status: 'ok', enabled: true, last_run: null, details: {} },
+  { name: 'memory_sync', status: 'ok', enabled: true, last_run: new Date().toISOString(), details: { item_count: 12, digest_chars: 2400 } },
+  { name: 'retrospective', status: 'error', enabled: true, last_run: '2026-02-20T10:28:00Z', details: { last_issue: 42 } },
+  { name: 'metrics', status: 'ok', enabled: true, last_run: '2026-02-20T10:25:00Z', details: {} },
+  { name: 'review_insights', status: 'disabled', enabled: false, last_run: null, details: {} },
 ]
 
 const mockPipelineWorkers = {
@@ -18,12 +23,10 @@ const mockPipelineWorkers = {
 
 describe('SystemPanel', () => {
   describe('Background Workers', () => {
-    it('renders all 4 background worker cards', () => {
+    it('renders all background worker cards', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
       expect(screen.getByText('Memory Sync')).toBeInTheDocument()
       expect(screen.getByText('Retrospective')).toBeInTheDocument()
-      // Use getAllByText since 'Metrics' label appears in both heading and worker card
-      expect(screen.getAllByText('Metrics').length).toBeGreaterThanOrEqual(1)
       expect(screen.getByText('Review Insights')).toBeInTheDocument()
     })
 
@@ -39,7 +42,7 @@ describe('SystemPanel', () => {
       expect(dot.style.background).toBe('var(--red)')
     })
 
-    it('shows correct status dot color for disabled workers', () => {
+    it('shows inactive dot color for disabled workers (enabled: false)', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
       const dot = screen.getByTestId('dot-review_insights')
       expect(dot.style.background).toBe('var(--text-inactive)')
@@ -61,13 +64,13 @@ describe('SystemPanel', () => {
 
     it('shows last run time when available', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} />)
-      expect(screen.getAllByText(/Last run:/).length).toBe(4)
+      expect(screen.getAllByText(/Last run:/).length).toBe(BACKGROUND_WORKERS.length)
     })
 
     it('shows "never" for workers that have not run', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       const neverTexts = screen.getAllByText(/never/)
-      expect(neverTexts.length).toBe(4)
+      expect(neverTexts.length).toBe(BACKGROUND_WORKERS.length)
     })
 
     it('shows detail key-value pairs', () => {
@@ -87,7 +90,7 @@ describe('SystemPanel', () => {
 
     it('renders pipeline worker cards', () => {
       render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
-      expect(screen.getByText('Pipeline Workers')).toBeInTheDocument()
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
       expect(screen.getByText('#5')).toBeInTheDocument()
       expect(screen.getByText('#7')).toBeInTheDocument()
       expect(screen.getByText('#10')).toBeInTheDocument()
@@ -110,7 +113,6 @@ describe('SystemPanel', () => {
 
     it('shows transcript toggle when transcript has lines', () => {
       render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
-      // Worker #10 has 3 transcript lines
       expect(screen.getByText('Show transcript (3 lines)')).toBeInTheDocument()
     })
 
@@ -125,7 +127,6 @@ describe('SystemPanel', () => {
 
     it('does not show transcript toggle when transcript is empty', () => {
       render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} />)
-      // review-20 has empty transcript
       expect(screen.queryByText('Show transcript (0 lines)')).not.toBeInTheDocument()
     })
 
@@ -138,8 +139,34 @@ describe('SystemPanel', () => {
     })
   })
 
+  describe('Pipeline Loop Toggles', () => {
+    it('shows pipeline loop toggle chips in the Pipeline section', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} onToggleBgWorker={() => {}} />)
+      for (const loop of PIPELINE_LOOPS) {
+        expect(screen.getByText(loop.label)).toBeInTheDocument()
+      }
+    })
+
+    it('shows worker count on pipeline loop chips when workers are active', () => {
+      render(<SystemPanel workers={mockPipelineWorkers} backgroundWorkers={[]} onToggleBgWorker={() => {}} />)
+      // mockPipelineWorkers has 1 triage, 1 planner, 1 implementer, 1 reviewer
+      // Each pipeline chip should show "1" for its count
+      const ones = screen.getAllByText('1')
+      expect(ones.length).toBeGreaterThanOrEqual(4)
+    })
+
+    it('calls onToggleBgWorker with pipeline loop key when toggled', () => {
+      const onToggle = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
+      // Pipeline loops appear first; find the "On" buttons for pipeline toggles
+      const allOnButtons = screen.getAllByText('On')
+      fireEvent.click(allOnButtons[0]) // First pipeline loop = triage
+      expect(onToggle).toHaveBeenCalledWith('triage', false)
+    })
+  })
+
   describe('Background Worker Toggles', () => {
-    it('shows On buttons when onToggleBgWorker is provided', () => {
+    it('shows toggle buttons when onToggleBgWorker is provided', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={() => {}} />)
       const onButtons = screen.getAllByText('On')
       expect(onButtons.length).toBeGreaterThan(0)
@@ -151,15 +178,7 @@ describe('SystemPanel', () => {
       expect(screen.queryByText('Off')).not.toBeInTheDocument()
     })
 
-    it('calls onToggleBgWorker with correct worker key when toggled', () => {
-      const onToggle = vi.fn()
-      render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
-      const onButtons = screen.getAllByText('On')
-      fireEvent.click(onButtons[0]) // First "On" button = memory_sync
-      expect(onToggle).toHaveBeenCalledWith('memory_sync', false)
-    })
-
-    it('shows Off button for disabled workers', () => {
+    it('shows Off button for disabled workers (enabled: false)', () => {
       const onToggle = vi.fn()
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
       expect(screen.getByText('Off')).toBeInTheDocument()
@@ -170,6 +189,15 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
       fireEvent.click(screen.getByText('Off'))
       expect(onToggle).toHaveBeenCalledWith('review_insights', true)
+    })
+
+    it('all workers default to enabled when no state reported', () => {
+      const onToggle = vi.fn()
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} onToggleBgWorker={onToggle} />)
+      const onButtons = screen.getAllByText('On')
+      // Pipeline loops + background workers all show On
+      expect(onButtons.length).toBe(PIPELINE_LOOPS.length + BACKGROUND_WORKERS.length)
+      expect(screen.queryByText('Off')).not.toBeInTheDocument()
     })
   })
 })

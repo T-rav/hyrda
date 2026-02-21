@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { BACKGROUND_WORKERS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
 
 function relativeTime(isoString) {
   if (!isoString) return 'never'
@@ -100,10 +100,34 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
   }
 
   const hasPipelineWorkers = pipelineWorkers.length > 0
+  const bgMap = Object.fromEntries((backgroundWorkers || []).map(w => [w.name, w]))
 
   return (
     <div style={styles.container}>
-      <h3 style={styles.heading}>Pipeline Workers</h3>
+      <h3 style={styles.heading}>Pipeline</h3>
+      <div style={styles.loopRow}>
+        {PIPELINE_LOOPS.map((loop) => {
+          const state = bgMap[loop.key]
+          const enabled = state?.enabled !== false
+          const stage = PIPELINE_STAGES.find(s => s.key === loop.key)
+          const count = stage?.role ? (grouped[stage.role] || []).length : 0
+          return (
+            <div key={loop.key} style={styles.loopChip}>
+              <span style={{ ...styles.loopDot, background: enabled ? loop.color : theme.textInactive }} />
+              <span style={styles.loopLabel}>{loop.label}</span>
+              {count > 0 && <span style={{ ...styles.loopCount, color: loop.color }}>{count}</span>}
+              {onToggleBgWorker && (
+                <button
+                  style={enabled ? styles.toggleOn : styles.toggleOff}
+                  onClick={() => onToggleBgWorker(loop.key, !enabled)}
+                >
+                  {enabled ? 'On' : 'Off'}
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
       {!hasPipelineWorkers && (
         <div style={styles.empty}>No active pipeline workers</div>
       )}
@@ -123,13 +147,13 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker }) {
           const lastRun = state?.last_run || null
           const details = state?.details || {}
 
-          const enabled = status !== 'disabled'
+          const enabled = state?.enabled !== false
 
           return (
             <div key={def.key} style={styles.card}>
               <div style={styles.cardHeader}>
                 <span
-                  style={{ ...styles.dot, background: enabled ? statusColor(status) : theme.textInactive }}
+                  style={{ ...styles.dot, background: !enabled ? theme.textInactive : statusColor(status) }}
                   data-testid={`dot-${def.key}`}
                 />
                 <span style={styles.label}>{def.label}</span>
@@ -278,6 +302,38 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  loopRow: {
+    display: 'flex',
+    gap: 8,
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  loopChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '4px 12px',
+    border: `1px solid ${theme.border}`,
+    borderRadius: 16,
+    background: theme.surface,
+  },
+  loopDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  loopLabel: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.text,
+  },
+  loopCount: {
+    fontSize: 10,
+    fontWeight: 700,
+    minWidth: 16,
+    textAlign: 'center',
   },
   toggleOn: {
     padding: '2px 10px',

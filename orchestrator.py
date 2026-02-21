@@ -389,6 +389,9 @@ class HydraOrchestrator:
     async def _triage_loop(self) -> None:
         """Continuously poll for find-labeled issues and triage them."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("triage"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 await self._triage_find_issues()
             except AuthenticationError:
@@ -406,6 +409,9 @@ class HydraOrchestrator:
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("plan"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 await self._plan_issues()
             except AuthenticationError:
@@ -423,6 +429,9 @@ class HydraOrchestrator:
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("implement"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             # After one poll cycle, release crash-recovered issues
             if self._recovered_issues:
                 self._active_impl_issues -= self._recovered_issues
@@ -453,6 +462,9 @@ class HydraOrchestrator:
     async def _review_loop(self) -> None:
         """Continuously consume reviewable issues from the store and review their PRs."""
         while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("review"):
+                await self._sleep_or_stop(self._config.poll_interval)
+                continue
             try:
                 review_issues = self._store.get_reviewable(
                     self._config.batch_size,
