@@ -11,6 +11,7 @@ from models import (
     ControlStatusResponse,
     GitHubIssue,
     HITLItem,
+    JudgeResult,
     LifetimeStats,
     NewIssueSpec,
     Phase,
@@ -21,6 +22,8 @@ from models import (
     ReviewerStatus,
     ReviewResult,
     ReviewVerdict,
+    StateData,
+    VerificationCriterion,
     WorkerResult,
     WorkerStatus,
 )
@@ -1240,3 +1243,122 @@ class TestLifetimeStats:
         assert stats.total_quality_fix_rounds == 0
         assert stats.total_implementation_seconds == 0.0
         assert stats.fired_thresholds == []
+
+
+# ---------------------------------------------------------------------------
+# VerificationCriterion
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationCriterion:
+    """Tests for the VerificationCriterion model."""
+
+    def test_basic_instantiation(self) -> None:
+        cr = VerificationCriterion(
+            description="Tests pass", passed=True, details="All 10 pass"
+        )
+        assert cr.description == "Tests pass"
+        assert cr.passed is True
+        assert cr.details == "All 10 pass"
+
+    def test_details_defaults_to_empty(self) -> None:
+        cr = VerificationCriterion(description="Lint", passed=False)
+        assert cr.details == ""
+
+    def test_serialization_round_trip(self) -> None:
+        cr = VerificationCriterion(
+            description="Type check", passed=True, details="Clean"
+        )
+        data = cr.model_dump()
+        restored = VerificationCriterion.model_validate(data)
+        assert restored == cr
+
+
+# ---------------------------------------------------------------------------
+# JudgeResult
+# ---------------------------------------------------------------------------
+
+
+class TestJudgeResult:
+    """Tests for the JudgeResult model."""
+
+    def test_all_passed_when_all_criteria_pass(self) -> None:
+        judge = JudgeResult(
+            issue_number=42,
+            pr_number=101,
+            criteria=[
+                VerificationCriterion(description="A", passed=True),
+                VerificationCriterion(description="B", passed=True),
+            ],
+        )
+        assert judge.all_passed is True
+        assert judge.failed_criteria == []
+
+    def test_all_passed_false_when_some_fail(self) -> None:
+        judge = JudgeResult(
+            issue_number=42,
+            pr_number=101,
+            criteria=[
+                VerificationCriterion(description="A", passed=True),
+                VerificationCriterion(description="B", passed=False, details="Failed"),
+            ],
+        )
+        assert judge.all_passed is False
+        assert len(judge.failed_criteria) == 1
+        assert judge.failed_criteria[0].description == "B"
+
+    def test_all_passed_true_when_no_criteria(self) -> None:
+        judge = JudgeResult(issue_number=42, pr_number=101, criteria=[])
+        assert judge.all_passed is True
+
+    def test_failed_criteria_returns_only_failures(self) -> None:
+        judge = JudgeResult(
+            issue_number=42,
+            pr_number=101,
+            criteria=[
+                VerificationCriterion(description="A", passed=False),
+                VerificationCriterion(description="B", passed=True),
+                VerificationCriterion(description="C", passed=False),
+            ],
+        )
+        failed = judge.failed_criteria
+        assert len(failed) == 2
+        assert {c.description for c in failed} == {"A", "C"}
+
+    def test_defaults(self) -> None:
+        judge = JudgeResult(issue_number=1, pr_number=2)
+        assert judge.criteria == []
+        assert judge.verification_instructions == ""
+        assert judge.summary == ""
+
+    def test_serialization_round_trip(self) -> None:
+        judge = JudgeResult(
+            issue_number=42,
+            pr_number=101,
+            criteria=[VerificationCriterion(description="X", passed=True)],
+            verification_instructions="Step 1",
+            summary="Good",
+        )
+        data = judge.model_dump()
+        restored = JudgeResult.model_validate(data)
+        assert restored.issue_number == judge.issue_number
+        assert restored.criteria[0].description == "X"
+        assert restored.verification_instructions == "Step 1"
+
+
+# ---------------------------------------------------------------------------
+# StateData - verification_issues field
+# ---------------------------------------------------------------------------
+
+
+class TestStateDataVerificationIssues:
+    """Tests for the verification_issues field on StateData."""
+
+    def test_defaults_to_empty_dict(self) -> None:
+        data = StateData()
+        assert data.verification_issues == {}
+
+    def test_accepts_verification_issues(self) -> None:
+        data = StateData(verification_issues={"42": 500, "99": 501})
+        assert data.verification_issues["42"] == 500
+        assert data.verification_issues["99"] == 501

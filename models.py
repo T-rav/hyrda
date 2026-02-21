@@ -285,6 +285,34 @@ class JudgeVerdict(BaseModel):
     summary: str = ""
 
 
+class VerificationCriterion(BaseModel):
+    """Result of evaluating a single acceptance criterion at code level."""
+
+    description: str
+    passed: bool
+    details: str = ""
+
+
+class JudgeResult(BaseModel):
+    """Overall result from the LLM judge evaluating acceptance criteria."""
+
+    issue_number: int
+    pr_number: int
+    criteria: list[VerificationCriterion] = Field(default_factory=list)
+    verification_instructions: str = ""
+    summary: str = ""
+
+    @property
+    def all_passed(self) -> bool:
+        """Return True if every criterion passed."""
+        return all(c.passed for c in self.criteria)
+
+    @property
+    def failed_criteria(self) -> list[VerificationCriterion]:
+        """Return only the criteria that failed."""
+        return [c for c in self.criteria if not c.passed]
+
+
 # --- Batch ---
 
 
@@ -360,6 +388,7 @@ class StateData(BaseModel):
     review_attempts: dict[str, int] = Field(default_factory=dict)
     review_feedback: dict[str, str] = Field(default_factory=dict)
     worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    verification_issues: dict[str, int] = Field(default_factory=dict)
     issue_attempts: dict[str, int] = Field(default_factory=dict)
     active_issue_numbers: list[int] = Field(default_factory=list)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)

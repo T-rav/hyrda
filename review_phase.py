@@ -13,7 +13,14 @@ from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict, WorkerStatus
+from models import (
+    GitHubIssue,
+    JudgeResult,
+    PRInfo,
+    ReviewResult,
+    ReviewVerdict,
+    WorkerStatus,
+)
 from pr_manager import PRManager, SelfReviewError
 from retrospective import RetrospectiveCollector
 from review_insights import (
@@ -26,6 +33,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from verification import format_verification_issue_body
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
@@ -305,6 +313,20 @@ class ReviewPhase:
                                     except Exception:  # noqa: BLE001
                                         logger.warning(
                                             "Verification judge failed for issue #%d",
+                                            pr.issue_number,
+                                            exc_info=True,
+                                        )
+
+                                # Create verification issue if judge result available
+                                judge_result = await self._get_judge_result(issue, pr)
+                                if judge_result is not None:
+                                    try:
+                                        await self._create_verification_issue(
+                                            issue, pr, judge_result
+                                        )
+                                    except Exception:  # noqa: BLE001
+                                        logger.warning(
+                                            "Verification issue creation failed for issue #%d",
                                             pr.issue_number,
                                             exc_info=True,
                                         )
@@ -691,6 +713,46 @@ class ReviewPhase:
                 )
             )
             return False  # Destroy worktree
+
+    async def _get_judge_result(
+        self,
+        issue: GitHubIssue,  # noqa: ARG002
+        pr: PRInfo,  # noqa: ARG002
+    ) -> JudgeResult | None:
+        """Retrieve the judge result for a merged PR.
+
+        Returns None until the LLM judge (#268) is implemented.
+        """
+        return None
+
+    async def _create_verification_issue(
+        self,
+        issue: GitHubIssue,
+        pr: PRInfo,
+        judge_result: JudgeResult,
+    ) -> int:
+        """Create a linked verification issue for human review.
+
+        Returns the created issue number (0 on failure).
+        """
+        title = f"Verify: {issue.title}"
+        if len(title) > 256:
+            title = title[:253] + "..."
+
+        body = format_verification_issue_body(judge_result, issue, pr)
+        label = self._config.hitl_label[0]
+        issue_number = await self._prs.create_issue(title, body, [label])
+
+        if issue_number > 0:
+            self._state.set_verification_issue(issue.number, issue_number)
+            logger.info(
+                "Created verification issue #%d for issue #%d (PR #%d)",
+                issue_number,
+                issue.number,
+                pr.number,
+            )
+
+        return issue_number
 
     async def _resolve_merge_conflicts(
         self,
