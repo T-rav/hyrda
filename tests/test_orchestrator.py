@@ -3212,7 +3212,6 @@ class TestMemorySuggestionFiling:
             pr_number=101, issue_number=42, transcript=MEMORY_TRANSCRIPT
         )
 
-        orch._store.get_reviewable = lambda _max_count: [review_issue]  # type: ignore[method-assign]
         orch._store.get_active_issues = lambda: {42: "review"}  # type: ignore[method-assign]
         orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
             return_value=([pr], [review_issue])
@@ -3221,15 +3220,13 @@ class TestMemorySuggestionFiling:
         orch._prs.pull_main = AsyncMock()  # type: ignore[method-assign]
         orch._file_memory_suggestion = AsyncMock()  # type: ignore[method-assign]
 
-        # Stop after one iteration
-        original_get_reviewable = orch._store.get_reviewable
         call_count = 0
 
         def get_reviewable_once(_max_count: int) -> list[GitHubIssue]:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return original_get_reviewable(_max_count)
+                return [review_issue]
             orch._stop_event.set()
             return []
 
@@ -3323,3 +3320,63 @@ class TestMemorySuggestionFiling:
             "reviewer",
             "PR #201",
         )
+
+    @pytest.mark.asyncio
+    async def test_implement_loop_isolates_memory_filing_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Memory filing failure in implementer must not crash the loop."""
+        orch = HydraOrchestrator(config)
+        r1 = make_worker_result(issue_number=10, transcript=MEMORY_TRANSCRIPT)
+        r2 = make_worker_result(issue_number=20, transcript=MEMORY_TRANSCRIPT)
+
+        async def batch_and_stop() -> tuple[list[WorkerResult], list[GitHubIssue]]:
+            orch._stop_event.set()
+            return [r1, r2], [make_issue(10), make_issue(20)]
+
+        orch._implementer.run_batch = batch_and_stop  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock(  # type: ignore[method-assign]
+            side_effect=[RuntimeError("transient"), None],
+        )
+
+        await orch._implement_loop()  # must not raise
+
+        assert orch._file_memory_suggestion.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_review_loop_isolates_memory_filing_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Memory filing failure in reviewer must not crash the loop."""
+        orch = HydraOrchestrator(config)
+        issue_a = make_issue(10)
+        pr_a = make_pr_info(number=201, issue_number=10)
+        r1 = make_review_result(
+            pr_number=201, issue_number=10, transcript=MEMORY_TRANSCRIPT
+        )
+
+        orch._store.get_active_issues = lambda: {10: "review"}  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(  # type: ignore[method-assign]
+            return_value=([pr_a], [issue_a])
+        )
+        orch._reviewer.review_prs = AsyncMock(return_value=[r1])  # type: ignore[method-assign]
+        orch._prs.pull_main = AsyncMock()  # type: ignore[method-assign]
+        orch._file_memory_suggestion = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("transient"),
+        )
+
+        call_count = 0
+
+        def get_reviewable_once(_max_count: int) -> list[GitHubIssue]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [issue_a]
+            orch._stop_event.set()
+            return []
+
+        orch._store.get_reviewable = get_reviewable_once  # type: ignore[method-assign]
+
+        await orch._review_loop()  # must not raise
+
+        orch._file_memory_suggestion.assert_awaited_once()

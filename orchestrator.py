@@ -1027,11 +1027,17 @@ class HydraOrchestrator:
 
                     # File memory suggestion if present in transcript
                     if result.transcript:
-                        await self._file_memory_suggestion(
-                            result.transcript,
-                            "planner",
-                            f"issue #{issue.number}",
-                        )
+                        try:
+                            await self._file_memory_suggestion(
+                                result.transcript,
+                                "planner",
+                                f"issue #{issue.number}",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to file memory suggestion for issue #%d",
+                                issue.number,
+                            )
 
                     return result
                 finally:
