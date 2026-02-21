@@ -67,6 +67,9 @@ describe('Timeline pre-computed styles', () => {
       expect(stageConnectorStyles[key]).toHaveProperty('active')
       expect(stageConnectorStyles[key]).toHaveProperty('pending')
       expect(stageConnectorStyles[key].active.background).toBe(STAGE_META[key].color)
+      // Pending connectors render dashed via borderLeft, not background
+      expect(stageConnectorStyles[key].pending.background).toBe('transparent')
+      expect(stageConnectorStyles[key].pending.borderLeft).toContain('dashed')
     }
   })
 

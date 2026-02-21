@@ -295,6 +295,24 @@ describe('deriveIssueTimelines', () => {
     const result = deriveIssueTimelines([], workers, [])
     expect(result[0].title).toBe('Add dark mode toggle')
   })
+
+  it('does not mark issue as done when all stages except merged are done', () => {
+    const events = [
+      { type: 'triage_update', timestamp: '2026-01-15T10:00:00Z', data: { issue: 9, status: 'done' } },
+      { type: 'planner_update', timestamp: '2026-01-15T10:01:00Z', data: { issue: 9, status: 'done' } },
+      { type: 'worker_update', timestamp: '2026-01-15T10:02:00Z', data: { issue: 9, status: 'done' } },
+      { type: 'review_update', timestamp: '2026-01-15T10:03:00Z', data: { issue: 9, pr: 40, status: 'done' } },
+    ]
+    const result = deriveIssueTimelines(events, {}, [])
+
+    expect(result[0].stages.triage.status).toBe('done')
+    expect(result[0].stages.plan.status).toBe('done')
+    expect(result[0].stages.implement.status).toBe('done')
+    expect(result[0].stages.review.status).toBe('done')
+    expect(result[0].stages.merged.status).toBe('pending')
+    // Should NOT be 'done' — merge hasn't happened yet
+    expect(result[0].overallStatus).toBe('active')
+  })
 })
 
 // ── applyFiltersAndSort ──────────────────────────────────────────────

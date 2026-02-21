@@ -62,12 +62,7 @@ function FilterBar({ filterStage, setFilterStage, filterStatus, setFilterStatus,
 
 function StatusIndicator({ status }) {
   if (status === 'active') {
-    return (
-      <>
-        <style>{pulseKeyframes}</style>
-        <span style={statusIndicatorStyles.active} data-testid="status-active" />
-      </>
-    )
+    return <span style={statusIndicatorStyles.active} data-testid="status-active" />
   }
   if (status === 'done') return <span style={statusIndicatorStyles.done}>✓</span>
   if (status === 'failed') return <span style={statusIndicatorStyles.failed}>✗</span>
@@ -119,9 +114,8 @@ function StageNode({ stageKey, stageData, isLast, pr, branch }) {
   return (
     <div style={styles.stageNodeContainer}>
       <div style={styles.stageRow}>
-        <div style={nodeStyle}>
-          {stageData.status === 'active' && <style>{pulseKeyframes}</style>}
-        </div>
+        <div style={nodeStyle} />
+
         <div style={styles.stageInfo}>
           <span style={styles.stageLabel}>{meta?.label || stageKey}</span>
           <span style={stageBadgeStyles[stageData.status] || stageBadgeStyles.pending}>
@@ -206,6 +200,7 @@ export function Timeline({ events, workers, prs }) {
 
   return (
     <div style={styles.container}>
+      <style>{pulseKeyframes}</style>
       <FilterBar
         filterStage={filterStage}
         setFilterStage={setFilterStage}
@@ -558,7 +553,7 @@ export const stageNodeStyles = Object.fromEntries(
 
 // Connector styles — per stage
 const connectorActiveBase = { ...styles.connector, background: theme.accent }
-const connectorPendingBase = { ...styles.connector, background: theme.border, borderStyle: 'dashed' }
+const connectorPendingBase = { ...styles.connector, width: 0, background: 'transparent', borderLeft: `2px dashed ${theme.border}` }
 
 export const stageConnectorStyles = Object.fromEntries(
   STAGE_KEYS.map(key => {

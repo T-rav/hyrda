@@ -245,7 +245,6 @@ export function deriveIssueTimelines(events, workers, prs) {
     let hasFailed = false
     let hasHitl = false
     let hasActive = false
-    let allDone = true
     let latestEndTime = null
 
     for (const stageKey of STAGE_KEYS) {
@@ -256,7 +255,6 @@ export function deriveIssueTimelines(events, workers, prs) {
       if (s.status === 'failed') hasFailed = true
       if (s.status === 'hitl') hasHitl = true
       if (s.status === 'active') hasActive = true
-      if (s.status !== 'done' && stageKey !== 'merged') allDone = false
       if (s.endTime && (!latestEndTime || s.endTime > latestEndTime)) {
         latestEndTime = s.endTime
       }
@@ -273,9 +271,6 @@ export function deriveIssueTimelines(events, workers, prs) {
       entry.endTime = latestEndTime
     } else if (hasActive) {
       entry.overallStatus = 'active'
-    } else if (allDone) {
-      entry.overallStatus = 'done'
-      entry.endTime = latestEndTime
     } else {
       entry.overallStatus = 'active'
     }
