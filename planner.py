@@ -913,9 +913,17 @@ SUMMARY: <brief one-line description of the plan>
     def _save_plan(self, issue_number: int, plan: str, summary: str) -> None:
         """Write the extracted plan to .hydra/plans/ for the implementation worker."""
         plan_dir = self._config.repo_root / ".hydra" / "plans"
-        plan_dir.mkdir(parents=True, exist_ok=True)
-        path = plan_dir / f"issue-{issue_number}.md"
-        path.write_text(
-            f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
-        )
-        logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        try:
+            plan_dir.mkdir(parents=True, exist_ok=True)
+            path = plan_dir / f"issue-{issue_number}.md"
+            path.write_text(
+                f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
+            )
+            logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        except OSError:
+            logger.warning(
+                "Could not save plan to %s",
+                plan_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )

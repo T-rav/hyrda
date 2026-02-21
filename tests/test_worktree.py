@@ -669,8 +669,8 @@ class TestSetupEnv:
         env_src = repo_root / ".env"
         env_src.write_text("SECRET=val")
 
-        # Also create node_modules source
-        ui_nm_src = repo_root / "ui" / "node_modules"
+        # Also create node_modules source under a real _UI_DIRS entry
+        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
         ui_nm_src.mkdir(parents=True)
 
         with patch.object(Path, "symlink_to", side_effect=OSError("perm denied")):
