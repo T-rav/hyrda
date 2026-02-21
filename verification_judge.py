@@ -121,7 +121,7 @@ class VerificationJudge:
                     )
                     verdict.instructions_quality = quality2
                     verdict.instructions_feedback = feedback2
-                    verdict.refined = True
+                    verdict.refined = bool(refined)
             except Exception:
                 logger.warning(
                     "Instructions validation failed for issue #%d",
@@ -403,7 +403,8 @@ REFINED_INSTRUCTIONS_END
             lines.append("|-----------|---------|-----------|")
             for cr in verdict.criteria_results:
                 icon = "PASS" if cr.verdict == CriterionVerdict.PASS else "FAIL"
-                lines.append(f"| {cr.criterion} | {icon} | {cr.reasoning} |")
+                safe_reasoning = cr.reasoning.replace("|", "\\|")
+                lines.append(f"| {cr.criterion} | {icon} | {safe_reasoning} |")
         else:
             lines.append("No criteria evaluated.")
         lines.append("")
@@ -457,7 +458,7 @@ REFINED_INSTRUCTIONS_END
                 + match.group(1)
                 + refined_instructions
                 + "\n"
-                + (match.group(3) if match.group(3) != "" else "")
+                + match.group(3)
             )
             path.write_text(new_content)
         else:

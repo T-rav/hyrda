@@ -527,6 +527,21 @@ class TestFormatJudgeReport:
         report = judge._format_judge_report(verdict)
         assert "All good" in report
 
+    def test_escapes_pipe_in_reasoning(self):
+        judge = _make_judge()
+        verdict = JudgeVerdict(
+            issue_number=1,
+            criteria_results=[
+                CriterionResult(
+                    criterion="AC-1",
+                    verdict=CriterionVerdict.PASS,
+                    reasoning="Uses curl | jq for parsing",
+                ),
+            ],
+        )
+        report = judge._format_judge_report(verdict)
+        assert "curl \\| jq" in report
+
 
 # ---------------------------------------------------------------------------
 # _update_criteria_file
@@ -554,6 +569,21 @@ class TestUpdateCriteriaFile:
         judge = _make_judge(cfg)
         # Should not raise
         judge._update_criteria_file(999, "Refined text")
+
+    def test_appends_instructions_section_when_none_exists(self, tmp_path):
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = _make_judge(cfg)
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        criteria_file = criteria_dir / "issue-42.md"
+        criteria_file.write_text("## Acceptance Criteria\n\n- [ ] First\n")
+
+        judge._update_criteria_file(42, "New instructions here")
+
+        content = criteria_file.read_text()
+        assert "## Verification Instructions" in content
+        assert "New instructions here" in content
+        assert "Acceptance Criteria" in content
 
 
 # ---------------------------------------------------------------------------
@@ -720,6 +750,39 @@ class TestJudgeIntegration:
         assert result.instructions_quality == InstructionsQuality.NEEDS_REFINEMENT
         # Should NOT retry again — max 1
         assert call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_refined_false_when_extraction_fails(self, tmp_path):
+        """When refinement extraction returns empty, refined should be False."""
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        bus = EventBus()
+        judge = VerificationJudge(cfg, bus)
+
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
+
+        call_count = 0
+        # Refinement transcript has no markers — extraction will fail
+        empty_refinement = "I tried to refine but here's some text without markers."
+
+        responses = [
+            SAMPLE_CODE_VALIDATION_TRANSCRIPT,
+            SAMPLE_INSTRUCTIONS_NEEDS_REFINEMENT_TRANSCRIPT,
+            empty_refinement,
+            SAMPLE_INSTRUCTIONS_READY_TRANSCRIPT,
+        ]
+
+        async def mock_execute(cmd, prompt, issue_number):
+            nonlocal call_count
+            call_count += 1
+            return responses[call_count - 1]
+
+        with patch.object(judge, "_execute", side_effect=mock_execute):
+            result = await judge.judge(issue_number=42, pr_number=101, diff="diff")
+
+        assert result is not None
+        assert result.refined is False
 
     @pytest.mark.asyncio
     async def test_saves_report(self, tmp_path):
