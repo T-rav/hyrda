@@ -24,6 +24,14 @@ beforeEach(() => {
 // All stages open by default for test visibility
 const allExpanded = Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, true]))
 
+const defaultProps = {
+  intents: [],
+  expandedStages: allExpanded,
+  onToggleStage: () => {},
+  onViewTranscript: () => {},
+  onRequestChanges: () => {},
+}
+
 describe('StreamView stage indicators', () => {
   describe('Status dot colors', () => {
     it('shows green dot when stage has active workers', () => {
@@ -40,15 +48,7 @@ describe('StreamView stage indicators', () => {
           { name: 'triage', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const dot = screen.getByTestId('stage-dot-triage')
       expect(dot.style.background).toBe('var(--green)')
     })
@@ -60,15 +60,7 @@ describe('StreamView stage indicators', () => {
           { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const dot = screen.getByTestId('stage-dot-plan')
       expect(dot.style.background).toBe('var(--yellow)')
     })
@@ -80,15 +72,7 @@ describe('StreamView stage indicators', () => {
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const dot = screen.getByTestId('stage-dot-implement')
       expect(dot.style.background).toBe('var(--red)')
     })
@@ -98,15 +82,7 @@ describe('StreamView stage indicators', () => {
         ...defaultHydra,
         backgroundWorkers: [],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const dot = screen.getByTestId('stage-dot-triage')
       expect(dot.style.background).toBe('var(--yellow)')
     })
@@ -120,15 +96,7 @@ describe('StreamView stage indicators', () => {
           { name: 'review', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       expect(screen.getByTestId('stage-disabled-review')).toHaveTextContent('Disabled')
     })
 
@@ -139,15 +107,7 @@ describe('StreamView stage indicators', () => {
           { name: 'review', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       expect(screen.queryByTestId('stage-disabled-review')).not.toBeInTheDocument()
     })
   })
@@ -160,15 +120,7 @@ describe('StreamView stage indicators', () => {
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const section = screen.getByTestId('stage-section-implement')
       expect(section.style.opacity).toBe('0.5')
     })
@@ -180,15 +132,7 @@ describe('StreamView stage indicators', () => {
           { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const section = screen.getByTestId('stage-section-implement')
       expect(section.style.opacity).toBe('1')
     })
@@ -206,15 +150,7 @@ describe('StreamView stage indicators', () => {
           { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       const count = screen.getByTestId('stage-workers-implement')
       expect(count).toHaveTextContent('2')
     })
@@ -226,30 +162,14 @@ describe('StreamView stage indicators', () => {
           { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       expect(screen.queryByTestId('stage-workers-plan')).not.toBeInTheDocument()
     })
   })
 
   describe('Merged stage exclusion', () => {
     it('does not render status dot for merged stage', () => {
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       expect(screen.queryByTestId('stage-dot-merged')).not.toBeInTheDocument()
     })
   })
@@ -268,15 +188,7 @@ describe('StreamView stage indicators', () => {
           { name: 'review', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
       })
-      render(
-        <StreamView
-          intents={[]}
-          expandedStages={allExpanded}
-          onToggleStage={() => {}}
-          onViewTranscript={() => {}}
-          onRequestChanges={() => {}}
-        />
-      )
+      render(<StreamView {...defaultProps} />)
       // Triage: enabled + active worker = green
       expect(screen.getByTestId('stage-dot-triage').style.background).toBe('var(--green)')
       // Plan: enabled + no workers = yellow
