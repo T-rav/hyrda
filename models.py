@@ -136,7 +136,7 @@ class PRInfo(BaseModel):
     draft: bool = False
 
 
-# --- Reviews ---
+# --- HITL ---
 
 
 class HITLResult(BaseModel):
