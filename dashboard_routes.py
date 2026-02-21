@@ -108,6 +108,17 @@ def create_router(
             if orch:
                 data["status"] = orch.get_hitl_status(item.issue)
             cause = state.get_hitl_cause(item.issue)
+            if not cause:
+                origin = state.get_hitl_origin(item.issue)
+                if origin:
+                    if origin in config.improve_label:
+                        cause = "Self-improvement proposal"
+                    elif origin in config.review_label:
+                        cause = "Review escalation"
+                    elif origin in config.find_label:
+                        cause = "Triage escalation"
+                    else:
+                        cause = "Escalation (reason not recorded)"
             if cause:
                 data["cause"] = cause
             enriched.append(data)
