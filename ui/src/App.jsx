@@ -102,7 +102,6 @@ function AppContent() {
         onStop={handleStop}
         phase={phase}
         workers={workers}
-        config={config}
       />
 
       <div style={styles.main}>

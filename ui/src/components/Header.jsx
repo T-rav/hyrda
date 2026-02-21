@@ -4,12 +4,11 @@ import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
 const toUpper = s => ({ ...s, label: s.label.toUpperCase() })
 
-const STAGES = PIPELINE_STAGES.filter(s => s.role != null).map(toUpper)
 const SESSION_STAGES = PIPELINE_STAGES.map(toUpper)
 
 export function Header({
   sessionCounts, connected, orchestratorStatus,
-  onStart, onStop, phase, workers, config,
+  onStart, onStop, phase, workers,
 }) {
   const workerList = Object.values(workers || {})
   const hasActiveWorkers = workerList.some(w => ACTIVE_STATUSES.includes(w.status))
@@ -51,14 +50,6 @@ export function Header({
     failed: workerList.filter(w => w.status === 'failed').length,
   }
 
-  // Count active workers per role for the stage pills
-  const activeByRole = {}
-  for (const w of workerList) {
-    if (ACTIVE_STATUSES.includes(w.status) && w.role) {
-      activeByRole[w.role] = (activeByRole[w.role] || 0) + 1
-    }
-  }
-
   return (
     <header style={styles.header}>
       <div style={styles.left}>
@@ -94,26 +85,6 @@ export function Header({
             <span style={styles.workloadFailed}>{workload.failed} failed</span>
           </div>
         </div>
-        <div style={styles.pills}>
-          {STAGES.map((stage, i) => {
-            const maxCount = stage.configKey && config ? config[stage.configKey] : 1
-            const activeCount = stage.role ? (activeByRole[stage.role] || 0) : 0
-            const lit = isRunning
-            return (
-              <React.Fragment key={stage.key}>
-                {i > 0 && (
-                  <div style={headerConnectorStyles[stage.key][lit ? 'lit' : 'dim']} />
-                )}
-                <div style={pillStyles[stage.key][lit ? 'lit' : 'dim']}>
-                  {stage.label}
-                  <span style={lit ? countLit : countDim}>
-                    {isRunning ? `${activeCount}/${maxCount}` : maxCount}
-                  </span>
-                </div>
-              </React.Fragment>
-            )
-          })}
-        </div>
       </div>
       <div style={styles.controls}>
         {canStart && (
@@ -146,12 +117,12 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px 20px',
+    padding: '16px 20px',
     background: theme.surface,
     borderBottom: `1px solid ${theme.border}`,
   },
   left: { display: 'flex', alignItems: 'flex-end', gap: 8, flexShrink: 0 },
-  logoImg: { width: 56, height: 56 },
+  logoImg: { width: 56, height: 56, marginTop: 10 },
   logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
   subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12 },
@@ -175,7 +146,7 @@ const styles = {
   },
   sessionLabel: {
     color: theme.textMuted,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
@@ -187,9 +158,9 @@ const styles = {
     flexWrap: 'wrap',
   },
   sessionPill: {
-    padding: '2px 8px',
+    padding: '3px 10px',
     borderRadius: 10,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: 600,
     textTransform: 'uppercase',
     border: '1px solid',
@@ -201,8 +172,8 @@ const styles = {
   sessionCount: {
     background: theme.overlay,
     borderRadius: 6,
-    padding: '0px 5px',
-    fontSize: 9,
+    padding: '1px 6px',
+    fontSize: 11,
     fontWeight: 700,
   },
   sessionConnector: {
@@ -214,38 +185,13 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    fontSize: 10,
+    fontSize: 12,
     color: theme.textMuted,
   },
   workloadSep: { color: theme.border },
   workloadActive: { color: theme.accent },
   workloadDone: { color: theme.green },
   workloadFailed: { color: theme.red },
-  pills: { display: 'flex', alignItems: 'center', gap: 0 },
-  pill: {
-    padding: '2px 8px',
-    borderRadius: 10,
-    fontSize: 10,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    border: '1px solid',
-    whiteSpace: 'nowrap',
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  connector: {
-    width: 24,
-    height: 2,
-    flexShrink: 0,
-  },
-  count: {
-    background: theme.overlay,
-    borderRadius: 6,
-    padding: '0px 5px',
-    fontSize: 9,
-    fontWeight: 700,
-  },
   controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10, flexShrink: 0 },
   startBtn: {
     padding: '4px 14px',
@@ -281,21 +227,6 @@ const styles = {
 export const dotConnected = { ...styles.dot, background: theme.green }
 export const dotDisconnected = { ...styles.dot, background: theme.red }
 
-// Pre-computed per-stage pill/connector variants (avoids object spread in .map())
-export const pillStyles = Object.fromEntries(
-  STAGES.map(s => [s.key, {
-    lit: { ...styles.pill, background: s.color, color: theme.bg, borderColor: s.color },
-    dim: { ...styles.pill, background: s.color + '20', color: s.color + '99', borderColor: s.color + '55' },
-  }])
-)
-
-export const headerConnectorStyles = Object.fromEntries(
-  STAGES.map(s => [s.key, {
-    lit: { ...styles.connector, background: s.color },
-    dim: { ...styles.connector, background: s.color + '55' },
-  }])
-)
-
 // Pre-computed session pill styles per stage
 export const sessionPillStyles = Object.fromEntries(
   SESSION_STAGES.map(s => [s.key, {
@@ -313,10 +244,6 @@ export const sessionConnectorStyles = Object.fromEntries(
     background: s.color + '55',
   }])
 )
-
-// Pre-computed count style variants
-export const countLit = { ...styles.count, opacity: 1 }
-export const countDim = { ...styles.count, opacity: 0.6 }
 
 // Pre-computed start button variants
 export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
