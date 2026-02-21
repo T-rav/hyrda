@@ -66,6 +66,18 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_review_fix_attempts: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Max review fix-and-retry cycles before HITL escalation",
+    )
+    min_review_findings: int = Field(
+        default=3,
+        ge=0,
+        le=20,
+        description="Minimum review findings threshold for adversarial review",
+    )
     max_merge_conflict_fix_attempts: int = Field(
         default=3,
         ge=0,
@@ -307,6 +319,24 @@ class HydraConfig(BaseModel):
             parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
+
+        # Review fix attempts override
+        if self.max_review_fix_attempts == 2:  # still at default
+            env_review_fix = os.environ.get("HYDRA_MAX_REVIEW_FIX_ATTEMPTS")
+            if env_review_fix is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_review_fix_attempts", int(env_review_fix)
+                    )
+
+        # Min review findings override
+        if self.min_review_findings == 3:  # still at default
+            env_min_findings = os.environ.get("HYDRA_MIN_REVIEW_FINDINGS")
+            if env_min_findings is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "min_review_findings", int(env_min_findings)
+                    )
 
         # Agent prompt config overrides
         env_test_cmd = os.environ.get("HYDRA_TEST_COMMAND")
