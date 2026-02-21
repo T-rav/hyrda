@@ -10,6 +10,7 @@ from pathlib import Path
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, WorkerResult, WorkerStatus
+from review_insights import ReviewInsightStore, get_common_feedback_section
 from runner_utils import stream_claude_process, terminate_processes
 
 logger = logging.getLogger("hydra.agent")
@@ -26,6 +27,7 @@ class AgentRunner:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
+        self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
 
     async def run(
         self,
@@ -152,6 +154,17 @@ class AgentRunner:
                 remaining.append(c)
         return plan, remaining
 
+    def _get_review_feedback_section(self) -> str:
+        """Build a common review feedback section from recent review data.
+
+        Returns an empty string if no data is available or on any error.
+        """
+        try:
+            recent = self._insights.load_recent(self._config.review_insight_window)
+            return get_common_feedback_section(recent)
+        except Exception:  # noqa: BLE001
+            return ""
+
     def _build_prompt(self, issue: GitHubIssue) -> str:
         """Build the implementation prompt for the agent."""
         plan_comment, other_comments = self._extract_plan_comment(issue.comments)
@@ -170,6 +183,8 @@ class AgentRunner:
             formatted = "\n".join(f"- {c}" for c in other_comments)
             comments_section = f"\n\n## Discussion\n{formatted}"
 
+        feedback_section = self._get_review_feedback_section()
+
         return f"""You are implementing GitHub issue #{issue.number}.
 
 ## Issue: {issue.title}
@@ -186,7 +201,7 @@ class AgentRunner:
 6. Run `make test-fast` to quickly check for test failures.
 7. Run `make quality` to verify the full quality gate (lint + typecheck + security + tests).
 8. Commit your changes with a message: "Fixes #{issue.number}: <concise summary>"
-
+{feedback_section}
 ## UI Guidelines
 
 - Before creating UI components, search `ui/src/components/` for existing patterns to reuse.

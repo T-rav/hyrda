@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { reducer } from '../useHydraSocket'
+import { MAX_EVENTS } from '../../constants'
 
 const initialState = {
   connected: false,
@@ -20,6 +21,8 @@ const initialState = {
   events: [],
   hitlItems: [],
   humanInputRequests: {},
+  backgroundWorkers: [],
+  metrics: null,
 }
 
 describe('useHydraSocket reducer', () => {
@@ -345,6 +348,311 @@ describe('useHydraSocket reducer', () => {
       expect(state.sessionPlanned).toBe(1)
       expect(state.sessionImplemented).toBe(0)
       expect(state.sessionReviewed).toBe(0)
+    })
+  })
+
+  describe('background worker status', () => {
+    it('initial state includes backgroundWorkers and metrics', () => {
+      expect(initialState.backgroundWorkers).toEqual([])
+      expect(initialState.metrics).toBeNull()
+    })
+
+    it('background_worker_status event updates backgroundWorkers array', () => {
+      const next = reducer(initialState, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: { count: 5 } },
+        timestamp: '2026-01-01T00:00:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].name).toBe('memory_sync')
+      expect(next.backgroundWorkers[0].status).toBe('ok')
+    })
+
+    it('background_worker_status event for existing worker replaces entry', () => {
+      const state = {
+        ...initialState,
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok', last_run: '2026-01-01T00:00:00Z', details: {} }],
+      }
+      const next = reducer(state, {
+        type: 'background_worker_status',
+        data: { worker: 'memory_sync', status: 'error', last_run: '2026-01-01T00:01:00Z', details: {} },
+        timestamp: '2026-01-01T00:01:00Z',
+      })
+      expect(next.backgroundWorkers).toHaveLength(1)
+      expect(next.backgroundWorkers[0].status).toBe('error')
+    })
+
+    it('BACKGROUND_WORKERS action sets the full array', () => {
+      const workers = [
+        { name: 'memory_sync', status: 'ok', last_run: null, details: {} },
+        { name: 'metrics', status: 'disabled', last_run: null, details: {} },
+      ]
+      const next = reducer(initialState, { type: 'BACKGROUND_WORKERS', data: workers })
+      expect(next.backgroundWorkers).toEqual(workers)
+    })
+
+    it('METRICS action sets metrics state', () => {
+      const metricsData = { lifetime: { issues_completed: 5, prs_merged: 3 }, rates: { merge_rate: 0.6 } }
+      const next = reducer(initialState, { type: 'METRICS', data: metricsData })
+      expect(next.metrics).toEqual(metricsData)
+    })
+
+    it('phase_change does NOT reset backgroundWorkers on new run', () => {
+      const state = {
+        ...initialState,
+        phase: 'idle',
+        backgroundWorkers: [{ name: 'memory_sync', status: 'ok' }],
+        metrics: { lifetime: { issues_completed: 1 }, rates: {} },
+      }
+      const next = reducer(state, {
+        type: 'phase_change',
+        data: { phase: 'plan' },
+        timestamp: new Date().toISOString(),
+      })
+      expect(next.backgroundWorkers).toEqual([{ name: 'memory_sync', status: 'ok' }])
+      expect(next.metrics).toEqual({ lifetime: { issues_completed: 1 }, rates: {} })
+    })
+  })
+
+  describe('event cap (MAX_EVENTS)', () => {
+    it('addEvent caps events at MAX_EVENTS', () => {
+      const state = {
+        ...initialState,
+        events: Array.from({ length: MAX_EVENTS }, (_, i) => ({
+          type: 'worker_update',
+          timestamp: `2024-01-01T00:00:${String(i).padStart(6, '0')}Z`,
+          data: {},
+        })),
+      }
+      const next = reducer(state, {
+        type: 'error',
+        data: { message: 'overflow' },
+        timestamp: '2024-01-02T00:00:00Z',
+      })
+      expect(next.events).toHaveLength(MAX_EVENTS)
+      expect(next.events[0].type).toBe('error')
+    })
+
+    it('addEvent does not truncate below MAX_EVENTS', () => {
+      const state = { ...initialState, events: [] }
+      const next = reducer(state, {
+        type: 'error',
+        data: { message: 'test' },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.events).toHaveLength(1)
+    })
+  })
+
+  describe('BACKFILL_EVENTS', () => {
+    it('merges new events without duplicating existing', () => {
+      const existing = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:02Z', data: { batch: 2 } },
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+      ]
+      const state = { ...initialState, events: existing }
+      const backfill = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:00Z', data: { phase: 'plan' } },
+      ]
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(3)
+      expect(next.events[0].timestamp).toBe('2024-01-01T00:00:02Z')
+      expect(next.events[2].timestamp).toBe('2024-01-01T00:00:00Z')
+    })
+
+    it('populates empty state', () => {
+      const backfill = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: { batch: 1 } },
+      ]
+      const next = reducer(initialState, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(1)
+      expect(next.events[0].type).toBe('batch_start')
+    })
+
+    it('with empty data is a no-op', () => {
+      const state = {
+        ...initialState,
+        events: [
+          { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: {} },
+        ],
+      }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: [] })
+      expect(next.events).toHaveLength(1)
+    })
+
+    it('caps combined events at MAX_EVENTS', () => {
+      const existing = Array.from({ length: 3000 }, (_, i) => ({
+        type: 'worker_update',
+        timestamp: `2024-01-01T01:00:${String(i).padStart(6, '0')}Z`,
+        data: {},
+      }))
+      const backfill = Array.from({ length: 3000 }, (_, i) => ({
+        type: 'phase_change',
+        timestamp: `2024-01-01T00:00:${String(i).padStart(6, '0')}Z`,
+        data: {},
+      }))
+      const state = { ...initialState, events: existing }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(MAX_EVENTS)
+    })
+
+    it('sorts merged events newest-first', () => {
+      const existing = [
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:03Z', data: {} },
+        { type: 'batch_start', timestamp: '2024-01-01T00:00:01Z', data: {} },
+      ]
+      const backfill = [
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:04Z', data: {} },
+        { type: 'phase_change', timestamp: '2024-01-01T00:00:02Z', data: {} },
+      ]
+      const state = { ...initialState, events: existing }
+      const next = reducer(state, { type: 'BACKFILL_EVENTS', data: backfill })
+      expect(next.events).toHaveLength(4)
+      expect(next.events.map(e => e.timestamp)).toEqual([
+        '2024-01-01T00:00:04Z',
+        '2024-01-01T00:00:03Z',
+        '2024-01-01T00:00:02Z',
+        '2024-01-01T00:00:01Z',
+      ])
+    })
+  })
+
+  describe('PR deduplication', () => {
+    it('EXISTING_PRS replaces state instead of prepending', () => {
+      const state = { ...initialState, prs: [{ pr: 1 }, { pr: 2 }] }
+      const next = reducer(state, { type: 'EXISTING_PRS', data: [{ pr: 3 }, { pr: 4 }] })
+      expect(next.prs).toEqual([{ pr: 3 }, { pr: 4 }])
+    })
+
+    it('EXISTING_PRS on reconnect does not duplicate', () => {
+      const data = [{ pr: 10 }, { pr: 20 }]
+      let state = reducer(initialState, { type: 'EXISTING_PRS', data })
+      state = reducer(state, { type: 'EXISTING_PRS', data })
+      expect(state.prs).toHaveLength(2)
+      expect(state.prs).toEqual(data)
+    })
+
+    it('pr_created does not add duplicate PR', () => {
+      const state = { ...initialState, prs: [{ pr: 42, issue: 1 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 42, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(1)
+      expect(next.sessionPrsCount).toBe(1)
+    })
+
+    it('pr_created adds new PR when not a duplicate', () => {
+      const state = { ...initialState, prs: [{ pr: 42 }], sessionPrsCount: 1 }
+      const next = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 43, issue: 2 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(next.prs).toHaveLength(2)
+      expect(next.sessionPrsCount).toBe(2)
+    })
+
+    it('pr_created deduplicates after EXISTING_PRS backfill', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 10 }, { pr: 20 }],
+      })
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 10, issue: 1 },
+        timestamp: '2024-01-01T00:00:00Z',
+      })
+      expect(state.prs).toHaveLength(2)
+      expect(state.sessionPrsCount).toBe(0)
+    })
+
+    it('WebSocket reconnect with overlapping data does not inflate count', () => {
+      let state = reducer(initialState, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }],
+      })
+      // Simulate a pr_created event during the session
+      state = reducer(state, {
+        type: 'pr_created',
+        data: { pr: 4, issue: 4 },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(state.prs).toHaveLength(4)
+      // Simulate reconnect — EXISTING_PRS replaces with fresh API data
+      state = reducer(state, {
+        type: 'EXISTING_PRS',
+        data: [{ pr: 1 }, { pr: 2 }, { pr: 3 }, { pr: 4 }],
+      })
+      expect(state.prs).toHaveLength(4)
+    })
+  })
+
+  describe('orchestrator_status clears stale session state', () => {
+    const staleState = {
+      ...initialState,
+      orchestratorStatus: 'running',
+      workers: {
+        1: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #1', branch: '', transcript: [], pr: null },
+        'plan-2': { status: 'planning', worker: 2, role: 'planner', title: 'Plan Issue #2', branch: '', transcript: [], pr: null },
+      },
+      sessionTriaged: 3,
+      sessionPlanned: 2,
+      sessionImplemented: 5,
+      sessionReviewed: 4,
+      mergedCount: 1,
+      sessionPrsCount: 3,
+    }
+
+    it('clears workers and session stats when status transitions to idle', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'idle' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('idle')
+      expect(next.workers).toEqual({})
+      expect(next.sessionTriaged).toBe(0)
+      expect(next.sessionPlanned).toBe(0)
+      expect(next.sessionImplemented).toBe(0)
+      expect(next.sessionReviewed).toBe(0)
+      expect(next.mergedCount).toBe(0)
+      expect(next.sessionPrsCount).toBe(0)
+    })
+
+    it('clears workers and session stats when status transitions to done', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'done' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('done')
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
+    })
+
+    it('preserves workers and session stats when status is running', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'running' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('running')
+      expect(Object.keys(next.workers)).toHaveLength(2)
+      expect(next.sessionImplemented).toBe(5)
+    })
+
+    it('clears workers and session stats when status is stopping', () => {
+      const next = reducer(staleState, {
+        type: 'orchestrator_status',
+        data: { status: 'stopping' },
+        timestamp: '2024-01-01T00:00:01Z',
+      })
+      expect(next.orchestratorStatus).toBe('stopping')
+      expect(next.workers).toEqual({})
+      expect(next.sessionImplemented).toBe(0)
     })
   })
 })
