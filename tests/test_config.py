@@ -1567,3 +1567,154 @@ class TestWorktreePathForIssue:
             state_file=tmp_path / "s.json",
         )
         assert cfg.worktree_path_for_issue(7) == custom_base / "issue-7"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – test_command field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigTestCommand:
+    """Tests for the test_command config field."""
+
+    def test_test_command_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "make test"
+
+    def test_test_command_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            test_command="npm test",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "npm test"
+
+    def test_test_command_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TEST_COMMAND", "pytest -x")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "pytest -x"
+
+    def test_test_command_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TEST_COMMAND", "pytest -x")
+        cfg = HydraConfig(
+            test_command="cargo test",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.test_command == "cargo test"
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – max_issue_body_chars field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxIssueBodyChars:
+    """Tests for the max_issue_body_chars config field."""
+
+    def test_max_issue_body_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 10_000
+
+    def test_max_issue_body_chars_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_issue_body_chars=5_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 5_000
+
+    def test_max_issue_body_chars_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_MAX_ISSUE_BODY_CHARS env var should override the default."""
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 20_000
+
+    def test_max_issue_body_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_ISSUE_BODY_CHARS", "20000")
+        cfg = HydraConfig(
+            max_issue_body_chars=5_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_issue_body_chars == 5_000
+
+
+# ---------------------------------------------------------------------------
+# HydraConfig – max_review_diff_chars field
+# ---------------------------------------------------------------------------
+
+
+class TestHydraConfigMaxReviewDiffChars:
+    """Tests for the max_review_diff_chars config field."""
+
+    def test_max_review_diff_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 15_000
+
+    def test_max_review_diff_chars_custom(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_review_diff_chars=30_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 30_000
+
+    def test_max_review_diff_chars_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_MAX_REVIEW_DIFF_CHARS env var should override the default."""
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 50_000
+
+    def test_max_review_diff_chars_explicit_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit value should take precedence over env var."""
+        monkeypatch.setenv("HYDRA_MAX_REVIEW_DIFF_CHARS", "50000")
+        cfg = HydraConfig(
+            max_review_diff_chars=25_000,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_review_diff_chars == 25_000
