@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels
+.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels hot
 
 help:
 	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
@@ -55,6 +55,7 @@ help:
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
+	@echo "  make hot            Send config update to running instance"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
 	@echo "  READY_LABEL      GitHub issue label (default: hydra-ready)"
@@ -190,6 +191,23 @@ ensure-labels:
 	@gh label create "hydra-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
 	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
 	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
+
+hot:
+	@echo "$(BLUE)Sending config update to running Hydra instance on :$(PORT)...$(RESET)"
+	@JSON='{"persist": true'; \
+	[ "$(origin WORKERS)" = "command line" ] && JSON="$$JSON, \"max_workers\": $(WORKERS)"; \
+	[ "$(origin MODEL)" = "command line" ] && JSON="$$JSON, \"model\": \"$(MODEL)\""; \
+	[ "$(origin BUDGET)" = "command line" ] && JSON="$$JSON, \"max_budget_usd\": $(BUDGET)"; \
+	[ "$(origin BATCH_SIZE)" = "command line" ] && JSON="$$JSON, \"batch_size\": $(BATCH_SIZE)"; \
+	[ "$(origin REVIEWERS)" = "command line" ] && JSON="$$JSON, \"max_reviewers\": $(REVIEWERS)"; \
+	[ "$(origin REVIEW_MODEL)" = "command line" ] && JSON="$$JSON, \"review_model\": \"$(REVIEW_MODEL)\""; \
+	[ "$(origin PLANNERS)" = "command line" ] && JSON="$$JSON, \"max_planners\": $(PLANNERS)"; \
+	[ "$(origin HITL_WORKERS)" = "command line" ] && JSON="$$JSON, \"max_hitl_workers\": $(HITL_WORKERS)"; \
+	JSON="$$JSON}"; \
+	curl -s -X PATCH "http://localhost:$(PORT)/api/control/config" \
+		-H "Content-Type: application/json" \
+		-d "$$JSON" | python -m json.tool
+	@echo "$(GREEN)Config update sent$(RESET)"
 
 ui:
 	@echo "$(BLUE)Building Hydra React dashboard...$(RESET)"

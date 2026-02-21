@@ -90,12 +90,14 @@ class ConfigFactory:
         worktree_base: Path | None = None,
         state_file: Path | None = None,
         event_log_path: Path | None = None,
+        config_file: Path | None = None,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
 
         root = repo_root or Path("/tmp/hydra-test-repo")
         return HydraConfig(
+            config_file=config_file,
             ready_label=ready_label if ready_label is not None else ["test-label"],
             batch_size=batch_size,
             max_workers=max_workers,

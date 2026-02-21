@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import contextlib
+import json
+import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger("hydra.config")
 
 
 class HydraConfig(BaseModel):
@@ -234,6 +239,12 @@ class HydraConfig(BaseModel):
         description="Days of event history to retain during rotation",
     )
 
+    # Config file persistence
+    config_file: Path | None = Field(
+        default=None,
+        description="Path to JSON config file for persisting runtime changes",
+    )
+
     # Dashboard
     dashboard_port: int = Field(
         default=5555, ge=1024, le=65535, description="Dashboard web UI port"
@@ -457,3 +468,38 @@ def _detect_repo_slug(repo_root: Path) -> str:
         return ""
     except (FileNotFoundError, OSError):
         return ""
+
+
+def load_config_file(path: Path | None) -> dict[str, Any]:
+    """Load a JSON config file and return its contents as a dict.
+
+    Returns an empty dict if the file is missing, unreadable, or invalid.
+    """
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
+    """Save config values to a JSON file, merging with existing contents."""
+    if path is None:
+        return
+    existing: dict[str, Any] = {}
+    try:
+        existing = json.loads(path.read_text())
+        if not isinstance(existing, dict):
+            existing = {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    existing.update(values)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing, indent=2) + "\n")
+    except OSError:
+        logger.warning("Failed to write config file %s", path)
