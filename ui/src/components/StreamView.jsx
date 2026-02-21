@@ -30,9 +30,9 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
         <span style={{ fontSize: 10 }}>{open ? '▾' : '▸'}</span>
         <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
         <span style={sectionCountStyles[stage.key]}>
-          {activeCount > 0 && <span style={styles.activeBadge}>{activeCount} active</span>}
-          {queuedCount > 0 && <span>{activeCount > 0 ? ' · ' : ''}{queuedCount} queued</span>}
-          {workerCount > 0 && <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>}
+          <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
+          <span> · {queuedCount} queued</span>
+          <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
         </span>
       </div>
       {open && issues.map(issue => (
