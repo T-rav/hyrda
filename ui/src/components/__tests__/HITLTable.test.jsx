@@ -230,6 +230,20 @@ describe('HITLTable component', () => {
     expect(onRefresh).toHaveBeenCalledOnce()
   })
 
+  it('renders Refresh button in empty state and calls onRefresh on click', () => {
+    const onRefresh = vi.fn()
+    render(<HITLTable items={[]} onRefresh={onRefresh} />)
+    const btn = screen.getByText('Refresh')
+    expect(btn).toBeInTheDocument()
+    fireEvent.click(btn)
+    expect(onRefresh).toHaveBeenCalledOnce()
+  })
+
+  it('shows muted HITL header text in empty state', () => {
+    render(<HITLTable items={[]} onRefresh={() => {}} />)
+    expect(screen.getByText('HITL')).toBeInTheDocument()
+  })
+
   it('does not fetch data on mount (no side effects)', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     render(<HITLTable items={[]} onRefresh={() => {}} />)
