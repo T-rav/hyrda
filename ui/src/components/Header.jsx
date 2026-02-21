@@ -122,7 +122,7 @@ const styles = {
     borderBottom: `1px solid ${theme.border}`,
   },
   left: { display: 'flex', alignItems: 'flex-end', gap: 8, flexShrink: 0 },
-  logoImg: { width: 64, height: 64 },
+  logoImg: { height: 56, width: 'auto' },
   logoGroup: { display: 'flex', flexDirection: 'column' },
   logo: { fontSize: 18, fontWeight: 700, color: theme.accent },
   subtitle: { color: theme.textMuted, fontWeight: 400, fontSize: 12 },
