@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles } from '../WorkerList'
+import { WorkerList, cardStyle, cardActiveStyle, statusBadgeStyles, sectionHeaderStyles, sectionLabelStyles } from '../WorkerList'
+import { PIPELINE_STAGES } from '../../constants'
 
 const statusColors = {
   queued:     { bg: 'var(--muted-subtle)',  fg: 'var(--text-muted)' },
@@ -54,14 +55,54 @@ describe('WorkerList pre-computed styles', () => {
   })
 })
 
+const SIDEBAR_STAGES = PIPELINE_STAGES.filter(s => s.role != null)
+
+describe('WorkerList section header styles', () => {
+  it('sectionHeaderStyles has an entry for every sidebar pipeline stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      expect(sectionHeaderStyles).toHaveProperty(stage.key)
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('background')
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('border')
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('borderLeft')
+      expect(sectionHeaderStyles[stage.key]).toHaveProperty('borderRadius', 6)
+    }
+  })
+
+  it('each sectionHeaderStyle uses the correct stage color', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const headerStyle = sectionHeaderStyles[stage.key]
+      expect(headerStyle.background).toBe(stage.subtleColor)
+      expect(headerStyle.borderLeft).toContain(stage.color)
+      expect(headerStyle.border).toContain(stage.color)
+    }
+  })
+
+  it('sectionLabelStyles has correct color per stage', () => {
+    for (const stage of SIDEBAR_STAGES) {
+      const labelStyle = sectionLabelStyles[stage.key]
+      expect(labelStyle.color).toBe(stage.color)
+      expect(labelStyle).toMatchObject({
+        fontSize: 11,
+        fontWeight: 600,
+        textTransform: 'uppercase',
+      })
+    }
+  })
+
+  it('section style objects are referentially stable', () => {
+    expect(sectionHeaderStyles.triage).toBe(sectionHeaderStyles.triage)
+    expect(sectionLabelStyles.triage).toBe(sectionLabelStyles.triage)
+  })
+})
+
 describe('WorkerList component', () => {
   it('renders without errors with empty workers', () => {
     render(<WorkerList workers={{}} selectedWorker={null} onSelect={() => {}} />)
-    // Section headers should still render
+    // Section headers should render pipeline stage names
     expect(screen.getByText('Triage')).toBeInTheDocument()
-    expect(screen.getByText('Planners')).toBeInTheDocument()
-    expect(screen.getByText('Implementers')).toBeInTheDocument()
-    expect(screen.getByText('Reviewers')).toBeInTheDocument()
+    expect(screen.getByText('Plan')).toBeInTheDocument()
+    expect(screen.getByText('Implement')).toBeInTheDocument()
+    expect(screen.getByText('Review')).toBeInTheDocument()
   })
 
   it('renders workers with reviewing and planning statuses', () => {
@@ -88,7 +129,7 @@ describe('WorkerList component', () => {
       2: { status: 'queued', title: 'Queued issue', branch: '', worker: 1, role: 'implementer' },
     }
     render(<WorkerList workers={workers} selectedWorker={null} onSelect={() => {}} />)
-    // Implementers section should show 1/2 (1 active out of 2 total)
+    // Implement section should show 1/2 (1 active out of 2 total)
     expect(screen.getByText('1/2')).toBeInTheDocument()
   })
 

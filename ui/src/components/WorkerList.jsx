@@ -1,6 +1,15 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
+
+const SIDEBAR_STAGES = PIPELINE_STAGES.filter(s => s.role != null)
+
+const ROLE_FILTERS = {
+  triage: ([, w]) => w.role === 'triage',
+  planner: ([, w]) => w.role === 'planner',
+  implementer: ([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage',
+  reviewer: ([, w]) => w.role === 'reviewer',
+}
 
 const statusColors = {
   queued:              { bg: theme.mutedSubtle,  fg: theme.textMuted },
@@ -23,10 +32,6 @@ const statusColors = {
 
 export function WorkerList({ workers, selectedWorker, onSelect, humanInputRequests = {} }) {
   const allEntries = Object.entries(workers)
-  const triagers = allEntries.filter(([, w]) => w.role === 'triage')
-  const planners = allEntries.filter(([, w]) => w.role === 'planner')
-  const implementers = allEntries.filter(([, w]) => w.role !== 'reviewer' && w.role !== 'planner' && w.role !== 'triage')
-  const reviewers = allEntries.filter(([, w]) => w.role === 'reviewer')
 
   return (
     <div style={styles.sidebar}>
@@ -36,39 +41,21 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
           50% { opacity: 0.4; }
         }
       `}</style>
-      <RoleSection
-        label="Triage"
-        entries={triagers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Planners"
-        entries={planners}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Implementers"
-        entries={implementers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
-      <RoleSection
-        label="Reviewers"
-        entries={reviewers}
-        selectedWorker={selectedWorker}
-        onSelect={onSelect}
-        humanInputRequests={humanInputRequests}
-      />
+      {SIDEBAR_STAGES.map(stage => (
+        <RoleSection
+          key={stage.key}
+          stage={stage}
+          entries={allEntries.filter(ROLE_FILTERS[stage.role])}
+          selectedWorker={selectedWorker}
+          onSelect={onSelect}
+          humanInputRequests={humanInputRequests}
+        />
+      ))}
     </div>
   )
 }
 
-function RoleSection({ label, entries, selectedWorker, onSelect, humanInputRequests }) {
+function RoleSection({ stage, entries, selectedWorker, onSelect, humanInputRequests }) {
   const [collapsed, setCollapsed] = useState(false)
   const sorted = [...entries].sort((a, b) => {
     // Sort numerically where possible, string keys (review-*) at end
@@ -86,11 +73,11 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
   return (
     <>
       <div
-        style={styles.sectionHeader}
+        style={sectionHeaderStyles[stage.key]}
         onClick={() => setCollapsed(!collapsed)}
       >
         <span style={styles.chevron}>{collapsed ? '\u25b6' : '\u25bc'}</span>
-        <span style={styles.sectionLabel}>{label}</span>
+        <span style={sectionLabelStyles[stage.key]}>{stage.label}</span>
         <span style={styles.sectionCount}>{active}/{total}</span>
       </div>
       {!collapsed && sorted.map(([num, w]) => {
@@ -126,30 +113,50 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
   )
 }
 
+// Pre-computed per-stage section header styles (avoids object spread in .map())
+const sectionHeaderBase = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 12px',
+  margin: '8px 8px 4px',
+  cursor: 'pointer',
+  userSelect: 'none',
+  borderRadius: 6,
+}
+
+const sectionLabelBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+}
+
+export const sectionHeaderStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionHeaderBase,
+    background: s.subtleColor,
+    border: `1px solid ${s.color}33`,
+    borderLeft: `3px solid ${s.color}`,
+  }])
+)
+
+export const sectionLabelStyles = Object.fromEntries(
+  SIDEBAR_STAGES.map(s => [s.key, {
+    ...sectionLabelBase,
+    color: s.color,
+  }])
+)
+
 const styles = {
   sidebar: {
     borderRight: `1px solid ${theme.border}`,
     overflowY: 'auto',
     background: theme.surface,
   },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '10px 16px 6px',
-    cursor: 'pointer',
-    userSelect: 'none',
-  },
   chevron: {
     fontSize: 9,
     color: theme.textMuted,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    color: theme.textMuted,
-    letterSpacing: 0.5,
   },
   sectionCount: {
     fontSize: 11,
