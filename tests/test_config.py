@@ -1047,6 +1047,36 @@ class TestHydraConfigValidationConstraints:
                 state_file=tmp_path / "s.json",
             )
 
+    # max_conflict_fix_attempts: ge=0, le=5
+
+    def test_max_conflict_fix_attempts_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_conflict_fix_attempts == 2
+
+    def test_max_conflict_fix_attempts_zero(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            max_conflict_fix_attempts=0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_conflict_fix_attempts == 0
+
+    def test_max_conflict_fix_attempts_above_maximum_raises(
+        self, tmp_path: Path
+    ) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                max_conflict_fix_attempts=6,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     # min_plan_words: ge=50, le=2000
 
     def test_min_plan_words_default(self, tmp_path: Path) -> None:

@@ -1405,11 +1405,19 @@ class TestResolveMergeConflicts:
         mock_agents._verify_result.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_aborts_merge_on_agent_exception(self, config: HydraConfig) -> None:
-        """On agent exception, should abort merge and return False."""
+    async def test_aborts_merge_on_agent_exception(self, tmp_path: Path) -> None:
+        """On agent exception with zero retries, should abort merge and return False."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(side_effect=RuntimeError("agent crashed"))
-        phase = _make_phase(config, agents=mock_agents)
+        phase = _make_phase(cfg, agents=mock_agents)
         pr = make_pr_info(101, 42)
         issue = make_issue(42)
 
@@ -1417,7 +1425,275 @@ class TestResolveMergeConflicts:
         phase._worktrees.abort_merge = AsyncMock()
 
         result = await phase._resolve_merge_conflicts(
-            pr, issue, config.worktree_base / "issue-42", worker_id=0
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        phase._worktrees.abort_merge.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# _build_conflict_prompt
+# ---------------------------------------------------------------------------
+
+
+class TestBuildConflictPrompt:
+    """Tests for the _build_conflict_prompt method."""
+
+    def test_prompt_without_error(self, config: HydraConfig) -> None:
+        """Base prompt should contain issue number and instructions."""
+        phase = _make_phase(config)
+        issue = make_issue(42, title="Fix widget")
+
+        prompt = phase._build_conflict_prompt(issue)
+
+        assert "#42" in prompt
+        assert "Fix widget" in prompt
+        assert "## Instructions" in prompt
+        assert "Previous Attempt Failed" not in prompt
+
+    def test_prompt_with_error(self, config: HydraConfig) -> None:
+        """Retry prompt should include previous error context."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+
+        prompt = phase._build_conflict_prompt(
+            issue, last_error="lint error: unused import"
+        )
+
+        assert "## Previous Attempt Failed" in prompt
+        assert "lint error: unused import" in prompt
+
+    def test_prompt_truncates_long_error(self, config: HydraConfig) -> None:
+        """Error output longer than 3000 chars should be truncated."""
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        long_error = "x" * 5000
+
+        prompt = phase._build_conflict_prompt(issue, last_error=long_error)
+
+        # The error section should contain at most 3000 chars of the error
+        assert "x" * 3000 in prompt
+        assert "x" * 5000 not in prompt
+
+
+# ---------------------------------------------------------------------------
+# _resolve_merge_conflicts retry loop
+# ---------------------------------------------------------------------------
+
+
+class TestResolveMergeConflictsRetry:
+    """Tests for the retry loop in _resolve_merge_conflicts."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_verify_failure(self, tmp_path: Path) -> None:
+        """Should retry and succeed on second attempt when verify fails first."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "lint failed"), (True, "OK")]
+        )
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        assert mock_agents._execute.await_count == 2
+        # abort_merge called once (before retry attempt 1)
+        phase._worktrees.abort_merge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_exhausts_all_attempts_then_returns_false(
+        self, tmp_path: Path
+    ) -> None:
+        """Should return False after all retry attempts are exhausted."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, "always fails"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        # 1 initial + 2 retries = 3 attempts
+        assert mock_agents._execute.await_count == 3
+        # abort_merge: 2 before retries + 1 final cleanup = 3
+        assert phase._worktrees.abort_merge.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_retry_prompt_includes_previous_error(self, tmp_path: Path) -> None:
+        """The prompt on retry should contain the previous attempt's error output."""
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=1,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(
+            side_effect=[(False, "type error on line 5"), (True, "OK")]
+        )
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        # Second call to _execute should have a prompt containing the error
+        calls = mock_agents._execute.call_args_list
+        assert len(calls) == 2
+        second_prompt = calls[1][0][1]  # positional arg: prompt
+        assert "type error on line 5" in second_prompt
+        assert "Previous Attempt Failed" in second_prompt
+
+    @pytest.mark.asyncio
+    async def test_zero_max_attempts_runs_once(self, tmp_path: Path) -> None:
+        """With max_conflict_fix_attempts=0, should run exactly one attempt."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, "fail"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is False
+        assert mock_agents._execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_clean_merge_on_retry_returns_true(self, tmp_path: Path) -> None:
+        """If merge becomes clean on a retry, should return True without running agent."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._verify_result = AsyncMock(return_value=(False, "fail"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        # First attempt: conflicts. Second attempt: clean merge.
+        phase._worktrees.start_merge_main = AsyncMock(side_effect=[False, True])
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        # Agent ran once (first attempt), not on second (clean merge)
+        assert mock_agents._execute.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_exception_on_non_final_attempt_continues(
+        self, tmp_path: Path
+    ) -> None:
+        """Exception on first attempt should allow retry on next attempt."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=1,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(
+            side_effect=[RuntimeError("crash"), AsyncMock(return_value="ok")]
+        )
+        mock_agents._verify_result = AsyncMock(return_value=(True, "OK"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
+        )
+
+        assert result is True
+        assert mock_agents._execute.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_exception_on_final_attempt_aborts_and_returns_false(
+        self, tmp_path: Path
+    ) -> None:
+        """Exception on the only attempt (max=0) should abort and return False."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_conflict_fix_attempts=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(side_effect=RuntimeError("crash"))
+        phase = _make_phase(cfg, agents=mock_agents)
+        pr = make_pr_info(101, 42)
+        issue = make_issue(42)
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        result = await phase._resolve_merge_conflicts(
+            pr, issue, cfg.worktree_base / "issue-42", worker_id=0
         )
 
         assert result is False

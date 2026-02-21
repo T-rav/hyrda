@@ -408,6 +408,42 @@ class ReviewPhase:
             )
         )
 
+    def _build_conflict_prompt(
+        self, issue: GitHubIssue, last_error: str | None = None
+    ) -> str:
+        """Build the merge-conflict resolution prompt, optionally with error context."""
+        error_section = ""
+        if last_error:
+            error_section = (
+                "\n## Previous Attempt Failed\n\n"
+                "The last conflict resolution attempt failed quality checks:\n\n"
+                f"```\n{last_error[-3000:]}\n```\n\n"
+                "Fix these issues in addition to resolving the conflicts.\n"
+            )
+
+        return (
+            f"The branch for issue #{issue.number} ({issue.title}) has "
+            f"merge conflicts with main.\n\n"
+            "There is a `git merge` in progress with conflict markers "
+            "in the working tree.\n\n"
+            f"{error_section}"
+            "## Instructions\n\n"
+            "1. Run `git diff --name-only --diff-filter=U` to list "
+            "conflicted files.\n"
+            "2. Open each conflicted file, understand both sides of the "
+            "conflict, and resolve the markers.\n"
+            "3. Stage all resolved files with `git add`.\n"
+            "4. Complete the merge with "
+            "`git commit --no-edit`.\n"
+            "5. Run `make quality` to ensure everything passes.\n"
+            "6. If quality fails, fix the issues and commit again.\n\n"
+            "## Rules\n\n"
+            "- Keep the intent of the original PR changes.\n"
+            "- Incorporate upstream (main) changes correctly.\n"
+            "- Do NOT push to remote. Do NOT create pull requests.\n"
+            "- Ensure `make quality` passes before finishing.\n"
+        )
+
     async def _resolve_merge_conflicts(
         self,
         pr: PRInfo,
@@ -417,8 +453,11 @@ class ReviewPhase:
     ) -> bool:
         """Use the implementation agent to resolve merge conflicts.
 
-        Starts a merge (leaving conflict markers), runs the agent to
-        resolve them, and verifies the result with ``make quality``.
+        Retries up to ``max_conflict_fix_attempts`` times if quality
+        verification fails after conflict resolution.  Each retry aborts
+        the failed merge, starts a fresh one, and re-runs the agent with
+        the previous error context.
+
         Returns *True* if the conflicts were resolved successfully.
         """
         if self._agents is None:
@@ -428,47 +467,51 @@ class ReviewPhase:
             )
             return False
 
-        # Start merge leaving conflict markers in place
-        clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
-        if clean:
-            # No conflicts after all (race / already resolved)
-            return True
+        max_attempts = self._config.max_conflict_fix_attempts
+        last_error: str | None = None
 
-        try:
-            prompt = (
-                f"The branch for issue #{issue.number} ({issue.title}) has "
-                f"merge conflicts with main.\n\n"
-                "There is a `git merge` in progress with conflict markers "
-                "in the working tree.\n\n"
-                "## Instructions\n\n"
-                "1. Run `git diff --name-only --diff-filter=U` to list "
-                "conflicted files.\n"
-                "2. Open each conflicted file, understand both sides of the "
-                "conflict, and resolve the markers.\n"
-                "3. Stage all resolved files with `git add`.\n"
-                "4. Complete the merge with "
-                "`git commit --no-edit`.\n"
-                "5. Run `make quality` to ensure everything passes.\n"
-                "6. If quality fails, fix the issues and commit again.\n\n"
-                "## Rules\n\n"
-                "- Keep the intent of the original PR changes.\n"
-                "- Incorporate upstream (main) changes correctly.\n"
-                "- Do NOT push to remote. Do NOT create pull requests.\n"
-                "- Ensure `make quality` passes before finishing.\n"
-            )
+        for attempt in range(max_attempts + 1):
+            # On retries, abort the prior failed merge before starting fresh
+            if attempt > 0:
+                await self._worktrees.abort_merge(wt_path)
 
-            cmd = self._agents._build_command(wt_path)
-            await self._agents._execute(cmd, prompt, wt_path, issue.number)
+            # Start merge leaving conflict markers in place
+            clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
+            if clean:
+                return True  # No conflicts (race / already resolved)
 
-            # Verify quality passes
-            success, _ = await self._agents._verify_result(wt_path, pr.branch)
-            return success
-        except Exception as exc:
-            logger.error(
-                "Conflict resolution agent failed for PR #%d: %s",
-                pr.number,
-                exc,
-            )
-            # Abort the merge to leave a clean state
-            await self._worktrees.abort_merge(wt_path)
-            return False
+            try:
+                prompt = self._build_conflict_prompt(issue, last_error)
+                cmd = self._agents._build_command(wt_path)
+                await self._agents._execute(cmd, prompt, wt_path, issue.number)
+
+                # Verify quality passes
+                success, error = await self._agents._verify_result(wt_path, pr.branch)
+                if success:
+                    return True
+
+                last_error = error
+                logger.warning(
+                    "Conflict resolution attempt %d/%d failed for PR #%d: %s",
+                    attempt + 1,
+                    max_attempts + 1,
+                    pr.number,
+                    (error or "")[:200],
+                )
+            except Exception as exc:
+                logger.error(
+                    "Conflict resolution agent failed for PR #%d (attempt %d/%d): %s",
+                    pr.number,
+                    attempt + 1,
+                    max_attempts + 1,
+                    exc,
+                )
+                last_error = str(exc)
+                # On final attempt, abort merge for clean state
+                if attempt >= max_attempts:
+                    await self._worktrees.abort_merge(wt_path)
+                    return False
+
+        # All attempts exhausted — abort merge and let caller escalate
+        await self._worktrees.abort_merge(wt_path)
+        return False

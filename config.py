@@ -66,6 +66,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max quality fix-and-retry cycles before marking agent as failed",
     )
+    max_conflict_fix_attempts: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Max conflict-resolution retry cycles before escalating to HITL",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
