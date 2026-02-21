@@ -3,11 +3,12 @@ import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
 import { formatDuration, STAGE_META, STAGE_KEYS } from '../hooks/useTimeline'
 
-function StatusDot({ status }) {
+export function StatusDot({ status }) {
   if (status === 'active') return <span style={dotStyles.active} />
   if (status === 'done') return <span style={dotStyles.done}>&#10003;</span>
   if (status === 'failed') return <span style={dotStyles.failed}>&#10007;</span>
   if (status === 'hitl') return <span style={dotStyles.hitl}>!</span>
+  if (status === 'queued') return <span style={dotStyles.queued} />
   return <span style={dotStyles.pending} />
 }
 
@@ -178,7 +179,7 @@ const stageNodeBase = {
   flexShrink: 0,
 }
 
-const dotStyles = {
+export const dotStyles = {
   active: {
     display: 'inline-block',
     width: 8,
@@ -190,6 +191,13 @@ const dotStyles = {
   done: { fontSize: 11, fontWeight: 700, color: theme.green },
   failed: { fontSize: 11, fontWeight: 700, color: theme.red },
   hitl: { fontSize: 11, fontWeight: 700, color: theme.yellow },
+  queued: {
+    display: 'inline-block',
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.yellow,
+  },
   pending: {
     display: 'inline-block',
     width: 8,
@@ -207,11 +215,12 @@ const badgeBase = {
   textTransform: 'uppercase',
 }
 
-const badgeStyleMap = {
+export const badgeStyleMap = {
   active: { ...badgeBase, background: theme.accentSubtle, color: theme.accent },
   done: { ...badgeBase, background: theme.greenSubtle, color: theme.green },
   failed: { ...badgeBase, background: theme.redSubtle, color: theme.red },
   hitl: { ...badgeBase, background: theme.yellowSubtle, color: theme.yellow },
+  queued: { ...badgeBase, background: theme.yellowSubtle, color: theme.yellow },
   pending: { ...badgeBase, background: theme.mutedSubtle, color: theme.textMuted },
 }
 

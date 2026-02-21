@@ -56,7 +56,7 @@ const STAGE_INDEX = Object.fromEntries(STAGE_KEYS.map((k, i) => [k, i]))
  * Convert a PipelineIssue from the server into a StreamCard-compatible shape.
  * Builds a synthetic `stages` object based on current pipeline position.
  */
-function toStreamIssue(pipeIssue, stageKey, prs) {
+export function toStreamIssue(pipeIssue, stageKey, prs) {
   const currentIdx = STAGE_INDEX[stageKey] ?? 0
   const isActive = pipeIssue.status === 'active'
   const stages = {}
@@ -65,7 +65,7 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
     if (i < currentIdx) {
       stages[k] = { status: 'done', startTime: null, endTime: null, transcript: [] }
     } else if (i === currentIdx) {
-      stages[k] = { status: isActive ? 'active' : 'pending', startTime: null, endTime: null, transcript: [] }
+      stages[k] = { status: isActive ? 'active' : 'queued', startTime: null, endTime: null, transcript: [] }
     } else {
       stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
     }
@@ -79,7 +79,11 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
     currentStage: stageKey,
-    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isActive ? 'active' : 'active',
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
+      : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
+      : pipeIssue.status === 'done' ? 'done'
+      : pipeIssue.status === 'active' ? 'active'
+      : 'queued',
     startTime: null,
     endTime: null,
     pr,
