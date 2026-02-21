@@ -459,6 +459,52 @@ class TestRunFinallyTerminatesRunners:
         mock_a.assert_called_once()
         mock_r.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_running_stays_true_during_terminate_calls(
+        self, config: HydraConfig
+    ) -> None:
+        """_running must remain True while terminate() calls are in progress."""
+        orch = HydraOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        running_during_terminate: list[bool] = []
+
+        original_terminate_p = orch._planners.terminate
+        original_terminate_a = orch._agents.terminate
+        original_terminate_r = orch._reviewers.terminate
+
+        def spy_terminate_p() -> None:
+            running_during_terminate.append(orch._running)
+            original_terminate_p()
+
+        def spy_terminate_a() -> None:
+            running_during_terminate.append(orch._running)
+            original_terminate_a()
+
+        def spy_terminate_r() -> None:
+            running_during_terminate.append(orch._running)
+            original_terminate_r()
+
+        orch._planners.terminate = spy_terminate_p  # type: ignore[method-assign]
+        orch._agents.terminate = spy_terminate_a  # type: ignore[method-assign]
+        orch._reviewers.terminate = spy_terminate_r  # type: ignore[method-assign]
+
+        await orch.run()
+
+        # All terminate calls should have seen _running == True
+        assert len(running_during_terminate) == 3
+        assert all(running_during_terminate)
+        # But after run() completes, it should be False
+        assert orch._running is False
+
 
 # ---------------------------------------------------------------------------
 # Constructor injection
@@ -1814,12 +1860,32 @@ class TestLoopExceptionIsolation:
             orch._stop_event.set()
             return []
 
-        orch._triage_find_issues = AsyncMock()  # type: ignore[method-assign]
         orch._plan_issues = failing_plan  # type: ignore[method-assign]
 
         await orch._plan_loop()
 
         assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_plan_loop_does_not_call_triage(self, config: HydraConfig) -> None:
+        """_plan_loop should not call _triage_find_issues (handled by _triage_loop)."""
+        orch = HydraOrchestrator(config)
+        triage_mock = AsyncMock()
+        orch._triage_find_issues = triage_mock  # type: ignore[method-assign]
+
+        call_count = 0
+
+        async def plan_and_stop() -> list[PlanResult]:
+            nonlocal call_count
+            call_count += 1
+            orch._stop_event.set()
+            return []
+
+        orch._plan_issues = plan_and_stop  # type: ignore[method-assign]
+        await orch._plan_loop()
+
+        triage_mock.assert_not_called()
+        assert call_count == 1
 
     @pytest.mark.asyncio
     async def test_implement_loop_continues_after_exception(
