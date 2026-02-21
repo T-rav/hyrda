@@ -2278,3 +2278,247 @@ class TestGranularReviewStatusEvents:
         ]
         assert review_statuses.index("start") < review_statuses.index("merge_main")
         assert review_statuses.index("merge_main") < review_statuses.index("merging")
+
+
+# ---------------------------------------------------------------------------
+# Acceptance Criteria Integration Tests
+# ---------------------------------------------------------------------------
+
+
+class TestAcceptanceCriteriaIntegration:
+    """Tests for AC generation integration in the post-merge flow."""
+
+    @pytest.mark.asyncio
+    async def test_review_merge_generates_acceptance_criteria(
+        self, config: HydraConfig
+    ) -> None:
+        """AC generation is called after a successful merge."""
+        from unittest.mock import patch
+
+        from models import VerificationCriteria
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        criteria = VerificationCriteria(
+            issue_number=42,
+            criteria=["Login validates email"],
+            raw_text="AC-1: Login validates email",
+            generated_at="2026-01-01T00:00:00+00:00",
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase, "_generate_acceptance_criteria", new_callable=AsyncMock
+        ) as mock_gen:
+            mock_gen.return_value = criteria
+            await phase.review_prs([pr], [issue])
+            mock_gen.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_review_merge_posts_ac_comment_on_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """AC comment is posted to the original issue after merge."""
+        from unittest.mock import patch
+
+        from models import VerificationCriteria
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        criteria = VerificationCriteria(
+            issue_number=42,
+            criteria=["Login validates email"],
+            raw_text="AC-1: Login validates email",
+            generated_at="2026-01-01T00:00:00+00:00",
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase, "_generate_acceptance_criteria", new_callable=AsyncMock
+        ) as mock_gen:
+            mock_gen.return_value = criteria
+            await phase.review_prs([pr], [issue])
+
+            phase._prs.post_comment.assert_awaited_once_with(
+                42, "AC-1: Login validates email"
+            )
+
+    @pytest.mark.asyncio
+    async def test_review_merge_persists_ac_to_disk(self, config: HydraConfig) -> None:
+        """AC criteria are persisted to .hydra/verification/."""
+        from unittest.mock import patch
+
+        from models import VerificationCriteria
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        criteria = VerificationCriteria(
+            issue_number=42,
+            criteria=["Login validates email"],
+            raw_text="AC-1: Login validates email",
+            generated_at="2026-01-01T00:00:00+00:00",
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase, "_generate_acceptance_criteria", new_callable=AsyncMock
+        ) as mock_gen:
+            mock_gen.return_value = criteria
+            await phase.review_prs([pr], [issue])
+
+        path = config.repo_root / ".hydra" / "verification" / "issue-42.md"
+        assert path.exists()
+        assert "AC-1: Login validates email" in path.read_text()
+
+    @pytest.mark.asyncio
+    async def test_review_merge_ac_failure_does_not_block_merge(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge completes and labels are swapped even if AC generation fails."""
+        from unittest.mock import patch
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase,
+            "_generate_acceptance_criteria",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("AC generation exploded"),
+        ):
+            results = await phase.review_prs([pr], [issue])
+
+        # Merge should still have succeeded
+        assert len(results) == 1
+        assert results[0].merged is True
+
+        # Labels should still be swapped
+        phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-fixed"])
+
+    @pytest.mark.asyncio
+    async def test_review_merge_ac_none_does_not_post_comment(
+        self, config: HydraConfig
+    ) -> None:
+        """When AC generation returns None, no comment is posted."""
+        from unittest.mock import patch
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase,
+            "_generate_acceptance_criteria",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            await phase.review_prs([pr], [issue])
+
+        phase._prs.post_comment.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_review_merge_ac_reuses_existing_diff(
+        self, config: HydraConfig
+    ) -> None:
+        """The diff is passed to AC generation, not re-fetched."""
+        from unittest.mock import patch
+
+        phase = _make_phase(config)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="the original diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        with patch.object(
+            phase, "_generate_acceptance_criteria", new_callable=AsyncMock
+        ) as mock_gen:
+            mock_gen.return_value = None
+            await phase.review_prs([pr], [issue])
+
+            # Verify diff was passed (3rd positional arg)
+            call_args = mock_gen.call_args
+            assert call_args.args[2] == "the original diff"
+
+            # get_pr_diff should only be called once (not a second time for AC)
+            phase._prs.get_pr_diff.assert_awaited_once()

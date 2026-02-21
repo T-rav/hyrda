@@ -125,6 +125,17 @@ class HydraConfig(BaseModel):
         description="Issue labels that trigger a lite plan (fewer required sections)",
     )
 
+    # Acceptance criteria generation
+    ac_model: str = Field(
+        default="haiku",
+        description="Model for post-merge acceptance criteria generation",
+    )
+    ac_budget_usd: float = Field(
+        default=0.5,
+        ge=0,
+        description="USD cap for acceptance criteria generation (0 = unlimited)",
+    )
+
     # Review insight aggregation
     review_insight_window: int = Field(
         default=10,

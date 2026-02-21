@@ -174,6 +174,18 @@ class ReviewResult(BaseModel):
     ci_fix_attempts: int = 0
 
 
+# --- Acceptance Criteria ---
+
+
+class VerificationCriteria(BaseModel):
+    """Structured acceptance criteria generated after a PR is merged."""
+
+    issue_number: int
+    criteria: list[str] = Field(default_factory=list)
+    raw_text: str = ""
+    generated_at: str = ""
+
+
 # --- Batch ---
 
 

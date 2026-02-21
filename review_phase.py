@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
-from models import GitHubIssue, PRInfo, ReviewResult, ReviewVerdict
+from models import (
+    GitHubIssue,
+    PRInfo,
+    ReviewResult,
+    ReviewVerdict,
+    VerificationCriteria,
+)
 from pr_manager import PRManager, SelfReviewError
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
@@ -21,6 +28,7 @@ from review_insights import (
     extract_categories,
 )
 from reviewer import ReviewRunner
+from runner_utils import stream_claude_process
 from state import StateTracker
 from worktree import WorktreeManager
 
@@ -52,6 +60,7 @@ class ReviewPhase:
         self._agents = agents
         self._bus = event_bus or EventBus()
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._active_procs: set[asyncio.subprocess.Process] = set()
 
     async def review_prs(
         self,
@@ -209,6 +218,25 @@ class ReviewPhase:
                                 self._state.mark_issue(pr.issue_number, "merged")
                                 self._state.record_pr_merged()
                                 self._state.record_issue_completed()
+
+                                # Generate acceptance criteria (best-effort)
+                                try:
+                                    criteria = await self._generate_acceptance_criteria(
+                                        pr, issue, diff
+                                    )
+                                    if criteria:
+                                        await self._prs.post_comment(
+                                            issue.number, criteria.raw_text
+                                        )
+                                        self._persist_criteria(criteria)
+                                except Exception:  # noqa: BLE001
+                                    logger.warning(
+                                        "AC generation failed for issue #%d"
+                                        " — continuing with label swap",
+                                        issue.number,
+                                        exc_info=True,
+                                    )
+
                                 for lbl in self._config.review_label:
                                     await self._prs.remove_label(pr.issue_number, lbl)
                                 await self._prs.add_labels(
@@ -405,6 +433,169 @@ class ReviewPhase:
                     "role": "reviewer",
                 },
             )
+        )
+
+    @staticmethod
+    def _extract_plan_comment(comments: list[str]) -> str:
+        """Extract the planner's implementation plan from issue comments.
+
+        Returns the raw body of the first comment containing
+        ``## Implementation Plan``, or an empty string if none found.
+        """
+        for c in comments:
+            if "## Implementation Plan" in c:
+                return c
+        return ""
+
+    @staticmethod
+    def _extract_test_files(diff: str) -> list[str]:
+        """Extract test file paths from a unified diff."""
+        return re.findall(
+            r"^\+\+\+ b/((?:tests?/)?(?:test_\w+|[\w/]*_test)\.py)", diff, re.MULTILINE
+        )
+
+    @staticmethod
+    def _build_ac_prompt(
+        issue_body: str,
+        plan_comment: str,
+        diff_summary: str,
+        test_files: list[str],
+    ) -> str:
+        """Build the prompt for acceptance criteria generation."""
+        parts = [
+            "You are generating acceptance criteria and human verification "
+            "instructions for a merged pull request.\n",
+            "## Original Issue\n",
+            issue_body[:5000] if issue_body else "(no issue body)",
+            "\n",
+        ]
+
+        if plan_comment:
+            parts.append("## Implementation Plan\n")
+            parts.append(plan_comment[:5000])
+            parts.append("\n")
+
+        if diff_summary:
+            parts.append("## PR Diff Summary\n")
+            parts.append("```diff\n")
+            parts.append(diff_summary[:10000])
+            parts.append("\n```\n")
+
+        if test_files:
+            parts.append("## Test Files Added/Modified\n")
+            for tf in test_files:
+                parts.append(f"- {tf}\n")
+            parts.append("\n")
+
+        parts.append(
+            "## Instructions\n\n"
+            "Produce TWO sections:\n\n"
+            "1. **Acceptance Criteria** — a numbered checklist using the format "
+            "`AC-1: <criterion>`, `AC-2: <criterion>`, etc. Each criterion "
+            "should describe a specific, verifiable outcome of the change.\n\n"
+            "2. **Human Verification Instructions** — step-by-step instructions "
+            "a human can follow to functionally verify the change works. "
+            "Focus on functional/UAT verification (e.g., 'Open the dashboard, "
+            "click X, verify Y appears') — NOT 'run tests'.\n\n"
+            "Output your response between these exact markers:\n\n"
+            "AC_START\n"
+            "<your acceptance criteria and verification instructions here>\n"
+            "AC_END\n"
+        )
+        return "".join(parts)
+
+    @staticmethod
+    def _extract_criteria(
+        transcript: str,
+        issue_number: int,
+    ) -> VerificationCriteria | None:
+        """Parse AC_START/AC_END markers and extract criteria items."""
+        pattern = r"AC_START\s*\n(.*?)\nAC_END"
+        match = re.search(pattern, transcript, re.DOTALL)
+        if not match:
+            return None
+
+        raw_text = match.group(1).strip()
+        criteria = re.findall(r"AC-\d+:\s*(.+)", raw_text)
+
+        return VerificationCriteria(
+            issue_number=issue_number,
+            criteria=criteria,
+            raw_text=raw_text,
+            generated_at=datetime.now(UTC).isoformat(),
+        )
+
+    async def _generate_acceptance_criteria(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        diff: str,
+    ) -> VerificationCriteria | None:
+        """Generate acceptance criteria from issue, plan, and diff context.
+
+        Returns ``None`` on any failure — AC generation is best-effort.
+        """
+        if self._config.dry_run:
+            logger.info(
+                "[dry-run] Would generate acceptance criteria for issue #%d",
+                issue.number,
+            )
+            return None
+
+        try:
+            plan_comment = self._extract_plan_comment(issue.comments)
+            test_files = self._extract_test_files(diff)
+            prompt = self._build_ac_prompt(issue.body, plan_comment, diff, test_files)
+
+            cmd = [
+                "claude",
+                "-p",
+                "--output-format",
+                "stream-json",
+                "--model",
+                self._config.ac_model,
+                "--verbose",
+                "--permission-mode",
+                "bypassPermissions",
+            ]
+            if self._config.ac_budget_usd > 0:
+                cmd.extend(["--max-budget-usd", str(self._config.ac_budget_usd)])
+
+            transcript = await stream_claude_process(
+                cmd=cmd,
+                prompt=prompt,
+                cwd=self._config.repo_root,
+                active_procs=self._active_procs,
+                event_bus=self._bus,
+                event_data={"issue": issue.number, "source": "ac_generator"},
+                logger=logger,
+            )
+
+            criteria = self._extract_criteria(transcript, issue.number)
+            if criteria is None:
+                logger.warning(
+                    "Could not extract AC markers from transcript for issue #%d",
+                    issue.number,
+                )
+            return criteria
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Acceptance criteria generation failed for issue #%d",
+                issue.number,
+                exc_info=True,
+            )
+            return None
+
+    def _persist_criteria(self, criteria: VerificationCriteria) -> None:
+        """Write criteria to ``.hydra/verification/issue-N.md``."""
+        verification_dir = self._config.repo_root / ".hydra" / "verification"
+        verification_dir.mkdir(parents=True, exist_ok=True)
+        path = verification_dir / f"issue-{criteria.issue_number}.md"
+        path.write_text(criteria.raw_text)
+        logger.info(
+            "Acceptance criteria saved to %s",
+            path,
+            extra={"issue": criteria.issue_number},
         )
 
     async def _resolve_merge_conflicts(
