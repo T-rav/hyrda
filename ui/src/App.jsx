@@ -4,20 +4,18 @@ import { Header } from './components/Header'
 import { TranscriptView } from './components/TranscriptView'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
-import { Livestream } from './components/Livestream'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['issues', 'transcript', 'hitl', 'livestream', 'metrics', 'system']
+const TABS = ['issues', 'transcript', 'hitl', 'metrics', 'system']
 
 const TAB_LABELS = {
   issues: 'Work Stream',
   transcript: 'Transcript',
   hitl: 'HITL',
-  livestream: 'Livestream',
   metrics: 'Metrics',
   system: 'System',
 }
@@ -36,7 +34,6 @@ function SystemAlertBanner({ alert }) {
 function AppContent() {
   const {
     connected, orchestratorStatus, workers,
-    events,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, metrics, systemAlert, intents,
     lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker,
@@ -130,7 +127,6 @@ function AppContent() {
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'livestream' && <Livestream events={events} />}
           {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
           {activeTab === 'metrics' && (
             <MetricsPanel

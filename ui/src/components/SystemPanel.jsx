@@ -2,6 +2,12 @@ import React, { useState } from 'react'
 import { theme } from '../theme'
 import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
 import { useHydra } from '../context/HydraContext'
+import { Livestream } from './Livestream'
+
+const SUB_TABS = [
+  { key: 'workers', label: 'Workers' },
+  { key: 'livestream', label: 'Livestream' },
+]
 
 function relativeTime(isoString) {
   if (!isoString) return 'never'
@@ -207,83 +213,101 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
 }
 
 export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog }) {
-  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus } = useHydra()
+  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus, events } = useHydra()
+  const [activeSubTab, setActiveSubTab] = useState('workers')
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && w.status !== 'queued'
   )
 
   const hasPipelineWorkers = pipelineWorkers.length > 0
-  const bgMap = Object.fromEntries((backgroundWorkers || []).map(w => [w.name, w]))
   const hitlCount = hitlItems?.length || 0
 
   return (
     <div style={styles.container}>
-      <h3 style={styles.heading}>Pipeline</h3>
-      <div style={styles.loopRow}>
-        {PIPELINE_LOOPS.map((loop) => {
-          const status = stageStatus[loop.key] || {}
-          const enabled = status.enabled !== false
-          const activeCount = status.workerCount || 0
-          const issueCount = status.issueCount || 0
-          return (
-            <div key={loop.key} style={styles.loopChip}>
-              <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />
-              <span style={enabled ? styles.loopLabel : styles.loopLabelDim}>{loop.label}</span>
-              <span
-                style={{ ...styles.loopCount, color: enabled && issueCount > 0 ? loop.color : theme.textMuted }}
-                data-testid={`loop-count-${loop.key}`}
-              >
-                {issueCount}
-              </span>
-              {activeCount > 0 && (
-                <span style={{ ...styles.loopActiveCount, color: loop.color }}>
-                  {activeCount} active
-                </span>
-              )}
-              {onToggleBgWorker && (
-                <button
-                  style={enabled ? styles.toggleOn : styles.toggleOff}
-                  onClick={() => onToggleBgWorker(loop.key, !enabled)}
-                >
-                  {enabled ? 'On' : 'Off'}
-                </button>
-              )}
-            </div>
-          )
-        })}
+      <div style={styles.subTabSidebar}>
+        {SUB_TABS.map(tab => (
+          <div
+            key={tab.key}
+            onClick={() => setActiveSubTab(tab.key)}
+            style={activeSubTab === tab.key ? subTabActiveStyle : subTabInactiveStyle}
+          >
+            {tab.label}
+          </div>
+        ))}
       </div>
-      {hitlCount > 0 && (
-        <div style={styles.hitlBadge}>
-          {hitlCount} HITL {hitlCount === 1 ? 'issue' : 'issues'}
-        </div>
-      )}
-      {!hasPipelineWorkers && (
-        <div style={styles.empty}>No active pipeline workers</div>
-      )}
-      {hasPipelineWorkers && (
-        <div style={styles.grid}>
-          {pipelineWorkers.map(([key, worker]) => (
-            <PipelineWorkerCard key={key} workerKey={key} worker={worker} />
-          ))}
-        </div>
-      )}
+      <div style={styles.subTabContent}>
+        {activeSubTab === 'workers' && (
+          <div style={styles.workersContent}>
+            <h3 style={styles.heading}>Pipeline</h3>
+            <div style={styles.loopRow}>
+              {PIPELINE_LOOPS.map((loop) => {
+                const status = stageStatus[loop.key] || {}
+                const enabled = status.enabled !== false
+                const activeCount = status.workerCount || 0
+                const issueCount = status.issueCount || 0
+                return (
+                  <div key={loop.key} style={styles.loopChip}>
+                    <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />
+                    <span style={enabled ? styles.loopLabel : styles.loopLabelDim}>{loop.label}</span>
+                    <span
+                      style={{ ...styles.loopCount, color: enabled && issueCount > 0 ? loop.color : theme.textMuted }}
+                      data-testid={`loop-count-${loop.key}`}
+                    >
+                      {issueCount}
+                    </span>
+                    {activeCount > 0 && (
+                      <span style={{ ...styles.loopActiveCount, color: loop.color }}>
+                        {activeCount} active
+                      </span>
+                    )}
+                    {onToggleBgWorker && (
+                      <button
+                        style={enabled ? styles.toggleOn : styles.toggleOff}
+                        onClick={() => onToggleBgWorker(loop.key, !enabled)}
+                      >
+                        {enabled ? 'On' : 'Off'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {hitlCount > 0 && (
+              <div style={styles.hitlBadge}>
+                {hitlCount} HITL {hitlCount === 1 ? 'issue' : 'issues'}
+              </div>
+            )}
+            {!hasPipelineWorkers && (
+              <div style={styles.empty}>No active pipeline workers</div>
+            )}
+            {hasPipelineWorkers && (
+              <div style={styles.grid}>
+                {pipelineWorkers.map(([key, worker]) => (
+                  <PipelineWorkerCard key={key} workerKey={key} worker={worker} />
+                ))}
+              </div>
+            )}
 
-      <h3 style={{ ...styles.heading, marginTop: 24 }}>Background Workers</h3>
-      <div style={styles.grid}>
-        {BACKGROUND_WORKERS.map((def) => {
-          const state = backgroundWorkers.find(w => w.name === def.key)
-          return (
-            <BackgroundWorkerCard
-              key={def.key}
-              def={def}
-              state={state}
-              pipelinePollerLastRun={pipelinePollerLastRun}
-              orchestratorStatus={orchestratorStatus}
-              onToggleBgWorker={onToggleBgWorker}
-              onViewLog={onViewLog}
-            />
-          )
-        })}
+            <h3 style={{ ...styles.heading, marginTop: 24 }}>Background Workers</h3>
+            <div style={styles.grid}>
+              {BACKGROUND_WORKERS.map((def) => {
+                const state = backgroundWorkers.find(w => w.name === def.key)
+                return (
+                  <BackgroundWorkerCard
+                    key={def.key}
+                    def={def}
+                    state={state}
+                    pipelinePollerLastRun={pipelinePollerLastRun}
+                    orchestratorStatus={orchestratorStatus}
+                    onToggleBgWorker={onToggleBgWorker}
+                    onViewLog={onViewLog}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {activeSubTab === 'livestream' && <Livestream events={events} />}
       </div>
     </div>
   )
@@ -291,6 +315,39 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
 
 const styles = {
   container: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+  },
+  subTabSidebar: {
+    width: 100,
+    flexShrink: 0,
+    borderRight: `1px solid ${theme.border}`,
+    background: theme.surface,
+    paddingTop: 12,
+  },
+  subTab: {
+    padding: '8px 16px',
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.textMuted,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+    borderLeftWidth: 2,
+    borderLeftStyle: 'solid',
+    borderLeftColor: 'transparent',
+  },
+  subTabActive: {
+    color: theme.accent,
+    borderLeftColor: theme.accent,
+  },
+  subTabContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  workersContent: {
     flex: 1,
     overflowY: 'auto',
     padding: 20,
@@ -558,3 +615,7 @@ const styles = {
     transition: 'background 0.15s',
   },
 }
+
+// Pre-computed sub-tab style variants (avoids object spread in .map())
+const subTabInactiveStyle = styles.subTab
+const subTabActiveStyle = { ...styles.subTab, ...styles.subTabActive }

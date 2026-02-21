@@ -21,6 +21,7 @@ function defaultMockContext(overrides = {}) {
     hitlItems: [],
     orchestratorStatus: 'idle',
     stageStatus: deriveStageStatus(pipelineIssues, workers, backgroundWorkers, {}),
+    events: [],
     ...overrides,
   }
 }
@@ -421,6 +422,66 @@ describe('SystemPanel', () => {
       render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
       const dot = screen.getByTestId('dot-pipeline_poller')
       expect(dot.style.background).toBe('var(--red)')
+    })
+  })
+
+  describe('Sub-tab Navigation', () => {
+    it('shows Workers and Livestream sub-tab labels', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.getByText('Workers')).toBeInTheDocument()
+      expect(screen.getByText('Livestream')).toBeInTheDocument()
+    })
+
+    it('Workers sub-tab is active by default showing pipeline content', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
+      expect(screen.getByText('Background Workers')).toBeInTheDocument()
+    })
+
+    it('clicking Livestream sub-tab shows event stream', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.getByText('Waiting for events...')).toBeInTheDocument()
+      // Pipeline content should not be visible
+      expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
+    })
+
+    it('clicking Workers sub-tab returns to worker content', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Workers'))
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
+    })
+
+    it('active sub-tab has accent color styling', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      const workersTab = screen.getByText('Workers')
+      expect(workersTab.style.color).toBe('var(--accent)')
+      expect(workersTab.style.borderLeftColor).toBe('var(--accent)')
+      const livestreamTab = screen.getByText('Livestream')
+      expect(livestreamTab.style.color).toBe('var(--text-muted)')
+      expect(livestreamTab.style.borderLeftColor).toBe('transparent')
+    })
+
+    it('sub-tab styles swap when clicking Livestream', () => {
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.getByText('Livestream').style.color).toBe('var(--accent)')
+      expect(screen.getByText('Livestream').style.borderLeftColor).toBe('var(--accent)')
+      expect(screen.getByText('Workers').style.color).toBe('var(--text-muted)')
+      expect(screen.getByText('Workers').style.borderLeftColor).toBe('transparent')
+    })
+
+    it('renders event data in Livestream sub-tab', () => {
+      mockUseHydra.mockReturnValue(defaultMockContext({
+        events: [
+          { timestamp: new Date().toISOString(), type: 'worker_update', data: { issue: 1, status: 'running' } },
+        ],
+      }))
+      render(<SystemPanel workers={{}} backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Livestream'))
+      expect(screen.getByText('worker update')).toBeInTheDocument()
     })
   })
 
