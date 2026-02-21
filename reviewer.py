@@ -105,7 +105,6 @@ class ReviewRunner:
             )
         )
 
-        result.duration_seconds = time.monotonic() - start
         return result
 
     async def fix_ci(

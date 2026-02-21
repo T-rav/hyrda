@@ -701,6 +701,7 @@ class HydraOrchestrator:
                         issue.number,
                         "Plan validation failed after retry",
                     )
+                    self._state.record_hitl_escalation()
                     await self._prs.add_labels(
                         issue.number, [self._config.hitl_label[0]]
                     )
