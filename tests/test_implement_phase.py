@@ -686,3 +686,74 @@ class TestReviewFeedbackPassing:
         mock_prs.create_pr.assert_awaited_once()
         assert results[0].pr_info is not None
         assert results[0].pr_info.number == 101
+
+
+# ---------------------------------------------------------------------------
+# Worker result metadata persistence
+# ---------------------------------------------------------------------------
+
+
+class TestWorkerResultMetaPersistence:
+    """Tests that worker result metadata is persisted to state."""
+
+    @pytest.mark.asyncio
+    async def test_worker_result_meta_persisted_after_run(
+        self, config: HydraConfig
+    ) -> None:
+        """Worker result metadata should be saved to state after agent run."""
+        issue = make_issue(42)
+
+        async def agent_with_metrics(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=True,
+                worktree_path=str(wt_path),
+                quality_fix_attempts=2,
+                duration_seconds=150.5,
+                error=None,
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=agent_with_metrics)
+
+        await phase.run_batch()
+
+        meta = phase._state.get_worker_result_meta(42)
+        assert meta["quality_fix_attempts"] == 2
+        assert meta["duration_seconds"] == 150.5
+        assert meta["error"] is None
+
+    @pytest.mark.asyncio
+    async def test_worker_result_meta_includes_error(self, config: HydraConfig) -> None:
+        """When agent fails, error should be captured in metadata."""
+        issue = make_issue(42)
+
+        async def failing_agent(
+            issue: GitHubIssue,
+            wt_path: Path,
+            branch: str,
+            worker_id: int = 0,
+            review_feedback: str = "",
+        ) -> WorkerResult:
+            return WorkerResult(
+                issue_number=issue.number,
+                branch=branch,
+                success=False,
+                worktree_path=str(wt_path),
+                quality_fix_attempts=0,
+                duration_seconds=30.0,
+                error="make quality failed",
+            )
+
+        phase, _, _ = _make_phase(config, [issue], agent_run=failing_agent)
+
+        await phase.run_batch()
+
+        meta = phase._state.get_worker_result_meta(42)
+        assert meta["error"] == "make quality failed"

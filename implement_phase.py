@@ -115,6 +115,16 @@ class ImplementPhase:
                     if review_feedback:
                         self._state.clear_review_feedback(issue.number)
 
+                    # Persist worker metrics for retrospective analysis
+                    self._state.set_worker_result_meta(
+                        issue.number,
+                        {
+                            "quality_fix_attempts": result.quality_fix_attempts,
+                            "duration_seconds": result.duration_seconds,
+                            "error": result.error,
+                        },
+                    )
+
                     # Push final commits and create PR
                     if result.worktree_path:
                         pushed = await self._prs.push_branch(

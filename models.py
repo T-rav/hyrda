@@ -237,6 +237,7 @@ class StateData(BaseModel):
     hitl_causes: dict[str, str] = Field(default_factory=dict)
     review_attempts: dict[str, int] = Field(default_factory=dict)
     review_feedback: dict[str, str] = Field(default_factory=dict)
+    worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
     last_updated: str | None = None
 
