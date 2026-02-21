@@ -97,6 +97,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max CI fix-and-retry cycles; 0 disables CI wait (default: 2)",
     )
     parser.add_argument(
+        "--max-review-fix-attempts",
+        type=int,
+        default=None,
+        help="Max review fix-and-retry cycles before HITL escalation (default: 2)",
+    )
+    parser.add_argument(
+        "--min-review-findings",
+        type=int,
+        default=None,
+        help="Minimum review findings threshold for adversarial review (default: 3)",
+    )
+    parser.add_argument(
         "--max-merge-conflict-fix-attempts",
         type=int,
         default=None,
@@ -251,6 +263,8 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "ci_check_timeout",
         "ci_poll_interval",
         "max_ci_fix_attempts",
+        "max_review_fix_attempts",
+        "min_review_findings",
         "max_merge_conflict_fix_attempts",
         "planner_model",
         "planner_budget_usd",
