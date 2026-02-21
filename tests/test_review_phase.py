@@ -4265,3 +4265,204 @@ class TestReviewOneInner:
 
         assert result.merged is True
         assert phase._state.get_pr_status(101) == "approve"
+
+
+# ---------------------------------------------------------------------------
+# _handle_rejected_review unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandleRejectedReview:
+    """Unit tests for the _handle_rejected_review helper."""
+
+    @pytest.mark.asyncio
+    async def test_under_cap_returns_true(self, config: HydraConfig) -> None:
+        """When under the review fix cap, should return True (preserve worktree)."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        # 0 attempts < max_review_fix_attempts (2 default)
+        returned = await phase._handle_rejected_review(pr, result, 0)
+
+        assert returned is True
+
+    @pytest.mark.asyncio
+    async def test_under_cap_stores_review_feedback(self, config: HydraConfig) -> None:
+        """When under cap, review summary should be saved as feedback for re-implementation."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            summary="Fix the error handling logic",
+        )
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        assert phase._state.get_review_feedback(42) == "Fix the error handling logic"
+
+    @pytest.mark.asyncio
+    async def test_under_cap_swaps_labels_on_issue_and_pr(
+        self, config: HydraConfig
+    ) -> None:
+        """When under cap, should swap labels from review→ready on both issue and PR."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        phase._prs.remove_label.assert_any_await(42, "hydra-review")
+        phase._prs.remove_pr_label.assert_any_await(101, "hydra-review")
+        phase._prs.add_labels.assert_awaited_once_with(42, ["hydra-ready"])
+        phase._prs.add_pr_labels.assert_awaited_once_with(101, ["hydra-ready"])
+
+    @pytest.mark.asyncio
+    async def test_under_cap_increments_review_attempts(
+        self, config: HydraConfig
+    ) -> None:
+        """When under cap, should increment the review attempt counter."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        assert phase._state.get_review_attempts(42) == 1
+
+    @pytest.mark.asyncio
+    async def test_cap_exceeded_returns_false(self, tmp_path: Path) -> None:
+        """When review fix cap is exhausted, should return False (destroy worktree)."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_review_fix_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        # Exhaust cap: 2 attempts already recorded
+        phase._state.increment_review_attempts(42)
+        phase._state.increment_review_attempts(42)
+
+        returned = await phase._handle_rejected_review(pr, result, 0)
+
+        assert returned is False
+
+    @pytest.mark.asyncio
+    async def test_cap_exceeded_escalates_to_hitl(self, tmp_path: Path) -> None:
+        """When cap is exceeded, should escalate issue to HITL and set state."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_review_fix_attempts=2,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        phase._state.increment_review_attempts(42)
+        phase._state.increment_review_attempts(42)
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        assert phase._state.get_hitl_origin(42) == "hydra-review"
+        phase._prs.add_labels.assert_any_await(42, ["hydra-hitl"])
+
+    @pytest.mark.asyncio
+    async def test_cap_exceeded_posts_comment_on_issue(self, tmp_path: Path) -> None:
+        """When cap exceeded, HITL escalation comment should be posted on the issue."""
+        from tests.helpers import ConfigFactory
+
+        config = ConfigFactory.create(
+            max_review_fix_attempts=1,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        # Exhaust cap
+        phase._state.increment_review_attempts(42)
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        # post_on_pr=False, so comment goes to the issue
+        comment_calls = [c.args for c in phase._prs.post_comment.call_args_list]
+        assert any("cap exceeded" in c[1].lower() for c in comment_calls)
+        phase._prs.post_pr_comment.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_under_cap_posts_requeue_comment(self, config: HydraConfig) -> None:
+        """When under cap, should post a re-queue notification on the issue."""
+        phase = _make_phase(config)
+        pr = make_pr_info(101, 42)
+        result = make_review_result(101, 42, verdict=ReviewVerdict.REQUEST_CHANGES)
+
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+
+        await phase._handle_rejected_review(pr, result, 0)
+
+        comment_calls = [c.args for c in phase._prs.post_comment.call_args_list]
+        assert any("Re-queuing for implementation" in c[1] for c in comment_calls)
