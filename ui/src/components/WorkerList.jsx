@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { ACTIVE_STATUSES } from '../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../constants'
 
 const statusColors = {
   queued:              { bg: theme.mutedSubtle,  fg: theme.textMuted },
@@ -38,6 +38,7 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
       `}</style>
       <RoleSection
         label="Triage"
+        role="triage"
         entries={triagers}
         selectedWorker={selectedWorker}
         onSelect={onSelect}
@@ -45,6 +46,7 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
       />
       <RoleSection
         label="Planners"
+        role="planner"
         entries={planners}
         selectedWorker={selectedWorker}
         onSelect={onSelect}
@@ -52,6 +54,7 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
       />
       <RoleSection
         label="Implementers"
+        role="implementer"
         entries={implementers}
         selectedWorker={selectedWorker}
         onSelect={onSelect}
@@ -59,6 +62,7 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
       />
       <RoleSection
         label="Reviewers"
+        role="reviewer"
         entries={reviewers}
         selectedWorker={selectedWorker}
         onSelect={onSelect}
@@ -68,7 +72,7 @@ export function WorkerList({ workers, selectedWorker, onSelect, humanInputReques
   )
 }
 
-function RoleSection({ label, entries, selectedWorker, onSelect, humanInputRequests }) {
+function RoleSection({ label, role, entries, selectedWorker, onSelect, humanInputRequests }) {
   const [collapsed, setCollapsed] = useState(false)
   const sorted = [...entries].sort((a, b) => {
     // Sort numerically where possible, string keys (review-*) at end
@@ -82,15 +86,16 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
 
   const active = entries.filter(([, w]) => ACTIVE_STATUSES.includes(w.status)).length
   const total = entries.length
+  const stageCards = cardStylesByStage[role]
 
   return (
     <>
       <div
-        style={styles.sectionHeader}
+        style={sectionHeaderByRole[role] || styles.sectionHeader}
         onClick={() => setCollapsed(!collapsed)}
       >
         <span style={styles.chevron}>{collapsed ? '\u25b6' : '\u25bc'}</span>
-        <span style={styles.sectionLabel}>{label}</span>
+        <span style={sectionLabelByRole[role] || styles.sectionLabel}>{label}</span>
         <span style={styles.sectionCount}>{active}/{total}</span>
       </div>
       {!collapsed && sorted.map(([num, w]) => {
@@ -104,7 +109,7 @@ function RoleSection({ label, entries, selectedWorker, onSelect, humanInputReque
           <div
             key={num}
             onClick={() => onSelect(isNaN(Number(num)) ? num : Number(num))}
-            style={isActive ? cardActiveStyle : cardStyle}
+            style={isActive ? stageCards.active : stageCards.normal}
           >
             <div style={styles.cardHeader}>
               <span style={styles.issue}>
@@ -136,7 +141,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '10px 16px 6px',
+    padding: '10px 16px 8px',
     cursor: 'pointer',
     userSelect: 'none',
   },
@@ -145,7 +150,7 @@ const styles = {
     color: theme.textMuted,
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 600,
     textTransform: 'uppercase',
     color: theme.textMuted,
@@ -209,6 +214,30 @@ const styles = {
 // Pre-computed card style variants (avoids object spread in .map())
 export const cardStyle = styles.card
 export const cardActiveStyle = { ...styles.card, ...styles.active }
+
+// Pre-computed card style variants per stage (avoids object spread in .map())
+export const cardStylesByStage = Object.fromEntries(
+  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
+    normal: { ...styles.card, borderLeft: `3px solid ${s.color}` },
+    active: { ...styles.card, ...styles.active, borderLeft: `3px solid ${s.color}` },
+  }])
+)
+
+// Pre-computed section header styles per stage
+export const sectionHeaderByRole = Object.fromEntries(
+  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
+    ...styles.sectionHeader,
+    borderBottom: `2px solid ${s.color}`,
+  }])
+)
+
+// Pre-computed section label styles per stage
+export const sectionLabelByRole = Object.fromEntries(
+  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, {
+    ...styles.sectionLabel,
+    color: s.color,
+  }])
+)
 
 // Pre-computed status badge styles for each known status
 export const statusBadgeStyles = Object.fromEntries(
