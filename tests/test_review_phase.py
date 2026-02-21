@@ -2591,3 +2591,171 @@ class TestGranularReviewStatusEvents:
         assert review_statuses.index("start") < review_statuses.index("merge_main")
         assert review_statuses.index("merge_main") < review_statuses.index("merging")
         assert review_statuses[-1] == "done"
+
+
+class TestHITLEscalationEvents:
+    """Tests that HITL escalation points emit HITL_ESCALATION events."""
+
+    @pytest.mark.asyncio
+    async def test_merge_conflict_escalation_emits_hitl_event(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge conflict escalation should emit HITL_ESCALATION with cause merge_conflict."""
+        bus = EventBus()
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(False, ""))
+        phase = _make_phase(config, agents=mock_agents, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=False)
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.abort_merge = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        escalation_events = [
+            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+        ]
+        assert len(escalation_events) == 1
+        data = escalation_events[0].data
+        assert data["issue"] == 42
+        assert data["pr"] == 101
+        assert data["status"] == "escalated"
+        assert data["role"] == "reviewer"
+        assert data["cause"] == "merge_conflict"
+
+    @pytest.mark.asyncio
+    async def test_merge_failure_escalation_emits_hitl_event(
+        self, config: HydraConfig
+    ) -> None:
+        """Merge failure escalation should emit HITL_ESCALATION with cause merge_failed."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=False)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        escalation_events = [
+            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+        ]
+        assert len(escalation_events) == 1
+        data = escalation_events[0].data
+        assert data["issue"] == 42
+        assert data["pr"] == 101
+        assert data["status"] == "escalated"
+        assert data["role"] == "reviewer"
+        assert data["cause"] == "merge_failed"
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_escalation_emits_hitl_event(
+        self, config: HydraConfig
+    ) -> None:
+        """CI failure escalation should emit HITL_ESCALATION with cause ci_failed."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        bus = EventBus()
+        phase = _make_phase(cfg, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42)
+
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        escalation_events = [
+            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+        ]
+        assert len(escalation_events) == 1
+        data = escalation_events[0].data
+        assert data["issue"] == 42
+        assert data["pr"] == 101
+        assert data["status"] == "escalated"
+        assert data["role"] == "reviewer"
+        assert data["cause"] == "ci_failed"
+        assert data["ci_fix_attempts"] == 1
+
+    @pytest.mark.asyncio
+    async def test_successful_merge_does_not_emit_hitl_escalation(
+        self, config: HydraConfig
+    ) -> None:
+        """Happy path (approve + merge) should NOT emit HITL_ESCALATION."""
+        bus = EventBus()
+        phase = _make_phase(config, event_bus=bus)
+        issue = make_issue(42)
+        pr = make_pr_info(101, 42, draft=False)
+
+        phase._reviewers.review = AsyncMock(
+            return_value=make_review_result(101, 42, verdict=ReviewVerdict.APPROVE)
+        )
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._worktrees.merge_main = AsyncMock(return_value=True)
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        escalation_events = [
+            e for e in bus.get_history() if e.type == EventType.HITL_ESCALATION
+        ]
+        assert len(escalation_events) == 0

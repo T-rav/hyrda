@@ -31,6 +31,7 @@ class EventType(StrEnum):
     PLANNER_UPDATE = "planner_update"
     MERGE_UPDATE = "merge_update"
     CI_CHECK = "ci_check"
+    HITL_ESCALATION = "hitl_escalation"
     ISSUE_CREATED = "issue_created"
     BATCH_COMPLETE = "batch_complete"
     HITL_UPDATE = "hitl_update"
