@@ -1,4 +1,4 @@
-"""GitHub issue fetching for the Hydra orchestrator."""
+"""GitHub issue fetching for the HydraFlow orchestrator."""
 
 from __future__ import annotations
 
@@ -6,17 +6,17 @@ import asyncio
 import json
 import logging
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from models import GitHubIssue, PRInfo
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydra.issue_fetcher")
+logger = logging.getLogger("hydraflow.issue_fetcher")
 
 
 class IssueFetcher:
     """Fetches GitHub issues and PRs via the ``gh`` CLI."""
 
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
 
     async def fetch_issues_by_labels(
@@ -85,8 +85,8 @@ class IssueFetcher:
         issues = [GitHubIssue.model_validate(raw) for raw in seen.values()]
         return issues[:limit]
 
-    async def fetch_all_hydra_issues(self) -> list[GitHubIssue]:
-        """Fetch all open issues with any Hydra pipeline label in one batch.
+    async def fetch_all_hydraflow_issues(self) -> list[GitHubIssue]:
+        """Fetch all open issues with any HydraFlow pipeline label in one batch.
 
         Collects all configured pipeline labels and calls
         :meth:`fetch_issues_by_labels` once, deduplicating by issue number.
@@ -132,7 +132,7 @@ class IssueFetcher:
             return None
 
     async def fetch_plan_issues(self) -> list[GitHubIssue]:
-        """Fetch issues labeled with the planner label (e.g. ``hydra-plan``)."""
+        """Fetch issues labeled with the planner label (e.g. ``hydraflow-plan``)."""
         if not self._config.planner_label:
             # No planner labels configured — fetch all open issues that are
             # not already in a downstream pipeline stage.
@@ -158,7 +158,7 @@ class IssueFetcher:
         return issues[: self._config.batch_size]
 
     async def fetch_ready_issues(self, active_issues: set[int]) -> list[GitHubIssue]:
-        """Fetch issues labeled ``hydra-ready`` for the implement phase.
+        """Fetch issues labeled ``hydraflow-ready`` for the implement phase.
 
         Returns up to ``2 * max_workers`` issues so the worker pool
         stays saturated.
@@ -170,7 +170,7 @@ class IssueFetcher:
             queue_size,
         )
         # Only skip issues already active in this run (GitHub labels are
-        # the source of truth — if it still has hydra-ready, it needs work)
+        # the source of truth — if it still has hydraflow-ready, it needs work)
         issues = [i for i in all_issues if i.number not in active_issues]
         for skipped in all_issues:
             if skipped.number in active_issues:
@@ -184,7 +184,7 @@ class IssueFetcher:
         active_issues: set[int],
         prefetched_issues: list[GitHubIssue] | None = None,
     ) -> tuple[list[PRInfo], list[GitHubIssue]]:
-        """Fetch issues labeled ``hydra-review`` and resolve their open PRs.
+        """Fetch issues labeled ``hydraflow-review`` and resolve their open PRs.
 
         When *prefetched_issues* is provided, skip the GitHub issue fetch
         and use those issues directly (they come from the ``IssueStore``).

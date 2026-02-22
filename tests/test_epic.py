@@ -93,7 +93,7 @@ def _make_epic(number: int, sub_issues: list[int]) -> GitHubIssue:
     lines = [f"- [ ] #{n} — Sub-issue {n}" for n in sub_issues]
     body = "## Epic\n\n" + "\n".join(lines)
     return GitHubIssue(
-        number=number, title="[Epic] Test", body=body, labels=["hydra-epic"]
+        number=number, title="[Epic] Test", body=body, labels=["hydraflow-epic"]
     )
 
 
@@ -104,7 +104,7 @@ def _make_checker(
     dry_run: bool = False,
 ) -> tuple[EpicCompletionChecker, AsyncMock, AsyncMock]:
     config = ConfigFactory.create(
-        epic_label=["hydra-epic"],
+        epic_label=["hydraflow-epic"],
         dry_run=dry_run,
     )
     prs = AsyncMock()
@@ -121,16 +121,16 @@ class TestEpicCompletionChecker:
     async def test_closes_epic_when_all_sub_issues_completed(self) -> None:
         epic = _make_epic(100, [1, 2, 3])
         sub_issues = {
-            1: _make_issue(1, ["hydra-fixed"]),
-            2: _make_issue(2, ["hydra-fixed"]),
-            3: _make_issue(3, ["hydra-fixed"]),
+            1: _make_issue(1, ["hydraflow-fixed"]),
+            2: _make_issue(2, ["hydraflow-fixed"]),
+            3: _make_issue(3, ["hydraflow-fixed"]),
         }
         checker, prs, _ = _make_checker(epics=[epic], sub_issues=sub_issues)
 
         await checker.check_and_close_epics(1)
 
         prs.close_issue.assert_called_once_with(100)
-        prs.add_labels.assert_called_once_with(100, ["hydra-fixed"])
+        prs.add_labels.assert_called_once_with(100, ["hydraflow-fixed"])
         prs.post_comment.assert_called_once()
         prs.update_issue_body.assert_called_once()
 
@@ -138,9 +138,9 @@ class TestEpicCompletionChecker:
     async def test_skips_epic_when_some_sub_issues_incomplete(self) -> None:
         epic = _make_epic(100, [1, 2, 3])
         sub_issues = {
-            1: _make_issue(1, ["hydra-fixed"]),
+            1: _make_issue(1, ["hydraflow-fixed"]),
             2: _make_issue(2, []),  # Not completed
-            3: _make_issue(3, ["hydra-fixed"]),
+            3: _make_issue(3, ["hydraflow-fixed"]),
         }
         checker, prs, _ = _make_checker(epics=[epic], sub_issues=sub_issues)
 
@@ -174,7 +174,7 @@ class TestEpicCompletionChecker:
             number=100,
             title="[Epic] No checkboxes",
             body="This epic has no checkbox sub-issues.",
-            labels=["hydra-epic"],
+            labels=["hydraflow-epic"],
         )
         checker, prs, _ = _make_checker(epics=[epic])
 
@@ -184,7 +184,7 @@ class TestEpicCompletionChecker:
 
     @pytest.mark.asyncio
     async def test_handles_fetch_failure_gracefully(self) -> None:
-        config = ConfigFactory.create(epic_label=["hydra-epic"])
+        config = ConfigFactory.create(epic_label=["hydraflow-epic"])
         prs = AsyncMock()
         fetcher = AsyncMock()
         fetcher.fetch_issues_by_labels = AsyncMock(
@@ -201,8 +201,8 @@ class TestEpicCompletionChecker:
     async def test_updates_epic_body_checkboxes(self) -> None:
         epic = _make_epic(100, [1, 2])
         sub_issues = {
-            1: _make_issue(1, ["hydra-fixed"]),
-            2: _make_issue(2, ["hydra-fixed"]),
+            1: _make_issue(1, ["hydraflow-fixed"]),
+            2: _make_issue(2, ["hydraflow-fixed"]),
         }
         checker, prs, _ = _make_checker(epics=[epic], sub_issues=sub_issues)
 
@@ -216,7 +216,7 @@ class TestEpicCompletionChecker:
     @pytest.mark.asyncio
     async def test_posts_closing_comment(self) -> None:
         epic = _make_epic(100, [1])
-        sub_issues = {1: _make_issue(1, ["hydra-fixed"])}
+        sub_issues = {1: _make_issue(1, ["hydraflow-fixed"])}
         checker, prs, _ = _make_checker(epics=[epic], sub_issues=sub_issues)
 
         await checker.check_and_close_epics(1)
@@ -228,7 +228,7 @@ class TestEpicCompletionChecker:
     async def test_skips_when_sub_issue_not_found(self) -> None:
         epic = _make_epic(100, [1, 2])
         sub_issues = {
-            1: _make_issue(1, ["hydra-fixed"]),
+            1: _make_issue(1, ["hydraflow-fixed"]),
             # Issue 2 not found (returns None)
         }
         checker, prs, _ = _make_checker(epics=[epic], sub_issues=sub_issues)
@@ -252,8 +252,8 @@ class TestEpicCompletionChecker:
     async def test_does_not_close_when_fixed_label_not_configured(self) -> None:
         """With fixed_label=[], no sub-issue can be confirmed complete — epic stays open."""
         epic = _make_epic(100, [1])
-        sub_issues = {1: _make_issue(1, ["hydra-fixed"])}
-        config = ConfigFactory.create(epic_label=["hydra-epic"], fixed_label=[])
+        sub_issues = {1: _make_issue(1, ["hydraflow-fixed"])}
+        config = ConfigFactory.create(epic_label=["hydraflow-epic"], fixed_label=[])
         prs = AsyncMock()
         fetcher = AsyncMock()
         fetcher.fetch_issues_by_labels = AsyncMock(return_value=[epic])
@@ -269,8 +269,8 @@ class TestEpicCompletionChecker:
         epic_a = _make_epic(100, [1, 2])
         epic_b = _make_epic(200, [1, 3])
         sub_issues = {
-            1: _make_issue(1, ["hydra-fixed"]),
-            2: _make_issue(2, ["hydra-fixed"]),
+            1: _make_issue(1, ["hydraflow-fixed"]),
+            2: _make_issue(2, ["hydraflow-fixed"]),
             3: _make_issue(3, []),  # Not done
         }
         checker, prs, _ = _make_checker(epics=[epic_a, epic_b], sub_issues=sub_issues)

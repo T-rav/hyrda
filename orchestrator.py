@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
-from config import HydraConfig
+from config import HydraFlowConfig
 from epic import EpicCompletionChecker
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from execution import get_default_runner
 from hitl_phase import HITLPhase
 from hitl_runner import HITLRunner
@@ -43,11 +43,11 @@ from worktree import WorktreeManager
 if TYPE_CHECKING:
     from metrics_manager import MetricsManager
 
-logger = logging.getLogger("hydra.orchestrator")
+logger = logging.getLogger("hydraflow.orchestrator")
 
 
-class HydraOrchestrator:
-    """Coordinates the full Hydra pipeline.
+class HydraFlowOrchestrator:
+    """Coordinates the full HydraFlow pipeline.
 
     Each phase runs as an independent polling loop so new work is picked
     up continuously — planner, implementer, and reviewer all run
@@ -56,7 +56,7 @@ class HydraOrchestrator:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         event_bus: EventBus | None = None,
         state: StateTracker | None = None,
     ) -> None:
@@ -401,7 +401,7 @@ class HydraOrchestrator:
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.ORCHESTRATOR_STATUS,
                 data={"status": self.run_status},
             )
@@ -440,7 +440,7 @@ class HydraOrchestrator:
 
         await self._publish_status()
         logger.info(
-            "Hydra starting — repo=%s label=%s workers=%d poll=%ds",
+            "HydraFlow starting — repo=%s label=%s workers=%d poll=%ds",
             self._config.repo,
             ",".join(self._config.ready_label),
             self._config.max_workers,
@@ -462,7 +462,7 @@ class HydraOrchestrator:
         self._state.save_session(self._current_session)
         self._bus.set_session_id(session_id)
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.SESSION_START,
                 session_id=session_id,
                 data={"session_id": session_id, "repo": self._config.repo},
@@ -490,7 +490,7 @@ class HydraOrchestrator:
                     self._config.repo, self._config.max_sessions_per_repo
                 )
                 await self._bus.publish(
-                    HydraEvent(
+                    HydraFlowEvent(
                         type=EventType.SESSION_END,
                         session_id=self._current_session.id,
                         data={
@@ -512,7 +512,7 @@ class HydraOrchestrator:
             await asyncio.sleep(0)
             self._running = False
             await self._publish_status()
-            logger.info("Hydra stopped")
+            logger.info("HydraFlow stopped")
 
     async def _supervise_loops(self) -> None:
         """Run all loops plus the IssueStore poller, restarting any that crash."""
@@ -533,7 +533,7 @@ class HydraOrchestrator:
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
-            tasks[name] = asyncio.create_task(factory(), name=f"hydra-{name}")
+            tasks[name] = asyncio.create_task(factory(), name=f"hydraflow-{name}")
 
         try:
             while not self._stop_event.is_set():
@@ -541,7 +541,7 @@ class HydraOrchestrator:
                     tasks.values(), return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
-                    name = task.get_name().removeprefix("hydra-")
+                    name = task.get_name().removeprefix("hydraflow-")
                     if self._stop_event.is_set():
                         break
                     exc = task.exception()
@@ -555,7 +555,7 @@ class HydraOrchestrator:
                             )
                             self._auth_failed = True
                             await self._bus.publish(
-                                HydraEvent(
+                                HydraFlowEvent(
                                     type=EventType.SYSTEM_ALERT,
                                     data={
                                         "message": (
@@ -577,7 +577,7 @@ class HydraOrchestrator:
 
                         logger.error("Loop %r crashed — restarting: %s", name, exc)
                         await self._bus.publish(
-                            HydraEvent(
+                            HydraFlowEvent(
                                 type=EventType.ERROR,
                                 data={
                                     "message": f"Loop {name} crashed and was restarted",
@@ -587,7 +587,7 @@ class HydraOrchestrator:
                         )
                         factory_fn = dict(loop_factories)[name]
                         tasks[name] = asyncio.create_task(
-                            factory_fn(), name=f"hydra-{name}"
+                            factory_fn(), name=f"hydraflow-{name}"
                         )
         finally:
             for task in tasks.values():
@@ -617,7 +617,7 @@ class HydraOrchestrator:
                     display,
                 )
                 await self._bus.publish(
-                    HydraEvent(
+                    HydraFlowEvent(
                         type=EventType.ERROR,
                         data={
                             "message": f"{display} loop error",
@@ -646,7 +646,7 @@ class HydraOrchestrator:
         )
 
     async def _implement_loop(self) -> None:
-        """Continuously poll for ``hydra-ready`` issues and implement them."""
+        """Continuously poll for ``hydraflow-ready`` issues and implement them."""
         await self._polling_loop(
             "implement",
             self._do_implement_work,
@@ -672,7 +672,7 @@ class HydraOrchestrator:
         )
 
     async def _memory_sync_loop(self) -> None:
-        """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
+        """Continuously poll ``hydraflow-memory`` issues and rebuild the digest."""
         await self._memory_sync_bg.run()
 
     async def _metrics_sync_loop(self) -> None:
@@ -811,7 +811,7 @@ class HydraOrchestrator:
             )
 
             await self._bus.publish(
-                HydraEvent(
+                HydraFlowEvent(
                     type=EventType.SYSTEM_ALERT,
                     data={
                         "message": (
@@ -854,7 +854,7 @@ class HydraOrchestrator:
         self._credits_paused_until = None
         logger.info("Credit pause ended — restarting all loops")
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.SYSTEM_ALERT,
                 data={
                     "message": "Credit pause ended. Resuming all loops.",
@@ -863,4 +863,6 @@ class HydraOrchestrator:
             )
         )
         for loop_name, factory in loop_factories:
-            tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
+            tasks[loop_name] = asyncio.create_task(
+                factory(), name=f"hydraflow-{loop_name}"
+            )

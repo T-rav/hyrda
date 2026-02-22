@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/state.py - StateTracker class."""
+"""Tests for dx/hydraflow/state.py - StateTracker class."""
 
 from __future__ import annotations
 
@@ -304,8 +304,8 @@ class TestPRTracking:
 class TestHITLOriginTracking:
     def test_set_hitl_origin_stores_label(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
-        tracker.set_hitl_origin(42, "hydra-review")
-        assert tracker.get_hitl_origin(42) == "hydra-review"
+        tracker.set_hitl_origin(42, "hydraflow-review")
+        assert tracker.get_hitl_origin(42) == "hydraflow-review"
 
     def test_get_hitl_origin_returns_none_for_unknown(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
@@ -314,18 +314,18 @@ class TestHITLOriginTracking:
     def test_set_hitl_origin_triggers_save(self, tmp_path: Path) -> None:
         state_file = tmp_path / "state.json"
         tracker = StateTracker(state_file)
-        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.set_hitl_origin(42, "hydraflow-review")
         assert state_file.exists()
 
     def test_set_hitl_origin_overwrites(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
-        tracker.set_hitl_origin(42, "hydra-find")
-        tracker.set_hitl_origin(42, "hydra-review")
-        assert tracker.get_hitl_origin(42) == "hydra-review"
+        tracker.set_hitl_origin(42, "hydraflow-find")
+        tracker.set_hitl_origin(42, "hydraflow-review")
+        assert tracker.get_hitl_origin(42) == "hydraflow-review"
 
     def test_remove_hitl_origin_deletes_entry(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
-        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.set_hitl_origin(42, "hydraflow-review")
         tracker.remove_hitl_origin(42)
         assert tracker.get_hitl_origin(42) is None
 
@@ -337,22 +337,22 @@ class TestHITLOriginTracking:
 
     def test_multiple_origins_tracked_independently(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
-        tracker.set_hitl_origin(1, "hydra-find")
-        tracker.set_hitl_origin(2, "hydra-review")
-        assert tracker.get_hitl_origin(1) == "hydra-find"
-        assert tracker.get_hitl_origin(2) == "hydra-review"
+        tracker.set_hitl_origin(1, "hydraflow-find")
+        tracker.set_hitl_origin(2, "hydraflow-review")
+        assert tracker.get_hitl_origin(1) == "hydraflow-find"
+        assert tracker.get_hitl_origin(2) == "hydraflow-review"
 
     def test_hitl_origin_persists_across_reload(self, tmp_path: Path) -> None:
         state_file = tmp_path / "state.json"
         tracker = StateTracker(state_file)
-        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.set_hitl_origin(42, "hydraflow-review")
 
         tracker2 = StateTracker(state_file)
-        assert tracker2.get_hitl_origin(42) == "hydra-review"
+        assert tracker2.get_hitl_origin(42) == "hydraflow-review"
 
     def test_reset_clears_hitl_origins(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
-        tracker.set_hitl_origin(42, "hydra-review")
+        tracker.set_hitl_origin(42, "hydraflow-review")
         tracker.reset()
         assert tracker.get_hitl_origin(42) is None
 
@@ -445,7 +445,7 @@ class TestHITLCauseTracking:
             "active_worktrees": {},
             "active_branches": {},
             "reviewed_prs": {},
-            "hitl_origins": {"42": "hydra-review"},
+            "hitl_origins": {"42": "hydraflow-review"},
             "last_updated": None,
         }
         state_file.write_text(json.dumps(old_data))
@@ -549,7 +549,7 @@ class TestReset:
         tracker.set_worktree(1, "/wt/1")
         tracker.set_branch(1, "agent/issue-1")
         tracker.mark_pr(10, "open")
-        tracker.set_hitl_origin(1, "hydra-review")
+        tracker.set_hitl_origin(1, "hydraflow-review")
         tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
         tracker.increment_batch()
         tracker.increment_issue_attempts(1)
@@ -1000,7 +1000,7 @@ class TestStateDataModel:
             "active_worktrees": {"2": "/wt/2"},
             "active_branches": {"2": "agent/issue-2"},
             "reviewed_prs": {"10": "merged"},
-            "hitl_origins": {"42": "hydra-review"},
+            "hitl_origins": {"42": "hydraflow-review"},
             "hitl_causes": {"42": "CI failed after 2 fix attempts"},
             "lifetime_stats": {
                 "issues_completed": 3,

@@ -1,7 +1,6 @@
 import React from 'react'
 import { theme } from '../theme'
-import { useHydra } from '../context/HydraContext'
-
+import { useHydraFlow } from '../context/HydraFlowContext'
 function TrendIndicator({ current, previous, label, format }) {
   if (previous == null || current == null) return null
   const diff = current - previous
@@ -77,7 +76,7 @@ function SnapshotTimeline({ snapshots }) {
 export function MetricsPanel() {
   const {
     metrics, lifetimeStats, githubMetrics, metricsHistory, stageStatus,
-  } = useHydra()
+  } = useHydraFlow()
   const sessionTriaged = stageStatus?.triage?.sessionCount || 0
   const sessionPlanned = stageStatus?.plan?.sessionCount || 0
   const sessionImplemented = stageStatus?.implement?.sessionCount || 0

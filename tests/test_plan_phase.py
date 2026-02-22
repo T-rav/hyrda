@@ -21,7 +21,7 @@ from plan_phase import PlanPhase
 from state import StateTracker
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -42,7 +42,7 @@ def make_issue(
 
 
 def _make_phase(
-    config: HydraConfig,
+    config: HydraFlowConfig,
 ) -> tuple[PlanPhase, StateTracker, AsyncMock, AsyncMock, IssueStore, asyncio.Event]:
     """Build a PlanPhase with mock dependencies.
 
@@ -75,7 +75,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_posts_comment_on_success(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On successful plan, post_comment should be called."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -101,7 +101,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_swaps_labels_on_success(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On success, planner_label should be removed and config.ready_label added."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -122,7 +122,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_skips_label_swap_on_failure(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On failure, no label changes should be made."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -144,7 +144,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_returns_empty_when_no_issues(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When no issues have the planner label, return empty list."""
         phase, _state, _planners, _prs, store, _stop = _make_phase(config)
@@ -156,7 +156,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issue_creation_records_lifetime_stats(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """record_issue_created should be called for each new issue filed by planner."""
         from models import NewIssueSpec
@@ -193,7 +193,7 @@ class TestPlanPhase:
         assert stats.issues_created == 2
 
     @pytest.mark.asyncio
-    async def test_plan_issues_files_new_issues(self, config: HydraConfig) -> None:
+    async def test_plan_issues_files_new_issues(self, config: HydraFlowConfig) -> None:
         """When planner discovers new issues, they should be filed via create_issue."""
         from models import NewIssueSpec
 
@@ -228,7 +228,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_semaphore_limits_concurrency(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """max_planners=1 means at most 1 planner runs concurrently."""
         concurrency_counter = {"current": 0, "peak": 0}
@@ -259,7 +259,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_marks_active_during_processing(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Plan should mark issues active to prevent re-queuing by refresh."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -286,7 +286,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_failure_returns_result_with_error(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Plan failure (success=False) should still return the result."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -308,7 +308,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_new_issues_use_default_planner_label_when_no_labels(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """New issues with empty labels should fall back to planner_label."""
         from models import NewIssueSpec
@@ -343,7 +343,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_skips_new_issues_with_short_body(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """New issues with body < 50 chars should be skipped, not filed."""
         from models import NewIssueSpec
@@ -370,7 +370,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_stop_event_cancels_remaining(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Setting stop_event after first plan should cancel remaining."""
         phase, _state, planners, prs, store, stop_event = _make_phase(config)
@@ -397,7 +397,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_escalates_to_hitl_after_retry_failure(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Failed retry triggers HITL label swap and comment."""
         phase, state, planners, prs, store, _stop = _make_phase(config)
@@ -434,7 +434,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_no_hitl_on_failure_without_retry(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Normal failure (no retry) should NOT escalate to HITL."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -457,7 +457,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_runs_analysis_before_label_swap(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Analysis comment should be posted after the plan comment."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -488,7 +488,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_proceeds_on_analysis_pass(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """PASS verdict should proceed with normal label swap."""
         from analysis import PlanAnalyzer
@@ -525,7 +525,7 @@ class TestPlanPhase:
 
     @pytest.mark.asyncio
     async def test_plan_issues_proceeds_on_analysis_warn(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """WARN verdict should still proceed with normal label swap."""
         from analysis import PlanAnalyzer
@@ -571,7 +571,7 @@ class TestPlanPhaseAlreadySatisfied:
 
     @pytest.mark.asyncio
     async def test_plan_already_satisfied_closes_issue_with_dup_label(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When planner returns already_satisfied, issue should be closed with dup label."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
@@ -595,16 +595,16 @@ class TestPlanPhaseAlreadySatisfied:
         prs.post_comment.assert_awaited_once()
         comment = prs.post_comment.call_args.args[1]
         assert "Already Satisfied" in comment
-        assert "Hydra Planner" in comment
+        assert "HydraFlow Planner" in comment
 
         # Issue should be closed
         prs.close_issue.assert_awaited_once_with(42)
 
     @pytest.mark.asyncio
     async def test_plan_already_satisfied_does_not_swap_to_ready(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
-        """When already_satisfied, issue should NOT get hydra-ready label."""
+        """When already_satisfied, issue should NOT get hydraflow-ready label."""
         phase, _state, planners, prs, store, _stop = _make_phase(config)
         issue = make_issue(42)
         plan_result = PlanResult(

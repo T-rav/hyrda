@@ -10,7 +10,7 @@ from memory import file_memory_suggestion
 
 if TYPE_CHECKING:
     from agent import AgentRunner
-    from config import HydraConfig
+    from config import HydraFlowConfig
     from events import EventBus
     from issue_fetcher import IssueFetcher
     from models import HITLItem
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from state import StateTracker
     from worktree import WorktreeManager
 
-logger = logging.getLogger("hydra.pr_unsticker")
+logger = logging.getLogger("hydraflow.pr_unsticker")
 
 # Keywords that indicate a merge conflict cause
 _MERGE_CONFLICT_KEYWORDS = ("merge conflict", "conflict")
@@ -29,7 +29,7 @@ class PRUnsticker:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         event_bus: EventBus,
         pr_manager: PRManager,
@@ -51,7 +51,7 @@ class PRUnsticker:
         Returns a dict with keys: ``processed``, ``resolved``, ``failed``,
         ``skipped``.
         """
-        from events import EventType, HydraEvent
+        from events import EventType, HydraFlowEvent
 
         stats: dict[str, int] = {
             "processed": 0,
@@ -83,7 +83,7 @@ class PRUnsticker:
                 stats["failed"] += 1
 
             await self._bus.publish(
-                HydraEvent(
+                HydraFlowEvent(
                     type=EventType.HITL_UPDATE,
                     data={
                         "issue": item.issue,
@@ -111,7 +111,7 @@ class PRUnsticker:
         await self._prs.post_comment(
             issue_number,
             "**PR Unsticker** attempting to resolve merge conflicts...\n\n"
-            "---\n*Automated by Hydra PR Unsticker*",
+            "---\n*Automated by HydraFlow PR Unsticker*",
         )
 
         try:
@@ -154,7 +154,7 @@ class PRUnsticker:
                     issue_number,
                     "**PR Unsticker** resolved merge conflicts successfully.\n\n"
                     f"Returning issue to `{origin or 'pipeline'}` stage."
-                    "\n\n---\n*Automated by Hydra PR Unsticker*",
+                    "\n\n---\n*Automated by HydraFlow PR Unsticker*",
                 )
 
                 logger.info(
@@ -268,7 +268,7 @@ class PRUnsticker:
             issue_number,
             f"**PR Unsticker** could not resolve merge conflicts: {reason}\n\n"
             "Returning to HITL for manual intervention."
-            "\n\n---\n*Automated by Hydra PR Unsticker*",
+            "\n\n---\n*Automated by HydraFlow PR Unsticker*",
         )
 
     def _is_merge_conflict(self, cause: str) -> bool:
@@ -279,8 +279,8 @@ class PRUnsticker:
     def _save_transcript(
         self, issue_number: int, attempt: int, transcript: str
     ) -> None:
-        """Save a conflict resolution transcript to ``.hydra/logs/``."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Save a conflict resolution transcript to ``.hydraflow/logs/``."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"unsticker-issue-{issue_number}-attempt-{attempt}.txt"

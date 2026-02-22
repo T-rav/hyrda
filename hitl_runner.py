@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from execution import get_default_runner
 from models import GitHubIssue, HITLResult
 from runner_utils import stream_claude_process, terminate_processes
@@ -18,7 +18,7 @@ from subprocess_util import CreditExhaustedError
 if TYPE_CHECKING:
     from execution import SubprocessRunner
 
-logger = logging.getLogger("hydra.hitl_runner")
+logger = logging.getLogger("hydraflow.hitl_runner")
 
 # Prompt instructions keyed by escalation cause category.
 _CAUSE_INSTRUCTIONS: dict[str, str] = {
@@ -81,7 +81,7 @@ class HITLRunner:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         event_bus: EventBus,
         runner: SubprocessRunner | None = None,
     ) -> None:
@@ -106,7 +106,7 @@ class HITLRunner:
         result = HITLResult(issue_number=issue.number)
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue.number,
@@ -147,7 +147,7 @@ class HITLRunner:
 
         status = "done" if result.success else "failed"
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue.number,
@@ -265,8 +265,8 @@ Only suggest genuinely valuable learnings — not trivial observations.
         return True, "OK"
 
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
-        """Write the HITL transcript to .hydra/logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Write the HITL transcript to .hydraflow/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"hitl-issue-{issue_number}.txt"

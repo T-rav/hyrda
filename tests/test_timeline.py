@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from state import StateTracker
 from tests.conftest import EventFactory
 from timeline import TimelineBuilder
@@ -24,8 +24,8 @@ def _event(
     event_type: EventType,
     offset: int = 0,
     **data: object,
-) -> HydraEvent:
-    """Create a HydraEvent with a controlled timestamp."""
+) -> HydraFlowEvent:
+    """Create a HydraFlowEvent with a controlled timestamp."""
     return EventFactory.create(type=event_type, timestamp=_ts(offset), data=data)
 
 

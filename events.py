@@ -18,7 +18,7 @@ from file_util import atomic_write
 
 _event_counter = itertools.count()
 
-logger = logging.getLogger("hydra.events")
+logger = logging.getLogger("hydraflow.events")
 
 
 class EventType(StrEnum):
@@ -53,7 +53,7 @@ class EventType(StrEnum):
     SESSION_END = "session_end"
 
 
-class HydraEvent(BaseModel):
+class HydraFlowEvent(BaseModel):
     """A single event published on the bus."""
 
     id: int = Field(default_factory=lambda: next(_event_counter))
@@ -84,7 +84,7 @@ class EventLog:
             f.write(line + "\n")
             f.flush()
 
-    async def append(self, event: HydraEvent) -> None:
+    async def append(self, event: HydraFlowEvent) -> None:
         """Serialize *event* to JSON and append a line to the log file."""
         line = event.model_dump_json()
         await asyncio.to_thread(self._append_sync, line)
@@ -93,19 +93,19 @@ class EventLog:
         self,
         since: datetime | None = None,
         max_events: int = 5000,
-    ) -> list[HydraEvent]:
+    ) -> list[HydraFlowEvent]:
         """Synchronous load — called via ``asyncio.to_thread``."""
         if not self._path.exists():
             return []
 
-        events: list[HydraEvent] = []
+        events: list[HydraFlowEvent] = []
         with open(self._path) as f:
             for line_num, raw_line in enumerate(f, 1):
                 stripped = raw_line.strip()
                 if not stripped:
                     continue
                 try:
-                    event = HydraEvent.model_validate_json(stripped)
+                    event = HydraFlowEvent.model_validate_json(stripped)
                 except Exception:
                     logger.warning(
                         "Skipping corrupt event log line %d in %s",
@@ -133,7 +133,7 @@ class EventLog:
         self,
         since: datetime | None = None,
         max_events: int = 5000,
-    ) -> list[HydraEvent]:
+    ) -> list[HydraFlowEvent]:
         """Read events from the JSONL file, optionally filtered by timestamp."""
         return await asyncio.to_thread(self._load_sync, since, max_events)
 
@@ -159,7 +159,7 @@ class EventLog:
                 if not stripped:
                     continue
                 try:
-                    event = HydraEvent.model_validate_json(stripped)
+                    event = HydraFlowEvent.model_validate_json(stripped)
                     ts = datetime.fromisoformat(event.timestamp)
                     if ts >= cutoff:
                         kept_lines.append(stripped)
@@ -183,7 +183,7 @@ class EventBus:
     """Async pub/sub bus with history replay.
 
     Subscribers receive an ``asyncio.Queue`` that yields
-    :class:`HydraEvent` objects as they are published.
+    :class:`HydraFlowEvent` objects as they are published.
     """
 
     def __init__(
@@ -191,8 +191,8 @@ class EventBus:
         max_history: int = 5000,
         event_log: EventLog | None = None,
     ) -> None:
-        self._subscribers: list[asyncio.Queue[HydraEvent]] = []
-        self._history: list[HydraEvent] = []
+        self._subscribers: list[asyncio.Queue[HydraFlowEvent]] = []
+        self._history: list[HydraFlowEvent] = []
         self._max_history = max_history
         self._event_log = event_log
         self._active_session_id: str | None = None
@@ -201,7 +201,7 @@ class EventBus:
         """Set the active session ID to auto-inject into published events."""
         self._active_session_id = session_id
 
-    async def publish(self, event: HydraEvent) -> None:
+    async def publish(self, event: HydraFlowEvent) -> None:
         """Publish *event* to all subscribers and append to history."""
         if event.session_id is None and getattr(self, "_active_session_id", None):
             event.session_id = self._active_session_id
@@ -220,7 +220,7 @@ class EventBus:
         if self._event_log is not None:
             asyncio.ensure_future(self._persist_event(event))
 
-    async def _persist_event(self, event: HydraEvent) -> None:
+    async def _persist_event(self, event: HydraFlowEvent) -> None:
         """Write event to disk, logging any errors without crashing."""
         try:
             assert self._event_log is not None  # noqa: S101
@@ -235,7 +235,7 @@ class EventBus:
         events = await self._event_log.load(max_events=self._max_history)
         self._history = events
 
-    async def load_events_since(self, since: datetime) -> list[HydraEvent] | None:
+    async def load_events_since(self, since: datetime) -> list[HydraFlowEvent] | None:
         """Load persisted events from disk since *since*.
 
         Returns ``None`` when no event log is configured (caller should
@@ -251,13 +251,13 @@ class EventBus:
             return
         await self._event_log.rotate(max_size_bytes, max_age_days)
 
-    def subscribe(self, max_queue: int = 500) -> asyncio.Queue[HydraEvent]:
+    def subscribe(self, max_queue: int = 500) -> asyncio.Queue[HydraFlowEvent]:
         """Return a new queue that will receive future events."""
-        queue: asyncio.Queue[HydraEvent] = asyncio.Queue(maxsize=max_queue)
+        queue: asyncio.Queue[HydraFlowEvent] = asyncio.Queue(maxsize=max_queue)
         self._subscribers.append(queue)
         return queue
 
-    def unsubscribe(self, queue: asyncio.Queue[HydraEvent]) -> None:
+    def unsubscribe(self, queue: asyncio.Queue[HydraFlowEvent]) -> None:
         """Remove *queue* from the subscriber list."""
         with contextlib.suppress(ValueError):
             self._subscribers.remove(queue)
@@ -265,7 +265,7 @@ class EventBus:
     @contextlib.asynccontextmanager
     async def subscription(
         self, max_queue: int = 500
-    ) -> AsyncIterator[asyncio.Queue[HydraEvent]]:
+    ) -> AsyncIterator[asyncio.Queue[HydraFlowEvent]]:
         """Async context manager that auto-unsubscribes on exit."""
         queue = self.subscribe(max_queue)
         try:
@@ -273,7 +273,7 @@ class EventBus:
         finally:
             self.unsubscribe(queue)
 
-    def get_history(self) -> list[HydraEvent]:
+    def get_history(self) -> list[HydraFlowEvent]:
         """Return a copy of all recorded events."""
         return list(self._history)
 

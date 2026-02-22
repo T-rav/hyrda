@@ -1,4 +1,4 @@
-"""Route handlers for the Hydra dashboard API."""
+"""Route handlers for the HydraFlow dashboard API."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from fastapi import APIRouter, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
-from config import HydraConfig, save_config_file
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig, save_config_file
+from events import EventBus, EventType, HydraFlowEvent
 from models import (
     BackgroundWorkersResponse,
     BackgroundWorkerStatus,
@@ -33,9 +33,9 @@ from state import StateTracker
 from timeline import TimelineBuilder
 
 if TYPE_CHECKING:
-    from orchestrator import HydraOrchestrator
+    from orchestrator import HydraFlowOrchestrator
 
-logger = logging.getLogger("hydra.dashboard")
+logger = logging.getLogger("hydraflow.dashboard")
 
 # Backend stage keys → frontend stage names
 _STAGE_NAME_MAP = {
@@ -56,12 +56,12 @@ _FRONTEND_STAGE_TO_LABEL_FIELD = {
 
 
 def create_router(
-    config: HydraConfig,
+    config: HydraFlowConfig,
     event_bus: EventBus,
     state: StateTracker,
     pr_manager: PRManager,
-    get_orchestrator: Callable[[], HydraOrchestrator | None],
-    set_orchestrator: Callable[[HydraOrchestrator], None],
+    get_orchestrator: Callable[[], HydraFlowOrchestrator | None],
+    set_orchestrator: Callable[[HydraFlowOrchestrator], None],
     set_run_task: Callable[[asyncio.Task[None]], None],
     ui_dist_dir: Path,
     template_dir: Path,
@@ -77,7 +77,9 @@ def create_router(
         template_path = template_dir / "index.html"
         if template_path.exists():
             return HTMLResponse(template_path.read_text())
-        return HTMLResponse("<h1>Hydra Dashboard</h1><p>Run 'make ui' to build.</p>")
+        return HTMLResponse(
+            "<h1>HydraFlow Dashboard</h1><p>Run 'make ui' to build.</p>"
+        )
 
     @router.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
@@ -134,7 +136,7 @@ def create_router(
         state.set_hitl_origin(issue_number, origin_label)
 
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_ESCALATION,
                 data={
                     "issue": issue_number,
@@ -184,7 +186,7 @@ def create_router(
 
     @router.get("/api/prs")
     async def get_prs() -> JSONResponse:
-        """Fetch all open Hydra PRs from GitHub."""
+        """Fetch all open HydraFlow PRs from GitHub."""
         all_labels = list(
             {
                 *config.ready_label,
@@ -245,7 +247,7 @@ def create_router(
         await pr_manager.swap_pipeline_labels(issue_number, config.hitl_active_label[0])
 
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue_number,
@@ -279,7 +281,7 @@ def create_router(
                 await pr_manager.remove_label(issue_number, lbl)
 
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue_number,
@@ -300,7 +302,7 @@ def create_router(
         state.remove_hitl_origin(issue_number)
         await pr_manager.close_issue(issue_number)
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue_number,
@@ -324,7 +326,7 @@ def create_router(
         state.remove_hitl_origin(issue_number)
         state.remove_hitl_cause(issue_number)
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue_number,
@@ -357,9 +359,9 @@ def create_router(
         if orch and orch.running:
             return JSONResponse({"error": "already running"}, status_code=409)
 
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        new_orch = HydraOrchestrator(
+        new_orch = HydraFlowOrchestrator(
             config,
             event_bus=event_bus,
             state=state,
@@ -367,7 +369,7 @@ def create_router(
         set_orchestrator(new_orch)
         set_run_task(asyncio.create_task(new_orch.run()))
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.ORCHESTRATOR_STATUS,
                 data={"status": "running", "reset": True},
             )
@@ -460,7 +462,7 @@ def create_router(
         test_values = config.model_dump()
         test_values.update(updates)
         try:
-            validated = HydraConfig.model_validate(test_values)
+            validated = HydraFlowConfig.model_validate(test_values)
         except ValidationError as exc:
             errors = exc.errors()
             msg = "; ".join(
@@ -745,7 +747,7 @@ def create_router(
             # Stream live events
             try:
                 while True:
-                    event: HydraEvent = await queue.get()
+                    event: HydraFlowEvent = await queue.get()
                     await ws.send_text(event.model_dump_json())
             except WebSocketDisconnect:
                 pass

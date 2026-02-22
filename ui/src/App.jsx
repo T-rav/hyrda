@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { HydraProvider, useHydra } from './context/HydraContext'
+import { HydraFlowProvider, useHydraFlow } from './context/HydraFlowContext'
 import { Header } from './components/Header'
 import { TranscriptView } from './components/TranscriptView'
 import { HumanInputBanner } from './components/HumanInputBanner'
@@ -59,7 +59,7 @@ function AppContent() {
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
     selectedSession, selectSession,
     requestChanges, resetSession,
-  } = useHydra()
+  } = useHydraFlow()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
@@ -172,9 +172,9 @@ function AppContent() {
 
 export default function App() {
   return (
-    <HydraProvider>
+    <HydraFlowProvider>
       <AppContent />
-    </HydraProvider>
+    </HydraFlowProvider>
   )
 }
 

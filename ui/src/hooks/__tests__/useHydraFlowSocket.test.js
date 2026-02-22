@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { reducer, initialState } from '../useHydraSocket'
+import { reducer, initialState } from '../useHydraFlowSocket'
 import { MAX_EVENTS } from '../../constants'
 
-describe('useHydraSocket reducer', () => {
+describe('useHydraFlowSocket reducer', () => {
   it('initial state includes hitlItems and humanInputRequests', () => {
     expect(initialState.hitlItems).toEqual([])
     expect(initialState.humanInputRequests).toEqual({})

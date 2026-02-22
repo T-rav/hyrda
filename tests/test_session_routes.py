@@ -144,21 +144,21 @@ class TestGetSessionDetail:
     async def test_returns_events_for_session(
         self, config, event_bus, state, tmp_path
     ) -> None:
-        from events import EventType, HydraEvent
+        from events import EventType, HydraFlowEvent
 
         session = _make_session(id="sess-1")
         state.save_session(session)
 
         # Publish events: one tagged with the session, one without
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.WORKER_UPDATE,
                 session_id="sess-1",
                 data={"issue": 1},
             )
         )
         await event_bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.WORKER_UPDATE,
                 session_id="other-session",
                 data={"issue": 2},

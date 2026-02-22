@@ -1,7 +1,7 @@
 /**
  * @typedef {'batch_start'|'phase_change'|'worker_update'|'transcript_line'|'pr_created'|'review_update'|'triage_update'|'planner_update'|'merge_update'|'ci_check'|'hitl_escalation'|'issue_created'|'batch_complete'|'hitl_update'|'orchestrator_status'|'error'|'memory_sync'|'retrospective'|'metrics_update'|'review_insight'|'background_worker_status'|'session_start'|'session_end'} EventType
  *
- * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraEvent
+ * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraFlowEvent
  *
  * @typedef {'queued'|'running'|'planning'|'validating'|'retrying'|'evaluating'|'testing'|'committing'|'quality_fix'|'merge_fix'|'reviewing'|'fixing'|'fix_done'|'start'|'merge_main'|'ci_wait'|'ci_fix'|'merging'|'escalating'|'escalated'|'done'|'failed'} WorkerStatus
  *

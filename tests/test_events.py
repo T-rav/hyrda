@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/events.py - EventType, HydraEvent, and EventBus."""
+"""Tests for dx/hydraflow/events.py - EventType, HydraFlowEvent, and EventBus."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from events import EventBus, EventLog, EventType, HydraEvent
+from events import EventBus, EventLog, EventType, HydraFlowEvent
 from tests.conftest import EventFactory
 
 # ---------------------------------------------------------------------------
@@ -77,11 +77,11 @@ class TestEventTypeEnum:
 
 
 # ---------------------------------------------------------------------------
-# HydraEvent
+# HydraFlowEvent
 # ---------------------------------------------------------------------------
 
 
-class TestHydraEvent:
+class TestHydraFlowEvent:
     def test_creation_with_explicit_values(self) -> None:
         event = EventFactory.create(
             type=EventType.BATCH_START,
@@ -93,12 +93,12 @@ class TestHydraEvent:
         assert event.data == {"batch": 1}
 
     def test_auto_timestamp_generated_when_omitted(self) -> None:
-        event = HydraEvent(type=EventType.ERROR)
+        event = HydraFlowEvent(type=EventType.ERROR)
         assert event.timestamp is not None
         assert "T" in event.timestamp  # ISO 8601 contains 'T'
 
     def test_auto_timestamp_is_utc_iso_format(self) -> None:
-        event = HydraEvent(type=EventType.ERROR)
+        event = HydraFlowEvent(type=EventType.ERROR)
         # UTC ISO strings end with '+00:00' or 'Z'
         assert "+" in event.timestamp or event.timestamp.endswith("Z")
 
@@ -120,27 +120,27 @@ class TestHydraEvent:
 
 
 # ---------------------------------------------------------------------------
-# HydraEvent ID
+# HydraFlowEvent ID
 # ---------------------------------------------------------------------------
 
 
-class TestHydraEventId:
+class TestHydraFlowEventId:
     def test_event_id_auto_generated(self) -> None:
-        event = HydraEvent(type=EventType.BATCH_START)
+        event = HydraFlowEvent(type=EventType.BATCH_START)
         assert isinstance(event.id, int)
 
     def test_event_ids_are_unique(self) -> None:
-        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(10)]
+        events = [HydraFlowEvent(type=EventType.BATCH_START) for _ in range(10)]
         ids = [e.id for e in events]
         assert len(set(ids)) == 10
 
     def test_event_ids_are_monotonically_increasing(self) -> None:
-        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(5)]
+        events = [HydraFlowEvent(type=EventType.BATCH_START) for _ in range(5)]
         for i in range(1, len(events)):
             assert events[i].id > events[i - 1].id
 
     def test_event_id_included_in_serialization(self) -> None:
-        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        event = HydraFlowEvent(type=EventType.BATCH_START, data={"batch": 1})
         dumped = event.model_dump()
         assert "id" in dumped
         assert isinstance(dumped["id"], int)
@@ -149,7 +149,7 @@ class TestHydraEventId:
         assert '"id"' in json_str
 
     def test_explicit_event_id_preserved(self) -> None:
-        event = HydraEvent(id=999, type=EventType.BATCH_START)
+        event = HydraFlowEvent(id=999, type=EventType.BATCH_START)
         assert event.id == 999
 
 
@@ -213,7 +213,7 @@ class TestEventBusPublishSubscribe:
     async def test_set_session_id_auto_injects(self) -> None:
         bus = EventBus()
         bus.set_session_id("sess-42")
-        event = HydraEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        event = HydraFlowEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
         await bus.publish(event)
         assert event.session_id == "sess-42"
 
@@ -221,7 +221,7 @@ class TestEventBusPublishSubscribe:
     async def test_set_session_id_does_not_override_explicit(self) -> None:
         bus = EventBus()
         bus.set_session_id("sess-42")
-        event = HydraEvent(
+        event = HydraFlowEvent(
             type=EventType.SESSION_START,
             session_id="explicit-id",
             data={},
@@ -234,7 +234,7 @@ class TestEventBusPublishSubscribe:
         bus = EventBus()
         bus.set_session_id("sess-42")
         bus.set_session_id(None)
-        event = HydraEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        event = HydraFlowEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
         await bus.publish(event)
         assert event.session_id is None
 
@@ -277,7 +277,7 @@ class TestEventBusUnsubscribe:
     @pytest.mark.asyncio
     async def test_unsubscribe_nonexistent_queue_is_noop(self) -> None:
         bus = EventBus()
-        orphan: asyncio.Queue[HydraEvent] = asyncio.Queue()
+        orphan: asyncio.Queue[HydraFlowEvent] = asyncio.Queue()
         # Should not raise
         bus.unsubscribe(orphan)
 
@@ -578,7 +578,7 @@ class TestRotateSyncUsesAtomicWrite:
     def test_rotate_sync_calls_atomic_write(self, tmp_path: Path) -> None:
         """_rotate_sync should delegate file writing to atomic_write."""
         log_path = tmp_path / "events.jsonl"
-        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        event = HydraFlowEvent(type=EventType.BATCH_START, data={"batch": 1})
         # Write enough data to exceed max_size_bytes
         log_path.write_text((event.model_dump_json() + "\n") * 100)
 
@@ -593,7 +593,7 @@ class TestRotateSyncUsesAtomicWrite:
     def test_rotate_sync_passes_joined_content(self, tmp_path: Path) -> None:
         """_rotate_sync should pass newline-joined kept lines to atomic_write."""
         log_path = tmp_path / "events.jsonl"
-        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        event = HydraFlowEvent(type=EventType.BATCH_START, data={"batch": 1})
         log_path.write_text((event.model_dump_json() + "\n") * 5)
 
         event_log = EventLog(log_path)

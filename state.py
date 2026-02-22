@@ -1,4 +1,4 @@
-"""Crash-recovery state persistence for Hydra."""
+"""Crash-recovery state persistence for HydraFlow."""
 
 from __future__ import annotations
 
@@ -11,13 +11,13 @@ from typing import Any
 from file_util import atomic_write
 from models import LifetimeStats, SessionLog, StateData, ThresholdProposal
 
-logger = logging.getLogger("hydra.state")
+logger = logging.getLogger("hydraflow.state")
 
 
 class StateTracker:
     """JSON-file backed state for crash recovery.
 
-    Writes ``<repo_root>/.hydra/state.json`` after every mutation.
+    Writes ``<repo_root>/.hydraflow/state.json`` after every mutation.
     """
 
     def __init__(self, state_file: Path) -> None:
