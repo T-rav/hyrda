@@ -430,6 +430,86 @@ describe('Stage header failed/hitl counts', () => {
   })
 })
 
+describe('PipelineFlow visualization', () => {
+  it('renders all pipeline stage labels in the flow', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [{ issue_number: 1, title: 'Test', status: 'queued' }],
+        plan: [], implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const flow = screen.getByTestId('pipeline-flow')
+    expect(flow).toBeInTheDocument()
+    expect(flow.textContent).toContain('Triage')
+    expect(flow.textContent).toContain('Plan')
+    expect(flow.textContent).toContain('Implement')
+    expect(flow.textContent).toContain('Review')
+    expect(flow.textContent).toContain('Merged')
+  })
+
+  it('renders dots for issues at their current stage', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [
+          { issue_number: 10, title: 'Plan issue', status: 'queued' },
+          { issue_number: 11, title: 'Plan issue 2', status: 'active' },
+        ],
+        implement: [],
+        review: [{ issue_number: 20, title: 'Review issue', status: 'active' }],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('flow-dot-10')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-11')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-20')).toBeInTheDocument()
+  })
+
+  it('does not render pipeline flow when no issues exist', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: { triage: [], plan: [], implement: [], review: [] },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('pipeline-flow')).not.toBeInTheDocument()
+  })
+
+  it('shows all stage labels even when some stages have no issues', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [{ issue_number: 5, title: 'Only plan', status: 'queued' }],
+        implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const flow = screen.getByTestId('pipeline-flow')
+    expect(flow.textContent).toContain('Triage')
+    expect(flow.textContent).toContain('Plan')
+    expect(flow.textContent).toContain('Implement')
+    expect(flow.textContent).toContain('Review')
+    expect(flow.textContent).toContain('Merged')
+  })
+
+  it('applies pulse animation to active issue dots', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [
+          { issue_number: 10, title: 'Active', status: 'active' },
+          { issue_number: 11, title: 'Queued', status: 'queued' },
+        ],
+        implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const activeDot = screen.getByTestId('flow-dot-10')
+    const queuedDot = screen.getByTestId('flow-dot-11')
+    expect(activeDot.style.animation).toContain('stream-pulse')
+    expect(queuedDot.style.animation).toBe('')
+  })
+})
+
 describe('Merged stage rendering', () => {
   it('renders merged PR issues in the merged stage section', () => {
     mockUseHydra.mockReturnValue({

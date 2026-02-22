@@ -17,6 +17,35 @@ function PendingIntentCard({ intent }) {
   )
 }
 
+function PipelineFlow({ stageGroups }) {
+  return (
+    <div style={styles.flowContainer} data-testid="pipeline-flow">
+      {stageGroups.map((group, idx) => (
+        <React.Fragment key={group.stage.key}>
+          <div style={styles.flowStage}>
+            <span style={flowLabelStyles[group.stage.key]}>{group.stage.label}</span>
+            {group.issues.length > 0 && (
+              <div style={styles.flowDots}>
+                {group.issues.map(issue => (
+                  <span
+                    key={issue.issueNumber}
+                    style={issue.overallStatus === 'active'
+                      ? flowDotActiveStyles[group.stage.key]
+                      : flowDotStyles[group.stage.key]}
+                    title={`#${issue.issueNumber}`}
+                    data-testid={`flow-dot-${issue.issueNumber}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          {idx < stageGroups.length - 1 && <div style={styles.flowConnector} />}
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
 function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const failedCount = issues.filter(i => i.overallStatus === 'failed').length
@@ -183,6 +212,8 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
 
+      {totalIssues > 0 && <PipelineFlow stageGroups={stageGroups} />}
+
       {stageGroups.map(({ stage, issues: stageIssues }) => {
         const status = stageStatus[stage.key] || {}
         const enabled = status.enabled !== false
@@ -270,11 +301,73 @@ const sectionCountStyles = Object.fromEntries(
   }])
 )
 
+const flowLabelBase = {
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.5px',
+  flexShrink: 0,
+}
+
+const flowDotBase = {
+  display: 'inline-block',
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  flexShrink: 0,
+  transition: 'all 0.3s ease',
+}
+
+const flowLabelStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowLabelBase, color: s.color }])
+)
+
+const flowDotStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: s.color }])
+)
+
+const flowDotActiveStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, {
+    ...flowDotBase,
+    background: s.color,
+    animation: 'stream-pulse 1.5s ease-in-out infinite',
+  }])
+)
+
 const styles = {
   container: {
     flex: 1,
     overflowY: 'auto',
     padding: 8,
+  },
+  flowContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '8px 12px',
+    margin: '0 8px 8px',
+    background: theme.surfaceInset,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+    overflowX: 'auto',
+    flexWrap: 'nowrap',
+  },
+  flowStage: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  flowDots: {
+    display: 'flex',
+    gap: 4,
+    alignItems: 'center',
+  },
+  flowConnector: {
+    width: 16,
+    height: 1,
+    background: theme.border,
+    flexShrink: 0,
   },
   empty: {
     display: 'flex',
