@@ -106,7 +106,7 @@ The React dashboard (`ui/`) uses inline styles in JSX. Follow these conventions.
 - New colors must be added to both `ui/index.html` `:root` and `ui/src/theme.js`
 
 ### Component Patterns
-- Check for existing components before creating new ones (pill badges in `Header.jsx`, status badges in `StreamCard.jsx`, tables in `PRTable.jsx`)
+- Check for existing components before creating new ones (pill badges in `Header.jsx`, status badges in `StreamCard.jsx`, tables in `ReviewTable.jsx`)
 - Prefer extending existing components over parallel implementations
 - Interactive elements need hover/focus states (`cursor: 'pointer'`, `transition`)
 - Derive stage-related UI from `PIPELINE_STAGES` in `constants.js`
