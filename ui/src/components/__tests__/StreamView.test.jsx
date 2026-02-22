@@ -612,8 +612,8 @@ describe('Merged stage count display', () => {
     }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
-    expect(section.textContent).toContain('active')
-    expect(section.textContent).toContain('queued')
+    expect(section.textContent).toContain('1 active')
+    expect(section.textContent).toContain('1 queued')
     expect(section.textContent).toContain('workers')
   })
 
