@@ -628,9 +628,9 @@ class TestHydraConfigPathResolution:
         assert cfg.state_file == explicit_state
 
     def test_default_worktree_base_derived_from_repo_root(self, tmp_path: Path) -> None:
-        """When worktree_base is left as Path('.'), it should be derived as repo_root.parent / 'hyrda-worktrees'."""
+        """When worktree_base is left as Path('.'), it should be derived as repo_root.parent / 'hydra-worktrees'."""
         # Arrange
-        git_root = tmp_path / "hyrda"
+        git_root = tmp_path / "hydra"
         git_root.mkdir()
         (git_root / ".git").mkdir()
 
@@ -638,12 +638,12 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig(repo_root=git_root)
 
         # Assert
-        assert cfg.worktree_base == git_root.parent / "hyrda-worktrees"
+        assert cfg.worktree_base == git_root.parent / "hydra-worktrees"
 
     def test_default_state_file_derived_from_repo_root(self, tmp_path: Path) -> None:
         """When state_file is left as Path('.'), it should resolve to repo_root / '.hydra/state.json'."""
         # Arrange
-        git_root = tmp_path / "hyrda"
+        git_root = tmp_path / "hydra"
         git_root.mkdir()
         (git_root / ".git").mkdir()
 
@@ -669,10 +669,10 @@ class TestHydraConfigPathResolution:
         # Assert
         assert cfg.repo_root.is_absolute()
 
-    def test_auto_detected_worktree_base_uses_hyrda_worktrees_name(
+    def test_auto_detected_worktree_base_uses_hydra_worktrees_name(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Auto-derived worktree_base should be named 'hyrda-worktrees'."""
+        """Auto-derived worktree_base should be named 'hydra-worktrees'."""
         # Arrange
         git_root = tmp_path / "repo"
         git_root.mkdir()
@@ -683,7 +683,7 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig()
 
         # Assert
-        assert cfg.worktree_base.name == "hyrda-worktrees"
+        assert cfg.worktree_base.name == "hydra-worktrees"
 
     def test_auto_detected_state_file_named_hydra_state_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -2780,6 +2780,22 @@ class TestDockerConfigDefaults:
         )
         assert cfg.docker_memory_limit == "4g"
 
+    def test_docker_pids_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 256
+
+    def test_docker_tmp_size_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "1g"
+
     def test_docker_network_mode_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
             repo_root=tmp_path,
@@ -3011,6 +3027,73 @@ class TestDockerConfigValidation:
         )
         assert cfg.docker_spawn_delay == pytest.approx(30.0)
 
+    def test_docker_pids_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_pids_limit=15,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_pids_limit=4097,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_pids_limit=16,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 16
+
+    def test_docker_pids_limit_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_pids_limit=4096,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 4096
+
+    def test_docker_memory_limit_invalid_suffix_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_memory_limit="4gb",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_memory_limit_invalid_text_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_memory_limit="lots",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_tmp_size_invalid_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_tmp_size="big",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     def test_docker_not_available_raises(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -3189,3 +3272,71 @@ class TestDockerConfigEnvVarOverrides:
             state_file=tmp_path / "s.json",
         )
         assert cfg.docker_spawn_delay == pytest.approx(2.0)  # unchanged default
+
+    def test_pids_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "512")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 512
+
+    def test_pids_limit_env_override_below_minimum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "15")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_PIDS_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_pids_limit_env_override_above_maximum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "4097")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_PIDS_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_TMP_SIZE", "2g")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "2g"
+
+    def test_memory_limit_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_MEMORY_LIMIT with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_MEMORY_LIMIT", "invalid_val")
+        with pytest.raises(ValueError, match="Invalid HYDRA_DOCKER_MEMORY_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_TMP_SIZE with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_TMP_SIZE", "4gb")
+        with pytest.raises(ValueError, match="Invalid HYDRA_DOCKER_TMP_SIZE"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )

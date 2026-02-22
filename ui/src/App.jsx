@@ -8,7 +8,6 @@ import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
 import { SessionSidebar } from './components/SessionSidebar'
-import { PipelineControlPanel } from './components/PipelineControlPanel'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
@@ -64,7 +63,6 @@ function AppContent() {
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
-  const [pipelinePanelOpen, setPipelinePanelOpen] = useState(true)
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
@@ -114,10 +112,6 @@ function AppContent() {
     return ok
   }, [requestChanges])
 
-  const handleTogglePipelinePanel = useCallback(() => {
-    setPipelinePanelOpen(prev => !prev)
-  }, [])
-
   return (
     <div style={styles.layout}>
       <Header
@@ -125,9 +119,6 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        style={styles.headerSpan}
-        pipelinePanelOpen={pipelinePanelOpen}
-        onTogglePipelinePanel={handleTogglePipelinePanel}
       />
 
       <SessionSidebar />
@@ -169,11 +160,6 @@ function AppContent() {
             {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
             {activeTab === 'metrics' && <MetricsPanel />}
           </div>
-          <PipelineControlPanel
-            collapsed={!pipelinePanelOpen}
-            onToggleCollapse={handleTogglePipelinePanel}
-            onToggleBgWorker={toggleBgWorker}
-          />
         </div>
       </div>
 
@@ -196,9 +182,6 @@ const styles = {
     gridTemplateColumns: '280px 1fr',
     height: '100vh',
     minWidth: '1080px',
-  },
-  headerSpan: {
-    gridColumn: '1 / -1',
   },
   main: {
     display: 'flex',

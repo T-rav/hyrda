@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     )
     from orchestrator import HydraOrchestrator
     from state import StateTracker
+    from test_scaffold import TestScaffoldResult
 
 
 # --- Session-scoped environment setup ---
@@ -357,6 +358,36 @@ class AnalysisResultFactory:
             name=name,
             verdict=verdict or AnalysisVerdict.PASS,
             details=details or [],
+        )
+
+
+# --- Test Scaffold Result Factory ---
+
+
+class TestScaffoldResultFactory:
+    """Factory for TestScaffoldResult instances."""
+
+    __test__ = False
+
+    @staticmethod
+    def create(
+        *,
+        created_dirs: list[str] | None = None,
+        created_files: list[str] | None = None,
+        modified_files: list[str] | None = None,
+        skipped: bool = False,
+        skip_reason: str = "",
+        language: str = "python",
+    ) -> TestScaffoldResult:
+        from test_scaffold import TestScaffoldResult
+
+        return TestScaffoldResult(
+            created_dirs=created_dirs or [],
+            created_files=created_files or [],
+            modified_files=modified_files or [],
+            skipped=skipped,
+            skip_reason=skip_reason,
+            language=language,
         )
 
 

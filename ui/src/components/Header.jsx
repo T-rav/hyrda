@@ -4,8 +4,7 @@ import { useHydra } from '../context/HydraContext'
 
 export function Header({
   connected, orchestratorStatus,
-  onStart, onStop, style,
-  pipelinePanelOpen, onTogglePipelinePanel,
+  onStart, onStop,
 }) {
   const { stageStatus } = useHydra()
   const workload = stageStatus.workload
@@ -44,7 +43,7 @@ export function Header({
   const isCreditsPaused = orchestratorStatus === 'credits_paused'
 
   return (
-    <header style={style ? { ...styles.header, ...style } : styles.header}>
+    <header style={styles.header}>
       <div style={styles.left}>
         <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
         <div style={styles.logoGroup}>
@@ -69,15 +68,6 @@ export function Header({
         </div>
       </div>
       <div style={styles.controls}>
-        {onTogglePipelinePanel && (
-          <button
-            style={pipelinePanelOpen ? panelToggleActiveStyle : panelToggleStyle}
-            onClick={onTogglePipelinePanel}
-            data-testid="pipeline-panel-toggle"
-          >
-            Pipeline
-          </button>
-        )}
         {canStart && (
           <button
             style={connected ? startBtnEnabled : startBtnDisabled}
@@ -198,17 +188,6 @@ const styles = {
     fontSize: 12,
     fontWeight: 600,
   },
-  panelToggle: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: `1px solid ${theme.border}`,
-    background: theme.surface,
-    color: theme.textMuted,
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  },
 }
 
 // Pre-computed connection dot variants
@@ -218,7 +197,3 @@ export const dotDisconnected = { ...styles.dot, background: theme.red }
 // Pre-computed start button variants
 export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
 export const startBtnDisabled = { ...styles.startBtn, opacity: 0.4, cursor: 'not-allowed' }
-
-// Pre-computed pipeline panel toggle button variants
-export const panelToggleStyle = styles.panelToggle
-export const panelToggleActiveStyle = { ...styles.panelToggle, border: `1px solid ${theme.accent}`, background: theme.accentSubtle, color: theme.accent }
