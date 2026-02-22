@@ -2849,6 +2849,28 @@ class TestDockerResourceEnvOverrides:
         )
         assert cfg.docker_pids_limit == 512
 
+    def test_pids_limit_env_override_below_minimum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "15")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_PIDS_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_pids_limit_env_override_above_maximum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "4097")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_PIDS_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
     def test_tmp_size_env_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

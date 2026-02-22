@@ -28,7 +28,6 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 7200),
     ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
     ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
-    ("docker_pids_limit", "HYDRA_DOCKER_PIDS_LIMIT", 256),
 ]
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
@@ -689,6 +688,19 @@ class HydraConfig(BaseModel):
                     msg = f"HYDRA_DOCKER_NETWORK_MODE must be 'bridge' or 'none', got '{env_net}'"
                     raise ValueError(msg)
                 object.__setattr__(self, "docker_network_mode", env_net)
+
+        if self.docker_pids_limit == 256:  # still at default
+            env_pids = os.environ.get("HYDRA_DOCKER_PIDS_LIMIT")
+            if env_pids is not None:
+                try:
+                    pids_val = int(env_pids)
+                except ValueError:
+                    pass
+                else:
+                    if not (16 <= pids_val <= 4096):
+                        msg = f"HYDRA_DOCKER_PIDS_LIMIT must be between 16 and 4096, got {pids_val}"
+                        raise ValueError(msg)
+                    object.__setattr__(self, "docker_pids_limit", pids_val)
 
         # Docker read-only root override (bool)
         env_readonly = os.environ.get("HYDRA_DOCKER_READ_ONLY_ROOT")
