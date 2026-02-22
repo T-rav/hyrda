@@ -1,6 +1,6 @@
 import { PIPELINE_STAGES } from '../constants'
 
-export const sectionHeaderBase = {
+const sectionHeaderBase = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
@@ -19,7 +19,7 @@ export const sectionLabelBase = {
   letterSpacing: '0.5px',
 }
 
-export const sectionCountBase = {
+const sectionCountBase = {
   fontSize: 11,
   fontWeight: 600,
   marginLeft: 'auto',
