@@ -1010,6 +1010,26 @@ async def test_plan_returns_result_when_save_plan_raises_os_error(
 
 
 @pytest.mark.asyncio
+async def test_plan_returns_failure_result_when_save_transcript_raises_after_exception(
+    config, event_bus, issue, caplog
+):
+    """plan() should return failure result even if _save_transcript raises after a planner error."""
+    runner = _make_runner(config, event_bus)
+
+    with (
+        patch.object(
+            runner, "_execute", AsyncMock(side_effect=RuntimeError("planner crashed"))
+        ),
+        patch.object(runner, "_save_transcript", side_effect=OSError("disk full")),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is False
+    assert "planner crashed" in (result.error or "")
+    assert "Failed to save transcript" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_plan_already_satisfied_returns_success_when_save_transcript_raises_os_error(
     config, event_bus, issue, caplog
 ):
