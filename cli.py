@@ -231,15 +231,66 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Disable the live web dashboard",
     )
     parser.add_argument(
-        "--execution-mode",
-        choices=["host", "docker"],
-        default=None,
-        help="Execution mode: 'host' (symlinks) or 'docker' (copies for container compatibility)",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Log actions without executing (no agents, no git, no PRs)",
+    )
+
+    # Docker isolation
+    exec_group = parser.add_mutually_exclusive_group()
+    exec_group.add_argument(
+        "--docker",
+        action="store_const",
+        const="docker",
+        dest="execution_mode",
+        help="Run agents in Docker containers",
+    )
+    exec_group.add_argument(
+        "--host",
+        action="store_const",
+        const="host",
+        dest="execution_mode",
+        help="Run agents on the host (default)",
+    )
+    parser.add_argument(
+        "--docker-image",
+        default=None,
+        help="Docker image for agent containers (default: ghcr.io/t-rav/hydra-agent:latest)",
+    )
+    parser.add_argument(
+        "--docker-cpu-limit",
+        type=float,
+        default=None,
+        help="CPU cores per container (default: 2.0)",
+    )
+    parser.add_argument(
+        "--docker-memory-limit",
+        default=None,
+        help="Memory limit per container (default: 4g)",
+    )
+    parser.add_argument(
+        "--docker-network-mode",
+        default=None,
+        choices=["bridge", "none", "host"],
+        help="Docker network mode (default: bridge)",
+    )
+    parser.add_argument(
+        "--docker-spawn-delay",
+        type=float,
+        default=None,
+        help="Seconds between container starts (default: 2.0)",
+    )
+    parser.add_argument(
+        "--docker-read-only-root",
+        action="store_true",
+        default=None,
+        help="Read-only root filesystem in containers",
+    )
+    parser.add_argument(
+        "--docker-no-new-privileges",
+        action="store_true",
+        default=None,
+        help="Prevent privilege escalation in containers",
     )
     parser.add_argument(
         "--gh-token",
@@ -262,6 +313,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
     )
     parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Scan the repo and report infrastructure gaps",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -275,6 +331,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--clean",
         action="store_true",
         help="Remove all worktrees and state, then exit",
+    )
+    parser.add_argument(
+        "--prep",
+        action="store_true",
+        help="Create Hydra lifecycle labels on the target repo, then exit",
     )
 
     return parser.parse_args(argv)
@@ -342,6 +403,11 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "memory_sync_interval",
         "metrics_sync_interval",
         "execution_mode",
+        "docker_image",
+        "docker_cpu_limit",
+        "docker_memory_limit",
+        "docker_network_mode",
+        "docker_spawn_delay",
     ):
         val = getattr(args, field)
         if val is not None:
@@ -371,8 +437,36 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         kwargs["dashboard_enabled"] = False
     if args.dry_run:
         kwargs["dry_run"] = True
+    if args.docker_read_only_root is True:
+        kwargs["docker_read_only_root"] = True
+    if args.docker_no_new_privileges is True:
+        kwargs["docker_no_new_privileges"] = True
 
     return HydraConfig(**kwargs)
+
+
+async def _run_prep(config: HydraConfig) -> bool:
+    """Create Hydra lifecycle labels on the target repo.
+
+    Returns ``True`` if all labels were created/updated successfully,
+    ``False`` if any labels failed.
+    """
+    from prep import ensure_labels  # noqa: PLC0415
+
+    result = await ensure_labels(config)
+    summary = result.summary()
+    print(f"[dry-run] {summary}" if config.dry_run else summary)  # noqa: T201
+    return not result.failed
+
+
+async def _run_audit(config: HydraConfig) -> bool:
+    """Run a repo audit and print the report. Returns True if critical gaps found."""
+    from prep import RepoAuditor  # noqa: PLC0415
+
+    auditor = RepoAuditor(config)
+    result = await auditor.run_audit()
+    print(result.format_report())  # noqa: T201
+    return result.has_critical_gaps
 
 
 async def _run_clean(config: HydraConfig) -> None:
@@ -464,6 +558,14 @@ def main(argv: list[str] | None = None) -> None:
     setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
+
+    if args.prep:
+        success = asyncio.run(_run_prep(config))
+        sys.exit(0 if success else 1)
+
+    if args.audit:
+        has_gaps = asyncio.run(_run_audit(config))
+        sys.exit(1 if has_gaps else 0)
 
     if args.clean:
         asyncio.run(_run_clean(config))

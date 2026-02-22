@@ -1238,14 +1238,17 @@ class TestGetMainCommitsSinceDiverge:
 
 def _make_docker_manager(tmp_path: Path) -> WorktreeManager:
     """Create a WorktreeManager with docker execution mode."""
+    from unittest.mock import patch
+
     from tests.helpers import ConfigFactory
 
-    cfg = ConfigFactory.create(
-        execution_mode="docker",
-        repo_root=tmp_path / "repo",
-        worktree_base=tmp_path / "worktrees",
-        state_file=tmp_path / "state.json",
-    )
+    with patch("shutil.which", return_value="/usr/bin/docker"):
+        cfg = ConfigFactory.create(
+            execution_mode="docker",
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
     return WorktreeManager(cfg)
 
 
@@ -1549,6 +1552,9 @@ class TestExecutionModeConfig:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """HYDRA_EXECUTION_MODE env var should override the default."""
+        import shutil as _shutil
+
+        monkeypatch.setattr(_shutil, "which", lambda _: "/usr/bin/docker")
         monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
         from config import HydraConfig
 
@@ -1565,6 +1571,9 @@ class TestExecutionModeConfig:
         'host' IS the default, ConfigFactory.create(execution_mode='host') is
         indistinguishable from using the default, so the env var wins.
         """
+        import shutil as _shutil
+
+        monkeypatch.setattr(_shutil, "which", lambda _: "/usr/bin/docker")
         monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
         from tests.helpers import ConfigFactory
 

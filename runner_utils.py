@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from events import EventBus, EventType, HydraEvent
+from execution import SubprocessRunner, get_default_runner
 from stream_parser import StreamParser
 from subprocess_util import (
     CreditExhaustedError,
@@ -32,6 +33,7 @@ async def stream_claude_process(
     logger: logging.Logger,
     on_output: Callable[[str], bool] | None = None,
     timeout: float | None = None,
+    runner: SubprocessRunner | None = None,
 ) -> str:
     """Run a ``claude -p`` subprocess and stream its output.
 
@@ -64,11 +66,10 @@ async def stream_claude_process(
     """
     env = make_clean_env()
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    if runner is None:
+        runner = get_default_runner()
+    proc = await runner.create_streaming_process(
+        cmd,
         cwd=str(cwd),
         env=env,
         limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default

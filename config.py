@@ -31,7 +31,18 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
     ("test_command", "HYDRA_TEST_COMMAND", "make test"),
-    ("execution_mode", "HYDRA_EXECUTION_MODE", "host"),
+    ("docker_image", "HYDRA_DOCKER_IMAGE", "ghcr.io/t-rav/hydra-agent:latest"),
+    ("docker_memory_limit", "HYDRA_DOCKER_MEMORY_LIMIT", "4g"),
+]
+
+_ENV_FLOAT_OVERRIDES: list[tuple[str, str, float]] = [
+    ("docker_cpu_limit", "HYDRA_DOCKER_CPU_LIMIT", 2.0),
+    ("docker_spawn_delay", "HYDRA_DOCKER_SPAWN_DELAY", 2.0),
+]
+
+_ENV_BOOL_OVERRIDES: list[tuple[str, str, bool]] = [
+    ("docker_read_only_root", "HYDRA_DOCKER_READ_ONLY_ROOT", True),
+    ("docker_no_new_privileges", "HYDRA_DOCKER_NO_NEW_PRIVILEGES", True),
 ]
 
 
@@ -383,12 +394,46 @@ class HydraConfig(BaseModel):
     )
 
     # Execution mode
-    execution_mode: Literal["host", "docker"] = Field(
-        default="host",
-        description="Execution mode: 'host' (symlinks) or 'docker' (copies for container compatibility)",
-    )
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
+    )
+    execution_mode: Literal["host", "docker"] = Field(
+        default="host",
+        description="Run agents on host or in Docker containers",
+    )
+
+    # Docker isolation
+    docker_image: str = Field(
+        default="ghcr.io/t-rav/hydra-agent:latest",
+        description="Docker image for agent containers",
+    )
+    docker_cpu_limit: float = Field(
+        default=2.0,
+        ge=0.5,
+        le=16.0,
+        description="CPU cores per container",
+    )
+    docker_memory_limit: str = Field(
+        default="4g",
+        description="Memory limit per container",
+    )
+    docker_network_mode: Literal["bridge", "none", "host"] = Field(
+        default="bridge",
+        description="Docker network mode",
+    )
+    docker_spawn_delay: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=30.0,
+        description="Seconds between concurrent container starts",
+    )
+    docker_read_only_root: bool = Field(
+        default=True,
+        description="Read-only root filesystem in containers",
+    )
+    docker_no_new_privileges: bool = Field(
+        default=True,
+        description="Prevent privilege escalation in containers",
     )
 
     # GitHub authentication
@@ -475,6 +520,48 @@ class HydraConfig(BaseModel):
                 env_val = os.environ.get(env_key)
                 if env_val is not None:
                     object.__setattr__(self, field, env_val)
+
+        # Data-driven env var overrides (float fields)
+        for field, env_key, default in _ENV_FLOAT_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    with contextlib.suppress(ValueError):
+                        new_val = float(env_val)
+                        for constraint in HydraConfig.model_fields[field].metadata:
+                            ge = getattr(constraint, "ge", None)
+                            le = getattr(constraint, "le", None)
+                            if ge is not None and new_val < ge:
+                                raise ValueError(
+                                    f"{env_key}={new_val} is below minimum {ge}"
+                                )
+                            if le is not None and new_val > le:
+                                raise ValueError(
+                                    f"{env_key}={new_val} is above maximum {le}"
+                                )
+                        object.__setattr__(self, field, new_val)
+
+        # Data-driven env var overrides (bool fields)
+        for field, env_key, default in _ENV_BOOL_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    object.__setattr__(
+                        self,
+                        field,
+                        env_val.lower() not in ("0", "false", "no"),
+                    )
+
+        # Literal-typed env var overrides (validated before setting)
+        if self.execution_mode == "host":
+            env_exec = os.environ.get("HYDRA_EXECUTION_MODE")
+            if env_exec in ("host", "docker"):
+                object.__setattr__(self, "execution_mode", env_exec)
+
+        if self.docker_network_mode == "bridge":
+            env_net = os.environ.get("HYDRA_DOCKER_NETWORK_MODE")
+            if env_net in ("bridge", "none", "host"):
+                object.__setattr__(self, "docker_network_mode", env_net)
 
         # Lite plan labels (comma-separated list, special-case)
         env_lite_labels = os.environ.get("HYDRA_LITE_PLAN_LABELS")
@@ -629,6 +716,17 @@ class HydraConfig(BaseModel):
                     else []
                 )
                 object.__setattr__(self, field_name, labels)
+
+        # Validate Docker availability when execution_mode is "docker"
+        if self.execution_mode == "docker":
+            import shutil  # noqa: PLC0415
+
+            if shutil.which("docker") is None:
+                msg = (
+                    "execution_mode is 'docker' but the 'docker' command "
+                    "was not found on PATH"
+                )
+                raise ValueError(msg)
 
         return self
 
