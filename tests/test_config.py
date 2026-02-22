@@ -2103,6 +2103,48 @@ class TestHydraConfigMaxReviewDiffChars:
 # ---------------------------------------------------------------------------
 
 
+class TestResolveDefaults:
+    """Tests for the resolve_defaults model validator."""
+
+    def test_resolve_defaults_sets_event_log_path(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(repo_root=tmp_path)
+        assert cfg.event_log_path == tmp_path / ".hydra" / "events.jsonl"
+
+    def test_resolve_defaults_repo_from_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GITHUB_REPO", "env-org/env-repo")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.repo == "env-org/env-repo"
+
+    def test_resolve_defaults_repo_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GITHUB_REPO", "env-org/env-repo")
+        cfg = HydraConfig(
+            repo="explicit-org/explicit-repo",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.repo == "explicit-org/explicit-repo"
+
+    def test_resolve_defaults_data_poll_interval_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DATA_POLL_INTERVAL", "120")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.data_poll_interval == 120
+
+
 class TestMaxIssueAttempts:
     """Tests for max_issue_attempts config field."""
 
