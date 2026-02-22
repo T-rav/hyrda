@@ -440,15 +440,14 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     return HydraConfig(**kwargs)
 
 
-async def _run_audit(config: HydraConfig) -> None:
-    """Run a repo audit and print the report."""
+async def _run_audit(config: HydraConfig) -> bool:
+    """Run a repo audit and print the report. Returns True if critical gaps found."""
     from prep import RepoAuditor
 
     auditor = RepoAuditor(config)
     result = await auditor.run_audit()
     print(result.format_report())  # noqa: T201
-    if result.has_critical_gaps:
-        sys.exit(1)
+    return result.has_critical_gaps
 
 
 async def _run_clean(config: HydraConfig) -> None:
@@ -542,8 +541,8 @@ def main(argv: list[str] | None = None) -> None:
     config = build_config(args)
 
     if args.audit:
-        asyncio.run(_run_audit(config))
-        sys.exit(0)
+        has_gaps = asyncio.run(_run_audit(config))
+        sys.exit(1 if has_gaps else 0)
 
     if args.clean:
         asyncio.run(_run_clean(config))

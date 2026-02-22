@@ -286,6 +286,22 @@ class TestCheckCI:
         check = auditor._check_ci()
         assert check.status == AuditCheckStatus.PARTIAL
 
+    def test_workflow_with_push_in_step_name_not_falsely_detected(
+        self, tmp_path: Path
+    ) -> None:
+        """Should not falsely detect 'push' appearing only in step names or run commands."""
+        wf_dir = tmp_path / ".github" / "workflows"
+        wf_dir.mkdir(parents=True)
+        (wf_dir / "deploy.yml").write_text(
+            "on:\n  workflow_dispatch:\nsteps:\n  - name: Push Docker image\n    run: docker push myimage\n"
+        )
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_ci()
+        assert check.status == AuditCheckStatus.PARTIAL
+
     def test_no_workflows_dir(self, tmp_path: Path) -> None:
         """Should report MISSING when .github/workflows/ doesn't exist."""
         config = ConfigFactory.create(repo_root=tmp_path)
@@ -508,6 +524,17 @@ class TestCheckTestFramework:
         check = auditor._check_test_framework()
         assert check.status == AuditCheckStatus.PRESENT
         assert "vitest" in check.detail
+
+    def test_jest_config_file(self, tmp_path: Path) -> None:
+        """Should detect jest from jest.config.ts without requiring __tests__/ dir."""
+        (tmp_path / "jest.config.ts").write_text("export default {}\n")
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_test_framework()
+        assert check.status == AuditCheckStatus.PRESENT
+        assert "jest" in check.detail
 
     def test_no_test_framework(self, tmp_path: Path) -> None:
         """Should report MISSING when no test framework detected."""

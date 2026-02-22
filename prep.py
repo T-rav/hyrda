@@ -192,11 +192,14 @@ class RepoAuditor:
                 critical=True,
             )
 
-        # Check if any workflow triggers on push or pull_request
+        # Check if any workflow triggers on push or pull_request.
+        # Match "push:" or "pull_request:" as YAML keys to avoid false positives
+        # from step names like "Push Docker image" or run commands like "git push".
+        _trigger_re = re.compile(r"\bpush\s*:|pull_request\s*:")
         for wf_file in wf_files:
             try:
                 content = wf_file.read_text()
-                if "push" in content or "pull_request" in content:
+                if _trigger_re.search(content):
                     return AuditCheck(
                         name="CI",
                         status=AuditCheckStatus.PRESENT,
