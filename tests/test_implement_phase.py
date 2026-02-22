@@ -1468,8 +1468,8 @@ class TestRunImplementation:
         await phase._run_implementation(issue, "agent/issue-42", 0, "")
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_implementation_seconds"] == pytest.approx(60.0)
-        assert stats["total_quality_fix_rounds"] == 2
+        assert stats.total_implementation_seconds == pytest.approx(60.0)
+        assert stats.total_quality_fix_rounds == 2
 
 
 class TestHandleImplementationResult:

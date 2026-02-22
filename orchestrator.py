@@ -7,7 +7,7 @@ import contextlib
 import logging
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
@@ -37,6 +37,9 @@ from triage import TriageRunner
 from triage_phase import TriagePhase
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
+
+if TYPE_CHECKING:
+    from metrics_manager import MetricsManager
 
 logger = logging.getLogger("hydra.orchestrator")
 

@@ -3572,7 +3572,7 @@ class TestEscalateToHitl:
         )
 
         stats = phase._state.get_lifetime_stats()
-        assert stats["total_hitl_escalations"] == 1
+        assert stats.total_hitl_escalations == 1
 
     @pytest.mark.asyncio
     async def test_swaps_labels_on_issue_and_pr(self, config: HydraConfig) -> None:
