@@ -66,7 +66,7 @@ export function HITLTable({ items, onRefresh }) {
           : styles.headerText}>
           {items.length === 0
             ? 'HITL'
-            : `${items.length} issue${items.length !== 1 ? 's' : ''} stuck on CI`}
+            : `${items.length} item${items.length !== 1 ? 's' : ''} awaiting action`}
         </span>
         <button onClick={onRefresh} style={styles.refresh}>Refresh</button>
       </div>

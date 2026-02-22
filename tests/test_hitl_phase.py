@@ -342,10 +342,18 @@ class TestHITLGetStatus:
     def test_get_status_returns_approval_for_improve_origin(
         self, config: HydraConfig
     ) -> None:
-        """Memory suggestions with hydra-improve origin should show 'approval'."""
+        """Memory suggestions with improve origin should show 'approval'."""
         phase, state, *_ = _make_phase(config)
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, config.improve_label[0])
         assert phase.get_status(42) == "approval"
+
+    def test_get_status_does_not_return_approval_for_non_improve_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Non-memory escalations should not show 'approval'."""
+        phase, state, *_ = _make_phase(config)
+        state.set_hitl_origin(42, "hydra-review")
+        assert phase.get_status(42) != "approval"
 
 
 class TestHITLResetsAttempts:
