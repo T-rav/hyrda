@@ -18,6 +18,7 @@ from tests.helpers import ConfigFactory  # noqa: E402
 if TYPE_CHECKING:
     from typing import Any
 
+    from ci_scaffold import CIScaffoldResult
     from config import HydraConfig
     from events import HydraEvent
     from lint_scaffold import LintScaffoldResult
@@ -356,6 +357,32 @@ class AnalysisResultFactory:
             name=name,
             verdict=verdict or AnalysisVerdict.PASS,
             details=details or [],
+        )
+
+
+# --- CI Scaffold Result Factory ---
+
+
+class CIScaffoldResultFactory:
+    """Factory for CIScaffoldResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        created: bool = True,
+        skipped: bool = False,
+        skip_reason: str = "",
+        language: str = "python",
+        workflow_path: str = ".github/workflows/quality.yml",
+    ) -> CIScaffoldResult:
+        from ci_scaffold import CIScaffoldResult as CS
+
+        return CS(
+            created=created,
+            skipped=skipped,
+            skip_reason=skip_reason,
+            language=language,
+            workflow_path=workflow_path,
         )
 
 
