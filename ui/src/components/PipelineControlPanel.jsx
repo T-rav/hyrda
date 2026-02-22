@@ -43,9 +43,11 @@ function TranscriptPreview({ lines }) {
       >
         {expanded ? 'Hide' : 'Show'} transcript ({lines.length} lines)
       </div>
-      {shown.map((line, i) => (
-        <div key={i} style={styles.transcriptLine}>{line}</div>
-      ))}
+      <div style={expanded ? styles.transcriptLinesExpanded : undefined}>
+        {shown.map((line, i) => (
+          <div key={i} style={styles.transcriptLine}>{line}</div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -335,6 +337,8 @@ const styles = {
     borderRadius: 8,
     padding: 12,
     background: theme.bg,
+    overflow: 'hidden',
+    minWidth: 0,
   },
   cardHeader: {
     display: 'flex',
@@ -403,6 +407,10 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  transcriptLinesExpanded: {
+    maxHeight: 200,
+    overflowY: 'auto',
   },
 }
 

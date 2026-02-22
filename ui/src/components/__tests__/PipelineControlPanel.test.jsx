@@ -204,6 +204,70 @@ describe('PipelineControlPanel', () => {
       render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
       expect(screen.queryByText('Show transcript (0 lines)')).not.toBeInTheDocument()
     })
+
+    it('applies maxHeight and scroll on expanded transcript', () => {
+      const manyLines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`)
+      const workers = {
+        42: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #42', branch: '', transcript: manyLines, pr: null },
+      }
+      mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
+      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      const toggle = screen.getByText('Show transcript (20 lines)')
+      fireEvent.click(toggle)
+      // The transcript lines wrapper should have maxHeight and overflowY when expanded
+      const firstLine = screen.getByText('Line 1')
+      const linesContainer = firstLine.parentElement
+      expect(linesContainer.style.maxHeight).toBe('200px')
+      expect(linesContainer.style.overflowY).toBe('auto')
+    })
+
+    it('does not apply scroll styles on collapsed transcript', () => {
+      const workers = {
+        42: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #42', branch: '', transcript: ['Line 1', 'Line 2', 'Line 3', 'Line 4', 'Line 5'], pr: null },
+      }
+      mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
+      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      // Collapsed — only last 3 lines shown, no scroll styles
+      const line = screen.getByText('Line 3')
+      const linesContainer = line.parentElement
+      expect(linesContainer.style.maxHeight).toBe('')
+      expect(linesContainer.style.overflowY).toBe('')
+    })
+
+    it('collapses transcript back after expanding', () => {
+      const manyLines = Array.from({ length: 10 }, (_, i) => `Line ${i + 1}`)
+      const workers = {
+        42: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #42', branch: '', transcript: manyLines, pr: null },
+      }
+      mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
+      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      // Expand
+      fireEvent.click(screen.getByText('Show transcript (10 lines)'))
+      expect(screen.getByText('Line 1')).toBeInTheDocument()
+      // Collapse
+      fireEvent.click(screen.getByText('Hide transcript (10 lines)'))
+      // Should be back to last 3 lines with no scroll styles
+      expect(screen.queryByText('Line 1')).not.toBeInTheDocument()
+      expect(screen.getByText('Line 8')).toBeInTheDocument()
+      const line = screen.getByText('Line 8')
+      const linesContainer = line.parentElement
+      expect(linesContainer.style.maxHeight).toBe('')
+    })
+
+    it('card has overflow hidden to contain content', () => {
+      const workers = {
+        42: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #42', branch: '', transcript: ['Test line'], pr: null },
+      }
+      mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
+      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      // The card wrapping the worker should have overflow: hidden
+      const issueLabel = screen.getByText('#42')
+      const card = issueLabel.closest('[style]')
+      // Walk up to find the card element (parent of cardHeader)
+      const cardEl = issueLabel.parentElement.parentElement
+      expect(cardEl.style.overflow).toBe('hidden')
+      expect(cardEl.style.minWidth).toBe('0px')
+    })
   })
 
   describe('Status Badges', () => {
