@@ -332,6 +332,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Remove all worktrees and state, then exit",
     )
+    parser.add_argument(
+        "--prep",
+        action="store_true",
+        help="Create Hydra lifecycle labels on the target repo, then exit",
+    )
 
     return parser.parse_args(argv)
 
@@ -440,9 +445,23 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     return HydraConfig(**kwargs)
 
 
+async def _run_prep(config: HydraConfig) -> bool:
+    """Create Hydra lifecycle labels on the target repo.
+
+    Returns ``True`` if all labels were created/updated successfully,
+    ``False`` if any labels failed.
+    """
+    from prep import ensure_labels  # noqa: PLC0415
+
+    result = await ensure_labels(config)
+    summary = result.summary()
+    print(f"[dry-run] {summary}" if config.dry_run else summary)  # noqa: T201
+    return not result.failed
+
+
 async def _run_audit(config: HydraConfig) -> bool:
     """Run a repo audit and print the report. Returns True if critical gaps found."""
-    from prep import RepoAuditor
+    from prep import RepoAuditor  # noqa: PLC0415
 
     auditor = RepoAuditor(config)
     result = await auditor.run_audit()
@@ -539,6 +558,10 @@ def main(argv: list[str] | None = None) -> None:
     setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
+
+    if args.prep:
+        success = asyncio.run(_run_prep(config))
+        sys.exit(0 if success else 1)
 
     if args.audit:
         has_gaps = asyncio.run(_run_audit(config))
