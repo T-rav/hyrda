@@ -186,7 +186,7 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
               />
               <div style={styles.feedbackActions}>
                 <button
-                  style={styles.feedbackSubmitBtn}
+                  style={(!feedbackText.trim() || submitting) ? feedbackSubmitBtnDisabled : styles.feedbackSubmitBtn}
                   disabled={!feedbackText.trim() || submitting}
                   onClick={handleSubmitFeedback}
                   data-testid={`request-changes-submit-${issue.issueNumber}`}
@@ -194,7 +194,7 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
                   {submitting ? 'Submitting...' : 'Submit'}
                 </button>
                 <button
-                  style={styles.feedbackCancelBtn}
+                  style={submitting ? feedbackCancelBtnDisabled : styles.feedbackCancelBtn}
                   disabled={submitting}
                   onClick={() => { setShowFeedback(false); setFeedbackText('') }}
                   data-testid={`request-changes-cancel-${issue.issueNumber}`}
@@ -456,3 +456,7 @@ const styles = {
     color: theme.text,
   },
 }
+
+// Pre-computed disabled variants — avoids object spread in render
+const feedbackSubmitBtnDisabled = { ...styles.feedbackSubmitBtn, cursor: 'not-allowed', opacity: 0.5 }
+const feedbackCancelBtnDisabled = { ...styles.feedbackCancelBtn, cursor: 'not-allowed', opacity: 0.5 }

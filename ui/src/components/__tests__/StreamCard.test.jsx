@@ -169,4 +169,37 @@ describe('StreamCard request changes feedback flow', () => {
 
     expect(screen.queryByTestId('request-changes-btn-42')).toBeNull()
   })
+
+  it('closes feedback panel after successful submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(true)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
+  it('keeps feedback panel open after failed submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(onRequestChanges).toHaveBeenCalled()
+    })
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+  })
 })
