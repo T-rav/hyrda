@@ -108,7 +108,14 @@ class AgentRunner:
         result.duration_seconds = time.monotonic() - start
 
         # Persist transcript to disk
-        self._save_transcript(result)
+        try:
+            self._save_transcript(result)
+        except OSError:
+            logger.warning(
+                "Failed to save transcript for issue #%d",
+                result.issue_number,
+                exc_info=True,
+            )
 
         return result
 
