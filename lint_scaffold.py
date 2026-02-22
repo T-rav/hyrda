@@ -399,9 +399,12 @@ def scaffold_lint_config(
             dep_files = _ensure_js_dev_deps(repo_root)
             result.modified_files.extend(dep_files)
 
-    # Deduplicate file lists
-    result.modified_files = list(dict.fromkeys(result.modified_files))
+    # Deduplicate file lists; a file can only be in one category
     result.created_files = list(dict.fromkeys(result.created_files))
+    created_set = set(result.created_files)
+    result.modified_files = list(
+        dict.fromkeys(f for f in result.modified_files if f not in created_set)
+    )
 
     logger.info(
         "Lint scaffold complete: scaffolded=%s, skipped=%s",

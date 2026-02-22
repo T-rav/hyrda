@@ -630,3 +630,14 @@ class TestScaffoldLintConfig:
         result = scaffold_lint_config(tmp_path)
         assert "tsconfig" in result.skipped
         assert "tsconfig" not in result.scaffolded
+
+    def test_created_file_not_duplicated_in_modified(self, tmp_path: Path) -> None:
+        """pyproject.toml created by ruff scaffold must not also appear in modified_files."""
+        # No pyproject.toml exists; both ruff and pyright will scaffold it
+        (tmp_path / "requirements.txt").touch()
+        result = scaffold_lint_config(tmp_path)
+        assert "ruff" in result.scaffolded
+        assert "pyright" in result.scaffolded
+        # File should appear in exactly one list
+        overlap = set(result.created_files) & set(result.modified_files)
+        assert overlap == set(), f"Files in both lists: {overlap}"
