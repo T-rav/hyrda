@@ -21,7 +21,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const failedCount = issues.filter(i => i.overallStatus === 'failed').length
   const hitlCount = issues.filter(i => i.overallStatus === 'hitl').length
-  const queuedCount = issues.length - activeCount - failedCount - hitlCount
+  const queuedCount = issues.filter(i => i.overallStatus === 'queued').length
   const hasRole = !!stage.role
 
   return (
@@ -87,7 +87,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
         : isActive ? 'active'
         : pipeIssue.status === 'failed' ? 'failed'
         : pipeIssue.status === 'hitl' ? 'hitl'
-        : 'pending'
+        : 'queued'
       stages[k] = { status: currentStageStatus, startTime: null, endTime: null, transcript: [] }
     } else {
       stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
@@ -103,9 +103,10 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
     currentStage: stageKey,
     overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
-      : pipeIssue.status === 'failed' ? 'failed'
+      : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
       : isDone ? 'done'
-      : 'active',
+      : pipeIssue.status === 'active' ? 'active'
+      : 'queued',
     startTime: null,
     endTime: null,
     pr,

@@ -27,7 +27,7 @@ export const PIPELINE_STAGES = [
 ]
 
 /** Valid overall statuses for stream cards. */
-export const STREAM_CARD_STATUSES = ['active', 'done', 'failed', 'hitl']
+export const STREAM_CARD_STATUSES = ['active', 'queued', 'done', 'failed', 'hitl']
 
 /**
  * Pipeline loop definitions — core processing loops that can be toggled on/off.
