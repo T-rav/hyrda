@@ -13,7 +13,10 @@ vi.mock('../../context/HydraContext', () => ({
 const { StreamView, toStreamIssue } = await import('../StreamView')
 
 function defaultHydraContext(overrides = {}) {
-  const pipelineIssues = overrides.pipelineIssues || { triage: [], plan: [], implement: [], review: [] }
+  const defaultPipeline = { triage: [], plan: [], implement: [], review: [], merged: [] }
+  const pipelineIssues = overrides.pipelineIssues
+    ? { ...defaultPipeline, ...overrides.pipelineIssues }
+    : defaultPipeline
   const workers = overrides.workers || {}
   const backgroundWorkers = overrides.backgroundWorkers || []
   return {
@@ -521,7 +524,9 @@ describe('Merged stage rendering', () => {
     }))
     render(<StreamView {...defaultProps} />)
     expect(screen.getByTestId('pipeline-flow')).toBeInTheDocument()
-    expect(screen.getByTestId('flow-dot-10')).toBeInTheDocument()
+    const dot = screen.getByTestId('flow-dot-10')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.animation).toBe('')
   })
 })
 

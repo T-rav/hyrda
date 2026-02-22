@@ -313,6 +313,8 @@ const dotBase = {
 
 const flowDotBase = { ...dotBase, transition: 'all 0.3s ease' }
 
+const PULSE_ANIMATION = 'stream-pulse 1.5s ease-in-out infinite'
+
 const flowLabelStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, { ...flowLabelBase, color: s.color }])
 )
@@ -325,7 +327,7 @@ const flowDotActiveStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, {
     ...flowDotBase,
     background: s.color,
-    animation: 'stream-pulse 1.5s ease-in-out infinite',
+    animation: PULSE_ANIMATION,
   }])
 )
 
@@ -410,7 +412,7 @@ const styles = {
   pendingDot: {
     ...dotBase,
     background: theme.accent,
-    animation: 'stream-pulse 1.5s ease-in-out infinite',
+    animation: PULSE_ANIMATION,
   },
   pendingText: {
     flex: 1,
