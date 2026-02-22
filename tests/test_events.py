@@ -117,6 +117,40 @@ class TestHydraEvent:
 
 
 # ---------------------------------------------------------------------------
+# HydraEvent ID
+# ---------------------------------------------------------------------------
+
+
+class TestHydraEventId:
+    def test_event_id_auto_generated(self) -> None:
+        event = HydraEvent(type=EventType.BATCH_START)
+        assert isinstance(event.id, int)
+
+    def test_event_ids_are_unique(self) -> None:
+        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(10)]
+        ids = [e.id for e in events]
+        assert len(set(ids)) == 10
+
+    def test_event_ids_are_monotonically_increasing(self) -> None:
+        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(5)]
+        for i in range(1, len(events)):
+            assert events[i].id > events[i - 1].id
+
+    def test_event_id_included_in_serialization(self) -> None:
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        dumped = event.model_dump()
+        assert "id" in dumped
+        assert isinstance(dumped["id"], int)
+
+        json_str = event.model_dump_json()
+        assert '"id"' in json_str
+
+    def test_explicit_event_id_preserved(self) -> None:
+        event = HydraEvent(id=999, type=EventType.BATCH_START)
+        assert event.id == 999
+
+
+# ---------------------------------------------------------------------------
 # EventBus - publish / subscribe
 # ---------------------------------------------------------------------------
 

@@ -10,8 +10,9 @@ const emptyPipeline = {
   merged: [],
 }
 
-const initialState = {
+export const initialState = {
   connected: false,
+  lastSeenId: -1,  // Monotonic event ID for deduplication on reconnect
   batchNum: 0,
   phase: 'idle',
   orchestratorStatus: 'idle',
@@ -41,9 +42,20 @@ const initialState = {
   pipelinePollerLastRun: null,
 }
 
+function isDuplicate(state, action) {
+  const eventId = action.id ?? -1
+  return eventId !== -1 && eventId <= state.lastSeenId
+}
+
 function addEvent(state, action) {
-  const event = { type: action.type, timestamp: action.timestamp, data: action.data }
-  return { ...state, events: [event, ...state.events].slice(0, MAX_EVENTS) }
+  const eventId = action.id ?? -1
+  if (isDuplicate(state, action)) return state
+  const event = { type: action.type, timestamp: action.timestamp, data: action.data, id: eventId }
+  return {
+    ...state,
+    lastSeenId: eventId !== -1 ? eventId : state.lastSeenId,
+    events: [event, ...state.events].slice(0, MAX_EVENTS),
+  }
 }
 
 export function reducer(state, action) {
@@ -75,6 +87,7 @@ export function reducer(state, action) {
           sessionReviewed: 0,
           hitlItems: [],
           hitlEscalation: null,
+          lastSeenId: -1,
         }
       }
       return { ...addEvent(state, action), phase: newPhase }
@@ -123,6 +136,7 @@ export function reducer(state, action) {
     }
 
     case 'transcript_line': {
+      if (isDuplicate(state, action)) return state
       let key = action.data.issue || action.data.pr
       if (action.data.source === 'triage') {
         key = `triage-${action.data.issue}`
@@ -634,7 +648,7 @@ export function HydraProvider({ children }) {
     ws.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data)
-        dispatch({ type: event.type, data: event.data, timestamp: event.timestamp })
+        dispatch({ type: event.type, data: event.data, timestamp: event.timestamp, id: event.id })
         if (event.timestamp && (!lastEventTsRef.current || event.timestamp > lastEventTsRef.current)) {
           lastEventTsRef.current = event.timestamp
         }
