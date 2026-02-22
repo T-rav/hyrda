@@ -29,9 +29,11 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
 ]
 
+_DEFAULT_DOCKER_IMAGE = "ghcr.io/travisf/hydra-agent:latest"
+
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
     ("test_command", "HYDRA_TEST_COMMAND", "make test"),
-    ("docker_image", "HYDRA_DOCKER_IMAGE", "ghcr.io/travisf/hydra-agent:latest"),
+    ("docker_image", "HYDRA_DOCKER_IMAGE", _DEFAULT_DOCKER_IMAGE),
 ]
 
 
@@ -389,7 +391,7 @@ class HydraConfig(BaseModel):
 
     # Docker isolation
     docker_image: str = Field(
-        default="ghcr.io/travisf/hydra-agent:latest",
+        default=_DEFAULT_DOCKER_IMAGE,
         description=(
             "Docker image for isolated agent execution. "
             "Override via HYDRA_DOCKER_IMAGE env var or set explicitly for your deployment "

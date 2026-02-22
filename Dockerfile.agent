@@ -47,7 +47,7 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 FROM base AS tools
 
 # Install Claude CLI globally via npm
-RUN npm install -g @anthropic-ai/claude-code --no-fund --no-audit 2>/dev/null
+RUN npm install -g @anthropic-ai/claude-code --no-fund --no-audit
 
 # Pre-install Python quality tools into a venv
 COPY pyproject.toml uv.lock ./
