@@ -1638,3 +1638,77 @@ class TestWorkerIntervals:
         result2 = tracker.get_worker_intervals()
         assert result1 == result2
         assert result1 is not result2
+
+
+# ---------------------------------------------------------------------------
+# Time-to-Merge Tracking
+# ---------------------------------------------------------------------------
+
+
+class TestMergeDurationTracking:
+    """Tests for time-to-merge tracking."""
+
+    def test_record_merge_duration_stores_value(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_merge_duration(3600.5)
+        stats = tracker.get_lifetime_stats()
+        assert 3600.5 in stats.merge_durations
+
+    def test_get_merge_duration_stats_empty(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_merge_duration_stats() == {}
+
+    def test_get_merge_duration_stats_computes_percentiles(
+        self, tmp_path: Path
+    ) -> None:
+        tracker = make_tracker(tmp_path)
+        durations = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+        for d in durations:
+            tracker.record_merge_duration(float(d))
+        stats = tracker.get_merge_duration_stats()
+        assert stats["avg"] == 550.0
+        assert stats["p50"] == 600.0  # median of 10 items
+        assert stats["p90"] == 1000.0  # 90th percentile
+
+    def test_merge_durations_persist(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_merge_duration(42.0)
+        tracker2 = StateTracker(tracker._path)
+        assert 42.0 in tracker2.get_lifetime_stats().merge_durations
+
+
+# ---------------------------------------------------------------------------
+# Retries Per Stage
+# ---------------------------------------------------------------------------
+
+
+class TestRetriesPerStage:
+    """Tests for retry-per-stage tracking."""
+
+    def test_record_stage_retry_increments(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_stage_retry(42, "quality_fix")
+        tracker.record_stage_retry(42, "quality_fix")
+        tracker.record_stage_retry(42, "ci_fix")
+        summary = tracker.get_retries_summary()
+        assert summary["quality_fix"] == 2
+        assert summary["ci_fix"] == 1
+
+    def test_get_retries_summary_empty(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_retries_summary() == {}
+
+    def test_retries_across_issues(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_stage_retry(1, "quality_fix")
+        tracker.record_stage_retry(2, "quality_fix")
+        tracker.record_stage_retry(2, "ci_fix")
+        summary = tracker.get_retries_summary()
+        assert summary["quality_fix"] == 2
+        assert summary["ci_fix"] == 1
+
+    def test_retries_persist(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.record_stage_retry(42, "quality_fix")
+        tracker2 = StateTracker(tracker._path)
+        assert tracker2.get_retries_summary() == {"quality_fix": 1}

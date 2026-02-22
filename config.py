@@ -386,6 +386,12 @@ class HydraFlowConfig(BaseModel):
         default=0, ge=0, description="USD cap for AC generation agent (0 = unlimited)"
     )
 
+    # UI directories (fallback for worktree node_modules symlinking)
+    ui_dirs: list[str] = Field(
+        default_factory=lambda: ["ui"],
+        description="UI directories containing package.json; auto-detected at runtime if present",
+    )
+
     # Retrospective
     retrospective_window: int = Field(
         default=10,

@@ -34,6 +34,9 @@ def _valid_plan(*, word_pad: int = 200) -> str:
         "- src/config.py — add configuration field\n\n"
         "## New Files\n\n"
         "None\n\n"
+        "## File Delta\n\n"
+        "MODIFIED: src/models.py\n"
+        "MODIFIED: src/config.py\n\n"
         "## Implementation Steps\n\n"
         "1. Add the new model class to models.py\n"
         "2. Add configuration field to config.py\n"
@@ -1445,11 +1448,12 @@ def test_build_prompt_warns_about_rejection(config, event_bus, issue):
 # ---------------------------------------------------------------------------
 
 
-def test_required_sections_has_six_entries(config, event_bus):
-    """PlannerRunner.REQUIRED_SECTIONS should have 6 entries."""
-    assert len(PlannerRunner.REQUIRED_SECTIONS) == 6
+def test_required_sections_has_seven_entries(config, event_bus):
+    """PlannerRunner.REQUIRED_SECTIONS should have 7 entries (including File Delta)."""
+    assert len(PlannerRunner.REQUIRED_SECTIONS) == 7
     assert "## Files to Modify" in PlannerRunner.REQUIRED_SECTIONS
     assert "## New Files" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## File Delta" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Implementation Steps" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Testing Strategy" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Acceptance Criteria" in PlannerRunner.REQUIRED_SECTIONS

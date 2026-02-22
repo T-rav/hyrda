@@ -337,6 +337,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Create HydraFlow lifecycle labels on the target repo, then exit",
     )
+    parser.add_argument(
+        "--replay",
+        type=int,
+        metavar="ISSUE",
+        default=None,
+        help="Replay a recorded run for the given issue number, then exit",
+    )
+    parser.add_argument(
+        "--replay-latest",
+        action="store_true",
+        help="When used with --replay, show only the most recent run",
+    )
 
     return parser.parse_args(argv)
 
@@ -486,6 +498,44 @@ async def _run_clean(config: HydraFlowConfig) -> None:
     logger.info("Cleanup complete")
 
 
+def _run_replay(config: HydraFlowConfig, issue_number: int, latest_only: bool) -> None:
+    """Display recorded run artifacts for an issue."""
+    from run_recorder import RunRecorder  # noqa: PLC0415
+
+    recorder = RunRecorder(config)
+    runs = recorder.list_runs(issue_number)
+
+    if not runs:
+        print(f"No recorded runs found for issue #{issue_number}")  # noqa: T201
+        return
+
+    if latest_only:
+        runs = runs[-1:]
+
+    for run in runs:
+        print(f"\n{'=' * 60}")  # noqa: T201
+        print(f"Issue #{run.issue_number}  |  Run: {run.timestamp}")  # noqa: T201
+        print(f"Outcome: {run.outcome}  |  Duration: {run.duration_seconds}s")  # noqa: T201
+        if run.error:
+            print(f"Error: {run.error}")  # noqa: T201
+        print(f"Artifacts: {', '.join(run.files)}")  # noqa: T201
+
+        # Show transcript preview
+        transcript = recorder.get_run_artifact(
+            issue_number, run.timestamp, "transcript.log"
+        )
+        if transcript and transcript.strip():
+            lines = transcript.strip().splitlines()
+            preview = lines[:20]
+            print(f"\n--- Transcript ({len(lines)} lines) ---")  # noqa: T201
+            for line in preview:
+                print(f"  {line}")  # noqa: T201
+            if len(lines) > 20:
+                print(f"  ... ({len(lines) - 20} more lines)")  # noqa: T201
+
+    print(f"\n{'=' * 60}")  # noqa: T201
+
+
 async def _run_main(config: HydraFlowConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
     if config.dashboard_enabled:
@@ -569,6 +619,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.clean:
         asyncio.run(_run_clean(config))
+        sys.exit(0)
+
+    if args.replay is not None:
+        _run_replay(config, args.replay, args.replay_latest)
         sys.exit(0)
 
     asyncio.run(_run_main(config))

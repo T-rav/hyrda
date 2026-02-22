@@ -368,6 +368,48 @@ class StateTracker:
             self._data.lifetime_stats.fired_thresholds.remove(name)
             self.save()
 
+    # --- time-to-merge tracking ---
+
+    def record_merge_duration(self, seconds: float) -> None:
+        """Record a time-to-merge duration (issue created to PR merged)."""
+        self._data.lifetime_stats.merge_durations.append(seconds)
+        self.save()
+
+    def get_merge_duration_stats(self) -> dict[str, float]:
+        """Return time-to-merge statistics: avg, p50, p90.
+
+        Returns an empty dict if no durations are recorded.
+        """
+        durations = self._data.lifetime_stats.merge_durations
+        if not durations:
+            return {}
+        sorted_d = sorted(durations)
+        n = len(sorted_d)
+        avg = sum(sorted_d) / n
+        p50 = sorted_d[n // 2]
+        p90_idx = min(int(n * 0.9), n - 1)
+        p90 = sorted_d[p90_idx]
+        return {"avg": round(avg, 1), "p50": round(p50, 1), "p90": round(p90, 1)}
+
+    # --- retries per stage ---
+
+    def record_stage_retry(self, issue_number: int, stage: str) -> None:
+        """Increment the retry count for a specific stage on an issue."""
+        key = str(issue_number)
+        retries = self._data.lifetime_stats.retries_per_stage
+        if key not in retries:
+            retries[key] = {}
+        retries[key][stage] = retries[key].get(stage, 0) + 1
+        self.save()
+
+    def get_retries_summary(self) -> dict[str, int]:
+        """Return total retries per stage across all issues."""
+        totals: dict[str, int] = {}
+        for stages in self._data.lifetime_stats.retries_per_stage.values():
+            for stage, count in stages.items():
+                totals[stage] = totals.get(stage, 0) + count
+        return totals
+
     # --- session persistence ---
 
     @property
@@ -478,6 +520,8 @@ class StateTracker:
         if content:
             content += "\n"
         atomic_write(self._sessions_path, content)
+
+    # --- threshold checking ---
 
     def check_thresholds(
         self,

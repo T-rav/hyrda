@@ -121,6 +121,7 @@ class ConfigFactory:
         docker_spawn_delay: float = 2.0,
         docker_read_only_root: bool = True,
         docker_no_new_privileges: bool = True,
+        ui_dirs: list[str] | None = None,
     ):
         """Create a HydraFlowConfig with test-friendly defaults."""
         from config import HydraFlowConfig
@@ -211,6 +212,7 @@ class ConfigFactory:
             docker_spawn_delay=docker_spawn_delay,
             docker_read_only_root=docker_read_only_root,
             docker_no_new_privileges=docker_no_new_privileges,
+            ui_dirs=ui_dirs if ui_dirs is not None else ["ui"],
         )
 
 

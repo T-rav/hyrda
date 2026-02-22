@@ -126,10 +126,23 @@ class RetrospectiveCollector:
             return ""
 
     def _parse_planned_files(self, plan_text: str) -> list[str]:
-        """Extract file paths from ``## Files to Modify`` and ``## New Files`` sections."""
+        """Extract file paths from plan text.
+
+        Prefers the structured ``## File Delta`` section if present,
+        falling back to heuristic extraction from ``## Files to Modify``
+        and ``## New Files``.
+        """
         if not plan_text:
             return []
 
+        # Try structured delta first
+        from delta_verifier import parse_file_delta
+
+        delta_files = parse_file_delta(plan_text)
+        if delta_files:
+            return delta_files
+
+        # Fallback: heuristic extraction from prose sections
         files: list[str] = []
         in_section = False
 

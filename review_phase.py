@@ -157,6 +157,10 @@ class ReviewPhase:
             )
 
         diff = await self._prs.get_pr_diff(pr.number)
+
+        # Delta verification: compare planned vs actual files
+        await self._run_delta_verification(pr, diff)
+
         result = await self._run_and_post_review(pr, issue, wt_path, diff, idx)
 
         # If reviewer fixed its own findings, re-review the updated code
@@ -313,6 +317,44 @@ class ReviewPhase:
 
         return result
 
+    async def _run_delta_verification(self, pr: PRInfo, diff: str) -> str:
+        """Run delta verification comparing plan's File Delta section to actual diff.
+
+        Returns a summary string (empty if no plan or no delta section).
+        """
+        from delta_verifier import parse_file_delta, verify_delta
+
+        plan_path = (
+            self._config.repo_root / ".hydra" / "plans" / f"issue-{pr.issue_number}.md"
+        )
+        if not plan_path.exists():
+            return ""
+
+        try:
+            plan_text = plan_path.read_text()
+        except OSError:
+            return ""
+
+        planned_files = parse_file_delta(plan_text)
+        if not planned_files:
+            return ""
+
+        # Extract actual changed files from the diff
+        actual_files = await self._prs.get_pr_diff_names(pr.number)
+        report = verify_delta(planned_files, actual_files)
+
+        if report.has_drift:
+            summary = report.format_summary()
+            logger.warning(
+                "Delta drift for PR #%d (issue #%d): %d missing, %d unexpected",
+                pr.number,
+                pr.issue_number,
+                len(report.missing),
+                len(report.unexpected),
+            )
+            return summary
+        return ""
+
     async def _handle_approved_merge(
         self,
         pr: PRInfo,
@@ -343,6 +385,38 @@ class ReviewPhase:
             self._state.record_issue_completed()
             if result.ci_fix_attempts > 0:
                 self._state.record_ci_fix_rounds(result.ci_fix_attempts)
+                for _ in range(result.ci_fix_attempts):
+                    self._state.record_stage_retry(pr.issue_number, "ci_fix")
+            # Track time-to-merge
+            if issue.created_at:
+                try:
+                    created = datetime.fromisoformat(issue.created_at)
+                    merge_seconds = (datetime.now(UTC) - created).total_seconds()
+                    self._state.record_merge_duration(merge_seconds)
+                except (ValueError, TypeError):
+                    pass
+            # Check thresholds and publish alerts
+            proposals = self._state.check_thresholds(
+                self._config.quality_fix_rate_threshold,
+                self._config.approval_rate_threshold,
+                self._config.hitl_rate_threshold,
+            )
+            for proposal in proposals:
+                self._state.mark_threshold_fired(proposal["name"])
+                await self._bus.publish(
+                    HydraFlowEvent(
+                        type=EventType.SYSTEM_ALERT,
+                        data={
+                            "message": (
+                                f"Threshold breached: {proposal['metric']} "
+                                f"({proposal['value']:.2f} vs {proposal['threshold']:.2f}). "
+                                f"{proposal['action']}"
+                            ),
+                            "source": "threshold_check",
+                            "threshold": proposal,
+                        },
+                    )
+                )
             self._state.reset_review_attempts(pr.issue_number)
             self._state.reset_issue_attempts(pr.issue_number)
             self._state.clear_review_feedback(pr.issue_number)
