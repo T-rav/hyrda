@@ -4,6 +4,7 @@ import { useHydra } from '../context/HydraContext'
 import { StreamCard } from './StreamCard'
 import { PIPELINE_STAGES } from '../constants'
 import { STAGE_KEYS } from '../hooks/useTimeline'
+import { sectionHeaderStyles, sectionLabelStyles, sectionCountStyles, sectionLabelBase } from '../styles/sectionStyles'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -130,6 +131,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   return {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    issueUrl: pipeIssue.url || null,
     currentStage: stageKey,
     overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
       : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
@@ -170,7 +172,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     const mergedFromPrs = (prs || [])
       .filter(p => p.merged && p.issue)
       .map(p => toStreamIssue(
-        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: null, status: 'done' },
         'merged',
         prs,
       ))
@@ -252,55 +254,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
   )
 }
 
-// Pre-computed per-stage section header styles (avoids object spread in .map())
-const sectionHeaderBase = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '8px 12px',
-  margin: '8px 8px 4px',
-  cursor: 'pointer',
-  userSelect: 'none',
-  borderRadius: 6,
-  transition: 'background 0.15s',
-}
-
-const sectionLabelBase = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-}
-
-const sectionCountBase = {
-  fontSize: 11,
-  fontWeight: 600,
-  marginLeft: 'auto',
-}
-
-const sectionHeaderStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionHeaderBase,
-    background: s.subtleColor,
-    border: `1px solid ${s.color}33`,
-    borderLeft: `3px solid ${s.color}`,
-  }])
-)
-
-const sectionLabelStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionLabelBase,
-    color: s.color,
-  }])
-)
-
-const sectionCountStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionCountBase,
-    color: s.color,
-  }])
-)
-
+// Pre-computed per-stage flow label/dot styles (avoids object spread in .map())
 const flowLabelBase = { ...sectionLabelBase, flexShrink: 0 }
 
 const dotBase = {

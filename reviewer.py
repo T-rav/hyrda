@@ -7,13 +7,18 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from execution import get_default_runner
 from memory import load_memory_digest
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
+
+if TYPE_CHECKING:
+    from execution import SubprocessRunner
 
 logger = logging.getLogger("hydra.reviewer")
 
@@ -25,10 +30,16 @@ class ReviewRunner:
     coverage, optionally makes fixes, and returns a verdict.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        config: HydraConfig,
+        event_bus: EventBus,
+        runner: SubprocessRunner | None = None,
+    ) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
+        self._runner = runner or get_default_runner()
 
     async def review(
         self,
@@ -419,6 +430,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
             event_bus=self._bus,
             event_data={"pr": pr_number, "source": "reviewer"},
             logger=logger,
+            runner=self._runner,
         )
 
     def _save_transcript(self, pr_number: int, transcript: str) -> None:
@@ -440,24 +452,15 @@ Only suggest genuinely valuable learnings — not trivial observations.
     async def _get_head_sha(self, worktree_path: Path) -> str | None:
         """Return the current HEAD commit SHA in the worktree."""
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "rev-parse",
-                "HEAD",
+            result = await self._runner.run_simple(
+                ["git", "rev-parse", "HEAD"],
                 cwd=str(worktree_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                timeout=30,
             )
-        except FileNotFoundError:
+        except (TimeoutError, FileNotFoundError):
             return None
-        try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-        except TimeoutError:
-            proc.kill()
-            await proc.wait()
-            return None
-        if proc.returncode == 0:
-            return stdout.decode().strip()
+        if result.returncode == 0:
+            return result.stdout
         return None
 
     async def _has_changes(self, worktree_path: Path, before_sha: str | None) -> bool:
@@ -469,15 +472,11 @@ Only suggest genuinely valuable learnings — not trivial observations.
                 return True
 
             # Check 2: uncommitted changes (staged or unstaged)
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "status",
-                "--porcelain",
+            result = await self._runner.run_simple(
+                ["git", "status", "--porcelain"],
                 cwd=str(worktree_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                timeout=30,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            return proc.returncode == 0 and bool(stdout.decode().strip())
+            return result.returncode == 0 and bool(result.stdout)
         except (TimeoutError, FileNotFoundError):
             return False
