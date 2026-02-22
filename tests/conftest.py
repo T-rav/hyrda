@@ -415,6 +415,11 @@ class ScaffoldResultFactory:
         )
 
 
+@pytest.fixture
+def scaffold_result():
+    return ScaffoldResultFactory.create()
+
+
 # --- HITL Runner Fixture ---
 
 

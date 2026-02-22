@@ -77,7 +77,8 @@ def parse_makefile(content: str) -> dict[str, str]:
             continue
 
         # Check for target definition: "name:" or "name: deps"
-        target_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:(.*)$", line)
+        # Exclude variable assignments like CC := gcc or CC ::= gcc
+        target_match = re.match(r"^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:(?![=:])(.*)$", line)
         if target_match:
             # Save previous target
             if current_target is not None:
@@ -183,8 +184,17 @@ def merge_makefile(existing_content: str, language: str) -> tuple[str, list[str]
     if "quality" in targets_to_add:
         new_lines += f"\n{_QUALITY_LINE}"
 
-    # Ensure .PHONY includes all targets
-    all_target_names = set(existing_targets.keys()) | set(targets_to_add)
+    # Ensure .PHONY includes all targets — preserve existing .PHONY entries
+    # that may not have target definitions in this file (e.g., from includes).
+    existing_phony: set[str] = set()
+    for _line in existing_content.split("\n"):
+        if _line.startswith(".PHONY"):
+            _rest = _line.split(":", 1)
+            if len(_rest) > 1:
+                existing_phony.update(_rest[1].split())
+    all_target_names = (
+        existing_phony | set(existing_targets.keys()) | set(targets_to_add)
+    )
     phony_names = " ".join(sorted(all_target_names))
 
     if ".PHONY" in existing_content:

@@ -73,6 +73,22 @@ class TestParseMakefile:
         assert "lint" in result
         assert len(result) == 1
 
+    def test_ignores_immediate_assignment_variables(self) -> None:
+        # CC := gcc uses := which should not be treated as a target
+        content = "CC := gcc\n\nlint:\n\truff check .\n"
+        result = parse_makefile(content)
+        assert "lint" in result
+        assert "CC" not in result
+        assert len(result) == 1
+
+    def test_ignores_posix_immediate_assignment_variables(self) -> None:
+        # CC ::= gcc uses ::= which should not be treated as a target
+        content = "CC ::= gcc\n\nlint:\n\truff check .\n"
+        result = parse_makefile(content)
+        assert "lint" in result
+        assert "CC" not in result
+        assert len(result) == 1
+
     def test_handles_empty_makefile(self) -> None:
         result = parse_makefile("")
         assert result == {}
@@ -149,7 +165,7 @@ class TestMergeMakefile:
 
     def test_adds_missing_targets_to_existing(self) -> None:
         existing = "lint:\n\truff check . --fix\n"
-        new_content, warnings = merge_makefile(existing, "python")
+        new_content, _ = merge_makefile(existing, "python")
         assert "quality:" in new_content
         assert "test:" in new_content
         assert "typecheck:" in new_content
@@ -178,9 +194,26 @@ class TestMergeMakefile:
     def test_updates_phony_line(self) -> None:
         existing = ".PHONY: clean build\n\nclean:\n\trm -rf dist\n"
         new_content, _ = merge_makefile(existing, "python")
-        # .PHONY should include new targets
+        # .PHONY should include new targets and preserve original entries
         assert "lint" in new_content
         assert "test" in new_content
+        # build is in .PHONY but has no target definition — must be preserved
+        phony_line = next(
+            ln for ln in new_content.split("\n") if ln.startswith(".PHONY")
+        )
+        assert "build" in phony_line
+        assert "clean" in phony_line
+
+    def test_preserves_phony_entries_without_target_definitions(self) -> None:
+        # Targets listed in .PHONY but without recipes (e.g. defined in included files)
+        # must not be dropped when the .PHONY line is rewritten.
+        existing = ".PHONY: deploy release\n\nclean:\n\trm -rf dist\n"
+        new_content, _ = merge_makefile(existing, "python")
+        phony_line = next(
+            ln for ln in new_content.split("\n") if ln.startswith(".PHONY")
+        )
+        assert "deploy" in phony_line
+        assert "release" in phony_line
 
     def test_handles_makefile_without_phony(self) -> None:
         existing = "clean:\n\trm -rf dist\n"
@@ -226,6 +259,19 @@ class TestScaffoldMakefile:
         result = scaffold_makefile(tmp_path, dry_run=True)
         assert result.language == "python"
         assert not (tmp_path / "Makefile").exists()
+
+    def test_dry_run_does_not_modify_existing_makefile(self, tmp_path: Path) -> None:
+        # dry_run=True on the merge path must not write to the existing file
+        (tmp_path / "pyproject.toml").touch()
+        makefile = tmp_path / "Makefile"
+        original = "clean:\n\trm -rf dist\n"
+        makefile.write_text(original)
+        result = scaffold_makefile(tmp_path, dry_run=True)
+        # File must be unchanged
+        assert makefile.read_text() == original
+        # But the result should still report what would have been added
+        assert len(result.targets_added) > 0
+        assert result.language == "python"
 
     def test_returns_warnings_for_conflicts(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").touch()
