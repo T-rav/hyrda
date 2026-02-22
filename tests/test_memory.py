@@ -10,9 +10,11 @@ import pytest
 from memory import (
     MemorySyncWorker,
     build_memory_issue_body,
+    file_memory_suggestion,
     load_memory_digest,
     parse_memory_suggestion,
 )
+from state import StateTracker
 from tests.helpers import ConfigFactory
 
 # --- parse_memory_suggestion tests ---
@@ -747,6 +749,78 @@ class TestMemoryPRManager:
                 assert color == "1d76db"
                 return
         pytest.fail("memory_label not found in _HYDRA_LABELS")
+
+
+# --- Orchestrator tests ---
+
+
+class TestFileSuggestionSetsOrigin:
+    """Tests that file_memory_suggestion sets hitl_origin on created issues."""
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_sets_hitl_origin(
+        self, tmp_path: Path
+    ) -> None:
+        """When a memory suggestion is filed, hitl_origin should be set."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something useful\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await file_memory_suggestion(
+            transcript, "implementer", "issue #42", config, mock_prs, state
+        )
+
+        # Verify issue was created with improve + hitl labels
+        mock_prs.create_issue.assert_awaited_once()
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
+
+        # Verify hitl_origin was set
+        assert state.get_hitl_origin(99) == config.improve_label[0]
+        assert state.get_hitl_cause(99) == "Memory suggestion"
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_no_origin_on_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """When create_issue returns 0, no hitl_origin should be set."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=0)
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await file_memory_suggestion(
+            transcript, "implementer", "issue #42", config, mock_prs, state
+        )
+
+        # No hitl_origin should be set when create_issue fails
+        assert state.get_hitl_origin(0) is None
 
 
 # --- Orchestrator tests ---
