@@ -150,7 +150,7 @@ def scaffold_pre_commit_hook(
     hook_path.parent.mkdir(parents=True, exist_ok=True)
     hook_content = _HOOK_TEMPLATES.get(detected, _UNKNOWN_HOOK)
     hook_path.write_text(hook_content)
-    os.chmod(hook_path, 0o755)  # noqa: S103
+    os.chmod(hook_path, 0o755)  # noqa: S103  # nosec B103
 
     message = (
         f"{warn_msg}; created hook at {hook_path}"
