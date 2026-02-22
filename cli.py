@@ -235,6 +235,63 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Log actions without executing (no agents, no git, no PRs)",
     )
+
+    # Docker isolation
+    exec_group = parser.add_mutually_exclusive_group()
+    exec_group.add_argument(
+        "--docker",
+        action="store_const",
+        const="docker",
+        dest="execution_mode",
+        help="Run agents in Docker containers",
+    )
+    exec_group.add_argument(
+        "--host",
+        action="store_const",
+        const="host",
+        dest="execution_mode",
+        help="Run agents on the host (default)",
+    )
+    parser.add_argument(
+        "--docker-image",
+        default=None,
+        help="Docker image for agent containers (default: ghcr.io/t-rav/hydra-agent:latest)",
+    )
+    parser.add_argument(
+        "--docker-cpu-limit",
+        type=float,
+        default=None,
+        help="CPU cores per container (default: 2.0)",
+    )
+    parser.add_argument(
+        "--docker-memory-limit",
+        default=None,
+        help="Memory limit per container (default: 4g)",
+    )
+    parser.add_argument(
+        "--docker-network-mode",
+        default=None,
+        choices=["bridge", "none", "host"],
+        help="Docker network mode (default: bridge)",
+    )
+    parser.add_argument(
+        "--docker-spawn-delay",
+        type=float,
+        default=None,
+        help="Seconds between container starts (default: 2.0)",
+    )
+    parser.add_argument(
+        "--docker-read-only-root",
+        action="store_true",
+        default=None,
+        help="Read-only root filesystem in containers",
+    )
+    parser.add_argument(
+        "--docker-no-new-privileges",
+        action="store_true",
+        default=None,
+        help="Prevent privilege escalation in containers",
+    )
     parser.add_argument(
         "--gh-token",
         default=None,
@@ -335,6 +392,12 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "git_user_email",
         "memory_sync_interval",
         "metrics_sync_interval",
+        "execution_mode",
+        "docker_image",
+        "docker_cpu_limit",
+        "docker_memory_limit",
+        "docker_network_mode",
+        "docker_spawn_delay",
     ):
         val = getattr(args, field)
         if val is not None:
@@ -364,6 +427,10 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         kwargs["dashboard_enabled"] = False
     if args.dry_run:
         kwargs["dry_run"] = True
+    if args.docker_read_only_root is True:
+        kwargs["docker_read_only_root"] = True
+    if args.docker_no_new_privileges is True:
+        kwargs["docker_no_new_privileges"] = True
 
     return HydraConfig(**kwargs)
 

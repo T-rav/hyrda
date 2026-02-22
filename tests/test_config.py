@@ -9,6 +9,8 @@ import pytest
 
 # conftest.py already inserts the hydra package directory into sys.path
 from config import (
+    _ENV_BOOL_OVERRIDES,
+    _ENV_FLOAT_OVERRIDES,
     _ENV_INT_OVERRIDES,
     _ENV_STR_OVERRIDES,
     HydraConfig,
@@ -2521,11 +2523,151 @@ class TestEnvVarOverrideTable:
         )
         assert getattr(cfg, field) == "explicit-value"
 
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_FLOAT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_FLOAT_OVERRIDES],
+    )
+    def test_env_float_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: float,
+    ) -> None:
+        """Each float override should apply when the field is at its default."""
+        override_value = default + 1.0
+        monkeypatch.setenv(env_key, str(override_value))
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == pytest.approx(override_value)
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_FLOAT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_FLOAT_OVERRIDES],
+    )
+    def test_env_float_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: float,
+    ) -> None:
+        """Explicit values should take precedence over float env var overrides."""
+        explicit = default + 0.5
+        monkeypatch.setenv(env_key, str(default + 1.0))
+        cfg = HydraConfig(
+            **{field: explicit},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == pytest.approx(explicit)
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_FLOAT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_FLOAT_OVERRIDES],
+    )
+    def test_env_float_override_invalid_value_ignored(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: float,
+    ) -> None:
+        """Non-numeric float env var values should be silently ignored."""
+        monkeypatch.setenv(env_key, "not-a-number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == pytest.approx(default)
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_BOOL_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_BOOL_OVERRIDES],
+    )
+    def test_env_bool_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: bool,
+    ) -> None:
+        """Each bool override should apply when the field is at its default."""
+        monkeypatch.setenv(env_key, "false")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) is False
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_BOOL_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_BOOL_OVERRIDES],
+    )
+    def test_env_bool_override_truthy_values(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: bool,
+    ) -> None:
+        """Bool overrides should treat '1', 'true', 'yes' as True."""
+        # First set to non-default so env var kicks in
+        monkeypatch.setenv(env_key, "0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) is False
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_BOOL_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_BOOL_OVERRIDES],
+    )
+    def test_env_bool_override_falsy_variants(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: bool,
+    ) -> None:
+        """Bool overrides should treat '0', 'false', 'no' as False."""
+        for falsy in ("0", "false", "no", "False", "NO"):
+            monkeypatch.setenv(env_key, falsy)
+            cfg = HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+            assert getattr(cfg, field) is False, f"'{falsy}' should parse as False"
+
     def test_override_table_field_names_are_valid(self) -> None:
         """Every field in the override tables should be a real HydraConfig attribute."""
-        all_fields = {f for f, _, _ in _ENV_INT_OVERRIDES} | {
-            f for f, _, _ in _ENV_STR_OVERRIDES
-        }
+        all_fields = (
+            {f for f, _, _ in _ENV_INT_OVERRIDES}
+            | {f for f, _, _ in _ENV_STR_OVERRIDES}
+            | {f for f, _, _ in _ENV_FLOAT_OVERRIDES}
+            | {f for f, _, _ in _ENV_BOOL_OVERRIDES}
+        )
         config_fields = set(HydraConfig.model_fields.keys())
         invalid = all_fields - config_fields
         assert not invalid, f"Invalid field names in override tables: {invalid}"
@@ -2554,3 +2696,431 @@ class TestEnvVarOverrideTable:
                 f"_ENV_STR_OVERRIDES entry for '{field}' has default={table_default!r}, "
                 f"but HydraConfig.{field} default is {pydantic_default!r}"
             )
+
+        # Act / Assert — float overrides
+        for field, _env_key, table_default in _ENV_FLOAT_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_FLOAT_OVERRIDES entry for '{field}' has default={table_default}, "
+                f"but HydraConfig.{field} default is {pydantic_default}"
+            )
+
+        # Act / Assert — bool overrides
+        for field, _env_key, table_default in _ENV_BOOL_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_BOOL_OVERRIDES entry for '{field}' has default={table_default}, "
+                f"but HydraConfig.{field} default is {pydantic_default}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Docker config – defaults
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigDefaults:
+    """Tests that Docker config fields have correct default values."""
+
+    def test_execution_mode_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "host"
+
+    def test_docker_image_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "ghcr.io/t-rav/hydra-agent:latest"
+
+    def test_docker_cpu_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)
+
+    def test_docker_memory_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4g"
+
+    def test_docker_network_mode_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "bridge"
+
+    def test_docker_spawn_delay_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(2.0)
+
+    def test_docker_read_only_root_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is True
+
+    def test_docker_no_new_privileges_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is True
+
+
+# ---------------------------------------------------------------------------
+# Docker config – custom values override defaults
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigCustomValues:
+    """Tests that custom Docker config values take precedence over defaults."""
+
+    def test_custom_execution_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        cfg = HydraConfig(
+            execution_mode="docker",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_custom_docker_image(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_image="my-registry/my-image:v1",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "my-registry/my-image:v1"
+
+    def test_custom_docker_cpu_limit(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_cpu_limit=4.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_custom_docker_memory_limit(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_memory_limit="8g",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "8g"
+
+    def test_custom_docker_network_mode(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_network_mode="none",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_custom_docker_spawn_delay(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_spawn_delay=5.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(5.0)
+
+    def test_custom_docker_read_only_root_false(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_read_only_root=False,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_custom_docker_no_new_privileges_false(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_no_new_privileges=False,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is False
+
+
+# ---------------------------------------------------------------------------
+# Docker config – validation constraints
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigValidation:
+    """Tests for Docker config validation constraints."""
+
+    def test_invalid_execution_mode_raises(self, tmp_path: Path) -> None:
+        """Invalid execution_mode Literal values should raise ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                execution_mode="kubernetes",  # type: ignore[arg-type]
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_docker_network_mode_raises(self, tmp_path: Path) -> None:
+        """Invalid docker_network_mode Literal values should raise ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_network_mode="overlay",  # type: ignore[arg-type]
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_cpu_limit=0.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_cpu_limit=32.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_cpu_limit=0.5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(0.5)
+
+    def test_docker_cpu_limit_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_cpu_limit=16.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(16.0)
+
+    def test_docker_spawn_delay_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_spawn_delay=-1.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_spawn_delay_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraConfig(
+                docker_spawn_delay=60.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_spawn_delay_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_spawn_delay=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(0.0)
+
+    def test_docker_spawn_delay_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_spawn_delay=30.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(30.0)
+
+    def test_docker_not_available_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """execution_mode='docker' with Docker not on PATH should raise ValueError."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        with pytest.raises(ValueError, match="docker.*not found on PATH"):
+            HydraConfig(
+                execution_mode="docker",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_available_passes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """execution_mode='docker' with Docker on PATH should not raise."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        cfg = HydraConfig(
+            execution_mode="docker",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_host_mode_skips_docker_check(self, tmp_path: Path) -> None:
+        """execution_mode='host' should not check for Docker availability."""
+        cfg = HydraConfig(
+            execution_mode="host",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "host"
+
+
+# ---------------------------------------------------------------------------
+# Docker config – env var overrides
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigEnvVarOverrides:
+    """Tests for Docker-specific env var overrides."""
+
+    def test_execution_mode_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_docker_image_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_IMAGE", "custom/image:v2")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "custom/image:v2"
+
+    def test_docker_memory_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_MEMORY_LIMIT", "16g")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "16g"
+
+    def test_docker_network_mode_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK_MODE", "none")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_docker_cpu_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "8.0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(8.0)
+
+    def test_docker_spawn_delay_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_SPAWN_DELAY", "5.0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(5.0)
+
+    def test_docker_read_only_root_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_READ_ONLY_ROOT", "false")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_docker_no_new_privileges_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NO_NEW_PRIVILEGES", "0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is False
