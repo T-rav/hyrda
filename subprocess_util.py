@@ -1,4 +1,4 @@
-"""Shared async subprocess helper for Hydra."""
+"""Shared async subprocess helper for HydraFlow."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 if TYPE_CHECKING:
     from execution import SubprocessRunner
 
-logger = logging.getLogger("hydra.subprocess")
+logger = logging.getLogger("hydraflow.subprocess")
 
 
 class AuthenticationError(RuntimeError):
@@ -126,6 +126,35 @@ def make_clean_env(gh_token: str = "") -> dict[str, str]:
     env.pop("CLAUDECODE", None)
     if gh_token:
         env["GH_TOKEN"] = gh_token
+    return env
+
+
+def make_docker_env(
+    gh_token: str = "",
+    git_user_name: str = "",
+    git_user_email: str = "",
+) -> dict[str, str]:
+    """Build a minimal env dict for Docker container execution.
+
+    Unlike :func:`make_clean_env` which inherits the full host env, this
+    passes only the variables necessary for agent operation inside a container.
+    """
+    env: dict[str, str] = {"HOME": "/root"}
+
+    if gh_token:
+        env["GH_TOKEN"] = gh_token
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if api_key:
+        env["ANTHROPIC_API_KEY"] = api_key
+
+    if git_user_name:
+        env["GIT_AUTHOR_NAME"] = git_user_name
+        env["GIT_COMMITTER_NAME"] = git_user_name
+    if git_user_email:
+        env["GIT_AUTHOR_EMAIL"] = git_user_email
+        env["GIT_COMMITTER_EMAIL"] = git_user_email
+
     return env
 
 

@@ -71,9 +71,9 @@ function freshStage() {
 /**
  * Derive per-issue timeline objects from raw events and workers state.
  *
- * @param {Array} events  — event array (newest first, from useHydraSocket)
- * @param {Object} workers — workers map from useHydraSocket
- * @param {Array} prs — PRs array from useHydraSocket
+ * @param {Array} events  — event array (newest first, from useHydraFlowSocket)
+ * @param {Object} workers — workers map from useHydraFlowSocket
+ * @param {Array} prs — PRs array from useHydraFlowSocket
  * @returns {Array} array of issue timeline objects
  */
 export function deriveIssueTimelines(events, workers, prs) {
@@ -331,9 +331,9 @@ export function applyFiltersAndSort(issues, filterStage, filterStatus, sortBy) {
 /**
  * Custom hook that derives timeline data from WebSocket state.
  *
- * @param {Array} events  — events array from useHydraSocket
- * @param {Object} workers — workers map from useHydraSocket
- * @param {Array} prs — PRs array from useHydraSocket
+ * @param {Array} events  — events array from useHydraFlowSocket
+ * @param {Object} workers — workers map from useHydraFlowSocket
+ * @param {Array} prs — PRs array from useHydraFlowSocket
  * @returns {{ issues, filterStage, setFilterStage, filterStatus, setFilterStatus, sortBy, setSortBy }}
  */
 export function useTimeline(events, workers, prs) {

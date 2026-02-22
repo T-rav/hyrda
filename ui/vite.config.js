@@ -25,7 +25,7 @@ export default defineConfig({
         configure: (proxy) => {
           proxy.on('error', () => {
             // Silently handle expected proxy errors (ECONNRESET/EPIPE)
-            // Frontend auto-reconnects via useHydraSocket
+            // Frontend auto-reconnects via useHydraFlowSocket
           })
         }
       }

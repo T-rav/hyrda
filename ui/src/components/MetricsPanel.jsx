@@ -1,7 +1,6 @@
 import React from 'react'
 import { theme } from '../theme'
-import { useHydra } from '../context/HydraContext'
-
+import { useHydraFlow } from '../context/HydraFlowContext'
 function TrendIndicator({ current, previous, label, format }) {
   if (previous == null || current == null) return null
   const diff = current - previous
@@ -46,6 +45,38 @@ function RateCard({ label, value, previousValue }) {
   )
 }
 
+function ThresholdStatus({ thresholds }) {
+  if (!thresholds || thresholds.length === 0) return null
+  return (
+    <div style={styles.thresholdSection}>
+      {thresholds.map((t, i) => (
+        <div key={i} style={styles.thresholdItem}>
+          <span style={styles.thresholdDot} />
+          <span style={styles.thresholdText}>
+            {t.metric}: {(t.value * 100).toFixed(1)}% (threshold: {(t.threshold * 100).toFixed(1)}%)
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function TimeToMerge({ data }) {
+  if (!data || Object.keys(data).length === 0) return null
+  const fmt = (s) => {
+    if (s < 60) return `${Math.round(s)}s`
+    if (s < 3600) return `${Math.round(s / 60)}m`
+    return `${(s / 3600).toFixed(1)}h`
+  }
+  return (
+    <div style={styles.row}>
+      <StatCard label="Avg Time to Merge" value={fmt(data.avg)} subtle />
+      <StatCard label="Median (p50)" value={fmt(data.p50)} subtle />
+      <StatCard label="p90" value={fmt(data.p90)} subtle />
+    </div>
+  )
+}
+
 function SnapshotTimeline({ snapshots }) {
   if (!snapshots || snapshots.length === 0) return null
   // Show last 10
@@ -77,7 +108,7 @@ function SnapshotTimeline({ snapshots }) {
 export function MetricsPanel() {
   const {
     metrics, lifetimeStats, githubMetrics, metricsHistory, stageStatus,
-  } = useHydra()
+  } = useHydraFlow()
   const sessionTriaged = stageStatus?.triage?.sessionCount || 0
   const sessionPlanned = stageStatus?.plan?.sessionCount || 0
   const sessionImplemented = stageStatus?.implement?.sessionCount || 0
@@ -86,6 +117,9 @@ export function MetricsPanel() {
   const github = githubMetrics || {}
   const openByLabel = github.open_by_label || {}
   const lifetime = metrics?.lifetime || lifetimeStats || {}
+
+  const timeToMerge = metrics?.time_to_merge || {}
+  const thresholds = metrics?.thresholds || []
 
   const hasGithub = githubMetrics !== null && githubMetrics !== undefined
   const hasSession = sessionTriaged > 0 || sessionPlanned > 0 ||
@@ -160,6 +194,20 @@ export function MetricsPanel() {
               previousValue={prev?.hitl_escalation_rate}
             />
           </div>
+        </>
+      )}
+
+      {thresholds.length > 0 && (
+        <>
+          <h3 style={styles.heading}>Threshold Alerts</h3>
+          <ThresholdStatus thresholds={thresholds} />
+        </>
+      )}
+
+      {Object.keys(timeToMerge).length > 0 && (
+        <>
+          <h3 style={styles.heading}>Time to Merge</h3>
+          <TimeToMerge data={timeToMerge} />
         </>
       )}
 
@@ -300,5 +348,31 @@ const styles = {
   timelineStat: {
     fontSize: 10,
     color: theme.textMuted,
+  },
+  thresholdSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    marginBottom: 24,
+    padding: 16,
+    background: theme.surfaceInset,
+    borderRadius: 8,
+    border: `1px solid ${theme.red}`,
+  },
+  thresholdItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  thresholdDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.red,
+    flexShrink: 0,
+  },
+  thresholdText: {
+    fontSize: 12,
+    color: theme.textBright,
   },
 }

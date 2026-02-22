@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 import re
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from issue_fetcher import IssueFetcher
 from pr_manager import PRManager
 
-logger = logging.getLogger("hydra.epic")
+logger = logging.getLogger("hydraflow.epic")
 
 # Matches checkbox lines like "- [ ] #123 — title" or "- [x] #456 — title"
 _CHECKBOX_PATTERN = re.compile(r"- \[[ x]\] #(\d+)")
@@ -30,7 +30,7 @@ class EpicCompletionChecker:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         prs: PRManager,
         fetcher: IssueFetcher,
     ) -> None:

@@ -6,8 +6,8 @@ import asyncio
 import logging
 from typing import Any
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from hitl_runner import HITLRunner
 from issue_fetcher import IssueFetcher
 from issue_store import IssueStore
@@ -16,13 +16,13 @@ from pr_manager import PRManager
 from state import StateTracker
 from worktree import WorktreeManager
 
-logger = logging.getLogger("hydra.hitl_phase")
+logger = logging.getLogger("hydraflow.hitl_phase")
 
 _HITL_ORIGIN_DISPLAY: dict[str, str] = {
-    "hydra-find": "from triage",
-    "hydra-plan": "from plan",
-    "hydra-ready": "from implement",
-    "hydra-review": "from review",
+    "hydraflow-find": "from triage",
+    "hydraflow-plan": "from plan",
+    "hydraflow-ready": "from implement",
+    "hydraflow-review": "from review",
 }
 
 
@@ -31,7 +31,7 @@ class HITLPhase:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         store: IssueStore,
         fetcher: IssueFetcher,
@@ -210,10 +210,10 @@ class HITLPhase:
                         issue_number,
                         f"**HITL correction applied successfully.**\n\n"
                         f"Returning issue to `{target_stage}` stage."
-                        f"\n\n---\n*Applied by Hydra HITL*",
+                        f"\n\n---\n*Applied by HydraFlow HITL*",
                     )
                     await self._bus.publish(
-                        HydraEvent(
+                        HydraFlowEvent(
                             type=EventType.HITL_UPDATE,
                             data={
                                 "issue": issue_number,
@@ -236,10 +236,10 @@ class HITLPhase:
                         f"**HITL correction failed.**\n\n"
                         f"Error: {result.error or 'No details available'}"
                         f"\n\nPlease retry with different guidance."
-                        f"\n\n---\n*Applied by Hydra HITL*",
+                        f"\n\n---\n*Applied by HydraFlow HITL*",
                     )
                     await self._bus.publish(
-                        HydraEvent(
+                        HydraFlowEvent(
                             type=EventType.HITL_UPDATE,
                             data={
                                 "issue": issue_number,

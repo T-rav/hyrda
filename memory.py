@@ -9,8 +9,8 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from file_util import atomic_write
 from models import MemoryIssueData, MemorySyncResult
 from state import StateTracker
@@ -19,7 +19,7 @@ from subprocess_util import make_clean_env
 if TYPE_CHECKING:
     from pr_manager import PRManager
 
-logger = logging.getLogger("hydra.memory")
+logger = logging.getLogger("hydraflow.memory")
 
 
 def parse_memory_suggestion(transcript: str) -> dict[str, str] | None:
@@ -64,13 +64,13 @@ def build_memory_issue_body(
     )
 
 
-def load_memory_digest(config: HydraConfig) -> str:
+def load_memory_digest(config: HydraFlowConfig) -> str:
     """Read the memory digest from disk if it exists.
 
     Returns an empty string if the file is missing or empty.
     Content is capped at ``config.max_memory_prompt_chars``.
     """
-    digest_path = config.repo_root / ".hydra" / "memory" / "digest.md"
+    digest_path = config.repo_root / ".hydraflow" / "memory" / "digest.md"
     if not digest_path.is_file():
         return ""
     try:
@@ -89,7 +89,7 @@ async def file_memory_suggestion(
     transcript: str,
     source: str,
     reference: str,
-    config: HydraConfig,
+    config: HydraFlowConfig,
     prs: PRManager,
     state: StateTracker,
 ) -> None:
@@ -118,11 +118,11 @@ async def file_memory_suggestion(
 
 
 class MemorySyncWorker:
-    """Polls ``hydra-memory`` issues and compiles them into a local digest."""
+    """Polls ``hydraflow-memory`` issues and compiles them into a local digest."""
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         event_bus: EventBus,
     ) -> None:
@@ -154,7 +154,7 @@ class MemorySyncWorker:
         if current_ids == sorted(prev_ids):
             # No change — just update timestamp
             self._state.update_memory_state(current_ids, prev_hash)
-            digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
+            digest_path = self._config.repo_root / ".hydraflow" / "memory" / "digest.md"
             digest_chars = len(digest_path.read_text()) if digest_path.is_file() else 0
             return {
                 "action": "synced",
@@ -183,7 +183,7 @@ class MemorySyncWorker:
             compacted = True
 
         # Write individual items
-        items_dir = self._config.repo_root / ".hydra" / "memory" / "items"
+        items_dir = self._config.repo_root / ".hydraflow" / "memory" / "items"
         items_dir.mkdir(parents=True, exist_ok=True)
         for num, learning, _ in learnings:
             item_path = items_dir / f"{num}.md"
@@ -345,13 +345,13 @@ class MemorySyncWorker:
 
     def _write_digest(self, content: str) -> None:
         """Write digest to disk atomically."""
-        digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
+        digest_path = self._config.repo_root / ".hydraflow" / "memory" / "digest.md"
         atomic_write(digest_path, content)
 
     async def publish_sync_event(self, stats: MemorySyncResult) -> None:
         """Publish a MEMORY_SYNC event with *stats*."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.MEMORY_SYNC,
                 data=dict(stats),
             )

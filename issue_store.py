@@ -7,13 +7,13 @@ import logging
 from collections import deque
 from datetime import UTC, datetime
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from issue_fetcher import IssueFetcher
 from models import GitHubIssue, QueueStats
 from subprocess_util import AuthenticationError
 
-logger = logging.getLogger("hydra.issue_store")
+logger = logging.getLogger("hydraflow.issue_store")
 
 # Pipeline stage names used as queue keys
 STAGE_FIND = "find"
@@ -23,7 +23,7 @@ STAGE_REVIEW = "review"
 STAGE_HITL = "hitl"
 
 # Priority order — higher index = further along in the pipeline.
-# When an issue has multiple Hydra labels, it is routed to the
+# When an issue has multiple HydraFlow labels, it is routed to the
 # most advanced stage (highest priority).
 _STAGE_PRIORITY = {
     STAGE_FIND: 0,
@@ -37,14 +37,14 @@ _STAGE_PRIORITY = {
 class IssueStore:
     """Central data layer for GitHub issue fetching and work queue management.
 
-    A single background polling loop fetches all Hydra-labeled issues from
+    A single background polling loop fetches all HydraFlow-labeled issues from
     GitHub and routes them into per-stage queues.  Orchestrator loops consume
     issues from these queues instead of independently polling GitHub.
     """
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         fetcher: IssueFetcher,
         event_bus: EventBus,
     ) -> None:
@@ -114,9 +114,9 @@ class IssueStore:
     # ------------------------------------------------------------------
 
     async def refresh(self) -> None:
-        """Fetch all Hydra-labeled issues and re-route into queues."""
+        """Fetch all HydraFlow-labeled issues and re-route into queues."""
         try:
-            issues = await self._fetcher.fetch_all_hydra_issues()
+            issues = await self._fetcher.fetch_all_hydraflow_issues()
         except AuthenticationError:
             raise
         except Exception:
@@ -131,7 +131,7 @@ class IssueStore:
         # Publish queue update event
         stats = self.get_queue_stats()
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.QUEUE_UPDATE,
                 data=stats.model_dump(),
             )

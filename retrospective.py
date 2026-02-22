@@ -1,4 +1,4 @@
-"""Post-merge retrospective analysis for the Hydra orchestrator."""
+"""Post-merge retrospective analysis for the HydraFlow orchestrator."""
 
 from __future__ import annotations
 
@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
     from models import ReviewResult
     from pr_manager import PRManager
     from state import StateTracker
 
-logger = logging.getLogger("hydra.retrospective")
+logger = logging.getLogger("hydraflow.retrospective")
 
 
 class RetrospectiveEntry(BaseModel):
@@ -43,7 +43,7 @@ class RetrospectiveCollector:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         prs: PRManager,
     ) -> None:
@@ -51,10 +51,10 @@ class RetrospectiveCollector:
         self._state = state
         self._prs = prs
         self._retro_path = (
-            config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
+            config.repo_root / ".hydraflow" / "memory" / "retrospectives.jsonl"
         )
         self._filed_patterns_path = (
-            config.repo_root / ".hydra" / "memory" / "filed_patterns.json"
+            config.repo_root / ".hydraflow" / "memory" / "filed_patterns.json"
         )
 
     async def record(
@@ -117,7 +117,7 @@ class RetrospectiveCollector:
     def _read_plan_file(self, issue_number: int) -> str:
         """Read the plan file for *issue_number*, returning empty string on failure."""
         plan_path = (
-            self._config.repo_root / ".hydra" / "plans" / f"issue-{issue_number}.md"
+            self._config.repo_root / ".hydraflow" / "plans" / f"issue-{issue_number}.md"
         )
         try:
             return plan_path.read_text()
@@ -126,10 +126,23 @@ class RetrospectiveCollector:
             return ""
 
     def _parse_planned_files(self, plan_text: str) -> list[str]:
-        """Extract file paths from ``## Files to Modify`` and ``## New Files`` sections."""
+        """Extract file paths from plan text.
+
+        Prefers the structured ``## File Delta`` section if present,
+        falling back to heuristic extraction from ``## Files to Modify``
+        and ``## New Files``.
+        """
         if not plan_text:
             return []
 
+        # Try structured delta first
+        from delta_verifier import parse_file_delta
+
+        delta_files = parse_file_delta(plan_text)
+        if delta_files:
+            return delta_files
+
+        # Fallback: heuristic extraction from prose sections
         files: list[str] = []
         in_section = False
 
@@ -236,7 +249,7 @@ class RetrospectiveCollector:
                         "quality fix rounds during implementation.\n\n"
                         "Consider strengthening the implementation prompt to "
                         "emphasize running `make quality` before finishing.\n\n"
-                        "---\n*Auto-detected by Hydra Retrospective*"
+                        "---\n*Auto-detected by HydraFlow Retrospective*"
                     ),
                 )
                 filed.add(key)
@@ -256,7 +269,7 @@ class RetrospectiveCollector:
                         "The planner is consistently missing files that need "
                         "changes. Consider improving the planner prompt to "
                         "better analyze dependencies.\n\n"
-                        "---\n*Auto-detected by Hydra Retrospective*"
+                        "---\n*Auto-detected by HydraFlow Retrospective*"
                     ),
                 )
                 filed.add(key)
@@ -275,7 +288,7 @@ class RetrospectiveCollector:
                         "required the reviewer to make fixes.\n\n"
                         "The implementation prompt likely needs strengthening "
                         "to produce higher-quality first drafts.\n\n"
-                        "---\n*Auto-detected by Hydra Retrospective*"
+                        "---\n*Auto-detected by HydraFlow Retrospective*"
                     ),
                 )
                 filed.add(key)
@@ -299,7 +312,7 @@ class RetrospectiveCollector:
                             f"**{count} of {n}** recent issues.\n\n"
                             "The planner should be made aware that this file "
                             "commonly needs changes.\n\n"
-                            "---\n*Auto-detected by Hydra Retrospective*"
+                            "---\n*Auto-detected by HydraFlow Retrospective*"
                         ),
                     )
                     filed.add(key)
@@ -308,7 +321,7 @@ class RetrospectiveCollector:
                 break
 
     async def _file_improvement_issue(self, title: str, body: str) -> None:
-        """File a ``hydra-improve`` + ``hydra-hitl`` improvement proposal."""
+        """File a ``hydraflow-improve`` + ``hydraflow-hitl`` improvement proposal."""
         labels = self._config.improve_label[:1] + self._config.hitl_label[:1]
         issue_num = await self._prs.create_issue(title, body, labels)
         if issue_num:

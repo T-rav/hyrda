@@ -88,6 +88,8 @@ class TestCreateRouter:
             "/api/timeline",
             "/api/timeline/issue/{issue_num}",
             "/api/intent",
+            "/api/sessions",
+            "/api/sessions/{session_id}",
             "/api/request-changes",
             "/ws",
             "/{path:path}",
@@ -97,6 +99,81 @@ class TestCreateRouter:
 
         # Verify approve-memory route is registered
         assert "/api/hitl/{issue_number}/approve-memory" in paths
+
+
+class TestStartOrchestratorBroadcast:
+    """Tests that /api/control/start broadcasts orchestrator_status running event."""
+
+    @pytest.mark.asyncio
+    async def test_start_publishes_orchestrator_status_running(
+        self, config, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        """POST /api/control/start should publish orchestrator_status with running."""
+        from unittest.mock import MagicMock as SyncMock
+
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+
+        def set_orch(o):
+            pass
+
+        def set_task(t):
+            t.cancel()  # Cancel the actual run task to avoid side effects
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=set_orch,
+            set_run_task=set_task,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Subscribe to the event bus before calling start
+        queue = event_bus.subscribe()
+
+        # Find and call the start endpoint
+        start_endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/start"
+                and hasattr(route, "endpoint")
+            ):
+                start_endpoint = route.endpoint
+                break
+
+        assert start_endpoint is not None
+
+        # Mock the orchestrator module to prevent actual orchestrator creation
+        mock_orch = SyncMock()
+        mock_orch.running = False
+        mock_orch.run = AsyncMock(return_value=None)
+
+        import orchestrator as orch_module
+
+        original_class = orch_module.HydraFlowOrchestrator
+        orch_module.HydraFlowOrchestrator = lambda *a, **kw: mock_orch  # type: ignore[assignment,misc]
+        try:
+            response = await start_endpoint()
+        finally:
+            orch_module.HydraFlowOrchestrator = original_class  # type: ignore[assignment]
+
+        import json
+
+        data = json.loads(response.body)
+        assert data["status"] == "started"
+
+        # Verify that orchestrator_status event was published with reset flag
+        event = queue.get_nowait()
+        assert event.type == "orchestrator_status"
+        assert event.data["status"] == "running"
+        assert event.data["reset"] is True
 
 
 class TestControlStatusImproveLabel:
@@ -249,7 +326,7 @@ class TestHITLEndpointCause:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -293,7 +370,7 @@ class TestHITLEndpointCause:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -395,7 +472,7 @@ class TestHITLEndpointCause:
         )
 
         # Set origin but not cause
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
         pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
@@ -486,7 +563,7 @@ class TestHITLEndpointCause:
         )
 
         state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
         pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
@@ -659,11 +736,11 @@ class TestGitHubMetricsEndpoint:
 
         mock_counts = {
             "open_by_label": {
-                "hydra-plan": 3,
-                "hydra-ready": 1,
-                "hydra-review": 2,
-                "hydra-hitl": 0,
-                "hydra-fixed": 0,
+                "hydraflow-plan": 3,
+                "hydraflow-ready": 1,
+                "hydraflow-review": 2,
+                "hydraflow-hitl": 0,
+                "hydraflow-fixed": 0,
             },
             "total_closed": 10,
             "total_merged": 8,
@@ -676,7 +753,7 @@ class TestGitHubMetricsEndpoint:
         response = await get_github_metrics()
         data = json.loads(response.body)
 
-        assert data["open_by_label"]["hydra-plan"] == 3
+        assert data["open_by_label"]["hydraflow-plan"] == 3
         assert data["total_closed"] == 10
         assert data["total_merged"] == 8
 
@@ -920,7 +997,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Skipping an improve-origin HITL item should remove improve and add find label."""
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         state.set_hitl_cause(42, "Memory suggestion")
 
         mock_orch = MagicMock()
@@ -947,7 +1024,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Non-improve HITL items should not get triage label on skip."""
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         mock_orch = MagicMock()
         mock_orch.skip_hitl_issue = MagicMock()
@@ -990,7 +1067,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Skip should clean up hitl_cause in addition to hitl_origin."""
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
 
         mock_orch = MagicMock()

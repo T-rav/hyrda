@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from events import EventType
 from metrics_manager import MetricsManager
 from models import MetricsSnapshot, QueueStats
@@ -22,15 +22,15 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def make_config(**overrides: Any) -> HydraConfig:
-    """Return a HydraConfig with sensible test defaults."""
+def make_config(**overrides: Any) -> HydraFlowConfig:
+    """Return a HydraFlowConfig with sensible test defaults."""
     defaults: dict[str, Any] = {
         "repo": "test-owner/test-repo",
         "dry_run": False,
-        "metrics_label": ["hydra-metrics"],
+        "metrics_label": ["hydraflow-metrics"],
     }
     defaults.update(overrides)
-    return HydraConfig(**defaults)
+    return HydraFlowConfig(**defaults)
 
 
 def make_pr_manager() -> MagicMock:
@@ -40,7 +40,7 @@ def make_pr_manager() -> MagicMock:
     pr.create_issue = AsyncMock(return_value=42)
     pr.get_label_counts = AsyncMock(
         return_value={
-            "open_by_label": {"hydra-plan": 3, "hydra-review": 1},
+            "open_by_label": {"hydraflow-plan": 3, "hydraflow-review": 1},
             "total_closed": 10,
             "total_merged": 8,
         }
@@ -103,7 +103,10 @@ class TestBuildSnapshot:
         """GitHub label counts are fetched and included."""
         mgr, _, _, _ = make_manager(state, event_bus)
         snapshot = await mgr._build_snapshot()
-        assert snapshot.github_open_by_label == {"hydra-plan": 3, "hydra-review": 1}
+        assert snapshot.github_open_by_label == {
+            "hydraflow-plan": 3,
+            "hydraflow-review": 1,
+        }
         assert snapshot.github_total_closed == 10
         assert snapshot.github_total_merged == 8
 

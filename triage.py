@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from models import GitHubIssue, TriageResult, TriageStatus
 
-logger = logging.getLogger("hydra.triage")
+logger = logging.getLogger("hydraflow.triage")
 
 # Minimum thresholds for issue readiness
 _MIN_TITLE_LENGTH = 10
@@ -22,7 +22,7 @@ class TriageRunner:
     active worker in the FIND column.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(self, config: HydraFlowConfig, event_bus: EventBus) -> None:
         self._config = config
         self._bus = event_bus
 
@@ -93,7 +93,7 @@ class TriageRunner:
     async def _emit_transcript(self, issue_number: int, line: str) -> None:
         """Publish a transcript line for the triage worker."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.TRANSCRIPT_LINE,
                 data={
                     "issue": issue_number,
@@ -108,7 +108,7 @@ class TriageRunner:
     ) -> None:
         """Publish a triage status event."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.TRIAGE_UPDATE,
                 data={
                     "issue": issue_number,

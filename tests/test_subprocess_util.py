@@ -15,6 +15,7 @@ from subprocess_util import (
     _is_auth_error,
     _is_retryable_error,
     make_clean_env,
+    make_docker_env,
     run_subprocess,
     run_subprocess_with_retry,
 )
@@ -561,3 +562,96 @@ class TestRetryWithTimeout:
             timeout=60.0,
             runner=None,
         )
+
+
+# --- make_docker_env ---
+
+
+class TestMakeDockerEnv:
+    """Tests for the make_docker_env helper."""
+
+    def test_sets_home_to_root(self) -> None:
+        env = make_docker_env()
+        assert env["HOME"] == "/root"
+
+    def test_includes_only_allowed_vars_when_empty(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            env = make_docker_env()
+        assert set(env.keys()) == {"HOME"}
+
+    def test_injects_gh_token(self) -> None:
+        env = make_docker_env(gh_token="ghp_test123")
+        assert env["GH_TOKEN"] == "ghp_test123"
+
+    def test_no_gh_token_when_empty(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            env = make_docker_env(gh_token="")
+        assert "GH_TOKEN" not in env
+
+    def test_injects_anthropic_key_from_environ(self) -> None:
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test"}, clear=True):
+            env = make_docker_env()
+        assert env["ANTHROPIC_API_KEY"] == "sk-ant-test"
+
+    def test_no_anthropic_key_when_absent(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            env = make_docker_env()
+        assert "ANTHROPIC_API_KEY" not in env
+
+    def test_sets_git_identity(self) -> None:
+        env = make_docker_env(git_user_name="Bot", git_user_email="bot@test.com")
+        assert env["GIT_AUTHOR_NAME"] == "Bot"
+        assert env["GIT_COMMITTER_NAME"] == "Bot"
+        assert env["GIT_AUTHOR_EMAIL"] == "bot@test.com"
+        assert env["GIT_COMMITTER_EMAIL"] == "bot@test.com"
+
+    def test_no_git_identity_when_empty(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            env = make_docker_env(git_user_name="", git_user_email="")
+        assert "GIT_AUTHOR_NAME" not in env
+        assert "GIT_COMMITTER_NAME" not in env
+        assert "GIT_AUTHOR_EMAIL" not in env
+        assert "GIT_COMMITTER_EMAIL" not in env
+
+    def test_excludes_host_path(self) -> None:
+        with patch.dict(
+            "os.environ", {"PATH": "/usr/bin", "PYTHONPATH": "/lib"}, clear=True
+        ):
+            env = make_docker_env()
+        assert "PATH" not in env
+        assert "PYTHONPATH" not in env
+
+    def test_excludes_host_specific_vars(self) -> None:
+        host_vars = {
+            "SHELL": "/bin/zsh",
+            "TERM": "xterm-256color",
+            "USER": "dev",
+            "LANG": "en_US.UTF-8",
+            "CLAUDECODE": "1",
+        }
+        with patch.dict("os.environ", host_vars, clear=True):
+            env = make_docker_env()
+        for var in host_vars:
+            assert var not in env
+
+    def test_all_vars_combined(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {"ANTHROPIC_API_KEY": "sk-test", "PATH": "/usr/bin"},
+            clear=True,
+        ):
+            env = make_docker_env(
+                gh_token="ghp_abc",
+                git_user_name="Agent",
+                git_user_email="agent@example.com",
+            )
+        expected_keys = {
+            "HOME",
+            "GH_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "GIT_AUTHOR_NAME",
+            "GIT_COMMITTER_NAME",
+            "GIT_AUTHOR_EMAIL",
+            "GIT_COMMITTER_EMAIL",
+        }
+        assert set(env.keys()) == expected_keys

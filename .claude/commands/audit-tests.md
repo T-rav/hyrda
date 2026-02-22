@@ -1,13 +1,13 @@
 # Test Audit
 
-Run a comprehensive test quality audit across the entire repo. Analyzes test naming, structure, factory usage, anti-patterns, coverage gaps, and flaky patterns. Creates GitHub issues for findings so Hydra can process them.
+Run a comprehensive test quality audit across the entire repo. Analyzes test naming, structure, factory usage, anti-patterns, coverage gaps, and flaky patterns. Creates GitHub issues for findings so HydraFlow can process them.
 
 ## Instructions
 
 1. **Resolve configuration** before doing anything else:
-   - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
-   - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
-   - Run `echo "$HYDRA_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
+   - Run `echo "$HYDRAFLOW_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+   - Run `echo "$HYDRAFLOW_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
+   - Run `echo "$HYDRAFLOW_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydraflow-plan`.
    - Store resolved values as `$REPO`, `$ASSIGNEE`, `$LABEL`.
 
 2. **Discover project structure:**
@@ -253,7 +253,7 @@ You are a test quality auditor focused on test infrastructure and coverage gaps 
 ## Missing Factories
 | Object | Used In | Times Repeated | Suggested Factory |
 |--------|---------|---------------|-------------------|
-| <HydraConfig(...)> | <test_a, test_b, test_c> | <5> | <make_config() in helpers.py> |
+| <HydraFlowConfig(...)> | <test_a, test_b, test_c> | <5> | <make_config() in helpers.py> |
 
 ## Coverage Gaps
 | Source File | Public Functions | Tested | Untested |

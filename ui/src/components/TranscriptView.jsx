@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { theme } from '../theme'
 import { ACTIVE_STATUSES, BACKGROUND_WORKERS } from '../constants'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 
 function formatTimestamp(ts) {
   if (!ts) return ''
@@ -82,7 +82,7 @@ function BackgroundWorkerDetail({ workerKey, backgroundWorkers, events }) {
 }
 
 export function TranscriptView({ workers, selectedWorker }) {
-  const { backgroundWorkers, events } = useHydra()
+  const { backgroundWorkers, events } = useHydraFlow()
   const containerRef = useRef(null)
 
   // Auto-scroll to bottom when new lines arrive

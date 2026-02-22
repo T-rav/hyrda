@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/planner.py."""
+"""Tests for dx/hydraflow/planner.py."""
 
 from __future__ import annotations
 
@@ -34,6 +34,9 @@ def _valid_plan(*, word_pad: int = 200) -> str:
         "- src/config.py — add configuration field\n\n"
         "## New Files\n\n"
         "None\n\n"
+        "## File Delta\n\n"
+        "MODIFIED: src/models.py\n"
+        "MODIFIED: src/config.py\n\n"
         "## Implementation Steps\n\n"
         "1. Add the new model class to models.py\n"
         "2. Add configuration field to config.py\n"
@@ -896,7 +899,7 @@ def test_save_transcript_writes_to_correct_path(event_bus, tmp_path):
 
     runner._save_transcript(42, transcript)
 
-    expected_path = tmp_path / ".hydra" / "logs" / "plan-issue-42.txt"
+    expected_path = tmp_path / ".hydraflow" / "logs" / "plan-issue-42.txt"
     assert expected_path.exists()
     assert expected_path.read_text() == transcript
 
@@ -904,7 +907,7 @@ def test_save_transcript_writes_to_correct_path(event_bus, tmp_path):
 def test_save_transcript_creates_log_directory(event_bus, tmp_path):
     cfg = ConfigFactory.create(repo_root=tmp_path)
     runner = PlannerRunner(config=cfg, event_bus=event_bus)
-    log_dir = tmp_path / ".hydra" / "logs"
+    log_dir = tmp_path / ".hydraflow" / "logs"
     assert not log_dir.exists()
 
     runner._save_transcript(7, "transcript content")
@@ -934,7 +937,7 @@ def test_save_plan_writes_to_correct_path(event_bus, tmp_path):
 
     runner._save_plan(42, "Step 1: Do X\nStep 2: Do Y", "Two-step plan")
 
-    expected_path = tmp_path / ".hydra" / "plans" / "issue-42.md"
+    expected_path = tmp_path / ".hydraflow" / "plans" / "issue-42.md"
     assert expected_path.exists()
     content = expected_path.read_text()
     assert "Step 1: Do X" in content
@@ -944,7 +947,7 @@ def test_save_plan_writes_to_correct_path(event_bus, tmp_path):
 def test_save_plan_creates_plans_directory(event_bus, tmp_path):
     cfg = ConfigFactory.create(repo_root=tmp_path)
     runner = PlannerRunner(config=cfg, event_bus=event_bus)
-    plan_dir = tmp_path / ".hydra" / "plans"
+    plan_dir = tmp_path / ".hydraflow" / "plans"
     assert not plan_dir.exists()
 
     runner._save_plan(7, "Some plan", "Summary")
@@ -1445,11 +1448,12 @@ def test_build_prompt_warns_about_rejection(config, event_bus, issue):
 # ---------------------------------------------------------------------------
 
 
-def test_required_sections_has_six_entries(config, event_bus):
-    """PlannerRunner.REQUIRED_SECTIONS should have 6 entries."""
-    assert len(PlannerRunner.REQUIRED_SECTIONS) == 6
+def test_required_sections_has_seven_entries(config, event_bus):
+    """PlannerRunner.REQUIRED_SECTIONS should have 7 entries (including File Delta)."""
+    assert len(PlannerRunner.REQUIRED_SECTIONS) == 7
     assert "## Files to Modify" in PlannerRunner.REQUIRED_SECTIONS
     assert "## New Files" in PlannerRunner.REQUIRED_SECTIONS
+    assert "## File Delta" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Implementation Steps" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Testing Strategy" in PlannerRunner.REQUIRED_SECTIONS
     assert "## Acceptance Criteria" in PlannerRunner.REQUIRED_SECTIONS

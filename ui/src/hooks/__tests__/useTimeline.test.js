@@ -124,7 +124,7 @@ describe('deriveIssueTimelines', () => {
 
   it('groups multiple stages for the same issue', () => {
     const events = [
-      // Newest first (as from useHydraSocket)
+      // Newest first (as from useHydraFlowSocket)
       { type: 'worker_update', timestamp: '2026-01-15T10:03:00Z', data: { issue: 42, status: 'running' } },
       { type: 'planner_update', timestamp: '2026-01-15T10:02:00Z', data: { issue: 42, status: 'done' } },
       { type: 'triage_update', timestamp: '2026-01-15T10:01:00Z', data: { issue: 42, status: 'done' } },

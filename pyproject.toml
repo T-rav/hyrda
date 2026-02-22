@@ -22,11 +22,15 @@ test = [
     "pytest-xdist>=3.5.0",
     "httpx>=0.27.0",
     "hydraflow[dashboard]",
+    "hydraflow[docker]",
 ]
 dev = [
     "ruff==0.15.0",
     "pyright==1.1.408",
     "bandit[toml]==1.8.0",
+]
+docker = [
+    "docker>=7.0.0",
 ]
 dashboard = [
     "fastapi>=0.110.0",

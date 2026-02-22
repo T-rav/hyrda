@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from execution import get_default_runner
 from memory import load_memory_digest
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
@@ -20,7 +20,20 @@ from subprocess_util import CreditExhaustedError
 if TYPE_CHECKING:
     from execution import SubprocessRunner
 
-logger = logging.getLogger("hydra.reviewer")
+logger = logging.getLogger("hydraflow.reviewer")
+
+# Compiled patterns that indicate a transcript line is internal tool output,
+# not a human-readable review summary.
+_JUNK_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"[→←]"),  # Tool arrows (e.g. "→ TaskOutput: ...")
+    re.compile(r"^\s*\{.*\}\s*$"),  # Raw JSON objects
+    re.compile(r"<[a-zA-Z/][^>]*>"),  # HTML tags
+    re.compile(r"^```"),  # Code fence markers
+    re.compile(r"^Co-Authored-By:", re.IGNORECASE),  # Git trailers
+    re.compile(r"^Signed-off-by:", re.IGNORECASE),  # Git trailers
+    re.compile(r"^\s*\d+[\s,]+\d+"),  # Metric lines (e.g. "1234 5678")
+    re.compile(r"^(tokens|cost|duration)\s*:", re.IGNORECASE),  # Metric labels
+]
 
 
 class ReviewRunner:
@@ -32,7 +45,7 @@ class ReviewRunner:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         event_bus: EventBus,
         runner: SubprocessRunner | None = None,
     ) -> None:
@@ -60,7 +73,7 @@ class ReviewRunner:
         )
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -106,7 +119,7 @@ class ReviewRunner:
         result.duration_seconds = time.monotonic() - start
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -144,7 +157,7 @@ class ReviewRunner:
         )
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.CI_CHECK,
                 data={
                     "pr": pr.number,
@@ -181,7 +194,7 @@ class ReviewRunner:
             logger.error("CI fix failed for PR #%d: %s", pr.number, exc)
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.CI_CHECK,
                 data={
                     "pr": pr.number,
@@ -400,15 +413,41 @@ Only suggest genuinely valuable learnings — not trivial observations.
             return mapping.get(raw, ReviewVerdict.COMMENT)
         return ReviewVerdict.COMMENT
 
+    @staticmethod
+    def _sanitize_summary(candidate: str) -> str | None:
+        """Return *candidate* if it looks like a real summary, else ``None``.
+
+        Rejects strings that match any :data:`_JUNK_PATTERNS` or are
+        shorter than 10 characters (likely not meaningful).  Valid
+        summaries are truncated to 200 characters.
+        """
+        text = candidate.strip()
+        if len(text) < 10:
+            return None
+        for pat in _JUNK_PATTERNS:
+            if pat.search(text):
+                return None
+        return text[:200]
+
     def _extract_summary(self, transcript: str) -> str:
         """Extract the summary line from the reviewer transcript."""
         pattern = r"SUMMARY:\s*(.+)"
         match = re.search(pattern, transcript, re.IGNORECASE)
         if match:
-            return match.group(1).strip()
-        # Fallback: last non-empty line
-        lines = [ln.strip() for ln in transcript.splitlines() if ln.strip()]
-        return lines[-1][:200] if lines else "No summary provided"
+            sanitized = self._sanitize_summary(match.group(1).strip())
+            if sanitized:
+                return sanitized
+
+        # Fallback: walk lines in reverse, skipping garbage
+        for line in reversed(transcript.splitlines()):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            sanitized = self._sanitize_summary(stripped)
+            if sanitized:
+                return sanitized
+
+        return "No summary provided"
 
     def terminate(self) -> None:
         """Kill all active reviewer subprocesses."""
@@ -434,8 +473,8 @@ Only suggest genuinely valuable learnings — not trivial observations.
         )
 
     def _save_transcript(self, pr_number: int, transcript: str) -> None:
-        """Write the review transcript to .hydra/logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Write the review transcript to .hydraflow/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"review-pr-{pr_number}.txt"

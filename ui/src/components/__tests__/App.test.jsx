@@ -34,6 +34,11 @@ const { mockState } = vi.hoisted(() => {
       submitIntent: () => {},
       toggleBgWorker: () => {},
       systemAlert: null,
+      sessions: [],
+      currentSessionId: null,
+      selectedSessionId: null,
+      selectedSession: null,
+      selectSession: () => {},
       pipelineIssues: {
         triage: [],
         plan: [],
@@ -54,14 +59,15 @@ const { mockState } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../context/HydraContext', () => ({
-  HydraProvider: ({ children }) => children,
-  useHydra: () => mockState,
+vi.mock('../../context/HydraFlowContext', () => ({
+  HydraFlowProvider: ({ children }) => children,
+  useHydraFlow: () => mockState,
 }))
 
 beforeEach(() => {
   mockState.hitlItems = []
   mockState.prs = []
+  mockState.resetSession = undefined
   cleanup()
 })
 
@@ -103,7 +109,7 @@ describe('Layout min-width', () => {
     const { default: App } = await import('../../App')
     const { container } = render(<App />)
     const layout = container.firstChild
-    expect(layout.style.minWidth).toBe('800px')
+    expect(layout.style.minWidth).toBe('1080px')
   })
 })
 
@@ -209,6 +215,22 @@ describe('Main tab bar', () => {
     render(<App />)
     const issueStreamTab = screen.getByText('Work Stream')
     expect(issueStreamTab.style.color).toBe('var(--accent)')
+  })
+})
+
+describe('Start button dispatches session reset', () => {
+  it('calls resetSession when Start is clicked', async () => {
+    const resetMock = vi.fn()
+    mockState.resetSession = resetMock
+    mockState.orchestratorStatus = 'idle'
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    fireEvent.click(screen.getByText('Start'))
+    expect(resetMock).toHaveBeenCalledTimes(1)
+
+    // Restore
+    mockState.orchestratorStatus = 'running'
   })
 })
 

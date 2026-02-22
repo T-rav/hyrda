@@ -20,7 +20,7 @@ from state import StateTracker
 from triage_phase import TriagePhase
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +41,7 @@ def make_issue(
 
 
 def _make_phase(
-    config: HydraConfig,
+    config: HydraFlowConfig,
 ) -> tuple[TriagePhase, StateTracker, AsyncMock, AsyncMock, IssueStore, asyncio.Event]:
     """Build a TriagePhase with mock dependencies.
 
@@ -72,7 +72,7 @@ class TestTriagePhase:
 
     @pytest.mark.asyncio
     async def test_triage_promotes_ready_issue_to_planning(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         from models import TriageResult
 
@@ -92,7 +92,7 @@ class TestTriagePhase:
 
     @pytest.mark.asyncio
     async def test_triage_escalates_unready_issue_to_hitl(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         from models import TriageResult
 
@@ -118,7 +118,7 @@ class TestTriagePhase:
 
     @pytest.mark.asyncio
     async def test_triage_escalation_records_hitl_origin(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Escalating an unready issue should record find_label as HITL origin."""
         from models import TriageResult
@@ -137,10 +137,12 @@ class TestTriagePhase:
 
         await phase.triage_issues()
 
-        assert state.get_hitl_origin(2) == "hydra-find"
+        assert state.get_hitl_origin(2) == "hydraflow-find"
 
     @pytest.mark.asyncio
-    async def test_triage_escalation_sets_hitl_cause(self, config: HydraConfig) -> None:
+    async def test_triage_escalation_sets_hitl_cause(
+        self, config: HydraFlowConfig
+    ) -> None:
         """Escalating an unready issue should record cause in state."""
         from models import TriageResult
 
@@ -172,7 +174,9 @@ class TestTriagePhase:
         prs.remove_label.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_triage_stops_when_stop_event_set(self, config: HydraConfig) -> None:
+    async def test_triage_stops_when_stop_event_set(
+        self, config: HydraFlowConfig
+    ) -> None:
         from models import TriageResult
 
         phase, _state, triage, prs, store, _stop = _make_phase(config)
@@ -198,7 +202,9 @@ class TestTriagePhase:
         assert call_count == 1
 
     @pytest.mark.asyncio
-    async def test_triage_skips_when_no_issues_found(self, config: HydraConfig) -> None:
+    async def test_triage_skips_when_no_issues_found(
+        self, config: HydraFlowConfig
+    ) -> None:
         phase, _state, _triage, prs, store, _stop = _make_phase(config)
 
         store.get_triageable = lambda _max_count: []  # type: ignore[method-assign]
@@ -209,7 +215,7 @@ class TestTriagePhase:
 
     @pytest.mark.asyncio
     async def test_triage_marks_active_during_processing(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Triage should mark issues active to prevent re-queuing by refresh."""
         from models import TriageResult

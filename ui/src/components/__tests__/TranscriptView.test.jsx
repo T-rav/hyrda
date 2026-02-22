@@ -2,16 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ACTIVE_STATUSES } from '../../constants'
 
-const mockUseHydra = vi.fn()
+const mockUseHydraFlow = vi.fn()
 
-vi.mock('../../context/HydraContext', () => ({
-  useHydra: (...args) => mockUseHydra(...args),
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
 const { TranscriptView } = await import('../TranscriptView')
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue({ backgroundWorkers: [], events: [] })
+  mockUseHydraFlow.mockReturnValue({ backgroundWorkers: [], events: [] })
 })
 
 describe('TranscriptView', () => {
@@ -129,7 +129,7 @@ describe('TranscriptView', () => {
 
   describe('background worker view', () => {
     it('renders bg worker name and status when bg- key selected', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: '2026-02-20T10:00:00Z', details: {} },
         ],
@@ -141,7 +141,7 @@ describe('TranscriptView', () => {
     })
 
     it('renders details dict as key-value pairs', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: '2026-02-20T10:00:00Z', details: { item_count: 12, digest_chars: 2400 } },
         ],
@@ -155,7 +155,7 @@ describe('TranscriptView', () => {
     })
 
     it('renders last run timestamp', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: '2026-02-20T10:00:00Z', details: {} },
         ],
@@ -168,7 +168,7 @@ describe('TranscriptView', () => {
     })
 
     it('shows "never" when last_run is null', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: null, details: {} },
         ],
@@ -179,7 +179,7 @@ describe('TranscriptView', () => {
     })
 
     it('renders recent background_worker_status events', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: '2026-02-20T10:00:00Z', details: {} },
         ],
@@ -193,7 +193,7 @@ describe('TranscriptView', () => {
     })
 
     it('shows "No log data available" when worker has no data and no events', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [],
         events: [],
       })
@@ -202,7 +202,7 @@ describe('TranscriptView', () => {
     })
 
     it('filters events to only show events for the selected worker', () => {
-      mockUseHydra.mockReturnValue({
+      mockUseHydraFlow.mockReturnValue({
         backgroundWorkers: [
           { name: 'memory_sync', status: 'ok', last_run: null, details: {} },
         ],

@@ -12,7 +12,7 @@ Issue #147 requests a fundamental UX transformation: shift Hydra's dashboard fro
 
 ### Backend (Python)
 
-1. **`dashboard_routes.py`** — Add `POST /api/intent` endpoint that creates a GitHub issue with `hydra-plan` label via `PRManager.create_issue()` and returns the issue number/URL. Also need to add the route path to test expectations.
+1. **`dashboard_routes.py`** — Add `POST /api/intent` endpoint that creates a GitHub issue with `hydraflow-plan` label via `PRManager.create_issue()` and returns the issue number/URL. Also need to add the route path to test expectations.
 
 2. **`models.py`** — Add `IntentRequest` and `IntentResponse` Pydantic models for the new endpoint.
 
@@ -92,7 +92,7 @@ async def submit_intent(request: IntentRequest) -> JSONResponse:
     """Create a GitHub issue from a user intent typed in the dashboard."""
     title = request.text[:120]  # Truncate for title
     body = request.text
-    labels = list(config.planner_label)  # e.g. ["hydra-plan"]
+    labels = list(config.planner_label)  # e.g. ["hydraflow-plan"]
     
     issue_number = await pr_manager.create_issue(
         title=title, body=body, labels=labels
@@ -113,7 +113,7 @@ async def submit_intent(request: IntentRequest) -> JSONResponse:
 Key design decisions:
 - Use the first 120 characters of the intent as the issue title
 - Use the full text as the issue body
-- Label with `planner_label` (default `hydra-plan`) so it enters the pipeline at the planning stage
+- Label with `planner_label` (default `hydraflow-plan`) so it enters the pipeline at the planning stage
 - `PRManager.create_issue()` already publishes an `ISSUE_CREATED` event, so the stream view will receive the update via WebSocket automatically
 
 ### Step 3: Backend — Write tests for intent endpoint (`tests/test_intent_endpoint.py`)
@@ -329,7 +329,7 @@ Since the project uses inline React without a test runner for UI:
 
 ## Acceptance Criteria
 
-- [ ] Intent input bar visible and functional — type a request, it becomes a GitHub issue with `hydra-plan` label
+- [ ] Intent input bar visible and functional — type a request, it becomes a GitHub issue with `hydraflow-plan` label
 - [ ] Stream view shows all active and recent issues as conversation cards
 - [ ] Each card shows lifecycle progression (intent → plan → implement → review → merge)
 - [ ] Active cards stream real-time updates with semantic progress indicators
@@ -379,5 +379,5 @@ SUMMARY: Add intent input bar, stream-first unified view with per-issue conversa
 NEW_ISSUES_START
 - title: Livestream tab duplicates raw event rendering inline in App.jsx
   body: "The Livestream tab in App.jsx (lines 122-133) renders events inline with `JSON.stringify(e.data).slice(0, 120)`, duplicating the dedicated `Livestream.jsx` component which uses the `EventLog` component's `eventSummary` formatter. The inline rendering at App.jsx:122-133 should be replaced with `<Livestream events={events} />` to use the proper component. This was likely left over from before the Livestream component was created. The current inline rendering shows raw JSON which is not user-friendly."
-  labels: hydra-find
+  labels: hydraflow-find
 NEW_ISSUES_END

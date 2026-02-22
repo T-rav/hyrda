@@ -1,4 +1,4 @@
-"""Tests for prep.py — Hydra lifecycle label preparation and repo audit."""
+"""Tests for prep.py — HydraFlow lifecycle label preparation and repo audit."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from models import AuditCheckStatus
-from prep import HYDRA_LABELS, PrepResult, _list_existing_labels, ensure_labels
+from prep import HYDRAFLOW_LABELS, PrepResult, _list_existing_labels, ensure_labels
 from tests.helpers import AuditCheckFactory, AuditResultFactory, ConfigFactory
 
 # ---------------------------------------------------------------------------
@@ -71,13 +71,13 @@ class TestListExistingLabels:
     @pytest.mark.asyncio
     async def test_parses_json(self) -> None:
         config = ConfigFactory.create()
-        labels_json = json.dumps([{"name": "bug"}, {"name": "hydra-plan"}])
+        labels_json = json.dumps([{"name": "bug"}, {"name": "hydraflow-plan"}])
         mock = _make_subprocess_mock(stdout=labels_json)
 
         with patch("asyncio.create_subprocess_exec", mock):
             result = await _list_existing_labels(config)
 
-        assert result == {"bug", "hydra-plan"}
+        assert result == {"bug", "hydraflow-plan"}
 
     @pytest.mark.asyncio
     async def test_empty_repo(self) -> None:
@@ -133,7 +133,7 @@ class TestEnsureLabels:
             result = await ensure_labels(config)
 
         # All labels should be created (none existed)
-        assert len(result.created) == len(HYDRA_LABELS)
+        assert len(result.created) == len(HYDRAFLOW_LABELS)
         assert len(result.existed) == 0
         assert len(result.failed) == 0
 
@@ -142,7 +142,7 @@ class TestEnsureLabels:
         """Labels already in the repo are classified as 'existed'."""
         config = ConfigFactory.create()
         # Use actual label names from config (ConfigFactory uses "test-label"
-        # for ready_label, not "hydra-ready")
+        # for ready_label, not "hydraflow-ready")
         existing = (
             list(config.find_label)
             + list(config.planner_label)
@@ -164,7 +164,7 @@ class TestEnsureLabels:
             result = await ensure_labels(config)
 
         assert set(result.existed) == set(existing)
-        assert len(result.created) + len(result.existed) == len(HYDRA_LABELS)
+        assert len(result.created) + len(result.existed) == len(HYDRAFLOW_LABELS)
         assert len(result.failed) == 0
 
     @pytest.mark.asyncio
@@ -212,14 +212,14 @@ class TestEnsureLabels:
         # No subprocess calls at all
         mock.assert_not_called()
         # But result should list what would be created
-        assert len(result.created) == len(HYDRA_LABELS)
+        assert len(result.created) == len(HYDRAFLOW_LABELS)
         assert len(result.existed) == 0
 
     @pytest.mark.asyncio
     async def test_handles_individual_failures(self) -> None:
         """One label failure doesn't prevent others from being created."""
         config = ConfigFactory.create()
-        fail_label = "hydra-find"
+        fail_label = "hydraflow-find"
 
         async def side_effect(*args, **_kwargs):
             proc = AsyncMock()
@@ -244,7 +244,7 @@ class TestEnsureLabels:
             result = await ensure_labels(config)
 
         assert fail_label in result.failed
-        assert len(result.created) == len(HYDRA_LABELS) - 1
+        assert len(result.created) == len(HYDRAFLOW_LABELS) - 1
         assert len(result.failed) == 1
 
     @pytest.mark.asyncio
@@ -268,7 +268,7 @@ class TestEnsureLabels:
             result = await ensure_labels(config)
 
         # All should be "created" since list failed (empty existing set)
-        assert len(result.created) == len(HYDRA_LABELS)
+        assert len(result.created) == len(HYDRAFLOW_LABELS)
         assert len(result.existed) == 0
 
     @pytest.mark.asyncio
@@ -277,7 +277,7 @@ class TestEnsureLabels:
         config = ConfigFactory.create()
         # Build the list of all default label names
         all_names = []
-        for cfg_field, _, _ in HYDRA_LABELS:
+        for cfg_field, _, _ in HYDRAFLOW_LABELS:
             all_names.extend(getattr(config, cfg_field))
         existing_json = json.dumps([{"name": n} for n in all_names])
 
@@ -295,7 +295,7 @@ class TestEnsureLabels:
             result = await ensure_labels(config)
 
         assert len(result.created) == 0
-        assert len(result.existed) == len(HYDRA_LABELS)
+        assert len(result.existed) == len(HYDRAFLOW_LABELS)
         assert len(result.failed) == 0
 
 
@@ -393,7 +393,7 @@ class TestAuditResult:
         assert "Missing (2)" in report
         assert "CI" in report
         assert "Git hooks" in report
-        assert "hydra prep" in report
+        assert "hydraflow prep" in report
 
 
 # ---------------------------------------------------------------------------
@@ -996,7 +996,7 @@ class TestCheckLabels:
 
     @pytest.mark.asyncio
     async def test_all_labels_present(self, tmp_path: Path) -> None:
-        """Should report PRESENT when all Hydra labels exist."""
+        """Should report PRESENT when all HydraFlow labels exist."""
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
 
@@ -1028,7 +1028,7 @@ class TestCheckLabels:
 
     @pytest.mark.asyncio
     async def test_no_labels(self, tmp_path: Path) -> None:
-        """Should report MISSING when no Hydra labels exist."""
+        """Should report MISSING when no HydraFlow labels exist."""
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
 

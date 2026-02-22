@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/stream_parser.py."""
+"""Tests for dx/hydraflow/stream_parser.py."""
 
 from __future__ import annotations
 

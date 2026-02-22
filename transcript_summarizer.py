@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from pr_manager import PRManager
 from state import StateTracker
 from subprocess_util import make_clean_env
 
-logger = logging.getLogger("hydra.transcript_summarizer")
+logger = logging.getLogger("hydraflow.transcript_summarizer")
 
 _MIN_TRANSCRIPT_LENGTH = 500
 
@@ -74,7 +74,7 @@ class TranscriptSummarizer:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         pr_manager: PRManager,
         event_bus: EventBus,
         state: StateTracker,
@@ -155,7 +155,7 @@ class TranscriptSummarizer:
             self._state.set_hitl_origin(issue_num, self._config.improve_label[0])
             self._state.set_hitl_cause(issue_num, "Transcript summary")
             await self._bus.publish(
-                HydraEvent(
+                HydraFlowEvent(
                     type=EventType.TRANSCRIPT_SUMMARY,
                     data={
                         "source_issue": issue_number,

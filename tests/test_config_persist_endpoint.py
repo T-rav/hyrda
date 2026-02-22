@@ -80,7 +80,7 @@ class TestPatchConfigEndpoint:
         self, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH with persist=true should write changes to config file."""
-        config_path = tmp_path / ".hydra" / "config.json"
+        config_path = tmp_path / ".hydraflow" / "config.json"
         cfg = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             worktree_base=tmp_path / "worktrees",
@@ -108,7 +108,7 @@ class TestPatchConfigEndpoint:
         self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH without persist should not write to disk."""
-        config_path = tmp_path / ".hydra" / "config.json"
+        config_path = tmp_path / ".hydraflow" / "config.json"
         object.__setattr__(config, "config_file", config_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
@@ -154,7 +154,7 @@ class TestPatchConfigEndpoint:
         self, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """The 'persist' flag itself should not be saved to the config file."""
-        config_path = tmp_path / ".hydra" / "config.json"
+        config_path = tmp_path / ".hydraflow" / "config.json"
         cfg = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             worktree_base=tmp_path / "worktrees",

@@ -17,18 +17,18 @@ Scan the current conversation for architectural decisions, bug root causes, conf
 
 Before doing anything else, resolve these values:
 
-1. **REPO**: Run `echo "$HYDRA_GITHUB_REPO"`. If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
-2. **ASSIGNEE**: Run `echo "$HYDRA_GITHUB_ASSIGNEE"`. If empty, extract the owner from the repo slug (the part before `/`).
-3. **IMPROVE_LABEL**: Run `echo "$HYDRA_LABEL_IMPROVE"`. If empty, default to `hydra-improve`.
-4. **HITL_LABEL**: Run `echo "$HYDRA_LABEL_HITL"`. If empty, default to `hydra-hitl`.
+1. **REPO**: Run `echo "$HYDRAFLOW_GITHUB_REPO"`. If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+2. **ASSIGNEE**: Run `echo "$HYDRAFLOW_GITHUB_ASSIGNEE"`. If empty, extract the owner from the repo slug (the part before `/`).
+3. **IMPROVE_LABEL**: Run `echo "$HYDRAFLOW_LABEL_IMPROVE"`. If empty, default to `hydraflow-improve`.
+4. **HITL_LABEL**: Run `echo "$HYDRAFLOW_LABEL_HITL"`. If empty, default to `hydraflow-hitl`.
 
 ### Phase 1: Fetch Existing Memories for Dedup
 
 Before extracting anything, fetch existing memory and improvement issues to avoid duplicates:
 
 ```bash
-gh issue list --repo $REPO --label hydra-memory --state open --limit 100 --json title,body
-gh issue list --repo $REPO --label hydra-improve --state open --limit 100 --json title,body
+gh issue list --repo $REPO --label hydraflow-memory --state open --limit 100 --json title,body
+gh issue list --repo $REPO --label hydraflow-improve --state open --limit 100 --json title,body
 ```
 
 Keep these titles and bodies in mind — skip any learning that substantially overlaps with an existing issue.

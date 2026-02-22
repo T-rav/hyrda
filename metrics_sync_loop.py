@@ -7,12 +7,12 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from issue_store import IssueStore
 from subprocess_util import AuthenticationError, CreditExhaustedError
 
-logger = logging.getLogger("hydra.metrics_sync_loop")
+logger = logging.getLogger("hydraflow.metrics_sync_loop")
 
 
 class MetricsSyncLoop:
@@ -20,7 +20,7 @@ class MetricsSyncLoop:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         store: IssueStore,
         metrics_manager: Any,
         bus: EventBus,
@@ -65,7 +65,7 @@ class MetricsSyncLoop:
                 )
                 self._status_cb("metrics", "error", None)
                 await self._bus.publish(
-                    HydraEvent(
+                    HydraFlowEvent(
                         type=EventType.ERROR,
                         data={
                             "message": "Metrics sync loop error",

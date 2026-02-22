@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { reducer } from '../HydraContext'
+import { reducer } from '../HydraFlowContext'
 
 const emptyPipeline = {
   triage: [],
@@ -39,12 +39,15 @@ const initialState = {
   githubMetrics: null,
   pipelineIssues: { ...emptyPipeline },
   pipelinePollerLastRun: null,
+  sessions: [],
+  currentSessionId: null,
+  selectedSessionId: null,
 }
 
-describe('HydraContext reducer', () => {
+describe('HydraFlowContext reducer', () => {
   it('GITHUB_METRICS action sets githubMetrics state', () => {
     const data = {
-      open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1 },
+      open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 1 },
       total_closed: 10,
       total_merged: 8,
     }
@@ -58,7 +61,7 @@ describe('HydraContext reducer', () => {
       githubMetrics: { open_by_label: {}, total_closed: 0, total_merged: 0 },
     }
     const data = {
-      open_by_label: { 'hydra-plan': 5 },
+      open_by_label: { 'hydraflow-plan': 5 },
       total_closed: 15,
       total_merged: 12,
     }
@@ -89,7 +92,7 @@ describe('HydraContext reducer', () => {
       ...initialState,
       phase: 'idle',
       sessionTriaged: 3,
-      githubMetrics: { open_by_label: { 'hydra-plan': 2 }, total_closed: 1, total_merged: 1 },
+      githubMetrics: { open_by_label: { 'hydraflow-plan': 2 }, total_closed: 1, total_merged: 1 },
     }
     const next = reducer(state, {
       type: 'phase_change',
@@ -97,7 +100,7 @@ describe('HydraContext reducer', () => {
       timestamp: new Date().toISOString(),
     })
     expect(next.sessionTriaged).toBe(0)
-    expect(next.githubMetrics).toEqual({ open_by_label: { 'hydra-plan': 2 }, total_closed: 1, total_merged: 1 })
+    expect(next.githubMetrics).toEqual({ open_by_label: { 'hydraflow-plan': 2 }, total_closed: 1, total_merged: 1 })
   })
 })
 
@@ -325,18 +328,18 @@ describe('BACKGROUND_WORKERS preserves local overrides', () => {
   })
 })
 
-describe('HydraProvider', () => {
+describe('HydraFlowProvider', () => {
   it('renders children', async () => {
     // Dynamic import to avoid WebSocket connection in test
-    const { HydraProvider } = await import('../HydraContext')
+    const { HydraFlowProvider } = await import('../HydraFlowContext')
 
     // We can't fully test the provider without mocking WebSocket,
     // but we can verify it renders children
     // Note: The provider will attempt to connect but the test env has no server
     render(
-      <HydraProvider>
+      <HydraFlowProvider>
         <div>Test Child</div>
-      </HydraProvider>
+      </HydraFlowProvider>
     )
     expect(screen.getByText('Test Child')).toBeInTheDocument()
   })
@@ -415,6 +418,134 @@ describe('UPDATE_BG_WORKER_INTERVAL action', () => {
   })
 })
 
+describe('session_start reducer', () => {
+  it('adds new session and sets currentSessionId', () => {
+    const result = reducer(initialState, {
+      type: 'session_start',
+      data: { session_id: 'test-repo-20260222T120000', repo: 'test/repo' },
+      timestamp: '2026-02-22T12:00:00Z',
+    })
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].id).toBe('test-repo-20260222T120000')
+    expect(result.sessions[0].repo).toBe('test/repo')
+    expect(result.sessions[0].status).toBe('active')
+    expect(result.currentSessionId).toBe('test-repo-20260222T120000')
+  })
+
+  it('prepends new session to existing list', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 'old-session', repo: 'test/repo', status: 'completed', started_at: '2026-02-21T12:00:00Z' }],
+    }
+    const result = reducer(state, {
+      type: 'session_start',
+      data: { session_id: 'new-session', repo: 'test/repo' },
+      timestamp: '2026-02-22T12:00:00Z',
+    })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('new-session')
+    expect(result.sessions[1].id).toBe('old-session')
+  })
+})
+
+describe('session_end reducer', () => {
+  it('marks session as completed and clears currentSessionId', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 'sess-1', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z', ended_at: null }],
+      currentSessionId: 'sess-1',
+    }
+    const result = reducer(state, {
+      type: 'session_end',
+      data: { session_id: 'sess-1' },
+      timestamp: '2026-02-22T13:00:00Z',
+    })
+    expect(result.sessions[0].status).toBe('completed')
+    expect(result.sessions[0].ended_at).toBe('2026-02-22T13:00:00Z')
+    expect(result.currentSessionId).toBeNull()
+  })
+
+  it('propagates issue counts from session_end event to session state', () => {
+    const state = {
+      ...initialState,
+      sessions: [{
+        id: 'sess-1',
+        repo: 'test/repo',
+        status: 'active',
+        started_at: '2026-02-22T12:00:00Z',
+        ended_at: null,
+        issues_processed: [],
+        issues_succeeded: 0,
+        issues_failed: 0,
+      }],
+      currentSessionId: 'sess-1',
+    }
+    const result = reducer(state, {
+      type: 'session_end',
+      data: {
+        session_id: 'sess-1',
+        issues_processed: [10, 11, 12],
+        issues_succeeded: 2,
+        issues_failed: 1,
+      },
+      timestamp: '2026-02-22T13:00:00Z',
+    })
+    expect(result.sessions[0].issues_processed).toEqual([10, 11, 12])
+    expect(result.sessions[0].issues_succeeded).toBe(2)
+    expect(result.sessions[0].issues_failed).toBe(1)
+  })
+})
+
+describe('SESSIONS reducer', () => {
+  it('replaces sessions list from API fetch', () => {
+    const sessions = [
+      { id: 's1', repo: 'a/b', status: 'completed' },
+      { id: 's2', repo: 'a/b', status: 'active' },
+    ]
+    const result = reducer(initialState, { type: 'SESSIONS', data: sessions })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('s1')
+  })
+
+  it('handles null data gracefully', () => {
+    const result = reducer(initialState, { type: 'SESSIONS', data: null })
+    expect(result.sessions).toEqual([])
+  })
+})
+
+describe('SELECT_SESSION reducer', () => {
+  it('sets selectedSessionId', () => {
+    const result = reducer(initialState, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: 'sess-123' },
+    })
+    expect(result.selectedSessionId).toBe('sess-123')
+  })
+
+  it('clears selectedSessionId when null', () => {
+    const state = { ...initialState, selectedSessionId: 'sess-123' }
+    const result = reducer(state, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: null },
+    })
+    expect(result.selectedSessionId).toBeNull()
+  })
+
+  it('does not reset sessions or currentSessionId', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 's1', repo: 'a/b' }],
+      currentSessionId: 's1',
+    }
+    const result = reducer(state, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: 's1' },
+    })
+    expect(result.sessions).toHaveLength(1)
+    expect(result.currentSessionId).toBe('s1')
+  })
+})
+
 describe('hitl_escalation reducer', () => {
   it('marks review worker as escalated when pr is present (automated escalation)', () => {
     const state = {
@@ -425,11 +556,11 @@ describe('hitl_escalation reducer', () => {
     }
     const next = reducer(state, {
       type: 'hitl_escalation',
-      data: { pr: 99, issue: 42, cause: 'CI failed', origin: 'hydra-review' },
+      data: { pr: 99, issue: 42, cause: 'CI failed', origin: 'hydraflow-review' },
       timestamp: new Date().toISOString(),
     })
     expect(next.workers['review-99'].status).toBe('escalated')
-    expect(next.hitlEscalation).toEqual({ pr: 99, issue: 42, cause: 'CI failed', origin: 'hydra-review' })
+    expect(next.hitlEscalation).toEqual({ pr: 99, issue: 42, cause: 'CI failed', origin: 'hydraflow-review' })
   })
 
   it('marks issue worker as escalated when pr is absent (manual request-changes)', () => {
@@ -441,11 +572,11 @@ describe('hitl_escalation reducer', () => {
     }
     const next = reducer(state, {
       type: 'hitl_escalation',
-      data: { issue: 42, cause: 'Needs rework', origin: 'hydra-review' },
+      data: { issue: 42, cause: 'Needs rework', origin: 'hydraflow-review' },
       timestamp: new Date().toISOString(),
     })
     expect(next.workers[42].status).toBe('escalated')
-    expect(next.hitlEscalation).toEqual({ issue: 42, cause: 'Needs rework', origin: 'hydra-review' })
+    expect(next.hitlEscalation).toEqual({ issue: 42, cause: 'Needs rework', origin: 'hydraflow-review' })
   })
 
   it('leaves workers unchanged when no matching worker found', () => {
@@ -457,10 +588,168 @@ describe('hitl_escalation reducer', () => {
     }
     const next = reducer(state, {
       type: 'hitl_escalation',
-      data: { issue: 99, cause: 'Escalated', origin: 'hydra-review' },
+      data: { issue: 99, cause: 'Escalated', origin: 'hydraflow-review' },
       timestamp: new Date().toISOString(),
     })
     expect(next.workers[7].status).toBe('active')
     expect(next.workers[99]).toBeUndefined()
+
+  })
+})
+
+describe('orchestrator_status reducer — session reset for other clients', () => {
+  it('clears session state when status is running and reset flag is true', () => {
+    const dirtyState = {
+      ...initialState,
+      orchestratorStatus: 'idle',
+      workers: { 42: { status: 'done', role: 'implementer', transcript: [] } },
+      prs: [{ pr: 100, issue: 42, merged: true }],
+      reviews: [{ pr: 100, verdict: 'approve' }],
+      mergedCount: 2,
+      sessionPrsCount: 3,
+      sessionTriaged: 1,
+      sessionPlanned: 2,
+      sessionImplemented: 1,
+      sessionReviewed: 1,
+      hitlItems: [{ issue: 42, title: 'Bug' }],
+      hitlEscalation: { pr: 99, issue: 42, cause: 'CI failed' },
+      humanInputRequests: { 42: { question: 'Continue?' } },
+      lastSeenId: 50,
+      intents: [{ text: 'Fix bug', issueNumber: 42, status: 'created' }],
+    }
+
+    const next = reducer(dirtyState, {
+      type: 'orchestrator_status',
+      data: { status: 'running', reset: true },
+      timestamp: '2026-01-01T00:00:00Z',
+    })
+
+    expect(next.orchestratorStatus).toBe('running')
+    expect(next.workers).toEqual({})
+    expect(next.prs).toEqual([])
+    expect(next.reviews).toEqual([])
+    expect(next.mergedCount).toBe(0)
+    expect(next.sessionPrsCount).toBe(0)
+    expect(next.sessionTriaged).toBe(0)
+    expect(next.sessionPlanned).toBe(0)
+    expect(next.sessionImplemented).toBe(0)
+    expect(next.sessionReviewed).toBe(0)
+    expect(next.hitlItems).toEqual([])
+    expect(next.hitlEscalation).toBeNull()
+    expect(next.humanInputRequests).toEqual({})
+    expect(next.lastSeenId).toBe(-1)
+    expect(next.intents).toEqual([])
+  })
+
+  it('does NOT reset session state when running without reset flag (reconnect case)', () => {
+    const dirtyState = {
+      ...initialState,
+      orchestratorStatus: 'running',
+      workers: { 42: { status: 'running', role: 'implementer', transcript: [] } },
+      mergedCount: 2,
+    }
+
+    const next = reducer(dirtyState, {
+      type: 'orchestrator_status',
+      data: { status: 'running' },
+      timestamp: '2026-01-01T00:00:00Z',
+    })
+
+    // State preserved — this is a reconnect to an already-running orchestrator
+    expect(next.workers).toEqual(dirtyState.workers)
+    expect(next.mergedCount).toBe(2)
+  })
+})
+
+describe('SESSION_RESET reducer', () => {
+  it('clears all session-scoped state fields', () => {
+    const dirtyState = {
+      ...initialState,
+      workers: {
+        42: { status: 'running', role: 'implementer', transcript: ['line1'] },
+        'plan-7': { status: 'done', role: 'planner', transcript: [] },
+      },
+      prs: [{ pr: 100, issue: 42, merged: true }, { pr: 101, issue: 43, merged: false }],
+      reviews: [{ pr: 100, verdict: 'approve' }],
+      mergedCount: 3,
+      sessionPrsCount: 5,
+      sessionTriaged: 2,
+      sessionPlanned: 4,
+      sessionImplemented: 3,
+      sessionReviewed: 1,
+      hitlItems: [{ issue: 42, title: 'Bug' }],
+      hitlEscalation: { pr: 99, issue: 42, cause: 'CI failed' },
+      humanInputRequests: { 42: { question: 'Continue?', timestamp: '2026-01-01' } },
+      lastSeenId: 50,
+      pipelineIssues: {
+        triage: [{ issue_number: 1, title: 'A', url: '', status: 'queued' }],
+        plan: [],
+        implement: [{ issue_number: 2, title: 'B', url: '', status: 'active' }],
+        review: [],
+        hitl: [],
+        merged: [{ issue_number: 3, title: 'C', url: '', status: 'done' }],
+      },
+      intents: [{ text: 'Fix bug', issueNumber: 42, status: 'created' }],
+    }
+
+    const next = reducer(dirtyState, { type: 'SESSION_RESET' })
+
+    expect(next.workers).toEqual({})
+    expect(next.prs).toEqual([])
+    expect(next.reviews).toEqual([])
+    expect(next.mergedCount).toBe(0)
+    expect(next.sessionPrsCount).toBe(0)
+    expect(next.sessionTriaged).toBe(0)
+    expect(next.sessionPlanned).toBe(0)
+    expect(next.sessionImplemented).toBe(0)
+    expect(next.sessionReviewed).toBe(0)
+    expect(next.hitlItems).toEqual([])
+    expect(next.hitlEscalation).toBeNull()
+    expect(next.humanInputRequests).toEqual({})
+    expect(next.lastSeenId).toBe(-1)
+    expect(next.pipelineIssues).toEqual({
+      triage: [],
+      plan: [],
+      implement: [],
+      review: [],
+      hitl: [],
+      merged: [],
+    })
+    expect(next.intents).toEqual([])
+  })
+
+  it('preserves non-session state', () => {
+    const state = {
+      ...initialState,
+      connected: true,
+      orchestratorStatus: 'running',
+      lifetimeStats: { issues_completed: 10, prs_merged: 5 },
+      config: { repo: 'test/repo' },
+      events: [{ type: 'batch_start', timestamp: '2026-01-01' }],
+      backgroundWorkers: [{ name: 'triage', status: 'ok', enabled: true }],
+      metrics: { lifetime: { issues_completed: 10 } },
+      githubMetrics: { open_by_label: {}, total_closed: 5, total_merged: 3 },
+      metricsHistory: [{ timestamp: '2026-01-01', value: 1 }],
+      // Dirty session state
+      workers: { 42: { status: 'done' } },
+      mergedCount: 5,
+    }
+
+    const next = reducer(state, { type: 'SESSION_RESET' })
+
+    // Non-session fields preserved
+    expect(next.connected).toBe(true)
+    expect(next.orchestratorStatus).toBe('running')
+    expect(next.lifetimeStats).toEqual({ issues_completed: 10, prs_merged: 5 })
+    expect(next.config).toEqual({ repo: 'test/repo' })
+    expect(next.events).toHaveLength(1)
+    expect(next.backgroundWorkers).toHaveLength(1)
+    expect(next.metrics).toEqual({ lifetime: { issues_completed: 10 } })
+    expect(next.githubMetrics).toEqual({ open_by_label: {}, total_closed: 5, total_merged: 3 })
+    expect(next.metricsHistory).toHaveLength(1)
+
+    // Session fields cleared
+    expect(next.workers).toEqual({})
+    expect(next.mergedCount).toBe(0)
   })
 })

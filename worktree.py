@@ -1,4 +1,4 @@
-"""Git worktree lifecycle management for Hydra."""
+"""Git worktree lifecycle management for HydraFlow."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ import shutil
 import stat
 from pathlib import Path
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydra.worktree")
+logger = logging.getLogger("hydraflow.worktree")
 
 
 class WorktreeManager:
@@ -25,18 +25,34 @@ class WorktreeManager:
     - Pre-commit hooks installed (symlinked path in host mode, copied files in docker mode)
     """
 
-    # Node UI directories that need symlinked or copied node_modules
-    _UI_DIRS = [
-        "bot/health_ui",
-        "tasks/ui",
-        "control_plane/ui",
-        "dashboard-service/health_ui",
-    ]
-
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
         self._repo_root = config.repo_root
         self._base = config.worktree_base
+        self._ui_dirs = self._detect_ui_dirs()
+
+    def _detect_ui_dirs(self) -> list[str]:
+        """Auto-detect UI directories by scanning for ``package.json`` files.
+
+        Falls back to ``config.ui_dirs`` if no ``package.json`` files are found.
+        """
+        detected: list[str] = []
+        try:
+            for pkg_json in self._repo_root.rglob("package.json"):
+                # Skip node_modules and hidden directories
+                parts = pkg_json.relative_to(self._repo_root).parts
+                if "node_modules" in parts or any(p.startswith(".") for p in parts):
+                    continue
+                parent = str(pkg_json.parent.relative_to(self._repo_root))
+                if parent == ".":
+                    continue  # Skip root-level package.json
+                detected.append(parent)
+        except OSError:
+            logger.debug("Could not scan for package.json files", exc_info=True)
+        if detected:
+            logger.info("Auto-detected UI dirs: %s", detected)
+            return sorted(detected)
+        return list(self._config.ui_dirs)
 
     async def _delete_local_branch(self, branch: str) -> None:
         """Delete a local branch if it exists, ignoring errors."""
@@ -314,6 +330,71 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
+    async def get_conflicting_files(self, worktree_path: Path) -> list[str]:
+        """Return the list of files with unresolved merge conflicts.
+
+        Runs ``git diff --name-only --diff-filter=U`` in *worktree_path*.
+        Returns an empty list on failure.
+        """
+        try:
+            output = await run_subprocess(
+                "git",
+                "diff",
+                "--name-only",
+                "--diff-filter=U",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return [f.strip() for f in output.strip().splitlines() if f.strip()]
+        except RuntimeError:
+            logger.warning("Could not get conflicting files in %s", worktree_path)
+            return []
+
+    async def get_main_diff_for_files(
+        self,
+        worktree_path: Path,
+        files: list[str],
+        max_chars: int = 30_000,
+    ) -> str:
+        """Return the diff of what changed on main for *files* since divergence.
+
+        Runs ``git merge-base HEAD origin/main`` then
+        ``git diff <base>..origin/main -- <files>``.  Truncates at
+        *max_chars*.  Returns an empty string on failure or when *files*
+        is empty.
+        """
+        if not files:
+            return ""
+        try:
+            merge_base = await run_subprocess(
+                "git",
+                "merge-base",
+                "HEAD",
+                f"origin/{self._config.main_branch}",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            base_sha = merge_base.strip()
+            if not base_sha:
+                return ""
+
+            diff_output = await run_subprocess(
+                "git",
+                "diff",
+                f"{base_sha}..origin/{self._config.main_branch}",
+                "--",
+                *files,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            result = diff_output.strip()
+            if len(result) > max_chars:
+                return result[:max_chars] + "\n\n[Diff truncated]"
+            return result
+        except RuntimeError:
+            logger.warning("Could not get main diff for files in %s", worktree_path)
+            return ""
+
     async def get_main_commits_since_diverge(self, worktree_path: Path) -> str:
         """Return recent commits on main since the branch diverged.
 
@@ -412,7 +493,7 @@ class WorktreeManager:
                 )
 
         # node_modules for each UI directory
-        for ui_dir in self._UI_DIRS:
+        for ui_dir in self._ui_dirs:
             nm_src = self._repo_root / ui_dir / "node_modules"
             nm_dst = wt_path / ui_dir / "node_modules"
             if nm_src.exists() and not nm_dst.exists():

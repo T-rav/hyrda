@@ -1,7 +1,7 @@
 """Pre-commit hook scaffolding for target repositories.
 
 Creates language-appropriate `.githooks/pre-commit` hooks and configures
-git to use them.  Designed to be called by the future ``hydra prep`` CLI
+git to use them.  Designed to be called by the future ``hydraflow prep`` CLI
 command (epic #561).
 """
 
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydra.prep_hooks")
+logger = logging.getLogger("hydraflow.prep_hooks")
 
 # ---------------------------------------------------------------------------
 # Hook templates
@@ -189,7 +189,7 @@ async def configure_hooks_path(repo_root: Path) -> None:
 async def setup_hooks(repo_root: Path, language: str | None = None) -> PrepHookResult:
     """Scaffold a pre-commit hook and configure git to use it.
 
-    This is the main entry point that the future ``hydra prep`` CLI will call.
+    This is the main entry point that the future ``hydraflow prep`` CLI will call.
     """
     result = scaffold_pre_commit_hook(repo_root, language=language)
     await configure_hooks_path(repo_root)

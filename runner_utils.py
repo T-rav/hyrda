@@ -11,7 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from execution import SubprocessRunner, get_default_runner
 from stream_parser import StreamParser
 from subprocess_util import (
@@ -113,7 +113,7 @@ async def stream_claude_process(
                 if display.strip():
                     accumulated_text += display + "\n"
                     await event_bus.publish(
-                        HydraEvent(
+                        HydraFlowEvent(
                             type=EventType.TRANSCRIPT_LINE,
                             data={**event_data, "line": display},
                         )

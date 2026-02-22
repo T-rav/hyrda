@@ -1,4 +1,4 @@
-"""Shared file-writing utilities for Hydra."""
+"""Shared file-writing utilities for HydraFlow."""
 
 from __future__ import annotations
 

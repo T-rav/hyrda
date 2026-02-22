@@ -1,13 +1,13 @@
 # Code Quality Audit
 
-Run a comprehensive code quality audit across the entire repo. Dynamically analyzes source code for dead code, complexity, duplication, error handling gaps, type safety issues, and architectural problems. Creates GitHub issues for findings so Hydra can process them.
+Run a comprehensive code quality audit across the entire repo. Dynamically analyzes source code for dead code, complexity, duplication, error handling gaps, type safety issues, and architectural problems. Creates GitHub issues for findings so HydraFlow can process them.
 
 ## Instructions
 
 1. **Resolve configuration** before doing anything else:
-   - Run `echo "$HYDRA_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
-   - Run `echo "$HYDRA_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
-   - Run `echo "$HYDRA_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydra-plan`.
+   - Run `echo "$HYDRAFLOW_GITHUB_REPO"` — if set, use it as the target repo (e.g., `owner/repo`). If empty, run `git remote get-url origin` and extract the `owner/repo` slug (strip `https://github.com/` prefix and `.git` suffix).
+   - Run `echo "$HYDRAFLOW_GITHUB_ASSIGNEE"` — if set, use it as the issue assignee. If empty, extract the owner from the repo slug (the part before `/`).
+   - Run `echo "$HYDRAFLOW_LABEL_PLAN"` — if set, use it as the label for created issues. If empty, default to `hydraflow-plan`.
    - Store resolved values as `$REPO`, `$ASSIGNEE`, `$LABEL`.
 
 2. **Discover project structure:**
