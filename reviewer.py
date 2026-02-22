@@ -22,6 +22,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("hydraflow.reviewer")
 
+# Compiled patterns that indicate a transcript line is internal tool output,
+# not a human-readable review summary.
+_JUNK_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"[→←]"),  # Tool arrows (e.g. "→ TaskOutput: ...")
+    re.compile(r"^\s*\{.*\}\s*$"),  # Raw JSON objects
+    re.compile(r"<[a-zA-Z/][^>]*>"),  # HTML tags
+    re.compile(r"^```"),  # Code fence markers
+    re.compile(r"^Co-Authored-By:", re.IGNORECASE),  # Git trailers
+    re.compile(r"^Signed-off-by:", re.IGNORECASE),  # Git trailers
+    re.compile(r"^\s*\d+[\s,]+\d+"),  # Metric lines (e.g. "1234 5678")
+    re.compile(r"^(tokens|cost|duration)\s*:", re.IGNORECASE),  # Metric labels
+]
+
 
 class ReviewRunner:
     """Launches a ``claude -p`` process to review a pull request.
@@ -400,15 +413,41 @@ Only suggest genuinely valuable learnings — not trivial observations.
             return mapping.get(raw, ReviewVerdict.COMMENT)
         return ReviewVerdict.COMMENT
 
+    @staticmethod
+    def _sanitize_summary(candidate: str) -> str | None:
+        """Return *candidate* if it looks like a real summary, else ``None``.
+
+        Rejects strings that match any :data:`_JUNK_PATTERNS` or are
+        shorter than 10 characters (likely not meaningful).  Valid
+        summaries are truncated to 200 characters.
+        """
+        text = candidate.strip()
+        if len(text) < 10:
+            return None
+        for pat in _JUNK_PATTERNS:
+            if pat.search(text):
+                return None
+        return text[:200]
+
     def _extract_summary(self, transcript: str) -> str:
         """Extract the summary line from the reviewer transcript."""
         pattern = r"SUMMARY:\s*(.+)"
         match = re.search(pattern, transcript, re.IGNORECASE)
         if match:
-            return match.group(1).strip()
-        # Fallback: last non-empty line
-        lines = [ln.strip() for ln in transcript.splitlines() if ln.strip()]
-        return lines[-1][:200] if lines else "No summary provided"
+            sanitized = self._sanitize_summary(match.group(1).strip())
+            if sanitized:
+                return sanitized
+
+        # Fallback: walk lines in reverse, skipping garbage
+        for line in reversed(transcript.splitlines()):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            sanitized = self._sanitize_summary(stripped)
+            if sanitized:
+                return sanitized
+
+        return "No summary provided"
 
     def terminate(self) -> None:
         """Kill all active reviewer subprocesses."""

@@ -107,10 +107,9 @@ class TestBuildConflictPrompt:
         issue = _make_issue()
         prompt = build_conflict_prompt(issue, [], "", None, 1)
         assert "## Instructions" in prompt
-        assert "Ours" in prompt
-        assert "Theirs" in prompt
-        assert "non-conflicted files" in prompt.lower()
         assert "make quality" in prompt
+        assert "non-conflicted files" in prompt.lower()
+        assert "PR's intent" in prompt
 
     def test_includes_rules(self) -> None:
         issue = _make_issue()
@@ -173,3 +172,70 @@ class TestBuildConflictPrompt:
         assert "MEMORY_SUGGESTION_START" in prompt
         assert "MEMORY_SUGGESTION_END" in prompt
         assert "## Optional: Memory Suggestion" in prompt
+
+    def test_includes_conflicting_files_section(self) -> None:
+        issue = _make_issue()
+        prompt = build_conflict_prompt(
+            issue,
+            [],
+            "",
+            None,
+            1,
+            conflicting_files=["src/foo.py", "src/bar.py"],
+        )
+        assert "## Conflicting Files" in prompt
+        assert "- src/foo.py" in prompt
+        assert "- src/bar.py" in prompt
+
+    def test_includes_main_diff_section(self) -> None:
+        issue = _make_issue()
+        diff = "diff --git a/foo.py b/foo.py\n+added line"
+        prompt = build_conflict_prompt(
+            issue,
+            [],
+            "",
+            None,
+            1,
+            main_diff=diff,
+        )
+        assert "## What Changed on Main" in prompt
+        assert "+added line" in prompt
+
+    def test_omits_conflicting_files_when_none(self) -> None:
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1)
+        assert "## Conflicting Files" not in prompt
+
+    def test_omits_conflicting_files_when_empty(self) -> None:
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1, conflicting_files=[])
+        assert "## Conflicting Files" not in prompt
+
+    def test_omits_main_diff_when_empty(self) -> None:
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1, main_diff="")
+        assert "## What Changed on Main" not in prompt
+
+    def test_backward_compatible_without_new_params(self) -> None:
+        """Calling without the new kwargs should still work."""
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1)
+        assert "merge conflicts with main" in prompt
+        assert "## Instructions" in prompt
+        assert "## Conflicting Files" not in prompt
+        assert "## What Changed on Main" not in prompt
+
+    def test_simplified_instructions(self) -> None:
+        """Instructions should be concise, not step-by-step."""
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1)
+        instructions = prompt.split("## Instructions")[1].split("##")[0]
+        assert "make quality" in instructions
+        # Should not have numbered step-by-step list
+        assert "1. Run `git diff" not in instructions
+
+    def test_instructions_include_gh_issue_reference(self) -> None:
+        """Instructions should tell the agent how to look up full issue history."""
+        issue = _make_issue(number=99)
+        prompt = build_conflict_prompt(issue, [], "", None, 1)
+        assert "gh issue view 99" in prompt
