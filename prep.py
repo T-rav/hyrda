@@ -150,12 +150,9 @@ class RepoAuditor:
                 critical=True,
             )
 
-        found: list[str] = []
         missing: list[str] = []
         for target in _REQUIRED_MAKE_TARGETS:
-            if re.search(rf"^{target}\s*:", content, re.MULTILINE):
-                found.append(target)
-            else:
+            if not re.search(rf"^{target}\s*:", content, re.MULTILINE):
                 missing.append(target)
 
         if not missing:
