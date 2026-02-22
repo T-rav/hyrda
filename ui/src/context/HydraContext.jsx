@@ -602,6 +602,18 @@ export function HydraProvider({ children }) {
     } catch { /* ignore — local state already updated */ }
   }, [])
 
+  const requestChanges = useCallback(async (issueNumber, feedback, stage) => {
+    const resp = await fetch('/api/request-changes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issue_number: issueNumber, feedback, stage }),
+    })
+    if (resp.ok) {
+      fetchHitlItems()
+    }
+    return resp.ok
+  }, [fetchHitlItems])
+
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
     try {
       await fetch(`/api/human-input/${issueNumber}`, {
@@ -775,6 +787,7 @@ export function HydraProvider({ children }) {
     stageStatus,
     submitIntent,
     submitHumanInput,
+    requestChanges,
     toggleBgWorker,
     updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,

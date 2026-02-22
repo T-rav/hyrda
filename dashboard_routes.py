@@ -95,6 +95,57 @@ def create_router(
         "hitl": "hitl",
     }
 
+    # Frontend stage key → config label field name (for request-changes)
+    _FRONTEND_STAGE_TO_LABEL_FIELD = {
+        "triage": "find_label",
+        "plan": "planner_label",
+        "implement": "ready_label",
+        "review": "review_label",
+    }
+
+    @router.post("/api/request-changes")
+    async def request_changes(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Escalate an issue to HITL with user feedback."""
+        issue_number: int | None = body.get("issue_number")
+        feedback = (body.get("feedback") or "").strip()
+        stage: str = body.get("stage") or ""
+
+        if not issue_number or not feedback:
+            return JSONResponse(
+                {"status": "error", "detail": "issue_number and feedback are required"},
+                status_code=400,
+            )
+
+        label_field = _FRONTEND_STAGE_TO_LABEL_FIELD.get(stage)
+        if not label_field:
+            return JSONResponse(
+                {"status": "error", "detail": f"Unknown stage: {stage}"},
+                status_code=400,
+            )
+
+        stage_labels: list[str] = getattr(config, label_field, [])
+        origin_label: str = stage_labels[0] if stage_labels else stage
+
+        for lbl in stage_labels:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.hitl_label)
+
+        state.set_hitl_cause(issue_number, feedback)
+        state.set_hitl_origin(issue_number, origin_label)
+
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.HITL_ESCALATION,
+                data={
+                    "issue": issue_number,
+                    "cause": feedback,
+                    "origin": origin_label,
+                },
+            )
+        )
+
+        return JSONResponse({"status": "ok"})
+
     @router.get("/api/pipeline")
     async def get_pipeline() -> JSONResponse:
         """Return current pipeline snapshot with issues per stage."""

@@ -88,6 +88,7 @@ class TestCreateRouter:
             "/api/timeline",
             "/api/timeline/issue/{issue_num}",
             "/api/intent",
+            "/api/request-changes",
             "/ws",
             "/{path:path}",
         }
@@ -1008,3 +1009,163 @@ class TestHITLSkipImproveTransition:
 
         assert state.get_hitl_origin(42) is None
         assert state.get_hitl_cause(42) is None
+
+
+# ---------------------------------------------------------------------------
+# POST /api/request-changes endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestRequestChangesEndpoint:
+    """Tests for POST /api/request-changes endpoint."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        pr_mgr.remove_label = AsyncMock()
+        pr_mgr.add_labels = AsyncMock()
+        return (
+            create_router(
+                config=config,
+                event_bus=event_bus,
+                state=state,
+                pr_manager=pr_mgr,
+                get_orchestrator=lambda: None,
+                set_orchestrator=lambda o: None,
+                set_run_task=lambda t: None,
+                ui_dist_dir=tmp_path / "no-dist",
+                template_dir=tmp_path / "no-templates",
+            ),
+            pr_mgr,
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_request_changes_stores_cause_and_origin(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Submit with valid data stores HITL cause and origin."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 42, "feedback": "Fix the tests", "stage": "review"}
+        )
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+
+        assert state.get_hitl_cause(42) == "Fix the tests"
+        assert state.get_hitl_origin(42) == "hydra-review"
+
+    @pytest.mark.asyncio
+    async def test_request_changes_swaps_labels(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Stage labels are removed and HITL labels are added."""
+        router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        await endpoint(
+            {"issue_number": 42, "feedback": "Fix the tests", "stage": "review"}
+        )
+
+        # Verify review label removed
+        remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
+        assert (42, "hydra-review") in remove_calls
+
+        # Verify HITL label added
+        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
+        assert (42, config.hitl_label) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_request_changes_emits_escalation_event(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """HITL_ESCALATION event is emitted with correct data."""
+        queue = event_bus.subscribe()
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        await endpoint(
+            {"issue_number": 42, "feedback": "Fix the tests", "stage": "implement"}
+        )
+
+        event = queue.get_nowait()
+        assert event.type == "hitl_escalation"
+        assert event.data["issue"] == 42
+        assert event.data["cause"] == "Fix the tests"
+        assert event.data["origin"] == "test-label"
+
+    @pytest.mark.asyncio
+    async def test_request_changes_rejects_empty_feedback(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Returns 400 when feedback is empty."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 42, "feedback": "  ", "stage": "review"}
+        )
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert "required" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_request_changes_rejects_unknown_stage(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Returns 400 when stage is not recognized."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 42, "feedback": "Fix it", "stage": "unknown"}
+        )
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert "Unknown stage" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_request_changes_rejects_missing_issue_number(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Returns 400 when issue_number is missing."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint({"feedback": "Fix it", "stage": "review"})
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert "required" in data["detail"]
+
+    def test_route_is_registered(self, config, event_bus, state, tmp_path) -> None:
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        paths = {route.path for route in router.routes if hasattr(route, "path")}
+        assert "/api/request-changes" in paths

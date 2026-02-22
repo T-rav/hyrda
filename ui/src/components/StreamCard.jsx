@@ -63,7 +63,19 @@ function StageRow({ stageKey, stageData, isLast }) {
 
 export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges }) {
   const [expanded, setExpanded] = useState(defaultExpanded || false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const toggle = useCallback(() => setExpanded(v => !v), [])
+
+  const handleSubmitFeedback = useCallback(async () => {
+    if (!feedbackText.trim() || submitting) return
+    setSubmitting(true)
+    await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
+    setSubmitting(false)
+    setShowFeedback(false)
+    setFeedbackText('')
+  }, [feedbackText, submitting, onRequestChanges, issue.issueNumber, issue.currentStage])
 
   const meta = STAGE_META[issue.currentStage]
   const isActive = issue.overallStatus === 'active'
@@ -154,12 +166,42 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
             {onRequestChanges && (
               <span
                 style={styles.actionBtn}
-                onClick={() => onRequestChanges(issue.issueNumber)}
+                onClick={() => setShowFeedback(v => !v)}
+                data-testid={`request-changes-btn-${issue.issueNumber}`}
               >
                 Request Changes
               </span>
             )}
           </div>
+          {showFeedback && (
+            <div style={styles.feedbackPanel}>
+              <textarea
+                style={styles.feedbackTextarea}
+                placeholder="What needs to change?"
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                data-testid={`request-changes-textarea-${issue.issueNumber}`}
+              />
+              <div style={styles.feedbackActions}>
+                <button
+                  style={styles.feedbackSubmitBtn}
+                  disabled={!feedbackText.trim() || submitting}
+                  onClick={handleSubmitFeedback}
+                  data-testid={`request-changes-submit-${issue.issueNumber}`}
+                >
+                  {submitting ? 'Submitting...' : 'Submit'}
+                </button>
+                <button
+                  style={styles.feedbackCancelBtn}
+                  disabled={submitting}
+                  onClick={() => { setShowFeedback(false); setFeedbackText('') }}
+                  data-testid={`request-changes-cancel-${issue.issueNumber}`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -365,5 +407,50 @@ const styles = {
     background: 'transparent',
     textDecoration: 'none',
     transition: 'background 0.15s',
+  },
+  feedbackPanel: {
+    marginTop: 8,
+    borderTop: `1px solid ${theme.border}`,
+    paddingTop: 8,
+  },
+  feedbackTextarea: {
+    width: '100%',
+    minHeight: 60,
+    padding: 8,
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 6,
+    color: theme.text,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    resize: 'vertical',
+    boxSizing: 'border-box',
+  },
+  feedbackActions: {
+    display: 'flex',
+    gap: 8,
+    marginTop: 8,
+  },
+  feedbackSubmitBtn: {
+    padding: '6px 14px',
+    border: 'none',
+    borderRadius: 6,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    background: theme.btnGreen,
+    color: theme.white,
+  },
+  feedbackCancelBtn: {
+    padding: '6px 14px',
+    border: `1px solid ${theme.border}`,
+    borderRadius: 6,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    background: theme.surfaceInset,
+    color: theme.text,
   },
 }
