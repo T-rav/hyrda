@@ -242,9 +242,7 @@ def create_router(
         orch.submit_hitl_correction(issue_number, correction)
 
         # Swap labels for immediate dashboard feedback
-        for lbl in config.hitl_label:
-            await pr_manager.remove_label(issue_number, lbl)
-        await pr_manager.add_labels(issue_number, config.hitl_active_label)
+        await pr_manager.swap_pipeline_labels(issue_number, config.hitl_active_label[0])
 
         await event_bus.publish(
             HydraEvent(
@@ -271,15 +269,14 @@ def create_router(
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
         state.remove_hitl_cause(issue_number)
-        for lbl in config.hitl_label:
-            await pr_manager.remove_label(issue_number, lbl)
 
         # If this was an improve issue, transition to triage for implementation
-        if origin and origin in config.improve_label:
-            for lbl in config.improve_label:
+        if origin and origin in config.improve_label and config.find_label:
+            await pr_manager.swap_pipeline_labels(issue_number, config.find_label[0])
+        else:
+            # Just remove all pipeline labels
+            for lbl in config.all_pipeline_labels:
                 await pr_manager.remove_label(issue_number, lbl)
-            if config.find_label:
-                await pr_manager.add_labels(issue_number, [config.find_label[0]])
 
         await event_bus.publish(
             HydraEvent(
@@ -317,9 +314,8 @@ def create_router(
     @router.post("/api/hitl/{issue_number}/approve-memory")
     async def hitl_approve_memory(issue_number: int) -> JSONResponse:
         """Approve a HITL item as a memory suggestion, relabeling for sync."""
-        for lbl in config.improve_label:
-            await pr_manager.remove_label(issue_number, lbl)
-        for lbl in config.hitl_label:
+        # Remove all pipeline labels and add memory label
+        for lbl in config.all_pipeline_labels:
             await pr_manager.remove_label(issue_number, lbl)
         await pr_manager.add_labels(issue_number, config.memory_label)
         orch = get_orchestrator()

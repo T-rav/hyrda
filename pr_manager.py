@@ -432,6 +432,29 @@ class PRManager:
         """Add *labels* to a GitHub pull request."""
         await self._add_labels("pr", pr_number, labels)
 
+    async def swap_pipeline_labels(
+        self,
+        issue_number: int,
+        new_label: str,
+        *,
+        pr_number: int | None = None,
+    ) -> None:
+        """Atomically swap to *new_label*, removing all other pipeline labels.
+
+        This prevents the dual-label bug where a crash between remove and add
+        leaves an issue with conflicting pipeline labels (e.g. hydra-ready +
+        hydra-hitl simultaneously).
+        """
+        all_labels = self._config.all_pipeline_labels
+        for lbl in all_labels:
+            if lbl != new_label:
+                await self._remove_label("issue", issue_number, lbl)
+                if pr_number is not None:
+                    await self._remove_label("pr", pr_number, lbl)
+        await self._add_labels("issue", issue_number, [new_label])
+        if pr_number is not None:
+            await self._add_labels("pr", pr_number, [new_label])
+
     async def create_issue(
         self,
         title: str,
