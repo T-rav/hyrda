@@ -490,3 +490,33 @@ class TestMaxIssueAttemptsCLI:
         args = parse_args(["--max-issue-attempts", "7"])
         config = build_config(args)
         assert config.max_issue_attempts == 7
+
+
+# ---------------------------------------------------------------------------
+# --execution-mode CLI arg
+# ---------------------------------------------------------------------------
+
+
+class TestExecutionModeCLI:
+    """Tests for the --execution-mode CLI argument."""
+
+    def test_cli_parses_execution_mode_host(self) -> None:
+        """--execution-mode host should be parsed correctly."""
+        args = parse_args(["--execution-mode", "host"])
+        assert args.execution_mode == "host"
+
+    def test_cli_parses_execution_mode_docker(self) -> None:
+        """--execution-mode docker should be parsed correctly."""
+        args = parse_args(["--execution-mode", "docker"])
+        assert args.execution_mode == "docker"
+
+    def test_cli_execution_mode_default_is_none(self) -> None:
+        """Without --execution-mode, the arg should be None (config/env takes precedence)."""
+        args = parse_args([])
+        assert args.execution_mode is None
+
+    def test_build_config_passes_execution_mode(self) -> None:
+        """build_config should pass execution_mode to HydraConfig when set."""
+        args = parse_args(["--execution-mode", "docker"])
+        cfg = build_config(args)
+        assert cfg.execution_mode == "docker"

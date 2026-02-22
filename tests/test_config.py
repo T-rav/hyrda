@@ -2498,6 +2498,12 @@ class TestEnvVarOverrideTable:
         )
         assert getattr(cfg, field) == "custom-value"
 
+    # Valid non-default explicit values for Literal-typed string fields.
+    # Generic tests can't use arbitrary strings for these fields.
+    _EXPLICIT_VALUES: dict[str, str] = {
+        "execution_mode": "docker",
+    }
+
     @pytest.mark.parametrize(
         ("field", "env_key", "default"),
         _ENV_STR_OVERRIDES,
@@ -2512,14 +2518,15 @@ class TestEnvVarOverrideTable:
         default: str,
     ) -> None:
         """Explicit values should take precedence over str env var overrides."""
+        explicit = self._EXPLICIT_VALUES.get(field, "explicit-value")
         monkeypatch.setenv(env_key, "env-value")
         cfg = HydraConfig(
-            **{field: "explicit-value"},  # type: ignore[arg-type]
+            **{field: explicit},  # type: ignore[arg-type]
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert getattr(cfg, field) == "explicit-value"
+        assert getattr(cfg, field) == explicit
 
     def test_override_table_field_names_are_valid(self) -> None:
         """Every field in the override tables should be a real HydraConfig attribute."""

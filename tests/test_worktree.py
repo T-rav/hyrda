@@ -1232,6 +1232,24 @@ class TestGetMainCommitsSinceDiverge:
 
 
 # ---------------------------------------------------------------------------
+# Docker mode — helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_docker_manager(tmp_path: Path) -> WorktreeManager:
+    """Create a WorktreeManager with docker execution mode."""
+    from tests.helpers import ConfigFactory
+
+    cfg = ConfigFactory.create(
+        execution_mode="docker",
+        repo_root=tmp_path / "repo",
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    return WorktreeManager(cfg)
+
+
+# ---------------------------------------------------------------------------
 # Docker mode — _setup_env
 # ---------------------------------------------------------------------------
 
@@ -1239,21 +1257,9 @@ class TestGetMainCommitsSinceDiverge:
 class TestSetupEnvDocker:
     """Tests for _setup_env when execution_mode='docker'."""
 
-    def _make_docker_manager(self, tmp_path: Path) -> WorktreeManager:
-        """Create a WorktreeManager with docker execution mode."""
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create(
-            execution_mode="docker",
-            repo_root=tmp_path / "repo",
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        return WorktreeManager(cfg)
-
     def test_setup_env_docker_copies_dotenv(self, tmp_path: Path) -> None:
         """In docker mode, .env should be copied (not symlinked) into worktree."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         wt_path = tmp_path / "worktree"
@@ -1274,7 +1280,7 @@ class TestSetupEnvDocker:
 
     def test_setup_env_docker_copies_node_modules(self, tmp_path: Path) -> None:
         """In docker mode, node_modules/ should be copied (not symlinked)."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         wt_path = tmp_path / "worktree"
@@ -1301,7 +1307,7 @@ class TestSetupEnvDocker:
 
     def test_setup_env_docker_skips_missing_sources(self, tmp_path: Path) -> None:
         """In docker mode, missing .env and node_modules should be skipped gracefully."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
@@ -1314,7 +1320,7 @@ class TestSetupEnvDocker:
 
     def test_setup_env_docker_does_not_overwrite_existing(self, tmp_path: Path) -> None:
         """In docker mode, existing destination files should not be overwritten."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         wt_path = tmp_path / "worktree"
@@ -1333,7 +1339,7 @@ class TestSetupEnvDocker:
 
     def test_setup_env_docker_handles_copy_oserror(self, tmp_path: Path) -> None:
         """In docker mode, OSError during copy should be caught and not raised."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         wt_path = tmp_path / "worktree"
@@ -1348,7 +1354,7 @@ class TestSetupEnvDocker:
 
     def test_setup_env_docker_handles_copytree_oserror(self, tmp_path: Path) -> None:
         """In docker mode, OSError during node_modules copytree should be caught."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         wt_path = tmp_path / "worktree"
@@ -1388,22 +1394,10 @@ class TestSetupEnvDocker:
 class TestInstallHooksDocker:
     """Tests for _install_hooks when execution_mode='docker'."""
 
-    def _make_docker_manager(self, tmp_path: Path) -> WorktreeManager:
-        """Create a WorktreeManager with docker execution mode."""
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create(
-            execution_mode="docker",
-            repo_root=tmp_path / "repo",
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        return WorktreeManager(cfg)
-
     @pytest.mark.asyncio
     async def test_install_hooks_docker_copies_hook_files(self, tmp_path: Path) -> None:
         """In docker mode, hook files should be copied to the git hooks dir."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
@@ -1440,7 +1434,7 @@ class TestInstallHooksDocker:
         self, tmp_path: Path
     ) -> None:
         """In docker mode, missing .githooks/ should be handled gracefully."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
@@ -1457,7 +1451,7 @@ class TestInstallHooksDocker:
         self, tmp_path: Path
     ) -> None:
         """In docker mode, OSError during hook copy should be caught."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
@@ -1509,7 +1503,7 @@ class TestInstallHooksDocker:
         self, tmp_path: Path
     ) -> None:
         """In docker mode, all hook files should be copied."""
-        manager = self._make_docker_manager(tmp_path)
+        manager = _make_docker_manager(tmp_path)
 
         repo_root = manager._repo_root
         repo_root.mkdir(parents=True, exist_ok=True)
@@ -1575,44 +1569,6 @@ class TestExecutionModeConfig:
         from tests.helpers import ConfigFactory
 
         cfg = ConfigFactory.create(execution_mode="host")
-        assert cfg.execution_mode == "docker"
-
-
-# ---------------------------------------------------------------------------
-# CLI — --execution-mode
-# ---------------------------------------------------------------------------
-
-
-class TestExecutionModeCLI:
-    """Tests for the --execution-mode CLI argument."""
-
-    def test_cli_parses_execution_mode_host(self) -> None:
-        """--execution-mode host should be parsed correctly."""
-        from cli import parse_args
-
-        args = parse_args(["--execution-mode", "host"])
-        assert args.execution_mode == "host"
-
-    def test_cli_parses_execution_mode_docker(self) -> None:
-        """--execution-mode docker should be parsed correctly."""
-        from cli import parse_args
-
-        args = parse_args(["--execution-mode", "docker"])
-        assert args.execution_mode == "docker"
-
-    def test_cli_execution_mode_default_is_none(self) -> None:
-        """Without --execution-mode, the arg should be None (config/env takes precedence)."""
-        from cli import parse_args
-
-        args = parse_args([])
-        assert args.execution_mode is None
-
-    def test_build_config_passes_execution_mode(self) -> None:
-        """build_config should pass execution_mode to HydraConfig when set."""
-        from cli import build_config, parse_args
-
-        args = parse_args(["--execution-mode", "docker"])
-        cfg = build_config(args)
         assert cfg.execution_mode == "docker"
 
 
