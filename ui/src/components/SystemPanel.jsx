@@ -312,6 +312,8 @@ const styles = {
     borderRadius: 8,
     padding: 16,
     background: theme.surface,
+    overflow: 'hidden',
+    minWidth: 0,
   },
   cardHeader: {
     display: 'flex',
