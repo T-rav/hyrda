@@ -822,8 +822,22 @@ export function HydraProvider({ children }) {
     [state.pipelineIssues, state.workers, state.backgroundWorkers, state.sessionTriaged, state.sessionPlanned, state.sessionImplemented, state.sessionReviewed, state.mergedCount],
   )
 
+  const selectedSession = useMemo(() => {
+    if (!state.selectedSessionId) return null
+    return state.sessions.find(s => s.id === state.selectedSessionId) ?? null
+  }, [state.selectedSessionId, state.sessions])
+
+  const filteredEvents = useMemo(() => {
+    if (!selectedSession) return state.events
+    const start = selectedSession.started_at
+    const end = selectedSession.ended_at || new Date().toISOString()
+    return state.events.filter(e => e.timestamp && e.timestamp >= start && e.timestamp <= end)
+  }, [state.events, selectedSession])
+
   const value = {
     ...state,
+    events: filteredEvents,
+    selectedSession,
     stageStatus,
     submitIntent,
     submitHumanInput,

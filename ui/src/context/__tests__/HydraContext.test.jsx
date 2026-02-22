@@ -39,6 +39,9 @@ const initialState = {
   githubMetrics: null,
   pipelineIssues: { ...emptyPipeline },
   pipelinePollerLastRun: null,
+  sessions: [],
+  currentSessionId: null,
+  selectedSessionId: null,
 }
 
 describe('HydraContext reducer', () => {
@@ -412,5 +415,103 @@ describe('UPDATE_BG_WORKER_INTERVAL action', () => {
     expect(result.backgroundWorkers).toHaveLength(1)
     expect(result.backgroundWorkers[0].name).toBe('metrics')
     expect(result.backgroundWorkers[0].interval_seconds).toBe(1800)
+  })
+})
+
+describe('session_start reducer', () => {
+  it('adds new session and sets currentSessionId', () => {
+    const result = reducer(initialState, {
+      type: 'session_start',
+      data: { session_id: 'test-repo-20260222T120000', repo: 'test/repo' },
+      timestamp: '2026-02-22T12:00:00Z',
+    })
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].id).toBe('test-repo-20260222T120000')
+    expect(result.sessions[0].repo).toBe('test/repo')
+    expect(result.sessions[0].status).toBe('active')
+    expect(result.currentSessionId).toBe('test-repo-20260222T120000')
+  })
+
+  it('prepends new session to existing list', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 'old-session', repo: 'test/repo', status: 'completed', started_at: '2026-02-21T12:00:00Z' }],
+    }
+    const result = reducer(state, {
+      type: 'session_start',
+      data: { session_id: 'new-session', repo: 'test/repo' },
+      timestamp: '2026-02-22T12:00:00Z',
+    })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('new-session')
+    expect(result.sessions[1].id).toBe('old-session')
+  })
+})
+
+describe('session_end reducer', () => {
+  it('marks session as completed and clears currentSessionId', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 'sess-1', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z', ended_at: null }],
+      currentSessionId: 'sess-1',
+    }
+    const result = reducer(state, {
+      type: 'session_end',
+      data: { session_id: 'sess-1' },
+      timestamp: '2026-02-22T13:00:00Z',
+    })
+    expect(result.sessions[0].status).toBe('completed')
+    expect(result.sessions[0].ended_at).toBe('2026-02-22T13:00:00Z')
+    expect(result.currentSessionId).toBeNull()
+  })
+})
+
+describe('SESSIONS reducer', () => {
+  it('replaces sessions list from API fetch', () => {
+    const sessions = [
+      { id: 's1', repo: 'a/b', status: 'completed' },
+      { id: 's2', repo: 'a/b', status: 'active' },
+    ]
+    const result = reducer(initialState, { type: 'SESSIONS', data: sessions })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('s1')
+  })
+
+  it('handles null data gracefully', () => {
+    const result = reducer(initialState, { type: 'SESSIONS', data: null })
+    expect(result.sessions).toEqual([])
+  })
+})
+
+describe('SELECT_SESSION reducer', () => {
+  it('sets selectedSessionId', () => {
+    const result = reducer(initialState, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: 'sess-123' },
+    })
+    expect(result.selectedSessionId).toBe('sess-123')
+  })
+
+  it('clears selectedSessionId when null', () => {
+    const state = { ...initialState, selectedSessionId: 'sess-123' }
+    const result = reducer(state, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: null },
+    })
+    expect(result.selectedSessionId).toBeNull()
+  })
+
+  it('does not reset sessions or currentSessionId', () => {
+    const state = {
+      ...initialState,
+      sessions: [{ id: 's1', repo: 'a/b' }],
+      currentSessionId: 's1',
+    }
+    const result = reducer(state, {
+      type: 'SELECT_SESSION',
+      data: { sessionId: 's1' },
+    })
+    expect(result.sessions).toHaveLength(1)
+    expect(result.currentSessionId).toBe('s1')
   })
 })
