@@ -336,6 +336,18 @@ class TestHITLPhaseProcessing:
 # ---------------------------------------------------------------------------
 
 
+class TestHITLGetStatus:
+    """Tests for HITLPhase.get_status() display mapping."""
+
+    def test_get_status_returns_approval_for_improve_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Memory suggestions with hydra-improve origin should show 'approval'."""
+        phase, state, *_ = _make_phase(config)
+        state.set_hitl_origin(42, "hydra-improve")
+        assert phase.get_status(42) == "approval"
+
+
 class TestHITLResetsAttempts:
     """Tests that HITL correction resets issue_attempts."""
 

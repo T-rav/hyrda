@@ -200,6 +200,7 @@ function statusBadgeStyle(status) {
     pending: { bg: theme.yellowSubtle, fg: theme.yellow },
     processing: { bg: theme.accentSubtle, fg: theme.accent },
     resolved: { bg: theme.greenSubtle, fg: theme.green },
+    approval: { bg: theme.purpleSubtle, fg: theme.purple },
     ...originColors,
   }
   const { bg, fg } = colors[status] || colors.pending

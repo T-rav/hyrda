@@ -1085,6 +1085,7 @@ class TestHITLCorrection:
             ("hydra-plan", "from plan"),
             ("hydra-ready", "from implement"),
             ("hydra-review", "from review"),
+            ("hydra-improve", "approval"),
         ],
     )
     def test_get_hitl_status_returns_human_readable_origin(

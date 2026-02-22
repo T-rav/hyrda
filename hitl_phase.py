@@ -23,6 +23,7 @@ _HITL_ORIGIN_DISPLAY: dict[str, str] = {
     "hydra-plan": "from plan",
     "hydra-ready": "from implement",
     "hydra-review": "from review",
+    "hydra-improve": "approval",
 }
 
 
