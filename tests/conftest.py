@@ -18,6 +18,7 @@ from tests.helpers import ConfigFactory  # noqa: E402
 if TYPE_CHECKING:
     from typing import Any
 
+    from ci_scaffold import CIScaffoldResult
     from config import HydraConfig
     from events import HydraEvent
     from models import (
@@ -372,10 +373,10 @@ class CIScaffoldResultFactory:
         skip_reason: str = "",
         language: str = "python",
         workflow_path: str = ".github/workflows/quality.yml",
-    ):
-        from ci_scaffold import CIScaffoldResult
+    ) -> CIScaffoldResult:
+        from ci_scaffold import CIScaffoldResult as CS
 
-        return CIScaffoldResult(
+        return CS(
             created=created,
             skipped=skipped,
             skip_reason=skip_reason,

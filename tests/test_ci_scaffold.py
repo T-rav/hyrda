@@ -315,3 +315,16 @@ class TestScaffoldCI:
         assert content.startswith("name: Quality")
         assert "make quality" in content
         assert "jobs:" in content
+
+    def test_raises_on_write_failure(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "pyproject.toml").touch()
+
+        def raise_oserror(*_args: object, **_kwargs: object) -> None:
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(Path, "write_text", raise_oserror)
+
+        with pytest.raises(OSError, match="permission denied"):
+            scaffold_ci(tmp_path)
