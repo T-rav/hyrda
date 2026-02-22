@@ -69,11 +69,17 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
           <span style={styles.disabledBadge} data-testid={`stage-disabled-${stage.key}`}>Disabled</span>
         )}
         <span style={sectionCountStyles[stage.key]}>
-          <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
-          <span> · {queuedCount} queued</span>
-          {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
-          {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
-          <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
+          {hasRole ? (
+            <>
+              <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
+              <span> · {queuedCount} queued</span>
+              {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
+              {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
+              <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
+            </>
+          ) : (
+            <span>{issues.length} merged</span>
+          )}
         </span>
         {hasRole && (
           <span
