@@ -514,7 +514,7 @@ class HydraFlowConfig(BaseModel):
         if self.repo_root == Path("."):
             self.repo_root = _find_repo_root()
         if self.worktree_base == Path("."):
-            self.worktree_base = self.repo_root.parent / "hydra-worktrees"
+            self.worktree_base = self.repo_root.parent / "hydraflow-worktrees"
         if self.state_file == Path("."):
             self.state_file = self.repo_root / ".hydraflow" / "state.json"
         if self.event_log_path == Path("."):
