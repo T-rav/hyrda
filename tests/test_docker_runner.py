@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import struct
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,7 @@ import pytest
 from docker_runner import (
     DockerProcess,
     DockerRunner,
+    DockerStderrAdapter,
     DockerStdinWriter,
     DockerStdoutReader,
     _check_docker_available,
@@ -21,6 +23,67 @@ from execution import HostRunner
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# Docker multiplexed stream type constants (match docker_runner.py)
+_STDOUT_STREAM = 1
+_STDERR_STREAM = 2
+
+
+def _frame(stream_type: int, data: bytes) -> bytes:
+    """Wrap *data* in a Docker multiplexed 8-byte-header frame."""
+    return struct.pack(">BxxxI", stream_type, len(data)) + data
+
+
+def _frame_stdout(data: bytes) -> bytes:
+    """Wrap *data* as a Docker stdout frame."""
+    return _frame(_STDOUT_STREAM, data)
+
+
+def _frame_stderr(data: bytes) -> bytes:
+    """Wrap *data* as a Docker stderr frame."""
+    return _frame(_STDERR_STREAM, data)
+
+
+class _MockSocketBuffer:
+    """Simulates a real socket that returns up to *n* bytes per ``recv(n)``."""
+
+    def __init__(self, data: bytes) -> None:
+        self._data = data
+        self._pos = 0
+
+    def recv(self, n: int) -> bytes:
+        if self._pos >= len(self._data):
+            return b""
+        chunk = self._data[self._pos : self._pos + n]
+        self._pos += len(chunk)
+        return chunk
+
+    def sendall(self, data: bytes) -> None:  # noqa: ARG002
+        pass
+
+
+def _make_mock_socket_from_frames(*frames: bytes) -> MagicMock:
+    """Build a mock Docker attach socket backed by concatenated *frames*."""
+    raw = b"".join(frames)
+    buf = _MockSocketBuffer(raw)
+    sock = MagicMock()
+    sock._sock = buf
+    return sock
+
+
+def _make_mock_socket(data: bytes = b"") -> MagicMock:
+    """Build a mock Docker attach socket with framed stdout data.
+
+    Wraps *data* in a single Docker stdout frame so the demultiplexer
+    can parse it correctly.
+    """
+    if data:
+        return _make_mock_socket_from_frames(_frame_stdout(data))
+    # Empty stream — just return empty on recv
+    buf = _MockSocketBuffer(b"")
+    sock = MagicMock()
+    sock._sock = buf
+    return sock
 
 
 def _make_mock_container(
@@ -49,19 +112,6 @@ def _make_mock_container(
     return container
 
 
-def _make_mock_socket(data: bytes = b"") -> MagicMock:
-    """Build a mock Docker attach socket."""
-    sock = MagicMock()
-    sock._sock = MagicMock()
-    # Return data once then empty bytes (EOF)
-    if data:
-        sock._sock.recv.side_effect = [data, b""]
-    else:
-        sock._sock.recv.return_value = b""
-    sock._sock.sendall.return_value = None
-    return sock
-
-
 def _make_mock_docker_client(
     container: MagicMock | None = None,
     socket: MagicMock | None = None,
@@ -86,13 +136,17 @@ class TestDockerStdinWriter:
     """Tests for the DockerStdinWriter wrapper."""
 
     def test_write_delegates_to_socket(self) -> None:
-        sock = _make_mock_socket()
+        sock = MagicMock()
+        sock._sock = MagicMock()
+        sock._sock.sendall = MagicMock()
         writer = DockerStdinWriter(sock)
         writer.write(b"hello")
         sock._sock.sendall.assert_called_once_with(b"hello")
 
     def test_close_prevents_further_writes(self) -> None:
-        sock = _make_mock_socket()
+        sock = MagicMock()
+        sock._sock = MagicMock()
+        sock._sock.sendall = MagicMock()
         writer = DockerStdinWriter(sock)
         writer.close()
         writer.write(b"should not send")
@@ -106,15 +160,15 @@ class TestDockerStdinWriter:
 
 
 # ---------------------------------------------------------------------------
-# DockerStdoutReader tests
+# DockerStdoutReader tests — demultiplexing
 # ---------------------------------------------------------------------------
 
 
 class TestDockerStdoutReader:
-    """Tests for the DockerStdoutReader async iterator."""
+    """Tests for the DockerStdoutReader async demultiplexing iterator."""
 
     @pytest.mark.asyncio
-    async def test_yields_lines_correctly(self) -> None:
+    async def test_yields_lines_from_stdout_frames(self) -> None:
         sock = _make_mock_socket(b"line1\nline2\n")
         loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
@@ -150,13 +204,177 @@ class TestDockerStdoutReader:
         assert lines == []
 
     @pytest.mark.asyncio
-    async def test_read_returns_all_remaining(self) -> None:
-        sock = _make_mock_socket(b"all data here")
+    async def test_demux_strips_8_byte_headers(self) -> None:
+        """Binary frame headers must NOT appear in yielded lines."""
+        payload = b'{"type":"assistant","message":{}}\n'
+        sock = _make_mock_socket_from_frames(_frame_stdout(payload))
         loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
 
-        result = await reader.read()
-        assert result == b"all data here"
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [payload]
+        # Verify no binary header bytes leaked through
+        for line in lines:
+            assert line[0:1] != b"\x01"  # Not a raw stream-type byte
+
+    @pytest.mark.asyncio
+    async def test_demux_multiple_stdout_frames(self) -> None:
+        """Multiple stdout frames are concatenated and line-split correctly."""
+        sock = _make_mock_socket_from_frames(
+            _frame_stdout(b"hello "),
+            _frame_stdout(b"world\n"),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [b"hello world\n"]
+
+    @pytest.mark.asyncio
+    async def test_demux_interleaved_stdout_stderr(self) -> None:
+        """Stderr frames are collected, not mixed into stdout lines."""
+        sock = _make_mock_socket_from_frames(
+            _frame_stdout(b"out1\n"),
+            _frame_stderr(b"err1"),
+            _frame_stdout(b"out2\n"),
+            _frame_stderr(b"err2"),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [b"out1\n", b"out2\n"]
+        assert reader.get_stderr() == b"err1err2"
+
+    @pytest.mark.asyncio
+    async def test_demux_only_stderr_frames(self) -> None:
+        """When only stderr frames are present, no stdout lines are yielded."""
+        sock = _make_mock_socket_from_frames(
+            _frame_stderr(b"error output"),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == []
+        assert reader.get_stderr() == b"error output"
+
+    @pytest.mark.asyncio
+    async def test_demux_realistic_stream_json(self) -> None:
+        """Realistic Claude stream-json payloads survive demultiplexing intact."""
+        json_line1 = b'{"type":"assistant","message":{"id":"msg_1","content":[{"type":"text","text":"hello"}]}}\n'
+        json_line2 = b'{"type":"result","result":"done"}\n'
+        sock = _make_mock_socket_from_frames(
+            _frame_stdout(json_line1),
+            _frame_stdout(json_line2),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [json_line1, json_line2]
+        # Verify JSON is parseable
+        import json
+
+        for line in lines:
+            json.loads(line)  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_demux_large_payload(self) -> None:
+        """Payloads larger than typical recv buffer sizes are handled correctly."""
+        big_payload = b"x" * 16384 + b"\n"
+        sock = _make_mock_socket_from_frames(_frame_stdout(big_payload))
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [big_payload]
+
+    @pytest.mark.asyncio
+    async def test_get_stderr_empty_when_no_stderr_frames(self) -> None:
+        sock = _make_mock_socket(b"stdout only\n")
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        async for _ in reader:
+            pass
+
+        assert reader.get_stderr() == b""
+
+    @pytest.mark.asyncio
+    async def test_demux_zero_length_payload_skipped(self) -> None:
+        """Frames with zero-length payloads are skipped without error."""
+        # Create a zero-length frame followed by a real frame
+        zero_frame = struct.pack(">BxxxI", _STDOUT_STREAM, 0)
+        sock = _make_mock_socket_from_frames(
+            zero_frame,
+            _frame_stdout(b"real data\n"),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+
+        lines: list[bytes] = []
+        async for line in reader:
+            lines.append(line)
+
+        assert lines == [b"real data\n"]
+
+
+# ---------------------------------------------------------------------------
+# DockerStderrAdapter tests
+# ---------------------------------------------------------------------------
+
+
+class TestDockerStderrAdapter:
+    """Tests for the DockerStderrAdapter."""
+
+    @pytest.mark.asyncio
+    async def test_read_returns_collected_stderr(self) -> None:
+        sock = _make_mock_socket_from_frames(
+            _frame_stdout(b"out\n"),
+            _frame_stderr(b"err data"),
+        )
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+        adapter = DockerStderrAdapter(reader)
+
+        # Consume stdout to trigger demuxing
+        async for _ in reader:
+            pass
+
+        result = await adapter.read()
+        assert result == b"err data"
+
+    @pytest.mark.asyncio
+    async def test_read_returns_empty_when_no_stderr(self) -> None:
+        sock = _make_mock_socket(b"stdout\n")
+        loop = asyncio.get_running_loop()
+        reader = DockerStdoutReader(sock, loop)
+        adapter = DockerStderrAdapter(reader)
+
+        async for _ in reader:
+            pass
+
+        result = await adapter.read()
+        assert result == b""
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +440,7 @@ class TestDockerProcess:
 
         assert isinstance(proc.stdin, DockerStdinWriter)
         assert isinstance(proc.stdout, DockerStdoutReader)
-        assert isinstance(proc.stderr, DockerStdoutReader)
+        assert isinstance(proc.stderr, DockerStderrAdapter)
 
 
 # ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import struct
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,14 @@ if TYPE_CHECKING:
     from config import HydraFlowConfig
 
 logger = logging.getLogger("hydraflow.docker_runner")
+
+# Docker multiplexed stream constants.
+# When tty=False, Docker uses an 8-byte header per frame:
+#   [stream_type: 1 byte][padding: 3 bytes][payload_size: 4 bytes big-endian]
+# stream_type: 0=stdin, 1=stdout, 2=stderr
+_HEADER_SIZE = 8
+_STDOUT_STREAM = 1
+_STDERR_STREAM = 2
 
 
 class DockerStdinWriter:
@@ -42,7 +51,12 @@ class DockerStdinWriter:
 
 
 class DockerStdoutReader:
-    """Async iterator that reads lines from a Docker attach stream.
+    """Async iterator that demultiplexes a Docker attach stream.
+
+    Docker non-TTY attach sockets use a multiplexed format with 8-byte
+    headers per frame.  This reader parses those headers, extracts only
+    stdout payloads for line iteration, and collects stderr payloads
+    separately.
 
     Compatible with the ``async for raw in stdout_stream:`` pattern
     used in :func:`stream_claude_process`.
@@ -51,8 +65,9 @@ class DockerStdoutReader:
     def __init__(self, socket: Any, loop: asyncio.AbstractEventLoop) -> None:
         self._socket = socket
         self._loop = loop
-        self._buffer = b""
+        self._buffer = b""  # Line buffer for yielding complete lines
         self._eof = False
+        self._stderr_chunks: list[bytes] = []
 
     def __aiter__(self) -> DockerStdoutReader:
         return self
@@ -69,28 +84,72 @@ class DockerStdoutReader:
                     return remaining
                 raise StopAsyncIteration
 
-            chunk = await self._loop.run_in_executor(None, self._read_chunk)
+            chunk = await self._loop.run_in_executor(None, self._read_next_stdout_frame)
             if not chunk:
                 self._eof = True
             else:
                 self._buffer += chunk
 
-    def _read_chunk(self) -> bytes:
+    def _read_exact(self, n: int) -> bytes:
+        """Read exactly *n* bytes from the socket, or fewer on EOF."""
         sock = getattr(self._socket, "_sock", self._socket)
-        try:
-            return sock.recv(8192)
-        except OSError:
-            return b""
-
-    async def read(self) -> bytes:
-        """Read all remaining data (for stderr compatibility)."""
-        chunks: list[bytes] = []
-        while True:
-            chunk = await self._loop.run_in_executor(None, self._read_chunk)
+        data = b""
+        while len(data) < n:
+            try:
+                chunk = sock.recv(n - len(data))
+            except OSError:
+                break
             if not chunk:
                 break
-            chunks.append(chunk)
-        return b"".join(chunks)
+            data += chunk
+        return data
+
+    def _read_next_stdout_frame(self) -> bytes:
+        """Read frames until a stdout frame is found or EOF is reached.
+
+        Each Docker multiplexed frame starts with an 8-byte header::
+
+            [stream_type: 1B][padding: 3B][payload_size: 4B big-endian]
+
+        Stdout frames (type 1) are returned as payload bytes.
+        Stderr frames (type 2) are collected in ``_stderr_chunks``.
+        Other frame types are skipped.
+        """
+        while True:
+            header = self._read_exact(_HEADER_SIZE)
+            if len(header) < _HEADER_SIZE:
+                return b""  # EOF or truncated header
+
+            stream_type = header[0]
+            payload_size = struct.unpack(">I", header[4:8])[0]
+
+            if payload_size == 0:
+                continue
+
+            payload = self._read_exact(payload_size)
+            if not payload:
+                return b""  # EOF during payload read
+
+            if stream_type == _STDOUT_STREAM:
+                return payload
+            if stream_type == _STDERR_STREAM:
+                self._stderr_chunks.append(payload)
+            # Skip other stream types (e.g. stdin=0)
+
+    def get_stderr(self) -> bytes:
+        """Return all stderr data collected during demultiplexing."""
+        return b"".join(self._stderr_chunks)
+
+
+class DockerStderrAdapter:
+    """Provides an async ``.read()`` method that returns stderr collected by a demuxer."""
+
+    def __init__(self, reader: DockerStdoutReader) -> None:
+        self._reader = reader
+
+    async def read(self) -> bytes:
+        """Return all stderr data collected during stdout iteration."""
+        return self._reader.get_stderr()
 
 
 class DockerProcess:
@@ -109,9 +168,10 @@ class DockerProcess:
         self._container = container
         self._socket = socket
         self._loop = loop
+        stdout_reader = DockerStdoutReader(socket, loop)
         self.stdin = DockerStdinWriter(socket)
-        self.stdout = DockerStdoutReader(socket, loop)
-        self.stderr = DockerStdoutReader(socket, loop)
+        self.stdout = stdout_reader
+        self.stderr = DockerStderrAdapter(stdout_reader)
         self.returncode: int | None = None
         self.pid: int | None = None
 
