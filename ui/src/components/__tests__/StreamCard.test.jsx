@@ -303,6 +303,28 @@ describe('StreamCard request changes feedback flow', () => {
     fireEvent.click(screen.getByTestId('request-changes-btn-42'))
     expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
   })
+
+  it('clears error message when panel is toggle-closed via Request Changes button', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+
+    // Close via toggle button (not Cancel)
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    // Re-open — error must be gone
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.queryByTestId('request-changes-error-42')).toBeNull()
+  })
 })
 
 describe('StreamCard issue link', () => {
