@@ -103,7 +103,7 @@ describe('MetricsPanel', () => {
     expect(screen.queryByText('Session')).not.toBeInTheDocument()
   })
 
-  it('renders pipeline blocks visualization with GitHub metrics', () => {
+  it('does not render pipeline section (moved to StreamView)', () => {
     mockUseHydra.mockReturnValue(defaultContext({
       githubMetrics: {
         open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1, 'hydra-review': 2, 'hydra-hitl': 0, 'hydra-fixed': 0 },
@@ -112,12 +112,7 @@ describe('MetricsPanel', () => {
       },
     }))
     render(<MetricsPanel />)
-    expect(screen.getByText('Pipeline')).toBeInTheDocument()
-    expect(screen.getByText('Plan')).toBeInTheDocument()
-    expect(screen.getByText('Ready')).toBeInTheDocument()
-    expect(screen.getByText('Review')).toBeInTheDocument()
-    expect(screen.getByText('HITL')).toBeInTheDocument()
-    expect(screen.getByText('Fixed')).toBeInTheDocument()
+    expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
   })
 
   it('falls back to lifetimeStats when metrics and githubMetrics are null', () => {
