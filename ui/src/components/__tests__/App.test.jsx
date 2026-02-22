@@ -27,6 +27,7 @@ const { mockState } = vi.hoisted(() => ({
     backgroundWorkers: [],
     metrics: null,
     githubMetrics: null,
+    metricsHistory: null,
     intents: [],
     submitIntent: () => {},
     toggleBgWorker: () => {},

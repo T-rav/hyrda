@@ -1406,6 +1406,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         memory_label=["custom-memory"],
         metrics_label=["custom-metrics"],
         dup_label=["custom-dup"],
+        epic_label=["custom-epic"],
         repo=config.repo,
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1437,6 +1438,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-memory",
         "custom-metrics",
         "custom-dup",
+        "custom-epic",
     }
 
 
@@ -2710,3 +2712,107 @@ class TestCountHelpers:
         mgr._run_gh = mock_run_gh
         result = await mgr._count_merged_prs("hydra-fixed")
         assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# close_issue
+# ---------------------------------------------------------------------------
+
+
+class TestCloseIssue:
+    """Tests for PRManager.close_issue."""
+
+    @pytest.mark.asyncio
+    async def test_close_issue_calls_gh_issue_close(self, config, event_bus):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await manager.close_issue(42)
+
+        assert mock_create.call_count == 1
+        args = mock_create.call_args[0]
+        assert args[0] == "gh"
+        assert "issue" in args
+        assert "close" in args
+        assert "42" in args
+        assert "--repo" in args
+        assert config.repo in args
+
+    @pytest.mark.asyncio
+    async def test_close_issue_dry_run_skips_command(self, dry_config, event_bus):
+        manager = _make_manager(dry_config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            await manager.close_issue(42)
+
+        mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_close_issue_handles_error_gracefully(self, config, event_bus):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            # Should not raise
+            await manager.close_issue(999)
+
+
+# ---------------------------------------------------------------------------
+# get_pr_diff_names
+# ---------------------------------------------------------------------------
+
+
+class TestGetPrDiffNames:
+    """Tests for PRManager.get_pr_diff_names."""
+
+    @pytest.mark.asyncio
+    async def test_get_pr_diff_names_returns_file_list(self, config, event_bus):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="foo.py\nbar.py\n")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await manager.get_pr_diff_names(101)
+
+        assert result == ["foo.py", "bar.py"]
+        args = mock_create.call_args[0]
+        assert args[0] == "gh"
+        assert "pr" in args
+        assert "diff" in args
+        assert "101" in args
+        assert "--name-only" in args
+
+    @pytest.mark.asyncio
+    async def test_get_pr_diff_names_returns_empty_on_failure(self, config, event_bus):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=1, stderr="not found")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await manager.get_pr_diff_names(999)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_pr_diff_names_empty_diff_returns_empty_list(
+        self, config, event_bus
+    ):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await manager.get_pr_diff_names(101)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_pr_diff_names_strips_whitespace(self, config, event_bus):
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(
+            returncode=0, stdout="  foo.py  \n\n  bar.py \n  \n"
+        )
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await manager.get_pr_diff_names(101)
+
+        assert result == ["foo.py", "bar.py"]

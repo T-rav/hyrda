@@ -8,7 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis import PlanAnalyzer
-from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+from models import AnalysisSection, AnalysisVerdict
+from tests.conftest import AnalysisResultFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -334,8 +335,7 @@ class TestFormatComment:
     """Tests for AnalysisResult.format_comment."""
 
     def test_format_comment_includes_all_sections(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="File Validation",
@@ -362,8 +362,7 @@ class TestFormatComment:
         assert "Test Pattern Check" in comment
 
     def test_format_comment_shows_verdict_icons(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(name="A", verdict=AnalysisVerdict.PASS, details=[]),
                 AnalysisSection(name="B", verdict=AnalysisVerdict.WARN, details=[]),
@@ -377,8 +376,7 @@ class TestFormatComment:
         assert "\U0001f6d1 BLOCK" in comment
 
     def test_format_comment_includes_details(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="File Validation",
@@ -393,8 +391,7 @@ class TestFormatComment:
         assert "- Missing file: `bar.py`" in comment
 
     def test_format_comment_includes_footer(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(name="A", verdict=AnalysisVerdict.PASS, details=[]),
             ],

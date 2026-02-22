@@ -12,11 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus
-from state import StateTracker
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
+from tests.conftest import make_state
 
 
 def _make_router(config, event_bus, tmp_path):

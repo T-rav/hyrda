@@ -10,6 +10,7 @@ import pytest
 
 from events import EventBus, EventType, HydraEvent
 from state import StateTracker
+from tests.conftest import EventFactory
 from timeline import TimelineBuilder
 
 
@@ -25,7 +26,7 @@ def _event(
     **data: object,
 ) -> HydraEvent:
     """Create a HydraEvent with a controlled timestamp."""
-    return HydraEvent(type=event_type, timestamp=_ts(offset), data=data)
+    return EventFactory.create(type=event_type, timestamp=_ts(offset), data=data)
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +446,9 @@ class TestEdgeCases:
     async def test_events_with_missing_data_fields_handled_gracefully(
         self, event_bus: EventBus
     ) -> None:
-        await event_bus.publish(HydraEvent(type=EventType.TRIAGE_UPDATE, data={}))
+        await event_bus.publish(
+            EventFactory.create(type=EventType.TRIAGE_UPDATE, data={})
+        )
         builder = TimelineBuilder(event_bus)
         # Should not crash, should just skip events without issue numbers
         timelines = builder.build_all()
