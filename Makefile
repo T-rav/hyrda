@@ -13,7 +13,7 @@ UV := VIRTUAL_ENV=$(VENV) uv run --active
 READY_LABEL ?= hydra-ready
 WORKERS ?= 3
 MODEL ?= opus
-REVIEW_MODEL ?= opus
+REVIEW_MODEL ?= sonnet
 BATCH_SIZE ?= 15
 BUDGET ?= 0
 REVIEW_BUDGET ?= 0
@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test lint lint-check typecheck security quality install setup status ui ui-dev ui-clean ensure-labels
+.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels hot
 
 help:
 	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
@@ -43,18 +43,21 @@ help:
 	@echo "  make dry-run        Dry run (log actions without executing)"
 	@echo "  make clean          Remove all worktrees and state"
 	@echo "  make status         Show current Hydra state"
-	@echo "  make test           Run unit tests"
+	@echo "  make test           Run unit tests (parallel)"
+	@echo "  make test-cov       Run tests with coverage report"
 	@echo "  make lint           Auto-fix linting"
 	@echo "  make lint-check     Check linting (no fix)"
 	@echo "  make typecheck      Run Pyright type checks"
 	@echo "  make security       Run Bandit security scan"
-	@echo "  make quality        Lint + typecheck + security + test"
+	@echo "  make quality        Lint + typecheck + test (parallel)"
+	@echo "  make quality-full   quality + security scan"
 	@echo "  make ensure-labels  Create Hydra labels in GitHub repo"
 	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
+	@echo "  make hot            Send config update to running instance"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
 	@echo "  READY_LABEL      GitHub issue label (default: hydra-ready)"
@@ -119,11 +122,16 @@ status:
 
 test:
 	@echo "$(BLUE)Running Hydra unit tests...$(RESET)"
-	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/
 	@echo "$(GREEN)All tests passed$(RESET)"
 
 test-fast:
-	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x -q --tb=short
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x --tb=short
+
+test-cov:
+	@echo "$(BLUE)Running Hydra tests with coverage...$(RESET)"
+	@cd $(HYDRA_DIR) && PYTHONPATH=. $(UV) pytest tests/ -v --cov=. --cov-fail-under=70 --cov-report=term-missing --cov-report=html:htmlcov -p no:xdist
+	@echo "$(GREEN)All tests passed with coverage$(RESET)"
 
 lint:
 	@echo "$(BLUE)Linting Hydra (auto-fix)...$(RESET)"
@@ -145,8 +153,20 @@ security:
 	@cd $(HYDRA_DIR) && $(UV) bandit -c pyproject.toml -r . --severity-level medium
 	@echo "$(GREEN)Security scan passed$(RESET)"
 
-quality: lint-check typecheck security test
+quality:
+	@echo "$(BLUE)Running quality checks in parallel...$(RESET)"
+	@cd $(HYDRA_DIR) && ( \
+		$(UV) ruff check . && $(UV) ruff format . --check && echo "[lint OK]" & \
+		$(UV) pyright && echo "[typecheck OK]" & \
+		PYTHONPATH=. $(UV) pytest tests/ && echo "[tests OK]" & \
+		wait_result=0; \
+		for job in $$(jobs -p); do wait $$job || wait_result=1; done; \
+		exit $$wait_result; \
+	)
 	@echo "$(GREEN)Hydra quality pipeline passed$(RESET)"
+
+quality-full: quality security
+	@echo "$(GREEN)Hydra full quality pipeline passed$(RESET)"
 
 install:
 	@echo "$(BLUE)Installing Hydra dashboard dependencies...$(RESET)"
@@ -190,6 +210,23 @@ ensure-labels:
 	@gh label create "hydra-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
 	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
 	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
+
+hot:
+	@echo "$(BLUE)Sending config update to running Hydra instance on :$(PORT)...$(RESET)"
+	@JSON='{"persist": true'; \
+	[ "$(origin WORKERS)" = "command line" ] && JSON="$$JSON, \"max_workers\": $(WORKERS)"; \
+	[ "$(origin MODEL)" = "command line" ] && JSON="$$JSON, \"model\": \"$(MODEL)\""; \
+	[ "$(origin BUDGET)" = "command line" ] && JSON="$$JSON, \"max_budget_usd\": $(BUDGET)"; \
+	[ "$(origin BATCH_SIZE)" = "command line" ] && JSON="$$JSON, \"batch_size\": $(BATCH_SIZE)"; \
+	[ "$(origin REVIEWERS)" = "command line" ] && JSON="$$JSON, \"max_reviewers\": $(REVIEWERS)"; \
+	[ "$(origin REVIEW_MODEL)" = "command line" ] && JSON="$$JSON, \"review_model\": \"$(REVIEW_MODEL)\""; \
+	[ "$(origin PLANNERS)" = "command line" ] && JSON="$$JSON, \"max_planners\": $(PLANNERS)"; \
+	[ "$(origin HITL_WORKERS)" = "command line" ] && JSON="$$JSON, \"max_hitl_workers\": $(HITL_WORKERS)"; \
+	JSON="$$JSON}"; \
+	curl -s -X PATCH "http://localhost:$(PORT)/api/control/config" \
+		-H "Content-Type: application/json" \
+		-d "$$JSON" | python -m json.tool
+	@echo "$(GREEN)Config update sent$(RESET)"
 
 ui:
 	@echo "$(BLUE)Building Hydra React dashboard...$(RESET)"

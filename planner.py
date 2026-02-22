@@ -10,8 +10,10 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_memory_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.planner")
 
@@ -151,6 +153,8 @@ class PlannerRunner:
             status = PlannerStatus.DONE if result.success else PlannerStatus.FAILED
             await self._emit_status(issue.number, worker_id, status)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.success = False
             result.error = str(exc)
@@ -246,6 +250,12 @@ class PlannerRunner:
                 "the surrounding text describes what they show."
             )
 
+        # Memory digest injection
+        memory_section = ""
+        digest = load_memory_digest(self._config)
+        if digest:
+            memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
+
         find_label = (
             self._config.find_label[0] if self._config.find_label else "hydra-find"
         )
@@ -298,7 +308,7 @@ class PlannerRunner:
 
 ## Issue: {issue.title}
 
-{body}{image_note}{comments_section}
+{body}{image_note}{comments_section}{memory_section}
 
 ## Instructions
 
@@ -403,6 +413,18 @@ ALREADY_SATISFIED_END
 
 This will close the issue automatically. Only use this when you are **certain** the
 requirements are already implemented — not when the issue is unclear or you are unsure.
+
+## Optional: Memory Suggestion
+
+If you discover a reusable pattern or insight during exploration that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: Short descriptive title
+learning: What was learned and why it matters
+context: How it was discovered (reference issue/PR numbers)
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely valuable learnings — not trivial observations.
 """
 
     # Required plan sections — each must appear as a ## header.
@@ -873,17 +895,35 @@ SUMMARY: <brief one-line description of the plan>
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
         """Write the planning transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"plan-issue-{issue_number}.txt"
-        path.write_text(transcript)
-        logger.info("Plan transcript saved to %s", path, extra={"issue": issue_number})
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"plan-issue-{issue_number}.txt"
+            path.write_text(transcript)
+            logger.info(
+                "Plan transcript saved to %s", path, extra={"issue": issue_number}
+            )
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )
 
     def _save_plan(self, issue_number: int, plan: str, summary: str) -> None:
         """Write the extracted plan to .hydra/plans/ for the implementation worker."""
         plan_dir = self._config.repo_root / ".hydra" / "plans"
-        plan_dir.mkdir(parents=True, exist_ok=True)
-        path = plan_dir / f"issue-{issue_number}.md"
-        path.write_text(
-            f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
-        )
-        logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        try:
+            plan_dir.mkdir(parents=True, exist_ok=True)
+            path = plan_dir / f"issue-{issue_number}.md"
+            path.write_text(
+                f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
+            )
+            logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        except OSError:
+            logger.warning(
+                "Could not save plan to %s",
+                plan_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )

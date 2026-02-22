@@ -9,7 +9,7 @@ import signal
 import sys
 from typing import Any
 
-from config import HydraConfig
+from config import HydraConfig, load_config_file
 from log import setup_logging
 from orchestrator import HydraOrchestrator
 
@@ -115,6 +115,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Max merge conflict resolution retry cycles (default: 3)",
     )
     parser.add_argument(
+        "--max-issue-attempts",
+        type=int,
+        default=None,
+        help="Max total implementation attempts per issue (default: 3)",
+    )
+    parser.add_argument(
         "--review-label",
         default=None,
         help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
@@ -148,6 +154,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--improve-label",
         default=None,
         help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+    )
+    parser.add_argument(
+        "--memory-label",
+        default=None,
+        help="Labels for accepted agent learnings, comma-separated (default: hydra-memory)",
+    )
+    parser.add_argument(
+        "--memory-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between memory sync polls (default: 120)",
+    )
+    parser.add_argument(
+        "--metrics-label",
+        default=None,
+        help="Labels for the metrics persistence issue, comma-separated (default: hydra-metrics)",
+    )
+    parser.add_argument(
+        "--metrics-sync-interval",
+        type=int,
+        default=None,
+        help="Seconds between metrics snapshot syncs (default: 300)",
     )
     parser.add_argument(
         "--planner-model",
@@ -218,6 +246,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Git user.email for worktree commits; uses global git config if unset",
     )
     parser.add_argument(
+        "--config-file",
+        default=None,
+        help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -244,12 +277,30 @@ def _parse_label_arg(value: str) -> list[str]:
 def build_config(args: argparse.Namespace) -> HydraConfig:
     """Convert parsed CLI args into a :class:`HydraConfig`.
 
+    Merge priority: defaults → config file → env vars → CLI args.
     Only explicitly-provided CLI values are passed through;
     HydraConfig supplies all defaults.
     """
+    # 0) Load config file values (lowest priority after defaults)
+    from pathlib import Path  # noqa: PLC0415
+
+    config_file_path = getattr(args, "config_file", None) or ".hydra/config.json"
+    file_kwargs = load_config_file(Path(config_file_path))
+
     kwargs: dict[str, Any] = {}
 
+    # Start from config file values, then overlay CLI args
+    # Filter config file values to known HydraConfig fields
+    _known_fields = set(HydraConfig.model_fields.keys())
+    for key, val in file_kwargs.items():
+        if key in _known_fields:
+            kwargs[key] = val
+
+    # Store config_file path
+    kwargs["config_file"] = Path(config_file_path)
+
     # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
+    # CLI args override config file values
     for field in (
         "batch_size",
         "max_workers",
@@ -266,6 +317,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "max_review_fix_attempts",
         "min_review_findings",
         "max_merge_conflict_fix_attempts",
+        "max_issue_attempts",
         "planner_model",
         "planner_budget_usd",
         "min_plan_words",
@@ -276,6 +328,8 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "gh_token",
         "git_user_name",
         "git_user_email",
+        "memory_sync_interval",
+        "metrics_sync_interval",
     ):
         val = getattr(args, field)
         if val is not None:
@@ -291,6 +345,8 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "find_label",
         "planner_label",
         "improve_label",
+        "memory_label",
+        "metrics_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

@@ -1,23 +1,139 @@
 import React from 'react'
+import { useHydra } from '../context/HydraContext'
 import { theme } from '../theme'
+import { PIPELINE_STAGES } from '../constants'
 
-export function MetricsPanel({ metrics, lifetimeStats }) {
-  const hasData = metrics || lifetimeStats
+const BLOCK_LABELS = [
+  { key: 'hydra-plan',   label: 'Plan',   stage: 'plan' },
+  { key: 'hydra-ready',  label: 'Ready',  stage: 'implement' },
+  { key: 'hydra-review', label: 'Review', stage: 'review' },
+  { key: 'hydra-hitl',   label: 'HITL',   stage: 'review' },
+  { key: 'hydra-fixed',  label: 'Fixed',  stage: 'merged' },
+]
+
+function stageColor(stageKey) {
+  const stage = PIPELINE_STAGES.find(s => s.key === stageKey)
+  return stage?.color || theme.textMuted
+}
+
+function TrendIndicator({ current, previous, label, format }) {
+  if (previous == null || current == null) return null
+  const diff = current - previous
+  if (Math.abs(diff) < 0.001) return null
+
+  const isUp = diff > 0
+  const arrow = isUp ? '\u2191' : '\u2193'
+  const color = isUp ? theme.green : theme.red
+  const formatted = format ? format(Math.abs(diff)) : Math.abs(diff)
+
+  return (
+    <span style={{ ...styles.trend, color }} title={`Change from previous snapshot`}>
+      {arrow} {formatted}
+    </span>
+  )
+}
+
+function StatCard({ label, value, subtle, trend }) {
+  return (
+    <div style={subtle ? styles.cardSubtle : styles.card}>
+      <div style={styles.valueRow}>
+        <div style={styles.value}>{value}</div>
+        {trend}
+      </div>
+      <div style={styles.label}>{label}</div>
+    </div>
+  )
+}
+
+function BlocksRow({ labelDef, count }) {
+  const color = stageColor(labelDef.stage)
+  const blocks = Array.from({ length: count }, (_, i) => i)
+
+  return (
+    <div style={styles.blocksRow}>
+      <div style={styles.blocksLabel}>{labelDef.label}</div>
+      <div style={styles.blocksContainer}>
+        {blocks.length === 0 && (
+          <span style={styles.blocksEmpty}>0</span>
+        )}
+        {blocks.map(i => (
+          <div
+            key={i}
+            style={{ ...styles.block, background: color }}
+            title={`${labelDef.label} issue`}
+          />
+        ))}
+      </div>
+      <span style={styles.blocksCount}>{count}</span>
+    </div>
+  )
+}
+
+function RateCard({ label, value, previousValue }) {
+  const pct = (value * 100).toFixed(1)
+  return (
+    <div style={styles.rateCard}>
+      <div style={styles.rateValue}>{pct}%</div>
+      <div style={styles.rateLabel}>{label}</div>
+      <TrendIndicator
+        current={value}
+        previous={previousValue}
+        format={v => `${(v * 100).toFixed(1)}%`}
+      />
+    </div>
+  )
+}
+
+function SnapshotTimeline({ snapshots }) {
+  if (!snapshots || snapshots.length === 0) return null
+  // Show last 10
+  const recent = snapshots.slice(-10)
+
+  return (
+    <div style={styles.timelineSection}>
+      <h3 style={styles.heading}>Snapshot History</h3>
+      <div style={styles.timelineStrip}>
+        {recent.map((s, i) => {
+          const ts = new Date(s.timestamp)
+          const timeStr = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          const dateStr = ts.toLocaleDateString([], { month: 'short', day: 'numeric' })
+          return (
+            <div key={i} style={styles.timelineItem} title={s.timestamp}>
+              <div style={styles.timelineDot} />
+              <div style={styles.timelineDate}>{dateStr}</div>
+              <div style={styles.timelineTime}>{timeStr}</div>
+              <div style={styles.timelineStat}>{s.issues_completed} done</div>
+              <div style={styles.timelineStat}>{s.prs_merged} merged</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function MetricsPanel() {
+  const {
+    metrics, lifetimeStats, githubMetrics, metricsHistory,
+    sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount,
+  } = useHydra()
+  const github = githubMetrics || {}
+  const openByLabel = github.open_by_label || {}
   const lifetime = metrics?.lifetime || lifetimeStats || {}
-  const rates = metrics?.rates || {}
 
-  const cards = [
-    { label: 'Issues Completed', value: lifetime.issues_completed ?? 0 },
-    { label: 'PRs Merged', value: lifetime.prs_merged ?? 0 },
-    { label: 'Issues Created', value: lifetime.issues_created ?? 0 },
-  ]
+  const hasGithub = githubMetrics !== null && githubMetrics !== undefined
+  const hasSession = sessionTriaged > 0 || sessionPlanned > 0 ||
+    sessionImplemented > 0 || sessionReviewed > 0 || mergedCount > 0
+  const hasLifetime = hasGithub || lifetime.issues_completed > 0 ||
+    lifetime.prs_merged > 0
 
-  const rateCards = Object.entries(rates).map(([key, value]) => ({
-    label: key.replace(/_/g, ' '),
-    value: `${(value * 100).toFixed(0)}%`,
-  }))
+  // Extract history data
+  const historyData = metricsHistory || {}
+  const snapshots = historyData.snapshots || []
+  const current = historyData.current
+  const prev = snapshots.length > 0 ? snapshots[snapshots.length - 1] : null
 
-  if (!hasData) {
+  if (!hasGithub && !hasSession && !hasLifetime && !current) {
     return (
       <div style={styles.container}>
         <div style={styles.empty}>No metrics data available yet.</div>
@@ -27,29 +143,90 @@ export function MetricsPanel({ metrics, lifetimeStats }) {
 
   return (
     <div style={styles.container}>
-      <h3 style={styles.heading}>Lifetime Stats</h3>
+      <h3 style={styles.heading}>Lifetime</h3>
       <div style={styles.row}>
-        {cards.map((card) => (
-          <div key={card.label} style={styles.card}>
-            <div style={styles.value}>{card.value}</div>
-            <div style={styles.label}>{card.label}</div>
-          </div>
-        ))}
+        <StatCard
+          label="Issues Completed"
+          value={github.total_closed ?? lifetime.issues_completed ?? 0}
+          trend={<TrendIndicator
+            current={current?.issues_completed}
+            previous={prev?.issues_completed}
+          />}
+        />
+        <StatCard
+          label="PRs Merged"
+          value={github.total_merged ?? lifetime.prs_merged ?? 0}
+          trend={<TrendIndicator
+            current={current?.prs_merged}
+            previous={prev?.prs_merged}
+          />}
+        />
+        {hasGithub && (
+          <StatCard
+            label="Open Issues"
+            value={Object.values(openByLabel).reduce((a, b) => a + b, 0)}
+          />
+        )}
       </div>
 
-      {rateCards.length > 0 && (
+      {(current || prev) && (
         <>
           <h3 style={styles.heading}>Rates</h3>
           <div style={styles.row}>
-            {rateCards.map((card) => (
-              <div key={card.label} style={styles.card}>
-                <div style={styles.value}>{card.value}</div>
-                <div style={styles.label}>{card.label}</div>
-              </div>
+            <RateCard
+              label="Merge Rate"
+              value={current?.merge_rate ?? 0}
+              previousValue={prev?.merge_rate}
+            />
+            <RateCard
+              label="First-Pass Approval"
+              value={current?.first_pass_approval_rate ?? 0}
+              previousValue={prev?.first_pass_approval_rate}
+            />
+            <RateCard
+              label="Quality Fix Rate"
+              value={current?.quality_fix_rate ?? 0}
+              previousValue={prev?.quality_fix_rate}
+            />
+            <RateCard
+              label="HITL Escalation"
+              value={current?.hitl_escalation_rate ?? 0}
+              previousValue={prev?.hitl_escalation_rate}
+            />
+          </div>
+        </>
+      )}
+
+      {hasSession && (
+        <>
+          <h3 style={styles.heading}>Session</h3>
+          <div style={styles.row}>
+            <StatCard label="Triaged" value={sessionTriaged || 0} subtle />
+            <StatCard label="Planned" value={sessionPlanned || 0} subtle />
+            <StatCard label="Implemented" value={sessionImplemented || 0} subtle />
+            <StatCard label="Reviewed" value={sessionReviewed || 0} subtle />
+            <StatCard label="Merged" value={mergedCount || 0} subtle />
+          </div>
+        </>
+      )}
+
+      {hasGithub && (
+        <>
+          <h3 style={styles.heading}>Pipeline</h3>
+          <div style={styles.blocksSection}>
+            {BLOCK_LABELS.map(def => (
+              <BlocksRow
+                key={def.key}
+                labelDef={def}
+                count={openByLabel[def.key] || 0}
+              />
             ))}
           </div>
         </>
       )}
+
+      <SnapshotTimeline snapshots={snapshots} />
+
     </div>
   )
 }
@@ -81,6 +258,20 @@ const styles = {
     minWidth: 140,
     textAlign: 'center',
   },
+  cardSubtle: {
+    border: `1px solid ${theme.border}`,
+    borderRadius: 8,
+    padding: 16,
+    background: theme.surfaceInset,
+    minWidth: 100,
+    textAlign: 'center',
+  },
+  valueRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
   value: {
     fontSize: 32,
     fontWeight: 700,
@@ -92,9 +283,115 @@ const styles = {
     color: theme.textMuted,
     textTransform: 'capitalize',
   },
+  trend: {
+    fontSize: 12,
+    fontWeight: 600,
+  },
   empty: {
     fontSize: 13,
     color: theme.textMuted,
     padding: 20,
+  },
+  rateCard: {
+    border: `1px solid ${theme.border}`,
+    borderRadius: 8,
+    padding: 16,
+    background: theme.surface,
+    minWidth: 120,
+    textAlign: 'center',
+  },
+  rateValue: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: theme.textBright,
+    marginBottom: 4,
+  },
+  rateLabel: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginBottom: 4,
+  },
+  blocksSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    marginBottom: 24,
+  },
+  blocksRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  blocksLabel: {
+    width: 60,
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.textMuted,
+    flexShrink: 0,
+  },
+  blocksContainer: {
+    display: 'flex',
+    gap: 4,
+    flexWrap: 'wrap',
+    flex: 1,
+    minHeight: 16,
+    alignItems: 'center',
+  },
+  block: {
+    width: 16,
+    height: 16,
+    borderRadius: 3,
+    transition: 'all 0.3s ease',
+  },
+  blocksCount: {
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.textMuted,
+    width: 24,
+    textAlign: 'right',
+    flexShrink: 0,
+  },
+  blocksEmpty: {
+    fontSize: 11,
+    color: theme.textInactive,
+  },
+  timelineSection: {
+    marginTop: 8,
+  },
+  timelineStrip: {
+    display: 'flex',
+    gap: 12,
+    overflowX: 'auto',
+    paddingBottom: 8,
+  },
+  timelineItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 80,
+    padding: '8px 12px',
+    background: theme.surfaceInset,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.accent,
+  },
+  timelineDate: {
+    fontSize: 10,
+    fontWeight: 600,
+    color: theme.textMuted,
+  },
+  timelineTime: {
+    fontSize: 10,
+    color: theme.textInactive,
+  },
+  timelineStat: {
+    fontSize: 10,
+    color: theme.textMuted,
   },
 }

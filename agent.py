@@ -10,9 +10,11 @@ from pathlib import Path
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from memory import load_memory_digest
 from models import GitHubIssue, WorkerResult, WorkerStatus
 from review_insights import ReviewInsightStore, get_common_feedback_section
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.agent")
 
@@ -90,6 +92,8 @@ class AgentRunner:
             status = WorkerStatus.DONE if success else WorkerStatus.FAILED
             await self._emit_status(issue.number, worker_id, status)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.success = False
             result.error = str(exc)
@@ -111,12 +115,22 @@ class AgentRunner:
     def _save_transcript(self, result: WorkerResult) -> None:
         """Write the transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"issue-{result.issue_number}.txt"
-        path.write_text(result.transcript)
-        logger.info(
-            "Transcript saved to %s", path, extra={"issue": result.issue_number}
-        )
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"issue-{result.issue_number}.txt"
+            path.write_text(result.transcript)
+            logger.info(
+                "Transcript saved to %s",
+                path,
+                extra={"issue": result.issue_number},
+            )
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"issue": result.issue_number},
+            )
 
     def _build_command(self, worktree_path: Path) -> list[str]:
         """Construct the ``claude`` CLI invocation.
@@ -264,6 +278,12 @@ class AgentRunner:
 
         feedback_section = self._get_review_feedback_section()
 
+        # Memory digest injection
+        memory_section = ""
+        digest = load_memory_digest(self._config)
+        if digest:
+            memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
+
         # Truncate issue body if too long
         body = issue.body
         max_body = self._config.max_issue_body_chars
@@ -279,7 +299,7 @@ class AgentRunner:
 
 ## Issue: {issue.title}
 
-{body}{plan_section}{review_feedback_section}{comments_section}
+{body}{plan_section}{review_feedback_section}{comments_section}{memory_section}
 
 ## Instructions
 
@@ -307,6 +327,18 @@ class AgentRunner:
 - Do NOT run `git push` or `gh pr create`.
 - Ensure `make quality` passes before committing.
 - If you encounter issues, commit what works with a descriptive message.
+
+## Optional: Memory Suggestion
+
+If you discover a reusable pattern or insight during this implementation that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: Short descriptive title
+learning: What was learned and why it matters
+context: How it was discovered (reference issue/PR numbers)
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely valuable learnings — not trivial observations.
 """
 
     def terminate(self) -> None:

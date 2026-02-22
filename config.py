@@ -3,10 +3,35 @@
 from __future__ import annotations
 
 import contextlib
+import json
+import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
+
+logger = logging.getLogger("hydra.config")
+
+# Data-driven env-var override tables.
+# Each tuple: (field_name, env_var_key, default_value)
+_ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
+    ("min_plan_words", "HYDRA_MIN_PLAN_WORDS", 200),
+    ("max_review_fix_attempts", "HYDRA_MAX_REVIEW_FIX_ATTEMPTS", 2),
+    ("min_review_findings", "HYDRA_MIN_REVIEW_FINDINGS", 3),
+    ("max_issue_body_chars", "HYDRA_MAX_ISSUE_BODY_CHARS", 10_000),
+    ("max_review_diff_chars", "HYDRA_MAX_REVIEW_DIFF_CHARS", 15_000),
+    ("gh_max_retries", "HYDRA_GH_MAX_RETRIES", 3),
+    ("max_issue_attempts", "HYDRA_MAX_ISSUE_ATTEMPTS", 3),
+    ("memory_sync_interval", "HYDRA_MEMORY_SYNC_INTERVAL", 120),
+    ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 300),
+    ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
+    ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
+]
+
+_ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
+    ("test_command", "HYDRA_TEST_COMMAND", "make test"),
+]
 
 
 class HydraConfig(BaseModel):
@@ -40,9 +65,7 @@ class HydraConfig(BaseModel):
     model: str = Field(default="sonnet", description="Model for implementation agents")
 
     # Review configuration
-    review_model: str = Field(
-        default="opus", description="Model for review agents (higher quality)"
-    )
+    review_model: str = Field(default="sonnet", description="Model for review agents")
     review_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per review agent (0 = unlimited)"
     )
@@ -84,6 +107,12 @@ class HydraConfig(BaseModel):
         le=5,
         description="Max merge conflict resolution retry cycles",
     )
+    max_issue_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max total implementation attempts per issue before HITL escalation",
+    )
     gh_max_retries: int = Field(
         default=3,
         ge=0,
@@ -110,7 +139,15 @@ class HydraConfig(BaseModel):
     )
     improve_label: list[str] = Field(
         default=["hydra-improve"],
-        description="Labels for review insight improvement proposals (OR logic)",
+        description="Labels for improvement/memory suggestion issues (OR logic)",
+    )
+    memory_label: list[str] = Field(
+        default=["hydra-memory"],
+        description="Labels for accepted agent learnings (OR logic)",
+    )
+    metrics_label: list[str] = Field(
+        default=["hydra-metrics"],
+        description="Labels for the metrics persistence issue (OR logic)",
     )
     dup_label: list[str] = Field(
         default=["hydra-dup"],
@@ -146,13 +183,6 @@ class HydraConfig(BaseModel):
         default=["bug", "typo", "docs"],
         description="Issue labels that trigger a lite plan (fewer required sections)",
     )
-    max_plan_file_overlap: int = Field(
-        default=3,
-        ge=1,
-        le=20,
-        description="Max files overlapping between concurrent plans before BLOCK",
-    )
-
     # Metric thresholds for improvement proposals
     quality_fix_rate_threshold: float = Field(
         default=0.5,
@@ -204,6 +234,22 @@ class HydraConfig(BaseModel):
         le=200_000,
         description="Max characters for PR diff in reviewer prompts before truncation",
     )
+    max_memory_chars: int = Field(
+        default=4000,
+        ge=500,
+        le=50_000,
+        description="Max characters for memory digest before compaction",
+    )
+    max_memory_prompt_chars: int = Field(
+        default=4000,
+        ge=500,
+        le=50_000,
+        description="Max characters for memory digest injected into agent prompts",
+    )
+    memory_compaction_model: str = Field(
+        default="haiku",
+        description="Cheap model for summarising memory digest when over size limit",
+    )
 
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
@@ -241,6 +287,12 @@ class HydraConfig(BaseModel):
         description="Days of event history to retain during rotation",
     )
 
+    # Config file persistence
+    config_file: Path | None = Field(
+        default=None,
+        description="Path to JSON config file for persisting runtime changes",
+    )
+
     # Dashboard
     dashboard_port: int = Field(
         default=5555, ge=1024, le=65535, description="Dashboard web UI port"
@@ -253,6 +305,45 @@ class HydraConfig(BaseModel):
     poll_interval: int = Field(
         default=30, ge=5, le=300, description="Seconds between work-queue polls"
     )
+    memory_sync_interval: int = Field(
+        default=120,
+        ge=10,
+        le=1200,
+        description="Seconds between memory sync polls (default: poll_interval * 4)",
+    )
+    metrics_sync_interval: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Seconds between metrics snapshot syncs",
+    )
+    data_poll_interval: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="Seconds between centralized GitHub issue store polls",
+    )
+    pr_unstick_interval: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="Seconds between PR unsticker polls",
+    )
+    pr_unstick_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Max HITL items to process per unsticker cycle",
+    )
+
+    # Acceptance criteria generation
+    ac_model: str = Field(
+        default="sonnet",
+        description="Model for acceptance criteria generation (post-merge)",
+    )
+    ac_budget_usd: float = Field(
+        default=0, ge=0, description="USD cap for AC generation agent (0 = unlimited)"
+    )
 
     # Retrospective
     retrospective_window: int = Field(
@@ -260,6 +351,14 @@ class HydraConfig(BaseModel):
         ge=3,
         le=100,
         description="Number of recent retrospective entries to scan for patterns",
+    )
+
+    # Credit pause
+    credit_pause_buffer_minutes: int = Field(
+        default=1,
+        ge=0,
+        le=30,
+        description="Extra minutes to wait after reported credit reset time",
     )
 
     # Execution mode
@@ -302,6 +401,8 @@ class HydraConfig(BaseModel):
             HYDRA_LABEL_HITL_ACTIVE → hitl_active_label
             HYDRA_LABEL_FIXED       → fixed_label
             HYDRA_LABEL_IMPROVE     → improve_label
+            HYDRA_LABEL_MEMORY      → memory_label
+            HYDRA_LABEL_DUP         → dup_label
         """
         # Paths
         if self.repo_root == Path("."):
@@ -335,11 +436,22 @@ class HydraConfig(BaseModel):
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
 
-        # Planner env var overrides (only apply when still at the default)
-        env_min_words = os.environ.get("HYDRA_MIN_PLAN_WORDS")
-        if env_min_words is not None and self.min_plan_words == 200:
-            object.__setattr__(self, "min_plan_words", int(env_min_words))
+        # Data-driven env var overrides (int fields)
+        for field, env_key, default in _ENV_INT_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    with contextlib.suppress(ValueError):
+                        object.__setattr__(self, field, int(env_val))
 
+        # Data-driven env var overrides (str fields)
+        for field, env_key, default in _ENV_STR_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    object.__setattr__(self, field, env_val)
+
+        # Lite plan labels (comma-separated list, special-case)
         env_lite_labels = os.environ.get("HYDRA_LITE_PLAN_LABELS")
         if env_lite_labels is not None and self.lite_plan_labels == [
             "bug",
@@ -349,13 +461,6 @@ class HydraConfig(BaseModel):
             parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
-
-        # plan file overlap override
-        if self.max_plan_file_overlap == 3:  # still at default
-            env_overlap = os.environ.get("HYDRA_MAX_PLAN_FILE_OVERLAP")
-            if env_overlap is not None:
-                with contextlib.suppress(ValueError):
-                    object.__setattr__(self, "max_plan_file_overlap", int(env_overlap))
 
         # Review fix attempts override
         if self.max_review_fix_attempts == 2:  # still at default
@@ -397,6 +502,31 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "gh_max_retries", int(env_retries))
 
+        # issue attempt cap override
+        if self.max_issue_attempts == 3:  # still at default
+            env_issue_attempts = os.environ.get("HYDRA_MAX_ISSUE_ATTEMPTS")
+            if env_issue_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_issue_attempts", int(env_issue_attempts)
+                    )
+
+        # Memory sync interval override
+        if self.memory_sync_interval == 120:  # still at default
+            env_mem_sync = os.environ.get("HYDRA_MEMORY_SYNC_INTERVAL")
+            if env_mem_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "memory_sync_interval", int(env_mem_sync))
+
+        # Metrics sync interval override
+        if self.metrics_sync_interval == 300:  # still at default
+            env_metrics_sync = os.environ.get("HYDRA_METRICS_SYNC_INTERVAL")
+            if env_metrics_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "metrics_sync_interval", int(env_metrics_sync)
+                    )
+
         # merge conflict fix attempts override
         if self.max_merge_conflict_fix_attempts == 3:  # still at default
             env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
@@ -405,6 +535,27 @@ class HydraConfig(BaseModel):
                     object.__setattr__(
                         self, "max_merge_conflict_fix_attempts", int(env_attempts)
                     )
+
+        # Data poll interval override
+        if self.data_poll_interval == 60:  # still at default
+            env_data_poll = os.environ.get("HYDRA_DATA_POLL_INTERVAL")
+            if env_data_poll is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "data_poll_interval", int(env_data_poll))
+
+        # PR unstick interval override
+        if self.pr_unstick_interval == 3600:  # still at default
+            env_unstick = os.environ.get("HYDRA_PR_UNSTICK_INTERVAL")
+            if env_unstick is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_interval", int(env_unstick))
+
+        # PR unstick batch size override
+        if self.pr_unstick_batch_size == 10:  # still at default
+            env_batch = os.environ.get("HYDRA_PR_UNSTICK_BATCH_SIZE")
+            if env_batch is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_batch_size", int(env_batch))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
@@ -416,6 +567,8 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_HITL_ACTIVE": ("hitl_active_label", ["hydra-hitl-active"]),
             "HYDRA_LABEL_FIXED": ("fixed_label", ["hydra-fixed"]),
             "HYDRA_LABEL_IMPROVE": ("improve_label", ["hydra-improve"]),
+            "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
+            "HYDRA_LABEL_METRICS": ("metrics_label", ["hydra-metrics"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
@@ -471,3 +624,38 @@ def _detect_repo_slug(repo_root: Path) -> str:
         return ""
     except (FileNotFoundError, OSError):
         return ""
+
+
+def load_config_file(path: Path | None) -> dict[str, Any]:
+    """Load a JSON config file and return its contents as a dict.
+
+    Returns an empty dict if the file is missing, unreadable, or invalid.
+    """
+    if path is None:
+        return {}
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return {}
+        return data
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
+    """Save config values to a JSON file, merging with existing contents."""
+    if path is None:
+        return
+    existing: dict[str, Any] = {}
+    try:
+        existing = json.loads(path.read_text())
+        if not isinstance(existing, dict):
+            existing = {}
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+    existing.update(values)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(existing, indent=2) + "\n")
+    except OSError:
+        logger.warning("Failed to write config file %s", path)

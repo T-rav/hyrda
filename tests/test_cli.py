@@ -132,7 +132,7 @@ class TestBuildConfig:
         assert cfg.hitl_active_label == ["hydra-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
         assert cfg.model == "sonnet"
-        assert cfg.review_model == "opus"
+        assert cfg.review_model == "sonnet"
         assert cfg.review_budget_usd == pytest.approx(0)
         assert cfg.ci_check_timeout == 600
         assert cfg.ci_poll_interval == 30
@@ -468,3 +468,25 @@ class TestRunMainSignalHandlers:
 
         mock_orch.stop.assert_called_once()
         mock_dashboard.stop.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# --max-issue-attempts CLI arg
+# ---------------------------------------------------------------------------
+
+
+class TestMaxIssueAttemptsCLI:
+    """Tests for the --max-issue-attempts CLI argument."""
+
+    def test_parses_max_issue_attempts(self) -> None:
+        args = parse_args(["--max-issue-attempts", "5"])
+        assert args.max_issue_attempts == 5
+
+    def test_defaults_to_none(self) -> None:
+        args = parse_args([])
+        assert args.max_issue_attempts is None
+
+    def test_build_config_maps_max_issue_attempts(self) -> None:
+        args = parse_args(["--max-issue-attempts", "7"])
+        config = build_config(args)
+        assert config.max_issue_attempts == 7

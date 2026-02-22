@@ -552,6 +552,8 @@ class TestReset:
         tracker.set_hitl_origin(1, "hydra-review")
         tracker.set_hitl_cause(1, "CI failed after 2 fix attempts")
         tracker.increment_batch()
+        tracker.increment_issue_attempts(1)
+        tracker.set_active_issue_numbers([1, 2])
 
         tracker.reset()
 
@@ -562,6 +564,8 @@ class TestReset:
         assert tracker.get_pr_status(10) is None
         assert tracker.get_hitl_origin(1) is None
         assert tracker.get_hitl_cause(1) is None
+        assert tracker.get_issue_attempts(1) == 0
+        assert tracker.get_active_issue_numbers() == []
 
 
 # ---------------------------------------------------------------------------
@@ -636,6 +640,8 @@ class TestToDict:
             "review_attempts",
             "review_feedback",
             "worker_result_meta",
+            "issue_attempts",
+            "active_issue_numbers",
             "lifetime_stats",
             "last_updated",
         }
@@ -778,7 +784,7 @@ class TestAtomicSave:
     def test_save_uses_atomic_replace(self, tmp_path: Path) -> None:
         """save() should write to a temp file then atomically replace."""
         tracker = make_tracker(tmp_path)
-        with patch("state.os.replace", wraps=os.replace) as mock_replace:
+        with patch("file_util.os.replace", wraps=os.replace) as mock_replace:
             tracker.save()
             mock_replace.assert_called_once()
             args = mock_replace.call_args[0]
@@ -793,7 +799,7 @@ class TestAtomicSave:
         state_dir = tmp_path
 
         with (
-            patch("state.os.fdopen", side_effect=OSError("disk full")),
+            patch("file_util.os.fdopen", side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
             tracker.save()
@@ -807,7 +813,7 @@ class TestAtomicSave:
         tracker = make_tracker(tmp_path)
 
         with (
-            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            patch("file_util.os.fsync", side_effect=OSError("fsync failed")),
             pytest.raises(OSError, match="fsync failed"),
         ):
             tracker.save()
@@ -826,7 +832,7 @@ class TestAtomicSave:
         original_content = state_file.read_text()
 
         with (
-            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            patch("file_util.os.fsync", side_effect=OSError("fsync failed")),
             pytest.raises(OSError),
         ):
             tracker.save()
@@ -848,7 +854,7 @@ class TestAtomicSave:
         """The temp file must be created in the same dir as the state file."""
         tracker = make_tracker(tmp_path)
         with patch(
-            "state.tempfile.mkstemp", wraps=__import__("tempfile").mkstemp
+            "file_util.tempfile.mkstemp", wraps=__import__("tempfile").mkstemp
         ) as mock_mkstemp:
             tracker.save()
             mock_mkstemp.assert_called_once()
@@ -973,6 +979,8 @@ class TestStateDataModel:
         assert data.review_attempts == {}
         assert data.review_feedback == {}
         assert data.worker_result_meta == {}
+        assert data.issue_attempts == {}
+        assert data.active_issue_numbers == []
         assert data.lifetime_stats == LifetimeStats()
         assert data.last_updated is None
 
@@ -1259,6 +1267,51 @@ class TestRecordingMethods:
 
 
 # ---------------------------------------------------------------------------
+# Metrics state
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsState:
+    """Tests for metrics state tracking methods."""
+
+    def test_get_metrics_issue_number_default(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_metrics_issue_number() is None
+
+    def test_set_and_get_metrics_issue_number(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_metrics_issue_number(42)
+        assert tracker.get_metrics_issue_number() == 42
+
+    def test_get_metrics_state_default(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        issue_num, hash_val, synced = tracker.get_metrics_state()
+        assert issue_num is None
+        assert hash_val == ""
+        assert synced is None
+
+    def test_update_metrics_state(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_metrics_issue_number(99)
+        tracker.update_metrics_state("abc123")
+        issue_num, hash_val, synced = tracker.get_metrics_state()
+        assert issue_num == 99
+        assert hash_val == "abc123"
+        assert synced is not None
+
+    def test_metrics_state_persists_across_reloads(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_metrics_issue_number(77)
+        tracker.update_metrics_state("def456")
+
+        tracker2 = make_tracker(tmp_path)
+        issue_num, hash_val, synced = tracker2.get_metrics_state()
+        assert issue_num == 77
+        assert hash_val == "def456"
+        assert synced is not None
+
+
+# ---------------------------------------------------------------------------
 # Threshold tracking
 # ---------------------------------------------------------------------------
 
@@ -1382,3 +1435,171 @@ class TestThresholdTracking:
         assert qf_proposal["threshold"] == 0.5
         assert qf_proposal["value"] == pytest.approx(0.8)
         assert "action" in qf_proposal
+
+
+# ---------------------------------------------------------------------------
+# Verification Issue Tracking
+# ---------------------------------------------------------------------------
+
+
+class TestVerificationIssueTracking:
+    """Tests for verification issue state tracking."""
+
+    def test_set_and_get_verification_issue(self, tmp_path: Path) -> None:
+        """Round-trip: set then get returns the verification issue number."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+        assert tracker.get_verification_issue(42) == 500
+
+    def test_get_returns_none_when_not_set(self, tmp_path: Path) -> None:
+        """Returns None when no verification issue is tracked."""
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_verification_issue(42) is None
+
+    def test_persists_across_reload(self, tmp_path: Path) -> None:
+        """Verification issue mapping survives reload from disk."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+
+        tracker2 = make_tracker(tmp_path)
+        assert tracker2.get_verification_issue(42) == 500
+
+    def test_multiple_issues_tracked(self, tmp_path: Path) -> None:
+        """Multiple original issues can each have verification issues."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_verification_issue(42, 500)
+        tracker.set_verification_issue(99, 501)
+
+        assert tracker.get_verification_issue(42) == 500
+        assert tracker.get_verification_issue(99) == 501
+
+
+# ---------------------------------------------------------------------------
+# Issue attempt tracking
+# ---------------------------------------------------------------------------
+
+
+class TestIssueAttemptTracking:
+    def test_get_issue_attempts_defaults_to_zero(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_issue_attempts(42) == 0
+
+    def test_increment_issue_attempts_returns_new_count(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.increment_issue_attempts(42) == 1
+        assert tracker.increment_issue_attempts(42) == 2
+
+    def test_reset_issue_attempts_clears_counter(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(42)
+        tracker.increment_issue_attempts(42)
+        tracker.reset_issue_attempts(42)
+        assert tracker.get_issue_attempts(42) == 0
+
+    def test_reset_issue_attempts_nonexistent_is_noop(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.reset_issue_attempts(999)
+        assert tracker.get_issue_attempts(999) == 0
+
+    def test_multiple_issues_tracked_independently(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(1)
+        tracker.increment_issue_attempts(1)
+        tracker.increment_issue_attempts(2)
+        assert tracker.get_issue_attempts(1) == 2
+        assert tracker.get_issue_attempts(2) == 1
+
+    def test_issue_attempts_persist_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.increment_issue_attempts(42)
+        tracker.increment_issue_attempts(42)
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_issue_attempts(42) == 2
+
+    def test_reset_clears_issue_attempts(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.increment_issue_attempts(42)
+        tracker.reset()
+        assert tracker.get_issue_attempts(42) == 0
+
+    def test_migration_adds_issue_attempts_to_old_file(self, tmp_path: Path) -> None:
+        """Loading a state file without issue_attempts should default to {}."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_issue_attempts(1) == 0
+        assert tracker.get_current_batch() == 5
+
+
+# ---------------------------------------------------------------------------
+# Active issue numbers tracking
+# ---------------------------------------------------------------------------
+
+
+class TestActiveIssueNumbersTracking:
+    def test_get_returns_empty_default(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        assert tracker.get_active_issue_numbers() == []
+
+    def test_set_and_get_active_issues(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_active_issue_numbers([1, 2, 3])
+        assert tracker.get_active_issue_numbers() == [1, 2, 3]
+
+    def test_set_overwrites_previous(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_active_issue_numbers([1, 2])
+        tracker.set_active_issue_numbers([3, 4])
+        assert tracker.get_active_issue_numbers() == [3, 4]
+
+    def test_persists_across_reload(self, tmp_path: Path) -> None:
+        state_file = tmp_path / "state.json"
+        tracker = StateTracker(state_file)
+        tracker.set_active_issue_numbers([10, 20])
+
+        tracker2 = StateTracker(state_file)
+        assert tracker2.get_active_issue_numbers() == [10, 20]
+
+    def test_reset_clears_active_issues(self, tmp_path: Path) -> None:
+        tracker = make_tracker(tmp_path)
+        tracker.set_active_issue_numbers([1, 2])
+        tracker.reset()
+        assert tracker.get_active_issue_numbers() == []
+
+    def test_get_returns_copy(self, tmp_path: Path) -> None:
+        """Mutating the returned list must not affect internal state."""
+        tracker = make_tracker(tmp_path)
+        tracker.set_active_issue_numbers([1, 2])
+        result = tracker.get_active_issue_numbers()
+        result.append(99)
+        assert tracker.get_active_issue_numbers() == [1, 2]
+
+    def test_migration_adds_active_issue_numbers_to_old_file(
+        self, tmp_path: Path
+    ) -> None:
+        """Loading a state file without active_issue_numbers should default to []."""
+        state_file = tmp_path / "state.json"
+        old_data = {
+            "current_batch": 5,
+            "processed_issues": {"1": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(old_data))
+
+        tracker = StateTracker(state_file)
+        assert tracker.get_active_issue_numbers() == []
+        assert tracker.get_current_batch() == 5

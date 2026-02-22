@@ -8,7 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis import PlanAnalyzer
-from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+from models import AnalysisSection, AnalysisVerdict
+from tests.conftest import AnalysisResultFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -209,167 +210,6 @@ class TestFileValidation:
 
 
 # ---------------------------------------------------------------------------
-# Concurrent conflict tests
-# ---------------------------------------------------------------------------
-
-
-class TestConcurrentConflicts:
-    """Tests for _check_concurrent_conflicts."""
-
-    def test_concurrent_no_other_plans(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py"])
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: change"
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.PASS
-        assert overlapping == {}
-
-    def test_concurrent_no_overlap(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py", "config.py"])
-        plans_dir = repo / ".hydra" / "plans"
-
-        # Write another plan that touches different files
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n- `config.py`: change"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: change"
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.PASS
-        assert overlapping == {}
-
-    def test_concurrent_small_overlap_warns(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py", "config.py"])
-        plans_dir = repo / ".hydra" / "plans"
-
-        # Other plan also modifies models.py
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n- `models.py`: change"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: our change\n- `config.py`: update"
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.WARN
-        assert 10 in overlapping
-        assert "models.py" in overlapping[10]
-
-    def test_concurrent_large_overlap_blocks(self, tmp_path: Path) -> None:
-        repo = _setup_repo(
-            tmp_path,
-            ["a.py", "b.py", "c.py", "d.py", "e.py"],
-        )
-        plans_dir = repo / ".hydra" / "plans"
-
-        # Other plan touches 4 of the same files (exceeds default max of 3)
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n"
-            "- `a.py`: change\n"
-            "- `b.py`: change\n"
-            "- `c.py`: change\n"
-            "- `d.py`: change\n"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo, max_file_overlap=3)
-
-        plan = (
-            "## Files to Modify\n\n"
-            "- `a.py`: change\n"
-            "- `b.py`: change\n"
-            "- `c.py`: change\n"
-            "- `d.py`: change\n"
-            "- `e.py`: change\n"
-        )
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.BLOCK
-        assert 10 in overlapping
-        assert len(overlapping[10]) == 4
-
-    def test_concurrent_skips_own_plan(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py"])
-        plans_dir = repo / ".hydra" / "plans"
-
-        # Write own plan (should be skipped)
-        (plans_dir / "issue-42.md").write_text(
-            "## Files to Modify\n\n- `models.py`: change"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: change"
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.PASS
-        assert overlapping == {}
-
-    def test_concurrent_overlapping_issues_dict_populated(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py", "config.py"])
-        plans_dir = repo / ".hydra" / "plans"
-
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n- `models.py`: change"
-        )
-        (plans_dir / "issue-20.md").write_text(
-            "## Files to Modify\n\n- `config.py`: change"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: change\n- `config.py`: change"
-        _, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert 10 in overlapping
-        assert 20 in overlapping
-        assert "models.py" in overlapping[10]
-        assert "config.py" in overlapping[20]
-
-    def test_concurrent_plans_dir_missing(self, tmp_path: Path) -> None:
-        """When .hydra/plans/ doesn't exist, conflict check should PASS."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = "## Files to Modify\n\n- `models.py`: change"
-        section, overlapping = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.PASS
-        assert overlapping == {}
-
-    def test_concurrent_configurable_threshold(self, tmp_path: Path) -> None:
-        """max_file_overlap=5 should allow 5 overlapping files without blocking."""
-        repo = _setup_repo(
-            tmp_path,
-            ["a.py", "b.py", "c.py", "d.py", "e.py"],
-        )
-        plans_dir = repo / ".hydra" / "plans"
-
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n"
-            "- `a.py`: change\n"
-            "- `b.py`: change\n"
-            "- `c.py`: change\n"
-            "- `d.py`: change\n"
-            "- `e.py`: change\n"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo, max_file_overlap=5)
-
-        plan = (
-            "## Files to Modify\n\n"
-            "- `a.py`: change\n"
-            "- `b.py`: change\n"
-            "- `c.py`: change\n"
-            "- `d.py`: change\n"
-            "- `e.py`: change\n"
-        )
-        section, _ = analyzer._check_concurrent_conflicts(plan, 42)
-
-        assert section.verdict == AnalysisVerdict.WARN
-
-
-# ---------------------------------------------------------------------------
 # Test pattern validation tests
 # ---------------------------------------------------------------------------
 
@@ -479,50 +319,11 @@ class TestAnalyze:
         result = analyzer.analyze(PLAN_ALL_EXIST, 42)
 
         assert not result.blocked
-        assert len(result.sections) == 3
+        assert len(result.sections) == 2
         assert all(
             s.verdict in (AnalysisVerdict.PASS, AnalysisVerdict.WARN)
             for s in result.sections
         )
-
-    def test_analyze_blocked_result(self, tmp_path: Path) -> None:
-        repo = _setup_repo(
-            tmp_path,
-            ["a.py", "b.py", "c.py", "d.py"],
-        )
-        plans_dir = repo / ".hydra" / "plans"
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n- `a.py`: x\n- `b.py`: x\n- `c.py`: x\n- `d.py`: x\n"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo, max_file_overlap=3)
-
-        plan = (
-            "## Files to Modify\n\n"
-            "- `a.py`: x\n- `b.py`: x\n- `c.py`: x\n- `d.py`: x\n"
-            "\n## Testing Strategy\n\nUse pytest."
-        )
-        result = analyzer.analyze(plan, 42)
-
-        assert result.blocked
-
-    def test_analyze_not_blocked_on_warn(self, tmp_path: Path) -> None:
-        repo = _setup_repo(tmp_path, ["models.py"])
-        plans_dir = repo / ".hydra" / "plans"
-        (plans_dir / "issue-10.md").write_text(
-            "## Files to Modify\n\n- `models.py`: change"
-        )
-        analyzer = PlanAnalyzer(repo_root=repo)
-
-        plan = (
-            "## Files to Modify\n\n- `models.py`: change\n"
-            "\n## Testing Strategy\n\nUse pytest."
-        )
-        result = analyzer.analyze(plan, 42)
-
-        assert not result.blocked
-        # Conflict section should be WARN
-        conflict = next(s for s in result.sections if s.name == "Conflict Check")
-        assert conflict.verdict == AnalysisVerdict.WARN
 
 
 # ---------------------------------------------------------------------------
@@ -534,8 +335,7 @@ class TestFormatComment:
     """Tests for AnalysisResult.format_comment."""
 
     def test_format_comment_includes_all_sections(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="File Validation",
@@ -562,8 +362,7 @@ class TestFormatComment:
         assert "Test Pattern Check" in comment
 
     def test_format_comment_shows_verdict_icons(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(name="A", verdict=AnalysisVerdict.PASS, details=[]),
                 AnalysisSection(name="B", verdict=AnalysisVerdict.WARN, details=[]),
@@ -577,8 +376,7 @@ class TestFormatComment:
         assert "\U0001f6d1 BLOCK" in comment
 
     def test_format_comment_includes_details(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(
                     name="File Validation",
@@ -593,8 +391,7 @@ class TestFormatComment:
         assert "- Missing file: `bar.py`" in comment
 
     def test_format_comment_includes_footer(self) -> None:
-        result = AnalysisResult(
-            issue_number=42,
+        result = AnalysisResultFactory.create(
             sections=[
                 AnalysisSection(name="A", verdict=AnalysisVerdict.PASS, details=[]),
             ],

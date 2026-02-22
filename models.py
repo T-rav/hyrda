@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 # --- GitHub ---
 
@@ -19,6 +19,10 @@ class GitHubIssue(BaseModel):
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
     url: str = ""
+    created_at: str = Field(
+        default="",
+        validation_alias=AliasChoices("createdAt", "created_at"),
+    )
 
     @field_validator("labels", mode="before")
     @classmethod
@@ -118,7 +122,6 @@ class AnalysisResult(BaseModel):
 
     issue_number: int
     sections: list[AnalysisSection] = Field(default_factory=list)
-    overlapping_issues: dict[int, list[str]] = Field(default_factory=dict)
 
     @property
     def blocked(self) -> bool:
@@ -153,6 +156,7 @@ class WorkerStatus(StrEnum):
     TESTING = "testing"
     COMMITTING = "committing"
     QUALITY_FIX = "quality_fix"
+    MERGE_FIX = "merge_fix"
     DONE = "done"
     FAILED = "failed"
 
@@ -201,6 +205,16 @@ class HITLResult(BaseModel):
 # --- Reviews ---
 
 
+class VerificationCriteria(BaseModel):
+    """Structured acceptance criteria and verification instructions for a merged PR."""
+
+    issue_number: int
+    pr_number: int
+    acceptance_criteria: str
+    verification_instructions: str
+    timestamp: str
+
+
 class ReviewerStatus(StrEnum):
     """Lifecycle status of a reviewer agent."""
 
@@ -234,6 +248,71 @@ class ReviewResult(BaseModel):
     duration_seconds: float = 0.0
 
 
+# --- Verification Judge ---
+
+
+class CriterionVerdict(StrEnum):
+    """Verdict for a single acceptance criterion."""
+
+    PASS = "pass"
+    FAIL = "fail"
+
+
+class CriterionResult(BaseModel):
+    """Result of evaluating a single acceptance criterion against the code."""
+
+    criterion: str
+    verdict: CriterionVerdict = CriterionVerdict.FAIL
+    reasoning: str = ""
+
+
+class InstructionsQuality(StrEnum):
+    """Quality verdict for human verification instructions."""
+
+    READY = "ready"
+    NEEDS_REFINEMENT = "needs_refinement"
+
+
+class JudgeVerdict(BaseModel):
+    """Full result of the verification judge evaluation."""
+
+    issue_number: int
+    criteria_results: list[CriterionResult] = Field(default_factory=list)
+    all_criteria_pass: bool = False
+    instructions_quality: InstructionsQuality = InstructionsQuality.NEEDS_REFINEMENT
+    instructions_feedback: str = ""
+    refined: bool = False
+    summary: str = ""
+
+
+class VerificationCriterion(BaseModel):
+    """Result of evaluating a single acceptance criterion at code level."""
+
+    description: str
+    passed: bool
+    details: str = ""
+
+
+class JudgeResult(BaseModel):
+    """Overall result from the LLM judge evaluating acceptance criteria."""
+
+    issue_number: int
+    pr_number: int
+    criteria: list[VerificationCriterion] = Field(default_factory=list)
+    verification_instructions: str = ""
+    summary: str = ""
+
+    @property
+    def all_passed(self) -> bool:
+        """Return True if every criterion passed."""
+        return all(c.passed for c in self.criteria)
+
+    @property
+    def failed_criteria(self) -> list[VerificationCriterion]:
+        """Return only the criteria that failed."""
+        return [c for c in self.criteria if not c.passed]
+
+
 # --- Batch ---
 
 
@@ -264,6 +343,15 @@ class Phase(StrEnum):
 
 
 # --- State Persistence ---
+
+
+class QueueStats(BaseModel):
+    """Snapshot of IssueStore queue depths and throughput."""
+
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    active_count: dict[str, int] = Field(default_factory=dict)
+    total_processed: dict[str, int] = Field(default_factory=dict)
+    last_poll_timestamp: str | None = None
 
 
 class LifetimeStats(BaseModel):
@@ -300,11 +388,50 @@ class StateData(BaseModel):
     review_attempts: dict[str, int] = Field(default_factory=dict)
     review_feedback: dict[str, str] = Field(default_factory=dict)
     worker_result_meta: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    verification_issues: dict[str, int] = Field(default_factory=dict)
+    issue_attempts: dict[str, int] = Field(default_factory=dict)
+    active_issue_numbers: list[int] = Field(default_factory=list)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    memory_issue_ids: list[int] = Field(default_factory=list)
+    memory_digest_hash: str = ""
+    memory_last_synced: str | None = None
+    metrics_issue_number: int | None = None
+    metrics_last_snapshot_hash: str = ""
+    metrics_last_synced: str | None = None
     last_updated: str | None = None
 
 
 # --- Dashboard API Responses ---
+
+
+class PipelineIssue(BaseModel):
+    """A single issue in a pipeline stage snapshot."""
+
+    issue_number: int
+    title: str = ""
+    url: str = ""
+    status: str = "queued"  # "queued" | "active" | "hitl"
+
+
+class PipelineSnapshot(BaseModel):
+    """Snapshot of all pipeline stages with their issues."""
+
+    stages: dict[str, list[PipelineIssue]] = Field(default_factory=dict)
+
+
+class IntentRequest(BaseModel):
+    """Request body for POST /api/intent."""
+
+    text: str = Field(..., min_length=1, max_length=5000)
+
+
+class IntentResponse(BaseModel):
+    """Response for POST /api/intent."""
+
+    issue_number: int
+    title: str
+    url: str = ""
+    status: str = "created"
 
 
 class PRListItem(BaseModel):
@@ -329,6 +456,7 @@ class HITLItem(BaseModel):
     branch: str = ""
     cause: str = ""  # escalation reason (populated by #113)
     status: str = "pending"  # pending | processing | resolved
+    isMemorySuggestion: bool = False  # camelCase to match frontend contract
 
 
 class ControlStatusConfig(BaseModel):
@@ -343,6 +471,7 @@ class ControlStatusConfig(BaseModel):
     hitl_active_label: list[str] = Field(default_factory=list)
     fixed_label: list[str] = Field(default_factory=list)
     improve_label: list[str] = Field(default_factory=list)
+    memory_label: list[str] = Field(default_factory=list)
     max_workers: int = 0
     max_planners: int = 0
     max_reviewers: int = 0
@@ -367,6 +496,7 @@ class BackgroundWorkerStatus(BaseModel):
     name: str
     label: str
     status: str = "disabled"  # ok | error | disabled
+    enabled: bool = True
     last_run: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
@@ -382,3 +512,70 @@ class MetricsResponse(BaseModel):
 
     lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
     rates: dict[str, float] = Field(default_factory=dict)
+
+
+class MetricsSnapshot(BaseModel):
+    """A single timestamped metrics snapshot for historical tracking."""
+
+    timestamp: str
+    # Core counters (from LifetimeStats)
+    issues_completed: int = 0
+    prs_merged: int = 0
+    issues_created: int = 0
+    # Volume counters
+    total_quality_fix_rounds: int = 0
+    total_ci_fix_rounds: int = 0
+    total_hitl_escalations: int = 0
+    total_review_approvals: int = 0
+    total_review_request_changes: int = 0
+    total_reviewer_fixes: int = 0
+    # Timing
+    total_implementation_seconds: float = 0.0
+    total_review_seconds: float = 0.0
+    # Derived rates (computed at snapshot time)
+    merge_rate: float = 0.0
+    quality_fix_rate: float = 0.0
+    hitl_escalation_rate: float = 0.0
+    first_pass_approval_rate: float = 0.0
+    avg_implementation_seconds: float = 0.0
+    # Queue snapshot
+    queue_depth: dict[str, int] = Field(default_factory=dict)
+    # GitHub label counts
+    github_open_by_label: dict[str, int] = Field(default_factory=dict)
+    github_total_closed: int = 0
+    github_total_merged: int = 0
+
+
+class MetricsHistoryResponse(BaseModel):
+    """Response for GET /api/metrics/history."""
+
+    snapshots: list[MetricsSnapshot] = Field(default_factory=list)
+    current: MetricsSnapshot | None = None
+
+
+# --- Timeline ---
+
+
+class TimelineStage(BaseModel):
+    """A single stage in an issue's lifecycle timeline."""
+
+    stage: str  # "triage", "plan", "implement", "review", "merge"
+    status: str  # "pending", "in_progress", "done", "failed"
+    started_at: str | None = None
+    completed_at: str | None = None
+    duration_seconds: float | None = None
+    transcript_preview: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class IssueTimeline(BaseModel):
+    """Full lifecycle timeline for a single issue."""
+
+    issue_number: int
+    title: str = ""
+    current_stage: str = ""
+    stages: list[TimelineStage] = Field(default_factory=list)
+    total_duration_seconds: float | None = None
+    pr_number: int | None = None
+    pr_url: str = ""
+    branch: str = ""

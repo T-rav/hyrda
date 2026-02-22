@@ -6,8 +6,6 @@ import asyncio
 import contextlib
 import itertools
 import logging
-import os
-import tempfile
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
@@ -15,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from file_util import atomic_write
 
 _event_counter = itertools.count()
 
@@ -45,6 +45,9 @@ class EventType(StrEnum):
     METRICS_UPDATE = "metrics_update"
     REVIEW_INSIGHT = "review_insight"
     BACKGROUND_WORKER_STATUS = "background_worker_status"
+    QUEUE_UPDATE = "queue_update"
+    SYSTEM_ALERT = "system_alert"
+    VERIFICATION_JUDGE = "verification_judge"
 
 
 class HydraEvent(BaseModel):
@@ -160,24 +163,8 @@ class EventLog:
                     # Drop corrupt / unparseable lines during rotation
                     continue
 
-        # Atomic write: temp file + os.replace (same pattern as StateTracker)
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(
-            dir=self._path.parent,
-            prefix=".events-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                for line in kept_lines:
-                    f.write(line + "\n")
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._path)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        content = "\n".join(kept_lines) + "\n" if kept_lines else ""
+        atomic_write(self._path, content)
 
     async def rotate(self, max_size_bytes: int, max_age_days: int) -> None:
         """Rotate the log file if it exceeds *max_size_bytes*.

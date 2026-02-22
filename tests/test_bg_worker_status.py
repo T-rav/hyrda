@@ -12,11 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType
 from models import BackgroundWorkersResponse, BackgroundWorkerStatus, MetricsResponse
-from state import StateTracker
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
+from tests.conftest import make_state
 
 
 class TestEventTypes:
@@ -50,14 +46,14 @@ class TestBackgroundWorkerStatusModel:
     def test_full_model_serializes_correctly(self) -> None:
         status = BackgroundWorkerStatus(
             name="memory_sync",
-            label="Memory Sync",
+            label="Memory Manager",
             status="ok",
             last_run="2026-02-20T10:30:00Z",
             details={"item_count": 12, "digest_chars": 2400},
         )
         data = status.model_dump()
         assert data["name"] == "memory_sync"
-        assert data["label"] == "Memory Sync"
+        assert data["label"] == "Memory Manager"
         assert data["status"] == "ok"
         assert data["last_run"] == "2026-02-20T10:30:00Z"
         assert data["details"]["item_count"] == 12
@@ -139,6 +135,47 @@ class TestOrchestratorBgWorkerTracking:
         assert orch.get_bg_worker_states() == {}
 
 
+class TestBgWorkerEnabled:
+    """Tests for is_bg_worker_enabled / set_bg_worker_enabled."""
+
+    def test_is_bg_worker_enabled_defaults_to_true(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        assert orch.is_bg_worker_enabled("memory_sync") is True
+
+    def test_set_bg_worker_enabled_false(self, config, event_bus: EventBus) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("memory_sync", False)
+        assert orch.is_bg_worker_enabled("memory_sync") is False
+
+    def test_set_bg_worker_enabled_true_after_disable(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("metrics", False)
+        orch.set_bg_worker_enabled("metrics", True)
+        assert orch.is_bg_worker_enabled("metrics") is True
+
+    def test_get_bg_worker_states_includes_enabled_flag(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.update_bg_worker_status("memory_sync", "ok")
+        orch.set_bg_worker_enabled("memory_sync", False)
+
+        states = orch.get_bg_worker_states()
+        assert states["memory_sync"]["enabled"] is False
+
+
 class TestSystemWorkersEndpoint:
     """Tests for GET /api/system/workers."""
 
@@ -178,7 +215,7 @@ class TestSystemWorkersEndpoint:
         return None
 
     @pytest.mark.asyncio
-    async def test_returns_all_four_workers(
+    async def test_returns_all_workers(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
         router = self._make_router(config, event_bus, tmp_path)
@@ -187,9 +224,19 @@ class TestSystemWorkersEndpoint:
 
         response = await endpoint()
         data = json.loads(response.body)
-        assert len(data["workers"]) == 4
+        assert len(data["workers"]) == 9
         names = [w["name"] for w in data["workers"]]
-        assert names == ["memory_sync", "retrospective", "metrics", "review_insights"]
+        assert names == [
+            "triage",
+            "plan",
+            "implement",
+            "review",
+            "memory_sync",
+            "retrospective",
+            "metrics",
+            "review_insights",
+            "pr_unsticker",
+        ]
 
     @pytest.mark.asyncio
     async def test_returns_disabled_when_no_orchestrator(

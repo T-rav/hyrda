@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
-import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from file_util import atomic_write
 from models import StateData
 
 logger = logging.getLogger("hydra.state")
@@ -46,26 +44,8 @@ class StateTracker:
     def save(self) -> None:
         """Flush current state to disk atomically."""
         self._data.last_updated = datetime.now(UTC).isoformat()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
         data = self._data.model_dump_json(indent=2)
-        # Write to a temp file in the same directory, fsync, then atomically
-        # rename.  os.replace() is atomic on POSIX, so the state file is
-        # always either the old version or the new version — never partial.
-        fd, tmp = tempfile.mkstemp(
-            dir=self._path.parent,
-            prefix=".state-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(data)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._path)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        atomic_write(self._path, data)
 
     # --- issue tracking ---
 
@@ -185,6 +165,49 @@ class StateTracker:
         self._data.review_feedback.pop(str(issue_number), None)
         self.save()
 
+    # --- verification issue tracking ---
+
+    def set_verification_issue(
+        self, original_issue: int, verification_issue: int
+    ) -> None:
+        """Record the verification issue number for *original_issue*."""
+        self._data.verification_issues[str(original_issue)] = verification_issue
+        self.save()
+
+    def get_verification_issue(self, original_issue: int) -> int | None:
+        """Return the verification issue number for *original_issue*, or *None*."""
+        return self._data.verification_issues.get(str(original_issue))
+
+    # --- issue attempt tracking ---
+
+    def get_issue_attempts(self, issue_number: int) -> int:
+        """Return the current implementation attempt count for *issue_number* (default 0)."""
+        return self._data.issue_attempts.get(str(issue_number), 0)
+
+    def increment_issue_attempts(self, issue_number: int) -> int:
+        """Increment and return the new implementation attempt count for *issue_number*."""
+        key = str(issue_number)
+        current = self._data.issue_attempts.get(key, 0)
+        self._data.issue_attempts[key] = current + 1
+        self.save()
+        return current + 1
+
+    def reset_issue_attempts(self, issue_number: int) -> None:
+        """Clear the implementation attempt counter for *issue_number*."""
+        self._data.issue_attempts.pop(str(issue_number), None)
+        self.save()
+
+    # --- active issue numbers ---
+
+    def get_active_issue_numbers(self) -> list[int]:
+        """Return the persisted list of active issue numbers."""
+        return list(self._data.active_issue_numbers)
+
+    def set_active_issue_numbers(self, numbers: list[int]) -> None:
+        """Persist the current set of active issue numbers."""
+        self._data.active_issue_numbers = numbers
+        self.save()
+
     # --- worker result metadata ---
 
     def set_worker_result_meta(self, issue_number: int, meta: dict[str, Any]) -> None:
@@ -273,6 +296,48 @@ class StateTracker:
     def get_lifetime_stats(self) -> dict[str, int | float]:
         """Return a copy of the lifetime stats counters."""
         return self._data.lifetime_stats.model_dump()
+
+    # --- memory state ---
+
+    def update_memory_state(self, issue_ids: list[int], digest_hash: str) -> None:
+        """Update memory tracking fields and persist."""
+        self._data.memory_issue_ids = issue_ids
+        self._data.memory_digest_hash = digest_hash
+        self._data.memory_last_synced = datetime.now(UTC).isoformat()
+        self.save()
+
+    def get_memory_state(self) -> tuple[list[int], str, str | None]:
+        """Return ``(issue_ids, digest_hash, last_synced)``."""
+        return (
+            list(self._data.memory_issue_ids),
+            self._data.memory_digest_hash,
+            self._data.memory_last_synced,
+        )
+
+    # --- metrics state ---
+
+    def get_metrics_issue_number(self) -> int | None:
+        """Return the cached metrics issue number, or *None*."""
+        return self._data.metrics_issue_number
+
+    def set_metrics_issue_number(self, issue_number: int) -> None:
+        """Cache the metrics issue number."""
+        self._data.metrics_issue_number = issue_number
+        self.save()
+
+    def get_metrics_state(self) -> tuple[int | None, str, str | None]:
+        """Return ``(issue_number, last_snapshot_hash, last_synced)``."""
+        return (
+            self._data.metrics_issue_number,
+            self._data.metrics_last_snapshot_hash,
+            self._data.metrics_last_synced,
+        )
+
+    def update_metrics_state(self, snapshot_hash: str) -> None:
+        """Update metrics tracking fields and persist."""
+        self._data.metrics_last_snapshot_hash = snapshot_hash
+        self._data.metrics_last_synced = datetime.now(UTC).isoformat()
+        self.save()
 
     # --- threshold tracking ---
 

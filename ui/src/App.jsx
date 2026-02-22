@@ -1,37 +1,49 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { useHydraSocket } from './hooks/useHydraSocket'
+import { HydraProvider, useHydra } from './context/HydraContext'
 import { Header } from './components/Header'
-import { WorkerList } from './components/WorkerList'
 import { TranscriptView } from './components/TranscriptView'
-import { PRTable } from './components/PRTable'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
-import { Livestream } from './components/Livestream'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
+import { StreamView } from './components/StreamView'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['transcript', 'prs', 'hitl', 'timeline', 'livestream', 'system', 'metrics']
+const TABS = ['issues', 'transcript', 'hitl', 'metrics', 'system']
 
-export default function App() {
+const TAB_LABELS = {
+  issues: 'Work Stream',
+  transcript: 'Transcript',
+  hitl: 'HITL',
+  metrics: 'Metrics',
+  system: 'System',
+}
+
+function SystemAlertBanner({ alert }) {
+  if (!alert) return null
+  return (
+    <div style={styles.alertBanner}>
+      <span style={styles.alertIcon}>!</span>
+      <span>{alert.message}</span>
+      {alert.source && <span style={styles.alertSource}>Source: {alert.source}</span>}
+    </div>
+  )
+}
+
+function AppContent() {
   const {
-    connected, batchNum, phase, orchestratorStatus, workers, prs, reviews,
-    mergedCount, sessionPrsCount, sessionTriaged, sessionPlanned,
-    sessionImplemented, sessionReviewed, lifetimeStats, config, events,
+    connected, orchestratorStatus, workers, prs,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics,
-  } = useHydraSocket()
+    backgroundWorkers, systemAlert, intents, toggleBgWorker,
+  } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
-  const [activeTab, setActiveTab] = useState('transcript')
-  const handleWorkerSelect = useCallback((worker) => {
-    setSelectedWorker(worker)
-    setActiveTab('transcript')
-  }, [])
+  const [activeTab, setActiveTab] = useState('issues')
+  const [expandedStages, setExpandedStages] = useState({})
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
-    if (selectedWorker !== null && workers[selectedWorker]) return
+    if (selectedWorker !== null && (workers[selectedWorker] || (typeof selectedWorker === 'string' && selectedWorker.startsWith('bg-')))) return
     const active = Object.entries(workers).find(
       ([, w]) => ACTIVE_STATUSES.includes(w.status)
     )
@@ -53,33 +65,38 @@ export default function App() {
     } catch { /* ignore */ }
   }, [])
 
+  const handleViewTranscript = useCallback((key) => {
+    if (typeof key === 'string' && key.startsWith('bg-')) {
+      setSelectedWorker(key)
+    } else {
+      const numKey = Number(key)
+      if (workers[numKey]) {
+        setSelectedWorker(numKey)
+      } else if (workers[`plan-${key}`]) {
+        setSelectedWorker(`plan-${key}`)
+      } else if (workers[`triage-${key}`]) {
+        setSelectedWorker(`triage-${key}`)
+      }
+    }
+    setActiveTab('transcript')
+  }, [workers])
+
+  const handleRequestChanges = useCallback(() => {
+    setActiveTab('hitl')
+  }, [])
+
   return (
     <div style={styles.layout}>
       <Header
-        sessionCounts={{
-          triage: sessionTriaged,
-          plan: sessionPlanned,
-          implement: sessionImplemented,
-          review: sessionReviewed,
-          merged: mergedCount,
-        }}
         connected={connected}
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        phase={phase}
         workers={workers}
-        config={config}
-      />
-
-      <WorkerList
-        workers={workers}
-        selectedWorker={selectedWorker}
-        onSelect={handleWorkerSelect}
-        humanInputRequests={humanInputRequests}
       />
 
       <div style={styles.main}>
+        <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
 
         <div style={styles.tabs}>
@@ -89,37 +106,29 @@ export default function App() {
               onClick={() => setActiveTab(tab)}
               style={activeTab === tab ? tabActiveStyle : tabInactiveStyle}
             >
-              {tab === 'prs'
-                ? <>Pull Requests{prs.length > 0 && <span style={styles.tabBadge}>{prs.length}</span>}</>
-                : tab === 'hitl' ? (
+              {tab === 'hitl' ? (
                 <>HITL{hitlItems?.length > 0 && <span style={hitlBadgeStyle}>{hitlItems.length}</span>}</>
-              ) : tab === 'timeline' ? 'Timeline' : tab === 'livestream' ? 'Livestream' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              ) : TAB_LABELS[tab]}
             </div>
           ))}
         </div>
 
         <div style={styles.tabContent}>
+          {activeTab === 'issues' && (
+            <StreamView
+              intents={intents}
+              expandedStages={expandedStages}
+              onToggleStage={setExpandedStages}
+              onViewTranscript={handleViewTranscript}
+              onRequestChanges={handleRequestChanges}
+            />
+          )}
           {activeTab === 'transcript' && (
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
-          {activeTab === 'prs' && <PRTable />}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'timeline' && <Livestream events={events} />}
-          {activeTab === 'livestream' && (
-            <div style={styles.timeline}>
-              {events.map((e, i) => (
-                <div key={i} style={styles.timelineItem}>
-                  <span style={styles.timelineTime}>
-                    {new Date(e.timestamp).toLocaleTimeString()}
-                  </span>
-                  <span style={styles.timelineType}>{e.type.replace(/_/g, ' ')}</span>
-                  <span>{JSON.stringify(e.data).slice(0, 120)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} />}
-          {activeTab === 'metrics' && <MetricsPanel metrics={metrics} lifetimeStats={lifetimeStats} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
+          {activeTab === 'metrics' && <MetricsPanel />}
         </div>
       </div>
 
@@ -127,13 +136,21 @@ export default function App() {
   )
 }
 
+export default function App() {
+  return (
+    <HydraProvider>
+      <AppContent />
+    </HydraProvider>
+  )
+}
+
 const styles = {
   layout: {
     display: 'grid',
     gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '280px 1fr',
+    gridTemplateColumns: '1fr',
     height: '100vh',
-    minWidth: '1024px',
+    minWidth: '800px',
   },
   main: {
     display: 'flex',
@@ -164,27 +181,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
   },
-  timeline: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: 8,
-  },
-  timelineItem: {
-    padding: '6px 8px',
-    borderBottom: `1px solid ${theme.border}`,
-    fontSize: 11,
-  },
-  timelineTime: { color: theme.textMuted, marginRight: 8 },
-  timelineType: { fontWeight: 600, color: theme.accent, marginRight: 6 },
-  tabBadge: {
-    marginLeft: 6,
-    padding: '1px 6px',
-    borderRadius: 10,
-    fontSize: 10,
-    fontWeight: 600,
-    background: theme.border,
-    color: theme.textMuted,
-  },
   hitlBadge: {
     background: theme.red,
     color: theme.white,
@@ -194,10 +190,39 @@ const styles = {
     padding: '1px 6px',
     marginLeft: 6,
   },
+  alertBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 16px',
+    background: theme.redSubtle,
+    borderBottom: `2px solid ${theme.red}`,
+    color: theme.red,
+    fontSize: 13,
+    fontWeight: 600,
+  },
+  alertIcon: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    background: theme.red,
+    color: theme.white,
+    fontSize: 12,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  alertSource: {
+    marginLeft: 'auto',
+    fontSize: 11,
+    fontWeight: 400,
+    opacity: 0.8,
+  },
 }
 
 // Pre-computed tab style variants (avoids object spread in .map())
 export const tabInactiveStyle = styles.tab
 export const tabActiveStyle = { ...styles.tab, ...styles.tabActive }
-export const tabBadgeStyle = styles.tabBadge
 export const hitlBadgeStyle = styles.hitlBadge
