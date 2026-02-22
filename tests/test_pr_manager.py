@@ -2713,6 +2713,115 @@ class TestCountHelpers:
         result = await mgr._count_merged_prs("hydra-fixed")
         assert result == 0
 
+    @pytest.mark.asyncio
+    async def test_count_open_issues_by_label_uses_search_api(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "5\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_open_issues_by_label({"hydra-plan": ["hydra-plan"]})
+        assert result == {"hydra-plan": 5}
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:open" in query_arg
+        assert 'label:"hydra-plan"' in query_arg
+
+    @pytest.mark.asyncio
+    async def test_count_closed_issues_uses_search_api(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "7\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_closed_issues(["hydra-fixed"])
+        assert result == 7
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:closed" in query_arg
+        assert 'label:"hydra-fixed"' in query_arg
+
+    @pytest.mark.asyncio
+    async def test_count_merged_prs_uses_search_api(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "12\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_merged_prs("hydra-fixed")
+        assert result == 12
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:pr" in query_arg
+        assert "is:merged" in query_arg
+        assert 'label:"hydra-fixed"' in query_arg
+
 
 # ---------------------------------------------------------------------------
 # close_issue
