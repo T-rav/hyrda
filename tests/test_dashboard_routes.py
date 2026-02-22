@@ -888,6 +888,7 @@ class TestHITLSkipImproveTransition:
         pr_mgr = PRManager(config, event_bus)
         pr_mgr.remove_label = AsyncMock()
         pr_mgr.add_labels = AsyncMock()
+        pr_mgr.swap_pipeline_labels = AsyncMock()
         return (
             create_router(
                 config=config,
@@ -933,13 +934,8 @@ class TestHITLSkipImproveTransition:
         response = await skip(42)
         assert response.status_code == 200
 
-        # Verify improve label was removed
-        remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
-        assert (42, "hydra-improve") in remove_calls
-
-        # Verify find/triage label was added
-        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
-        assert (42, [config.find_label[0]]) in add_calls
+        # Verify find/triage label was set via swap
+        pr_mgr.swap_pipeline_labels.assert_any_call(42, config.find_label[0])
 
         # Verify state cleanup
         assert state.get_hitl_origin(42) is None

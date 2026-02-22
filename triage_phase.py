@@ -64,13 +64,9 @@ class TriagePhase:
                 if self._config.dry_run:
                     continue
 
-                # Remove find label regardless of outcome
-                for lbl in self._config.find_label:
-                    await self._prs.remove_label(issue.number, lbl)
-
                 if result.ready:
-                    await self._prs.add_labels(
-                        issue.number, [self._config.planner_label[0]]
+                    await self._prs.swap_pipeline_labels(
+                        issue.number, self._config.planner_label[0]
                     )
                     logger.info(
                         "Issue #%d triaged → %s (ready for planning)",
@@ -86,8 +82,8 @@ class TriagePhase:
                         "Insufficient issue detail for triage",
                     )
                     self._state.record_hitl_escalation()
-                    await self._prs.add_labels(
-                        issue.number, [self._config.hitl_label[0]]
+                    await self._prs.swap_pipeline_labels(
+                        issue.number, self._config.hitl_label[0]
                     )
                     note = (
                         "## Needs More Information\n\n"
