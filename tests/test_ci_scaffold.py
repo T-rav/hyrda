@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ci_scaffold import (
     CIScaffoldResult,
     detect_language,
@@ -168,18 +170,18 @@ class TestGenerateWorkflow:
         assert "setup-python" not in wf
         assert "setup-node" not in wf
 
-    def test_workflow_has_valid_structure(self) -> None:
-        for lang in ("python", "javascript", "mixed", "unknown"):
-            wf = generate_workflow(lang)
-            assert wf.startswith("name: Quality"), f"Missing name for {lang}"
-            assert "jobs:" in wf, f"Missing 'jobs' key for {lang}"
-            assert "quality:" in wf, f"Missing 'quality' job for {lang}"
-            assert "runs-on: ubuntu-latest" in wf, f"Missing runs-on for {lang}"
+    @pytest.mark.parametrize("lang", ["python", "javascript", "mixed", "unknown"])
+    def test_workflow_has_valid_structure(self, lang: str) -> None:
+        wf = generate_workflow(lang)
+        assert wf.startswith("name: Quality")
+        assert "jobs:" in wf
+        assert "quality:" in wf
+        assert "runs-on: ubuntu-latest" in wf
 
-    def test_all_workflows_have_checkout(self) -> None:
-        for lang in ("python", "javascript", "mixed", "unknown"):
-            wf = generate_workflow(lang)
-            assert "actions/checkout@v4" in wf
+    @pytest.mark.parametrize("lang", ["python", "javascript", "mixed", "unknown"])
+    def test_all_workflows_have_checkout(self, lang: str) -> None:
+        wf = generate_workflow(lang)
+        assert "actions/checkout@v4" in wf
 
 
 # --- Full Scaffolding ---
@@ -270,6 +272,16 @@ class TestScaffoldCI:
         assert result.created is True
         assert result.skipped is False
         assert (wf_dir / "quality.yml").exists()
+
+    def test_creates_workflow_for_unknown_repo(self, tmp_path: Path) -> None:
+        result = scaffold_ci(tmp_path)
+
+        assert result.created is True
+        assert result.language == "unknown"
+        content = (tmp_path / ".github" / "workflows" / "quality.yml").read_text()
+        assert "make quality" in content
+        assert "setup-python" not in content
+        assert "setup-node" not in content
 
     def test_generated_file_has_valid_structure(self, tmp_path: Path) -> None:
         (tmp_path / "pyproject.toml").touch()
