@@ -57,7 +57,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
   const issueNum = issueMatch ? issueMatch[0] : workerKey
 
   return (
-    <div style={styles.card}>
+    <div style={styles.card} data-testid={`pipeline-worker-card-${workerKey}`}>
       <div style={styles.cardHeader}>
         <span
           style={pipelineWorkerDot(worker.status)}
