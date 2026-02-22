@@ -283,6 +283,7 @@ class JudgeVerdict(BaseModel):
     instructions_feedback: str = ""
     refined: bool = False
     summary: str = ""
+    verification_instructions: str = ""
 
 
 class VerificationCriterion(BaseModel):

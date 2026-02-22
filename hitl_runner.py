@@ -199,6 +199,18 @@ class HITLRunner:
 - Do NOT push to remote. Do NOT create pull requests.
 - Do NOT run `git push` or `gh pr create`.
 - Ensure `make quality` passes before committing.
+
+## Optional: Memory Suggestion
+
+If you discover a reusable pattern or insight during this correction that would help future agent runs, you may output ONE suggestion:
+
+MEMORY_SUGGESTION_START
+title: Short descriptive title
+learning: What was learned and why it matters
+context: How it was discovered (reference issue/PR numbers)
+MEMORY_SUGGESTION_END
+
+Only suggest genuinely valuable learnings — not trivial observations.
 """
 
     def terminate(self) -> None:

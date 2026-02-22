@@ -6,6 +6,8 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from memory import file_memory_suggestion
+
 if TYPE_CHECKING:
     from agent import AgentRunner
     from config import HydraFlowConfig
@@ -217,6 +219,21 @@ class PRUnsticker:
                 )
 
                 self._save_transcript(issue_number, attempt, transcript)
+
+                try:
+                    await file_memory_suggestion(
+                        transcript,
+                        "pr_unsticker",
+                        f"issue #{issue_number}",
+                        self._config,
+                        self._prs,
+                        self._state,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for unsticker on issue #%d",
+                        issue_number,
+                    )
 
                 success, error_msg = await self._agents._verify_result(wt_path, branch)
                 if success:

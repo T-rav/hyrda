@@ -14,12 +14,16 @@ from config import HydraFlowConfig
 from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraFlowEvent
 from issue_store import IssueStore
+from memory import file_memory_suggestion
 from models import (
+    CriterionVerdict,
     GitHubIssue,
     JudgeResult,
+    JudgeVerdict,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
+    VerificationCriterion,
     WorkerStatus,
 )
 from pr_manager import PRManager, SelfReviewError
@@ -358,9 +362,10 @@ class ReviewPhase:
                     pr.issue_number,
                     exc_info=True,
                 )
+        verdict: JudgeVerdict | None = None
         if self._verification_judge:
             try:
-                await self._verification_judge.judge(
+                verdict = await self._verification_judge.judge(
                     issue_number=pr.issue_number,
                     pr_number=pr.number,
                     diff=diff,
@@ -368,6 +373,17 @@ class ReviewPhase:
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Verification judge failed for issue #%d",
+                    pr.issue_number,
+                    exc_info=True,
+                )
+
+        judge_result = self._get_judge_result(issue, pr, verdict)
+        if judge_result is not None:
+            try:
+                await self._create_verification_issue(issue, pr, judge_result)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Verification issue creation failed for issue #%d",
                     pr.issue_number,
                     exc_info=True,
                 )
@@ -697,6 +713,33 @@ class ReviewPhase:
             )
             return False  # Destroy worktree
 
+    def _get_judge_result(
+        self,
+        issue: GitHubIssue,
+        pr: PRInfo,
+        verdict: JudgeVerdict | None,
+    ) -> JudgeResult | None:
+        """Convert a JudgeVerdict into a JudgeResult for verification issue creation."""
+        if verdict is None:
+            return None
+
+        criteria = [
+            VerificationCriterion(
+                description=cr.criterion,
+                passed=cr.verdict == CriterionVerdict.PASS,
+                details=cr.reasoning,
+            )
+            for cr in verdict.criteria_results
+        ]
+
+        return JudgeResult(
+            issue_number=issue.number,
+            pr_number=pr.number,
+            criteria=criteria,
+            verification_instructions=verdict.verification_instructions,
+            summary=verdict.summary,
+        )
+
     async def _create_verification_issue(
         self,
         issue: GitHubIssue,
@@ -788,6 +831,21 @@ class ReviewPhase:
                 self._save_conflict_transcript(
                     pr.number, issue.number, attempt, transcript
                 )
+
+                try:
+                    await file_memory_suggestion(
+                        transcript,
+                        "conflict_resolver",
+                        f"PR #{pr.number}",
+                        self._config,
+                        self._prs,
+                        self._state,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for conflict resolution on PR #%d",
+                        pr.number,
+                    )
 
                 success, error_msg = await self._agents._verify_result(
                     wt_path, pr.branch

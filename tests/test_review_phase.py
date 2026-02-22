@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -18,8 +18,11 @@ if TYPE_CHECKING:
 
 from events import EventType
 from models import (
+    CriterionResult,
+    CriterionVerdict,
     GitHubIssue,
     JudgeResult,
+    JudgeVerdict,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
@@ -1505,6 +1508,65 @@ class TestResolveMergeConflicts:
         mock_agents._execute.assert_not_awaited()
         # Final abort_merge should still be called
         phase._worktrees.abort_merge.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_conflict_resolution_calls_file_memory_suggestion(
+        self, config: HydraConfig
+    ) -> None:
+        """file_memory_suggestion should be called with the conflict transcript."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript with suggestion")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = make_review_phase(config, agents=mock_agents)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.get_main_commits_since_diverge = AsyncMock(return_value="")
+        phase._prs.get_pr_diff_names = AsyncMock(return_value=[])
+
+        with patch(
+            "review_phase.file_memory_suggestion", new_callable=AsyncMock
+        ) as mock_fms:
+            await phase._resolve_merge_conflicts(
+                pr, issue, config.worktree_base / "issue-42", worker_id=0
+            )
+
+            mock_fms.assert_awaited_once_with(
+                "transcript with suggestion",
+                "conflict_resolver",
+                f"PR #{pr.number}",
+                phase._config,
+                phase._prs,
+                phase._state,
+            )
+
+    @pytest.mark.asyncio
+    async def test_conflict_resolution_memory_failure_does_not_propagate(
+        self, config: HydraConfig
+    ) -> None:
+        """Exceptions from file_memory_suggestion must not break conflict resolution."""
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = make_review_phase(config, agents=mock_agents)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.get_main_commits_since_diverge = AsyncMock(return_value="")
+        phase._prs.get_pr_diff_names = AsyncMock(return_value=[])
+
+        with patch(
+            "review_phase.file_memory_suggestion",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("network error"),
+        ):
+            result = await phase._resolve_merge_conflicts(
+                pr, issue, config.worktree_base / "issue-42", worker_id=0
+            )
+
+            assert result is True
 
 
 # ---------------------------------------------------------------------------
@@ -3488,6 +3550,163 @@ class TestCreateVerificationIssue:
 
 
 # ---------------------------------------------------------------------------
+# _get_judge_result conversion
+# ---------------------------------------------------------------------------
+
+
+class TestGetJudgeResult:
+    """Tests for ReviewPhase._get_judge_result verdict-to-result conversion."""
+
+    def test_returns_none_when_verdict_is_none(self, config: HydraConfig) -> None:
+        """When no verdict is produced, returns None."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+
+        result = phase._get_judge_result(issue, pr, None)
+
+        assert result is None
+
+    def test_maps_pass_criterion(self, config: HydraConfig) -> None:
+        """PASS criterion is converted with passed=True."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            criteria_results=[
+                CriterionResult(
+                    criterion="AC-1",
+                    verdict=CriterionVerdict.PASS,
+                    reasoning="Tests pass",
+                ),
+            ],
+        )
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert len(result.criteria) == 1
+        assert result.criteria[0].description == "AC-1"
+        assert result.criteria[0].passed is True
+        assert result.criteria[0].details == "Tests pass"
+
+    def test_maps_fail_criterion(self, config: HydraConfig) -> None:
+        """FAIL criterion is converted with passed=False."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            criteria_results=[
+                CriterionResult(
+                    criterion="AC-2",
+                    verdict=CriterionVerdict.FAIL,
+                    reasoning="No test coverage",
+                ),
+            ],
+        )
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert len(result.criteria) == 1
+        assert result.criteria[0].passed is False
+        assert result.criteria[0].details == "No test coverage"
+
+    def test_maps_mixed_criteria(self, config: HydraConfig) -> None:
+        """Multiple criteria with mixed verdicts are all converted."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            criteria_results=[
+                CriterionResult(
+                    criterion="AC-1",
+                    verdict=CriterionVerdict.PASS,
+                    reasoning="OK",
+                ),
+                CriterionResult(
+                    criterion="AC-2",
+                    verdict=CriterionVerdict.FAIL,
+                    reasoning="Missing",
+                ),
+                CriterionResult(
+                    criterion="AC-3",
+                    verdict=CriterionVerdict.PASS,
+                    reasoning="Covered",
+                ),
+            ],
+        )
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert len(result.criteria) == 3
+        assert result.criteria[0].passed is True
+        assert result.criteria[1].passed is False
+        assert result.criteria[2].passed is True
+
+    def test_passes_through_verification_instructions(
+        self, config: HydraConfig
+    ) -> None:
+        """verification_instructions from verdict flows to result."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            verification_instructions="1. Run app\n2. Check output",
+        )
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert result.verification_instructions == "1. Run app\n2. Check output"
+
+    def test_passes_through_summary(self, config: HydraConfig) -> None:
+        """summary from verdict flows to result."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            summary="2/3 criteria passed, instructions: ready",
+        )
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert result.summary == "2/3 criteria passed, instructions: ready"
+
+    def test_uses_issue_and_pr_numbers(self, config: HydraConfig) -> None:
+        """issue_number and pr_number come from the issue/pr args, not verdict."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create(number=99)
+        pr = PRInfoFactory.create(number=200, issue_number=99)
+        verdict = JudgeVerdict(issue_number=99)
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert result.issue_number == 99
+        assert result.pr_number == 200
+
+    def test_empty_criteria(self, config: HydraConfig) -> None:
+        """Verdict with no criteria produces result with empty criteria list."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+        verdict = JudgeVerdict(issue_number=issue.number)
+
+        result = phase._get_judge_result(issue, pr, verdict)
+
+        assert result is not None
+        assert result.criteria == []
+
+
+# ---------------------------------------------------------------------------
 # Extracted method unit tests
 # ---------------------------------------------------------------------------
 
@@ -3976,6 +4195,101 @@ class TestRunPostMergeHooks:
 
         # Should not raise
         await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        # No judge configured — verification issue must never be attempted
+        phase._prs.create_issue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_judge_verdict_creates_verification_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """When judge returns a verdict, a verification issue should be created."""
+        mock_judge = AsyncMock()
+        issue = IssueFactory.create()
+        verdict = JudgeVerdict(
+            issue_number=issue.number,
+            criteria_results=[
+                CriterionResult(
+                    criterion="AC-1",
+                    verdict=CriterionVerdict.PASS,
+                    reasoning="OK",
+                ),
+            ],
+            summary="1/1 criteria passed, instructions: ready",
+            verification_instructions="1. Check it",
+        )
+        mock_judge.judge = AsyncMock(return_value=verdict)
+        phase = make_review_phase(config)
+        phase._verification_judge = mock_judge
+        phase._prs.create_issue = AsyncMock(return_value=500)
+        pr = PRInfoFactory.create()
+        result = ReviewResultFactory.create()
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_judge.judge.assert_awaited_once()
+        phase._prs.create_issue.assert_awaited_once()
+        body = phase._prs.create_issue.call_args[0][1]
+        assert "Check it" in body
+        assert phase._state.get_verification_issue(issue.number) == 500
+
+    @pytest.mark.asyncio
+    async def test_judge_returns_none_no_verification_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """When judge returns None (no criteria file), no verification issue is created."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(return_value=None)
+        phase = make_review_phase(config)
+        phase._verification_judge = mock_judge
+        phase._prs.create_issue = AsyncMock(return_value=0)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+        result = ReviewResultFactory.create()
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_judge.judge.assert_awaited_once()
+        phase._prs.create_issue.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_judge_failure_does_not_create_verification_issue(
+        self, config: HydraConfig
+    ) -> None:
+        """When judge raises, no verification issue is created."""
+        mock_judge = AsyncMock()
+        mock_judge.judge = AsyncMock(side_effect=RuntimeError("judge failed"))
+        phase = make_review_phase(config)
+        phase._verification_judge = mock_judge
+        phase._prs.create_issue = AsyncMock(return_value=0)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+        result = ReviewResultFactory.create()
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        phase._prs.create_issue.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_verification_issue_creation_failure_does_not_block_epic_checker(
+        self, config: HydraConfig
+    ) -> None:
+        """When _create_verification_issue raises, epic checker still runs."""
+        mock_judge = AsyncMock()
+        verdict = JudgeVerdict(issue_number=42)
+        mock_judge.judge = AsyncMock(return_value=verdict)
+        mock_epic = AsyncMock()
+        phase = make_review_phase(config)
+        phase._verification_judge = mock_judge
+        phase._prs.create_issue = AsyncMock(side_effect=RuntimeError("API failure"))
+        phase._epic_checker = mock_epic
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+        result = ReviewResultFactory.create()
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_epic.check_and_close_epics.assert_awaited_once()
 
 
 class TestReviewOneInner:
