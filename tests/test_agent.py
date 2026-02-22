@@ -1140,6 +1140,86 @@ class TestSaveTranscript:
 
 
 # ---------------------------------------------------------------------------
+# AgentRunner.run — _save_transcript OSError defense-in-depth
+# ---------------------------------------------------------------------------
+
+
+class TestRunSaveTranscriptOSError:
+    """Tests verifying that an OSError from _save_transcript does not crash run()."""
+
+    @pytest.mark.asyncio
+    async def test_run_returns_result_when_save_transcript_raises_os_error(
+        self,
+        config,
+        event_bus: EventBus,
+        issue,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """run() should return a valid WorkerResult even if _save_transcript raises OSError."""
+        runner = AgentRunner(config, event_bus)
+
+        with (
+            patch.object(
+                runner, "_execute", new_callable=AsyncMock, return_value="transcript"
+            ),
+            patch.object(
+                runner,
+                "_verify_result",
+                new_callable=AsyncMock,
+                return_value=(True, "OK"),
+            ),
+            patch.object(
+                runner,
+                "_count_commits",
+                new_callable=AsyncMock,
+                return_value=2,
+            ),
+            patch.object(
+                runner,
+                "_save_transcript",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            result = await runner.run(issue, tmp_path, "agent/issue-42")
+
+        assert result.success is True
+        assert result.issue_number == issue.number
+        assert result.branch == "agent/issue-42"
+        assert result.commits == 2
+        assert "Failed to save transcript" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_run_returns_failure_result_when_save_transcript_raises_after_exception(
+        self,
+        config,
+        event_bus: EventBus,
+        issue,
+        tmp_path: Path,
+    ) -> None:
+        """run() should return failure result even if _save_transcript raises after an agent error."""
+        runner = AgentRunner(config, event_bus)
+
+        with (
+            patch.object(
+                runner,
+                "_execute",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("agent crashed"),
+            ),
+            patch.object(
+                runner,
+                "_save_transcript",
+                side_effect=OSError("disk full"),
+            ),
+        ):
+            result = await runner.run(issue, tmp_path, "agent/issue-42")
+
+        assert result.success is False
+        assert "agent crashed" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
 # AgentRunner — event publishing
 # ---------------------------------------------------------------------------
 

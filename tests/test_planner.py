@@ -964,6 +964,52 @@ def test_save_plan_handles_oserror(event_bus, tmp_path, caplog):
 
 
 # ---------------------------------------------------------------------------
+# plan() — _save_transcript / _save_plan OSError defense-in-depth
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_plan_returns_result_when_save_transcript_raises_os_error(
+    config, event_bus, issue, caplog
+):
+    """plan() should return a valid PlanResult even if _save_transcript raises OSError."""
+    runner = _make_runner(config, event_bus)
+    transcript = _valid_transcript()
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_save_transcript", side_effect=OSError("disk full")),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    assert result.issue_number == issue.number
+    assert "## Files to Modify" in result.plan
+    assert "Failed to save transcript" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_plan_returns_result_when_save_plan_raises_os_error(
+    config, event_bus, issue, caplog
+):
+    """plan() should return a successful PlanResult even if _save_plan raises OSError."""
+    runner = _make_runner(config, event_bus)
+    transcript = _valid_transcript()
+
+    with (
+        patch.object(runner, "_execute", AsyncMock(return_value=transcript)),
+        patch.object(runner, "_save_transcript"),
+        patch.object(runner, "_save_plan", side_effect=OSError("disk full")),
+    ):
+        result = await runner.plan(issue, worker_id=0)
+
+    assert result.success is True
+    assert result.issue_number == issue.number
+    assert "## Files to Modify" in result.plan
+    assert "Failed to save plan" in caplog.text
+
+
+# ---------------------------------------------------------------------------
 # PLANNER_UPDATE events
 # ---------------------------------------------------------------------------
 
