@@ -3524,8 +3524,6 @@ class TestCreateVerificationIssue:
         assert phase._state.get_verification_issue(42) is None
 
 
-
-
 # ---------------------------------------------------------------------------
 # Extracted method unit tests
 # ---------------------------------------------------------------------------
