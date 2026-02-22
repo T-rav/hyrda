@@ -66,6 +66,8 @@ export default defineConfig({
 class TestScaffoldResult:
     """Result of test infrastructure scaffolding."""
 
+    __test__ = False  # prevent pytest from treating this dataclass as a test class
+
     created_dirs: list[str] = field(default_factory=list)
     created_files: list[str] = field(default_factory=list)
     modified_files: list[str] = field(default_factory=list)
@@ -135,8 +137,11 @@ def has_test_infrastructure(repo_root: Path, language: str) -> tuple[bool, list[
 
     Returns (has_infra, details) where has_infra is True when both
     a test directory with test files AND framework config exist.
+    For "mixed" repos, BOTH Python and JS infrastructure must be present.
     """
     details: list[str] = []
+    py_done = False
+    js_done = False
 
     if language in ("python", "mixed"):
         py_files = _has_python_test_files(repo_root)
@@ -145,7 +150,8 @@ def has_test_infrastructure(repo_root: Path, language: str) -> tuple[bool, list[
             details.append(f"Python test files found: {', '.join(py_files[:3])}")
         if py_config:
             details.append("pytest config found in pyproject.toml")
-        if py_files and py_config:
+        py_done = bool(py_files and py_config)
+        if language == "python" and py_done:
             return True, details
 
     if language in ("javascript", "mixed"):
@@ -155,8 +161,12 @@ def has_test_infrastructure(repo_root: Path, language: str) -> tuple[bool, list[
             details.append(f"JS test files found: {', '.join(js_files[:3])}")
         if js_configs:
             details.append(f"JS test config found: {', '.join(js_configs)}")
-        if js_files and js_configs:
+        js_done = bool(js_files and js_configs)
+        if language == "javascript" and js_done:
             return True, details
+
+    if language == "mixed":
+        return py_done and js_done, details
 
     return False, details
 
@@ -329,7 +339,20 @@ def _dry_run_scaffold(repo_root: Path, language: str) -> TestScaffoldResult:
             result.created_dirs.append("__tests__")
         if not _has_js_test_config(repo_root):
             result.created_files.append("vitest.config.js")
-        if (repo_root / "package.json").is_file():
-            result.modified_files.append("package.json")
+        pkg_path = repo_root / "package.json"
+        if pkg_path.is_file():
+            try:
+                pkg = json.loads(pkg_path.read_text())
+                dev_deps = pkg.get("devDependencies", {})
+                scripts = pkg.get("scripts", {})
+                needs_modification = (
+                    "vitest" not in dev_deps
+                    or "@testing-library/jest-dom" not in dev_deps
+                    or "test" not in scripts
+                )
+                if needs_modification:
+                    result.modified_files.append("package.json")
+            except (json.JSONDecodeError, OSError):
+                result.modified_files.append("package.json")
 
     return result

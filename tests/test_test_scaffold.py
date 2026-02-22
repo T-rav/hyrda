@@ -201,6 +201,54 @@ class TestHasTestInfrastructure:
 
         assert has_infra is False
 
+    # --- Mixed ---
+
+    def test_mixed_returns_false_when_only_python_infra_present(
+        self, tmp_path: Path
+    ) -> None:
+        """Mixed repo with only Python infra should NOT be considered complete."""
+        tests_dir = tmp_path / "tests"
+        tests_dir.mkdir()
+        (tests_dir / "test_foo.py").write_text("def test_x(): pass\n")
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.pytest.ini_options]\ntestpaths = ['tests']\n"
+        )
+
+        has_infra, _details = has_test_infrastructure(tmp_path, "mixed")
+
+        assert has_infra is False
+
+    def test_mixed_returns_false_when_only_js_infra_present(
+        self, tmp_path: Path
+    ) -> None:
+        """Mixed repo with only JS infra should NOT be considered complete."""
+        tests_dir = tmp_path / "__tests__"
+        tests_dir.mkdir()
+        (tests_dir / "foo.test.js").write_text("test('x', () => {})\n")
+        (tmp_path / "vitest.config.js").write_text("export default {}\n")
+
+        has_infra, _details = has_test_infrastructure(tmp_path, "mixed")
+
+        assert has_infra is False
+
+    def test_mixed_returns_true_when_both_infra_present(self, tmp_path: Path) -> None:
+        """Mixed repo requires both Python and JS infra to return True."""
+        py_dir = tmp_path / "tests"
+        py_dir.mkdir()
+        (py_dir / "test_foo.py").write_text("def test_x(): pass\n")
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.pytest.ini_options]\ntestpaths = ['tests']\n"
+        )
+        js_dir = tmp_path / "__tests__"
+        js_dir.mkdir()
+        (js_dir / "foo.test.js").write_text("test('x', () => {})\n")
+        (tmp_path / "vitest.config.js").write_text("export default {}\n")
+
+        has_infra, details = has_test_infrastructure(tmp_path, "mixed")
+
+        assert has_infra is True
+        assert len(details) > 0
+
 
 # ---------------------------------------------------------------------------
 # _scaffold_python_tests
@@ -526,3 +574,21 @@ class TestScaffoldTests:
         # Check JS test dir
         js_tests = list((tmp_path / "__tests__").glob("*.test.*"))
         assert js_tests == []
+
+    def test_dry_run_does_not_report_package_json_when_already_complete(
+        self, tmp_path: Path
+    ) -> None:
+        """Dry-run should not report package.json as modified when it already has all deps."""
+        pkg_data = {
+            "name": "foo",
+            "devDependencies": {
+                "vitest": "^4.0.0",
+                "@testing-library/jest-dom": "^6.0.0",
+            },
+            "scripts": {"test": "vitest run"},
+        }
+        (tmp_path / "package.json").write_text(json.dumps(pkg_data, indent=2) + "\n")
+
+        result = scaffold_tests(tmp_path, dry_run=True)
+
+        assert "package.json" not in result.modified_files
