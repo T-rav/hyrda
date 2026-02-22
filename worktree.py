@@ -376,6 +376,27 @@ class WorktreeManager:
                     exc_info=True,
                 )
 
+        # In docker mode, ensure .env is listed in .gitignore to prevent
+        # accidental commits of secrets from the copied worktree.
+        if docker and env_dst.exists():
+            gitignore_path = wt_path / ".gitignore"
+            try:
+                existing = gitignore_path.read_text() if gitignore_path.exists() else ""
+                if ".env" not in [ln.strip() for ln in existing.splitlines()]:
+                    with gitignore_path.open("a") as f:
+                        if existing and not existing.endswith("\n"):
+                            f.write("\n")
+                        f.write(
+                            "# Docker mode: .env is copied — exclude from commits\n"
+                            ".env\n"
+                        )
+            except OSError:
+                logger.debug(
+                    "Could not update .gitignore at %s",
+                    gitignore_path,
+                    exc_info=True,
+                )
+
         # Copy .claude/settings.local.json (not symlink - agents may modify)
         local_settings_src = self._repo_root / ".claude" / "settings.local.json"
         local_settings_dst = wt_path / ".claude" / "settings.local.json"

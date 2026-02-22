@@ -1252,6 +1252,17 @@ def _make_docker_manager(tmp_path: Path) -> WorktreeManager:
     return WorktreeManager(cfg)
 
 
+def _make_hooks_subprocess_mock(hooks_dir: Path):
+    """Return a coroutine that fakes 'git rev-parse --git-path hooks'."""
+
+    async def _fake(*args, **_kwargs):
+        if "rev-parse" in args:
+            return str(hooks_dir)
+        return ""
+
+    return _fake
+
+
 # ---------------------------------------------------------------------------
 # Docker mode — _setup_env
 # ---------------------------------------------------------------------------
@@ -1370,6 +1381,67 @@ class TestSetupEnvDocker:
         with patch("shutil.copytree", side_effect=OSError("disk full")):
             manager._setup_env(wt_path)  # should not raise
 
+    def test_setup_env_docker_adds_env_to_gitignore(self, tmp_path: Path) -> None:
+        """In docker mode, .env should be appended to worktree .gitignore."""
+        manager = _make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+
+        manager._setup_env(wt_path)
+
+        gitignore = wt_path / ".gitignore"
+        assert gitignore.exists()
+        assert ".env" in [ln.strip() for ln in gitignore.read_text().splitlines()]
+
+    def test_setup_env_docker_does_not_duplicate_gitignore_entry(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, .env should not be added to .gitignore if already present."""
+        manager = _make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+
+        # Pre-populate .gitignore with .env already listed
+        gitignore = wt_path / ".gitignore"
+        gitignore.write_text("node_modules/\n.env\n*.pyc\n")
+
+        manager._setup_env(wt_path)
+
+        lines = [ln.strip() for ln in gitignore.read_text().splitlines()]
+        assert lines.count(".env") == 1, "duplicate .env entries must not be added"
+
+    def test_setup_env_docker_handles_gitignore_update_oserror(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, OSError when updating .gitignore should be caught."""
+        manager = _make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Pre-create env_dst so the gitignore update block is reached;
+        # with env_dst already present the copy step is skipped.
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+        (wt_path / ".env").write_text("SECRET=val")
+
+        with patch("pathlib.Path.open", side_effect=OSError("read-only")):
+            manager._setup_env(wt_path)  # should not raise
+
     def test_setup_env_host_still_symlinks(self, config, tmp_path: Path) -> None:
         """Confirm host mode still creates symlinks (regression check)."""
         assert config.execution_mode == "host"
@@ -1417,13 +1489,10 @@ class TestInstallHooksDocker:
         hooks_dir = wt_path / ".git" / "hooks"
         hooks_dir.mkdir(parents=True)
 
-        # Mock git rev-parse to return the hooks directory path
-        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
-            if "rev-parse" in args:
-                return str(hooks_dir)
-            return ""
-
-        with patch("worktree.run_subprocess", side_effect=fake_run_subprocess):
+        with patch(
+            "worktree.run_subprocess",
+            side_effect=_make_hooks_subprocess_mock(hooks_dir),
+        ):
             await manager._install_hooks(wt_path)
 
         copied_hook = hooks_dir / "pre-commit"
@@ -1468,13 +1537,11 @@ class TestInstallHooksDocker:
         hooks_dir = wt_path / ".git" / "hooks"
         hooks_dir.mkdir(parents=True)
 
-        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
-            if "rev-parse" in args:
-                return str(hooks_dir)
-            return ""
-
         with (
-            patch("worktree.run_subprocess", side_effect=fake_run_subprocess),
+            patch(
+                "worktree.run_subprocess",
+                side_effect=_make_hooks_subprocess_mock(hooks_dir),
+            ),
             patch("shutil.copy2", side_effect=OSError("perm denied")),
         ):
             await manager._install_hooks(wt_path)  # should not raise
@@ -1521,16 +1588,40 @@ class TestInstallHooksDocker:
         hooks_dir = wt_path / ".git" / "hooks"
         hooks_dir.mkdir(parents=True)
 
-        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
-            if "rev-parse" in args:
-                return str(hooks_dir)
-            return ""
-
-        with patch("worktree.run_subprocess", side_effect=fake_run_subprocess):
+        with patch(
+            "worktree.run_subprocess",
+            side_effect=_make_hooks_subprocess_mock(hooks_dir),
+        ):
             await manager._install_hooks(wt_path)
 
         assert (hooks_dir / "pre-commit").exists()
         assert (hooks_dir / "pre-push").exists()
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_handles_git_rev_parse_error(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, RuntimeError from git rev-parse should be caught."""
+        manager = _make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        githooks_dir = repo_root / ".githooks"
+        githooks_dir.mkdir()
+        (githooks_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+
+        async def _raise(*args, cwd=None, gh_token=None):  # noqa: ARG001
+            raise RuntimeError("git not available")
+
+        with patch("worktree.run_subprocess", side_effect=_raise):
+            await manager._install_hooks(wt_path)  # should not raise
+
+        # No hooks should have been copied since git rev-parse failed
+        assert not (wt_path / ".git" / "hooks" / "pre-commit").exists()
 
 
 # ---------------------------------------------------------------------------
