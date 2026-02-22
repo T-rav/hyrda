@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -493,3 +493,146 @@ class TestHITLImproveTransition:
 
         comment = prs.post_comment.call_args.args[1]
         assert config.find_label[0] in comment
+
+
+# ---------------------------------------------------------------------------
+# HITL memory suggestion filing
+# ---------------------------------------------------------------------------
+
+MEMORY_TRANSCRIPT = (
+    "Some output\n"
+    "MEMORY_SUGGESTION_START\n"
+    "title: Test suggestion\n"
+    "learning: Learned something useful\n"
+    "context: During testing\n"
+    "MEMORY_SUGGESTION_END\n"
+)
+
+
+class TestHITLMemorySuggestionFiling:
+    """Memory suggestions from HITL transcripts are filed."""
+
+    @pytest.mark.asyncio
+    async def test_hitl_files_memory_suggestion_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """On success with transcript, file_memory_suggestion should be called."""
+        from models import HITLResult
+
+        phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
+        issue = make_issue(42)
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_cause(42, "CI failed")
+
+        runner.run = AsyncMock(
+            return_value=HITLResult(
+                issue_number=42, success=True, transcript=MEMORY_TRANSCRIPT
+            )
+        )
+
+        with patch(
+            "hitl_phase.file_memory_suggestion", new_callable=AsyncMock
+        ) as mock_mem:
+            semaphore = asyncio.Semaphore(1)
+            await phase._process_one_hitl(42, "Fix the tests", semaphore)
+
+            mock_mem.assert_awaited_once()
+            args = mock_mem.call_args[0]
+            assert args[0] == MEMORY_TRANSCRIPT
+            assert args[1] == "hitl"
+            assert args[2] == "issue #42"
+
+    @pytest.mark.asyncio
+    async def test_hitl_files_memory_suggestion_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure with transcript, file_memory_suggestion should still be called."""
+        from models import HITLResult
+
+        phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
+        issue = make_issue(42)
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_cause(42, "CI failed")
+
+        runner.run = AsyncMock(
+            return_value=HITLResult(
+                issue_number=42,
+                success=False,
+                error="quality failed",
+                transcript=MEMORY_TRANSCRIPT,
+            )
+        )
+
+        with patch(
+            "hitl_phase.file_memory_suggestion", new_callable=AsyncMock
+        ) as mock_mem:
+            semaphore = asyncio.Semaphore(1)
+            await phase._process_one_hitl(42, "Fix the tests", semaphore)
+
+            mock_mem.assert_awaited_once()
+            args = mock_mem.call_args[0]
+            assert args[0] == MEMORY_TRANSCRIPT
+            assert args[1] == "hitl"
+            assert args[2] == "issue #42"
+
+    @pytest.mark.asyncio
+    async def test_hitl_skips_memory_suggestion_for_empty_transcript(
+        self, config: HydraConfig
+    ) -> None:
+        """Empty transcript should not trigger file_memory_suggestion."""
+        from models import HITLResult
+
+        phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
+        issue = make_issue(42)
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        state.set_hitl_origin(42, "hydra-review")
+
+        runner.run = AsyncMock(
+            return_value=HITLResult(issue_number=42, success=True, transcript="")
+        )
+
+        with patch(
+            "hitl_phase.file_memory_suggestion", new_callable=AsyncMock
+        ) as mock_mem:
+            semaphore = asyncio.Semaphore(1)
+            await phase._process_one_hitl(42, "Fix it", semaphore)
+
+            mock_mem.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_hitl_memory_suggestion_error_does_not_break_processing(
+        self, config: HydraConfig
+    ) -> None:
+        """file_memory_suggestion errors should be logged but not interrupt processing."""
+        from models import HITLResult
+
+        phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
+        issue = make_issue(42)
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_cause(42, "CI failed")
+
+        runner.run = AsyncMock(
+            return_value=HITLResult(
+                issue_number=42, success=True, transcript=MEMORY_TRANSCRIPT
+            )
+        )
+
+        with patch(
+            "hitl_phase.file_memory_suggestion",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("GitHub API error"),
+        ):
+            semaphore = asyncio.Semaphore(1)
+            await phase._process_one_hitl(42, "Fix the tests", semaphore)
+
+            # Processing should complete normally — comment posted, labels swapped
+            prs.post_comment.assert_called_once()
+            comment = prs.post_comment.call_args.args[1]
+            assert "HITL correction applied successfully" in comment

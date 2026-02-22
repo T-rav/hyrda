@@ -113,6 +113,12 @@ class TestBuildPrompt:
         prompt = hitl_runner._build_prompt(issue, "Fix", "CI failed")
         assert "Do NOT push to remote" in prompt
 
+    def test_prompt_includes_memory_suggestion_block(self, hitl_runner) -> None:
+        issue = IssueFactory.create(number=42)
+        prompt = hitl_runner._build_prompt(issue, "Fix", "CI failed")
+        assert "MEMORY_SUGGESTION_START" in prompt
+        assert "MEMORY_SUGGESTION_END" in prompt
+
 
 # ---------------------------------------------------------------------------
 # Command building
