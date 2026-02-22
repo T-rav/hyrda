@@ -1,24 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { StatusDot, dotStyles, badgeStyleMap } from '../StreamCard'
-import { StreamCard } from '../StreamCard'
-import { STAGE_KEYS } from '../../hooks/useTimeline'
+import { StreamCard, StatusDot, dotStyles, badgeStyleMap } from '../StreamCard'
 import { theme } from '../../theme'
+import { STAGE_KEYS } from '../../hooks/useTimeline'
 
 function makeIssue(overrides = {}) {
-  const stages = Object.fromEntries(
-    STAGE_KEYS.map(k => [k, { status: 'pending', startTime: null, endTime: null, transcript: [] }])
-  )
+  const stages = {}
+  for (const key of STAGE_KEYS) {
+    stages[key] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
+  }
+  stages.plan = { status: 'active', startTime: null, endTime: null, transcript: [] }
   return {
-    issueNumber: 1,
+    issueNumber: 42,
     title: 'Test issue',
-    currentStage: 'implement',
+    issueUrl: null,
+    currentStage: 'plan',
     overallStatus: 'active',
+    stages,
+    pr: null,
+    branch: 'agent/issue-42',
     startTime: null,
     endTime: null,
-    pr: null,
-    branch: 'agent/issue-1',
-    stages: { ...stages, triage: { ...stages.triage, status: 'done' }, plan: { ...stages.plan, status: 'done' }, implement: { ...stages.implement, status: 'active' } },
     ...overrides,
   }
 }
@@ -98,6 +100,34 @@ describe('badgeStyleMap', () => {
   it('queued badge uses yellow theme colors', () => {
     expect(badgeStyleMap.queued.background).toBe(theme.yellowSubtle)
     expect(badgeStyleMap.queued.color).toBe(theme.yellow)
+  })
+})
+
+describe('StreamCard issue link', () => {
+  it('renders issue number as a link when issueUrl is provided', () => {
+    const issue = makeIssue({ issueUrl: 'https://github.com/owner/repo/issues/42' })
+    render(<StreamCard issue={issue} />)
+    const link = screen.getByText('#42')
+    expect(link.tagName).toBe('A')
+    expect(link.getAttribute('href')).toBe('https://github.com/owner/repo/issues/42')
+    expect(link.getAttribute('target')).toBe('_blank')
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+  })
+
+  it('renders issue number as plain text when issueUrl is absent', () => {
+    const issue = makeIssue({ issueUrl: null })
+    render(<StreamCard issue={issue} />)
+    const text = screen.getByText('#42')
+    expect(text.tagName).toBe('SPAN')
+  })
+
+  it('link click does not toggle card expansion', () => {
+    const issue = makeIssue({ issueUrl: 'https://github.com/owner/repo/issues/42' })
+    const { container } = render(<StreamCard issue={issue} defaultExpanded={false} />)
+    const link = screen.getByText('#42')
+    fireEvent.click(link)
+    // Card body should not appear — the card should remain collapsed
+    expect(container.querySelector('[style*="border-top"]')).toBeNull()
   })
 })
 

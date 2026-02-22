@@ -132,6 +132,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   return {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    issueUrl: pipeIssue.url || null,
     currentStage: stageKey,
     overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
       : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
@@ -201,7 +202,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     const mergedFromPrs = (prs || [])
       .filter(p => p.merged && p.issue)
       .map(p => toStreamIssue(
-        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: null, status: 'done' },
         'merged',
         prs,
       ))

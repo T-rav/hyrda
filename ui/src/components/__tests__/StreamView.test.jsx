@@ -344,6 +344,29 @@ describe('toStreamIssue output shape', () => {
     const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
     expect(result.pr).toBeNull()
   })
+
+  it('passes through issueUrl from pipeIssue url field', () => {
+    const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
+    expect(result.issueUrl).toBe('https://github.com/test/42')
+  })
+
+  it('returns null issueUrl when url is empty', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', url: '', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
+
+  it('returns null issueUrl when url is missing', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
 })
 
 describe('Stage header failed/hitl counts', () => {
@@ -518,6 +541,8 @@ describe('Merged stage rendering', () => {
     render(<StreamView {...defaultProps} />)
     expect(screen.getByText('#10')).toBeInTheDocument()
     expect(screen.getByText('Fix bug')).toBeInTheDocument()
+    // Merged-from-PR cards should NOT use the PR url as an issue link
+    expect(screen.getByText('#10').tagName).toBe('SPAN')
   })
 
   it('renders merged PR issue as a dot in PipelineFlow', () => {
@@ -529,6 +554,16 @@ describe('Merged stage rendering', () => {
     const dot = screen.getByTestId('flow-dot-10')
     expect(dot).toBeInTheDocument()
     expect(dot.style.animation).toBe('')
+  })
+
+  it('does not set issueUrl from PR url for merged-from-PR cards', () => {
+    // PRData.url is a PR URL, not an issue URL — merged cards should have issueUrl null
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Fix bug', url: null, status: 'done' },
+      'merged',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
   })
 })
 
