@@ -2500,6 +2500,12 @@ class TestEnvVarOverrideTable:
         )
         assert getattr(cfg, field) == "custom-value"
 
+    # Valid non-default explicit values for Literal-typed string fields.
+    # Generic tests can't use arbitrary strings for these fields.
+    _EXPLICIT_VALUES: dict[str, str] = {
+        "execution_mode": "docker",
+    }
+
     @pytest.mark.parametrize(
         ("field", "env_key", "default"),
         _ENV_STR_OVERRIDES,
@@ -2514,14 +2520,15 @@ class TestEnvVarOverrideTable:
         default: str,
     ) -> None:
         """Explicit values should take precedence over str env var overrides."""
+        explicit = self._EXPLICIT_VALUES.get(field, "explicit-value")
         monkeypatch.setenv(env_key, "env-value")
         cfg = HydraFlowConfig(
-            **{field: "explicit-value"},  # type: ignore[arg-type]
+            **{field: explicit},  # type: ignore[arg-type]
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert getattr(cfg, field) == "explicit-value"
+        assert getattr(cfg, field) == explicit
 
     @pytest.mark.parametrize(
         ("field", "env_key", "default"),
@@ -3340,6 +3347,27 @@ class TestDockerConfigEnvVarOverrides:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
+
+    def test_execution_mode_default_value_overridden_by_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When execution_mode equals the default ('host'), env var overrides it.
+
+        The override only applies when the value is still at the default. Because
+        'host' IS the default, explicitly passing execution_mode='host' is
+        indistinguishable from using the default, so the env var wins.
+        """
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        monkeypatch.setenv("HYDRAFLOW_EXECUTION_MODE", "docker")
+        cfg = HydraFlowConfig(
+            execution_mode="host",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
 
 
 # ---------------------------------------------------------------------------
