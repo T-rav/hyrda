@@ -1119,6 +1119,25 @@ class TestSaveTranscript:
         log_file = config.repo_root / ".hydra" / "logs" / "issue-123.txt"
         assert log_file.exists()
 
+    def test_save_transcript_handles_oserror(
+        self, config, event_bus: EventBus, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """_save_transcript should swallow OSError and log a warning."""
+        from models import WorkerResult
+
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        runner = AgentRunner(config, event_bus)
+        result = WorkerResult(
+            issue_number=42,
+            branch="agent/issue-42",
+            transcript="content",
+        )
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            runner._save_transcript(result)  # should not raise
+
+        assert "Could not save transcript" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # AgentRunner — event publishing

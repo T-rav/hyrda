@@ -13,6 +13,26 @@ from pydantic import BaseModel, Field, model_validator
 
 logger = logging.getLogger("hydra.config")
 
+# Data-driven env-var override tables.
+# Each tuple: (field_name, env_var_key, default_value)
+_ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
+    ("min_plan_words", "HYDRA_MIN_PLAN_WORDS", 200),
+    ("max_review_fix_attempts", "HYDRA_MAX_REVIEW_FIX_ATTEMPTS", 2),
+    ("min_review_findings", "HYDRA_MIN_REVIEW_FINDINGS", 3),
+    ("max_issue_body_chars", "HYDRA_MAX_ISSUE_BODY_CHARS", 10_000),
+    ("max_review_diff_chars", "HYDRA_MAX_REVIEW_DIFF_CHARS", 15_000),
+    ("gh_max_retries", "HYDRA_GH_MAX_RETRIES", 3),
+    ("max_issue_attempts", "HYDRA_MAX_ISSUE_ATTEMPTS", 3),
+    ("memory_sync_interval", "HYDRA_MEMORY_SYNC_INTERVAL", 120),
+    ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 300),
+    ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
+    ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
+]
+
+_ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
+    ("test_command", "HYDRA_TEST_COMMAND", "make test"),
+]
+
 
 class HydraConfig(BaseModel):
     """Configuration for the Hydra orchestrator."""
@@ -132,6 +152,10 @@ class HydraConfig(BaseModel):
     dup_label: list[str] = Field(
         default=["hydra-dup"],
         description="Labels applied when issue is already satisfied (no changes needed)",
+    )
+    epic_label: list[str] = Field(
+        default=["hydra-epic"],
+        description="Labels for epic tracking issues with linked sub-issues (OR logic)",
     )
 
     # Discovery / planner configuration
@@ -303,6 +327,18 @@ class HydraConfig(BaseModel):
         le=600,
         description="Seconds between centralized GitHub issue store polls",
     )
+    pr_unstick_interval: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="Seconds between PR unsticker polls",
+    )
+    pr_unstick_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Max HITL items to process per unsticker cycle",
+    )
 
     # Acceptance criteria generation
     ac_model: str = Field(
@@ -319,6 +355,14 @@ class HydraConfig(BaseModel):
         ge=3,
         le=100,
         description="Number of recent retrospective entries to scan for patterns",
+    )
+
+    # Credit pause
+    credit_pause_buffer_minutes: int = Field(
+        default=1,
+        ge=0,
+        le=30,
+        description="Extra minutes to wait after reported credit reset time",
     )
 
     # Execution mode
@@ -396,11 +440,22 @@ class HydraConfig(BaseModel):
             if env_email:
                 object.__setattr__(self, "git_user_email", env_email)
 
-        # Planner env var overrides (only apply when still at the default)
-        env_min_words = os.environ.get("HYDRA_MIN_PLAN_WORDS")
-        if env_min_words is not None and self.min_plan_words == 200:
-            object.__setattr__(self, "min_plan_words", int(env_min_words))
+        # Data-driven env var overrides (int fields)
+        for field, env_key, default in _ENV_INT_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    with contextlib.suppress(ValueError):
+                        object.__setattr__(self, field, int(env_val))
 
+        # Data-driven env var overrides (str fields)
+        for field, env_key, default in _ENV_STR_OVERRIDES:
+            if getattr(self, field) == default:
+                env_val = os.environ.get(env_key)
+                if env_val is not None:
+                    object.__setattr__(self, field, env_val)
+
+        # Lite plan labels (comma-separated list, special-case)
         env_lite_labels = os.environ.get("HYDRA_LITE_PLAN_LABELS")
         if env_lite_labels is not None and self.lite_plan_labels == [
             "bug",
@@ -492,6 +547,20 @@ class HydraConfig(BaseModel):
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "data_poll_interval", int(env_data_poll))
 
+        # PR unstick interval override
+        if self.pr_unstick_interval == 3600:  # still at default
+            env_unstick = os.environ.get("HYDRA_PR_UNSTICK_INTERVAL")
+            if env_unstick is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_interval", int(env_unstick))
+
+        # PR unstick batch size override
+        if self.pr_unstick_batch_size == 10:  # still at default
+            env_batch = os.environ.get("HYDRA_PR_UNSTICK_BATCH_SIZE")
+            if env_batch is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_batch_size", int(env_batch))
+
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
             "HYDRA_LABEL_FIND": ("find_label", ["hydra-find"]),
@@ -505,6 +574,7 @@ class HydraConfig(BaseModel):
             "HYDRA_LABEL_MEMORY": ("memory_label", ["hydra-memory"]),
             "HYDRA_LABEL_METRICS": ("metrics_label", ["hydra-metrics"]),
             "HYDRA_LABEL_DUP": ("dup_label", ["hydra-dup"]),
+            "HYDRA_LABEL_EPIC": ("epic_label", ["hydra-epic"]),
         }
         for env_key, (field_name, default_val) in _ENV_LABEL_MAP.items():
             current = getattr(self, field_name)

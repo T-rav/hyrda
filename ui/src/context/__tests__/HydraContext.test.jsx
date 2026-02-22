@@ -8,6 +8,7 @@ const emptyPipeline = {
   implement: [],
   review: [],
   hitl: [],
+  merged: [],
 }
 
 const initialState = {
@@ -170,6 +171,119 @@ describe('WS_PIPELINE_UPDATE reducer', () => {
     // Issue 999 not found in triage, should not appear in plan
     expect(next.pipelineIssues.plan).toHaveLength(0)
     expect(next.pipelineIssues.triage).toHaveLength(0)
+  })
+
+  it('moves issue from review to merged on merge event', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        review: [{ issue_number: 10, title: 'PR Fix', url: '', status: 'done' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 10, fromStage: 'review', toStage: 'merged', status: 'done' },
+    })
+    expect(next.pipelineIssues.review).toHaveLength(0)
+    expect(next.pipelineIssues.merged).toHaveLength(1)
+    expect(next.pipelineIssues.merged[0].issue_number).toBe(10)
+    expect(next.pipelineIssues.merged[0].status).toBe('done')
+  })
+
+  it('adds to merged even if issue was already removed from review', () => {
+    // Item may have been removed by review_update done before merge_update arrives
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        review: [], // already removed
+      },
+    }
+    const next = reducer(state, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 10, fromStage: 'review', toStage: 'merged', status: 'done' },
+    })
+    expect(next.pipelineIssues.merged).toHaveLength(1)
+    expect(next.pipelineIssues.merged[0].issue_number).toBe(10)
+  })
+
+  it('does not duplicate issue in merged stage', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        merged: [{ issue_number: 10, title: '', url: '', status: 'done' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'WS_PIPELINE_UPDATE',
+      data: { issueNumber: 10, fromStage: 'review', toStage: 'merged', status: 'done' },
+    })
+    expect(next.pipelineIssues.merged).toHaveLength(1)
+  })
+})
+
+describe('Merged state persistence', () => {
+  it('PIPELINE_SNAPSHOT preserves session merged items', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        merged: [
+          { issue_number: 10, title: 'Merged PR', url: '', status: 'done' },
+          { issue_number: 11, title: 'Another Merged', url: '', status: 'done' },
+        ],
+      },
+    }
+    // Server data never includes merged
+    const serverData = {
+      triage: [{ issue_number: 20, title: 'New', url: '', status: 'queued' }],
+    }
+    const next = reducer(state, { type: 'PIPELINE_SNAPSHOT', data: serverData })
+    // Merged items from session should survive
+    expect(next.pipelineIssues.merged).toHaveLength(2)
+    expect(next.pipelineIssues.merged[0].issue_number).toBe(10)
+    // Server data should be applied
+    expect(next.pipelineIssues.triage).toHaveLength(1)
+  })
+
+  it('EXISTING_PRS preserves merged PRs from session', () => {
+    const state = {
+      ...initialState,
+      prs: [
+        { pr: 100, issue: 10, merged: true, title: 'Merged PR' },
+        { pr: 101, issue: 11, merged: false, title: 'Open PR' },
+      ],
+    }
+    // Server returns only open PRs (merged PR 100 is gone)
+    const openPrs = [
+      { pr: 102, issue: 12, merged: false, title: 'New Open PR' },
+    ]
+    const next = reducer(state, { type: 'EXISTING_PRS', data: openPrs })
+    // Should have the new open PR plus the preserved merged PR
+    expect(next.prs).toHaveLength(2)
+    expect(next.prs.find(p => p.pr === 100)?.merged).toBe(true)
+    expect(next.prs.find(p => p.pr === 102)).toBeDefined()
+    // Non-merged PR 101 should be gone (replaced by server data)
+    expect(next.prs.find(p => p.pr === 101)).toBeUndefined()
+  })
+
+  it('EXISTING_PRS does not duplicate if merged PR reappears in server data', () => {
+    const state = {
+      ...initialState,
+      prs: [
+        { pr: 100, issue: 10, merged: true, title: 'Merged PR' },
+      ],
+    }
+    // Server returns the same PR as open (unlikely but possible)
+    const openPrs = [
+      { pr: 100, issue: 10, merged: false, title: 'Merged PR' },
+    ]
+    const next = reducer(state, { type: 'EXISTING_PRS', data: openPrs })
+    // Server version should win — only 1 entry
+    expect(next.prs).toHaveLength(1)
+    expect(next.prs[0].pr).toBe(100)
   })
 })
 

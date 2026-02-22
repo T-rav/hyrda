@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import HydraConfig
 
-from models import ReviewResult, ReviewVerdict
 from retrospective import RetrospectiveCollector, RetrospectiveEntry
 from state import StateTracker
+from tests.conftest import ReviewResultFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,24 +39,6 @@ def _make_collector(
 
     collector = RetrospectiveCollector(config, state, mock_prs)
     return collector, mock_prs, state
-
-
-def _make_review_result(
-    pr_number: int = 101,
-    issue_number: int = 42,
-    verdict: ReviewVerdict = ReviewVerdict.APPROVE,
-    fixes_made: bool = False,
-    ci_fix_attempts: int = 0,
-) -> ReviewResult:
-    return ReviewResult(
-        pr_number=pr_number,
-        issue_number=issue_number,
-        verdict=verdict,
-        summary="Looks good.",
-        fixes_made=fixes_made,
-        ci_fix_attempts=ci_fix_attempts,
-        merged=True,
-    )
 
 
 def _write_plan(config: HydraConfig, issue_number: int, content: str) -> None:
@@ -314,7 +296,9 @@ class TestRecord:
             },
         )
 
-        review = _make_review_result(fixes_made=False, ci_fix_attempts=0)
+        review = ReviewResultFactory.create(
+            merged=True, fixes_made=False, ci_fix_attempts=0
+        )
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -343,7 +327,7 @@ class TestRecord:
         """When plan file doesn't exist, should still record with empty planned_files."""
         collector, _, _ = _make_collector(config, diff_names=["src/foo.py"])
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -358,7 +342,7 @@ class TestRecord:
         collector, _, _ = _make_collector(config, diff_names=[])
 
         _write_plan(config, 42, "## Files to Modify\n\n- `src/foo.py`\n")
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -374,7 +358,7 @@ class TestRecord:
         """When worker metadata not in state, should use defaults."""
         collector, _, _ = _make_collector(config, diff_names=["src/foo.py"])
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -391,7 +375,7 @@ class TestRecord:
             side_effect=RuntimeError("network error")
         )
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         # Should not raise
         await collector.record(42, 101, review)
 
@@ -644,6 +628,15 @@ class TestFiledPatterns:
         result = collector._load_filed_patterns()
         assert result == set()
 
+    def test_save_filed_patterns_handles_oserror(
+        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        collector, _, _ = _make_collector(config)
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            collector._save_filed_patterns({"quality_fix"})  # should not raise
+
+        assert "Could not save filed patterns" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # RetrospectiveEntry model tests
@@ -685,3 +678,60 @@ class TestRetrospectiveEntry:
         json_str = entry.model_dump_json()
         restored = RetrospectiveEntry.model_validate_json(json_str)
         assert restored == entry
+
+
+# ---------------------------------------------------------------------------
+# _file_improvement_issue sets hitl_origin
+# ---------------------------------------------------------------------------
+
+
+class TestFileImprovementIssueSetsOrigin:
+    """Tests that _file_improvement_issue sets hitl_origin for created issues."""
+
+    @pytest.mark.asyncio
+    async def test_file_improvement_issue_sets_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Filing an improvement issue should set hitl_origin to improve label."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=99)
+
+        await collector._file_improvement_issue("Pattern: test", "Some body text")
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(99) == config.improve_label[0]
+        assert state.get_hitl_cause(99) == "Retrospective pattern detected"
+
+    @pytest.mark.asyncio
+    async def test_file_improvement_issue_no_origin_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """When create_issue returns 0, no hitl_origin should be set."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=0)
+
+        await collector._file_improvement_issue("Pattern: test", "Some body text")
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(0) is None
+
+    @pytest.mark.asyncio
+    async def test_pattern_detection_sets_hitl_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """When pattern detection files an issue, hitl_origin should be set."""
+        collector, mock_prs, state = _make_collector(config, create_issue_return=77)
+        entries = [
+            RetrospectiveEntry(
+                issue_number=i,
+                pr_number=100 + i,
+                timestamp="2026-02-20T10:30:00Z",
+                quality_fix_rounds=1,  # >50% → triggers pattern
+                plan_accuracy_pct=90,
+            )
+            for i in range(10)
+        ]
+
+        await collector._detect_patterns(entries)
+
+        mock_prs.create_issue.assert_awaited_once()
+        assert state.get_hitl_origin(77) == config.improve_label[0]
+        assert state.get_hitl_cause(77) == "Retrospective pattern detected"

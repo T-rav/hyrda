@@ -310,7 +310,10 @@ class RetrospectiveCollector:
     async def _file_improvement_issue(self, title: str, body: str) -> None:
         """File a ``hydra-improve`` + ``hydra-hitl`` improvement proposal."""
         labels = self._config.improve_label[:1] + self._config.hitl_label[:1]
-        await self._prs.create_issue(title, body, labels)
+        issue_num = await self._prs.create_issue(title, body, labels)
+        if issue_num:
+            self._state.set_hitl_origin(issue_num, self._config.improve_label[0])
+            self._state.set_hitl_cause(issue_num, "Retrospective pattern detected")
 
     def _load_filed_patterns(self) -> set[str]:
         """Load the set of already-filed pattern keys."""
@@ -324,5 +327,12 @@ class RetrospectiveCollector:
 
     def _save_filed_patterns(self, patterns: set[str]) -> None:
         """Persist the set of filed pattern keys."""
-        self._filed_patterns_path.parent.mkdir(parents=True, exist_ok=True)
-        self._filed_patterns_path.write_text(json.dumps(sorted(patterns)))
+        try:
+            self._filed_patterns_path.parent.mkdir(parents=True, exist_ok=True)
+            self._filed_patterns_path.write_text(json.dumps(sorted(patterns)))
+        except OSError:
+            logger.warning(
+                "Could not save filed patterns to %s",
+                self._filed_patterns_path,
+                exc_info=True,
+            )

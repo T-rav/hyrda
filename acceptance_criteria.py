@@ -249,7 +249,6 @@ class AcceptanceCriteriaGenerator:
     def _persist(self, criteria: VerificationCriteria) -> None:
         """Write criteria to ``.hydra/verification/issue-N.md``."""
         verification_dir = self._config.repo_root / ".hydra" / "verification"
-        verification_dir.mkdir(parents=True, exist_ok=True)
         path = verification_dir / f"issue-{criteria.issue_number}.md"
 
         content = (
@@ -265,11 +264,19 @@ class AcceptanceCriteriaGenerator:
                 f"{criteria.verification_instructions}\n\n"
             )
 
-        path.write_text(content)
-        logger.info(
-            "Acceptance criteria persisted to %s",
-            path,
-        )
+        try:
+            verification_dir.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            logger.info(
+                "Acceptance criteria persisted to %s",
+                path,
+            )
+        except OSError:
+            logger.warning(
+                "Could not persist acceptance criteria to %s",
+                path,
+                exc_info=True,
+            )
 
     def terminate(self) -> None:
         """Kill any active AC generation processes."""

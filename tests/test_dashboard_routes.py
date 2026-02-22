@@ -12,11 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus
 from models import HITLItem
-from state import StateTracker
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
+from tests.conftest import make_state
 
 
 class TestCreateRouter:
@@ -897,3 +893,144 @@ class TestPipelineEndpoint:
         assert data["stages"]["triage"][0]["issue_number"] == 1
         assert len(data["stages"]["implement"]) == 1
         assert data["stages"]["implement"][0]["status"] == "active"
+
+
+# ---------------------------------------------------------------------------
+# HITL skip with improve origin → triage transition
+# ---------------------------------------------------------------------------
+
+
+class TestHITLSkipImproveTransition:
+    """Tests that /api/hitl/{issue}/skip transitions improve issues to triage."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        pr_mgr.remove_label = AsyncMock()
+        pr_mgr.add_labels = AsyncMock()
+        return (
+            create_router(
+                config=config,
+                event_bus=event_bus,
+                state=state,
+                pr_manager=pr_mgr,
+                get_orchestrator=get_orch or (lambda: None),
+                set_orchestrator=lambda o: None,
+                set_run_task=lambda t: None,
+                ui_dist_dir=tmp_path / "no-dist",
+                template_dir=tmp_path / "no-templates",
+            ),
+            pr_mgr,
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_hitl_skip_improve_origin_transitions_to_triage(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """Skipping an improve-origin HITL item should remove improve and add find label."""
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_cause(42, "Memory suggestion")
+
+        mock_orch = MagicMock()
+        mock_orch.skip_hitl_issue = MagicMock()
+        router, pr_mgr = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+
+        skip = self._find_endpoint(router, "/api/hitl/{issue_number}/skip")
+        assert skip is not None
+
+        response = await skip(42)
+        assert response.status_code == 200
+
+        # Verify improve label was removed
+        remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
+        assert (42, "hydra-improve") in remove_calls
+
+        # Verify find/triage label was added
+        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
+        assert (42, [config.find_label[0]]) in add_calls
+
+        # Verify state cleanup
+        assert state.get_hitl_origin(42) is None
+        assert state.get_hitl_cause(42) is None
+
+    @pytest.mark.asyncio
+    async def test_hitl_skip_non_improve_origin_no_triage_transition(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """Non-improve HITL items should not get triage label on skip."""
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-review")
+
+        mock_orch = MagicMock()
+        mock_orch.skip_hitl_issue = MagicMock()
+        router, pr_mgr = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+
+        skip = self._find_endpoint(router, "/api/hitl/{issue_number}/skip")
+        assert skip is not None
+        await skip(42)
+
+        # Should NOT add find label for non-improve origins
+        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
+        for call in add_calls:
+            assert call[1] != [config.find_label[0]]
+
+    @pytest.mark.asyncio
+    async def test_hitl_skip_no_origin_no_triage_transition(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """When no origin is set, skip should not add find label."""
+        state = make_state(tmp_path)
+
+        mock_orch = MagicMock()
+        mock_orch.skip_hitl_issue = MagicMock()
+        router, pr_mgr = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+
+        skip = self._find_endpoint(router, "/api/hitl/{issue_number}/skip")
+        assert skip is not None
+        await skip(42)
+
+        # Should NOT add find label when no origin
+        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
+        for call in add_calls:
+            assert call[1] != [config.find_label[0]]
+
+    @pytest.mark.asyncio
+    async def test_hitl_skip_cleans_up_hitl_cause(
+        self, config, event_bus, tmp_path
+    ) -> None:
+        """Skip should clean up hitl_cause in addition to hitl_origin."""
+        state = make_state(tmp_path)
+        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
+
+        mock_orch = MagicMock()
+        mock_orch.skip_hitl_issue = MagicMock()
+        router, _ = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+
+        skip = self._find_endpoint(router, "/api/hitl/{issue_number}/skip")
+        assert skip is not None
+        await skip(42)
+
+        assert state.get_hitl_origin(42) is None
+        assert state.get_hitl_cause(42) is None

@@ -13,8 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType
 from hitl_runner import HITLRunner, _classify_cause
-from models import HITLResult
-from tests.conftest import IssueFactory
+from tests.conftest import HITLResultFactory, IssueFactory
 
 if TYPE_CHECKING:
     from config import HydraConfig
@@ -299,6 +298,17 @@ class TestSaveTranscript:
         assert path.exists()
         assert path.read_text() == "test transcript content"
 
+    def test_save_transcript_handles_oserror(
+        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        runner = HITLRunner(config, EventBus())
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            runner._save_transcript(42, "transcript")  # should not raise
+
+        assert "Could not save transcript" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Terminate
@@ -328,7 +338,7 @@ class TestHITLResult:
     """Tests for the HITLResult Pydantic model."""
 
     def test_defaults(self) -> None:
-        result = HITLResult(issue_number=42)
+        result = HITLResultFactory.create(success=False)
         assert result.issue_number == 42
         assert result.success is False
         assert result.error is None
@@ -336,7 +346,7 @@ class TestHITLResult:
         assert result.duration_seconds == 0.0
 
     def test_success_result(self) -> None:
-        result = HITLResult(issue_number=42, success=True, transcript="done")
+        result = HITLResultFactory.create(transcript="done")
         assert result.success is True
         assert result.transcript == "done"
 
