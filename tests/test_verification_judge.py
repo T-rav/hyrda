@@ -177,7 +177,7 @@ class TestReadCriteriaFile:
     def test_returns_content_when_exists(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text(SAMPLE_CRITERIA_FILE)
@@ -195,7 +195,7 @@ class TestReadCriteriaFile:
     def test_returns_none_on_oserror(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text("content")
@@ -491,7 +491,7 @@ class TestSaveJudgeReport:
 
         judge._save_judge_report(42, verdict)
 
-        path = tmp_path / ".hydra" / "verification" / "issue-42-judge.md"
+        path = tmp_path / ".hydraflow" / "verification" / "issue-42-judge.md"
         assert path.exists()
         content = path.read_text()
         assert "Issue #42" in content
@@ -519,7 +519,7 @@ class TestSaveJudgeReport:
 
         judge._save_judge_report(7, verdict)
 
-        path = tmp_path / ".hydra" / "verification" / "issue-7-judge.md"
+        path = tmp_path / ".hydraflow" / "verification" / "issue-7-judge.md"
         content = path.read_text()
         assert "| AC-1 | PASS |" in content
         assert "| AC-2 | FAIL |" in content
@@ -537,7 +537,7 @@ class TestSaveJudgeReport:
 
         judge._save_judge_report(5, verdict)
 
-        path = tmp_path / ".hydra" / "verification" / "issue-5-judge.md"
+        path = tmp_path / ".hydraflow" / "verification" / "issue-5-judge.md"
         content = path.read_text()
         assert "needs_refinement" in content
         assert "Steps are vague" in content
@@ -615,7 +615,7 @@ class TestUpdateCriteriaFile:
     def test_replaces_instructions_section(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text(SAMPLE_CRITERIA_FILE)
@@ -641,7 +641,7 @@ class TestUpdateCriteriaFile:
     def test_appends_instructions_section_when_none_exists(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text("## Acceptance Criteria\n\n- [ ] First\n")
@@ -656,7 +656,7 @@ class TestUpdateCriteriaFile:
     def test_handles_read_oserror(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text(SAMPLE_CRITERIA_FILE)
@@ -667,7 +667,7 @@ class TestUpdateCriteriaFile:
     def test_handles_write_oserror(self, tmp_path):
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = _make_judge(cfg)
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         criteria_file = criteria_dir / "issue-42.md"
         criteria_file.write_text(SAMPLE_CRITERIA_FILE)
@@ -696,7 +696,7 @@ class TestJudgeIntegration:
         judge = VerificationJudge(cfg, event_bus)
 
         # Create criteria file so we don't skip for missing file
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -711,7 +711,7 @@ class TestJudgeIntegration:
         judge = VerificationJudge(cfg, event_bus)
 
         # Create criteria file
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -747,7 +747,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -775,7 +775,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -808,7 +808,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -841,7 +841,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -872,7 +872,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -888,7 +888,7 @@ class TestJudgeIntegration:
         with patch.object(judge, "_execute", side_effect=mock_execute):
             await judge.judge(issue_number=42, pr_number=101, diff="diff")
 
-        report_path = tmp_path / ".hydra" / "verification" / "issue-42-judge.md"
+        report_path = tmp_path / ".hydraflow" / "verification" / "issue-42-judge.md"
         assert report_path.exists()
         content = report_path.read_text()
         assert "Issue #42" in content
@@ -902,7 +902,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -924,7 +924,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -945,7 +945,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -971,7 +971,7 @@ class TestJudgeIntegration:
         judge = VerificationJudge(cfg, event_bus)
 
         criteria_text = "## Acceptance Criteria\n\n- [ ] First\n- [ ] Second\n"
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(criteria_text)
 
@@ -999,7 +999,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -1027,7 +1027,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 

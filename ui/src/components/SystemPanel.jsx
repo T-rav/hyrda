@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
 import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 import { Livestream } from './Livestream'
 import { PipelineControlPanel } from './PipelineControlPanel'
 
@@ -222,7 +222,7 @@ const NON_SYSTEM_WORKERS = BACKGROUND_WORKERS.filter(w => !w.system)
 const SYSTEM_WORKERS = BACKGROUND_WORKERS.filter(w => w.system)
 
 export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
-  const { pipelinePollerLastRun, orchestratorStatus, events, pipelineIssues } = useHydra()
+  const { pipelinePollerLastRun, orchestratorStatus, events, pipelineIssues } = useHydraFlow()
   const [activeSubTab, setActiveSubTab] = useState('workers')
 
   return (

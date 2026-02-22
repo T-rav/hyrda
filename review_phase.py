@@ -1,4 +1,4 @@
-"""Review processing for the Hydra orchestrator."""
+"""Review processing for the HydraFlow orchestrator."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from pathlib import Path
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
-from config import HydraConfig
+from config import HydraFlowConfig
 from epic import EpicCompletionChecker
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from issue_store import IssueStore
 from memory import file_memory_suggestion
 from models import (
@@ -43,7 +43,7 @@ from verification import format_verification_issue_body
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
-logger = logging.getLogger("hydra.review_phase")
+logger = logging.getLogger("hydraflow.review_phase")
 
 
 class ReviewPhase:
@@ -51,7 +51,7 @@ class ReviewPhase:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         worktrees: WorktreeManager,
         reviewers: ReviewRunner,
@@ -80,7 +80,7 @@ class ReviewPhase:
         self._verification_judge = verification_judge
         self._summarizer = transcript_summarizer
         self._epic_checker = epic_checker
-        self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._insights = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
         self._active_issues: set[int] = set()
 
     async def review_prs(
@@ -562,7 +562,7 @@ class ReviewPhase:
     ) -> None:
         """Emit a REVIEW_UPDATE event with the given status."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -612,7 +612,7 @@ class ReviewPhase:
         if extra_event_data:
             event_data.update(extra_event_data)
         await self._bus.publish(
-            HydraEvent(type=EventType.HITL_ESCALATION, data=event_data)
+            HydraFlowEvent(type=EventType.HITL_ESCALATION, data=event_data)
         )
 
     @staticmethod
@@ -946,8 +946,8 @@ class ReviewPhase:
         attempt: int,
         transcript: str,
     ) -> None:
-        """Save a conflict resolution transcript to ``.hydra/logs/``."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Save a conflict resolution transcript to ``.hydraflow/logs/``."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         path = log_dir / f"conflict-pr-{pr_number}-attempt-{attempt}.txt"
         path.write_text(transcript)

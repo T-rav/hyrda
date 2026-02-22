@@ -12,7 +12,7 @@ import logging
 import tomllib
 from pathlib import Path
 
-logger = logging.getLogger("hydra.lint_scaffold")
+logger = logging.getLogger("hydraflow.lint_scaffold")
 
 # ---------------------------------------------------------------------------
 # Constants

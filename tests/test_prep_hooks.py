@@ -224,7 +224,7 @@ class TestConfigureHooksPath:
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("git not found"),
             ),
-            caplog.at_level(logging.WARNING, logger="hydra.prep_hooks"),
+            caplog.at_level(logging.WARNING, logger="hydraflow.prep_hooks"),
         ):
             await configure_hooks_path(Path("/fake/repo"))
         assert "Failed to configure git hooks path" in caplog.text

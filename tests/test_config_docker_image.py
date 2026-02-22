@@ -1,4 +1,4 @@
-"""Tests for docker_image config field in HydraConfig — unique cases only.
+"""Tests for docker_image config field in HydraFlowConfig — unique cases only.
 
 Default, custom value, and basic env-var-override cases are already covered
 in tests/test_config.py (TestDockerConfigDefaults / TestDockerConfigEnvOverrides).
@@ -11,13 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from config import HydraConfig
+from config import HydraFlowConfig
 
-DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydra-agent:latest"
+DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydraflow-agent:latest"
 
 
 # ---------------------------------------------------------------------------
-# HydraConfig – docker_image field (unique edge cases)
+# HydraFlowConfig – docker_image field (unique edge cases)
 # ---------------------------------------------------------------------------
 
 
@@ -28,8 +28,8 @@ class TestDockerImageConfig:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Explicit docker_image should NOT be overridden by env var."""
-        monkeypatch.setenv("HYDRA_DOCKER_IMAGE", "env/override:latest")
-        cfg = HydraConfig(
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_IMAGE", "env/override:latest")
+        cfg = HydraFlowConfig(
             docker_image="explicit/image:v1",
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -41,8 +41,8 @@ class TestDockerImageConfig:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Without env var, default should be used."""
-        monkeypatch.delenv("HYDRA_DOCKER_IMAGE", raising=False)
-        cfg = HydraConfig(
+        monkeypatch.delenv("HYDRAFLOW_DOCKER_IMAGE", raising=False)
+        cfg = HydraFlowConfig(
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",

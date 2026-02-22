@@ -1,4 +1,4 @@
-"""CLI entry point for Hydra."""
+"""CLI entry point for HydraFlow."""
 
 from __future__ import annotations
 
@@ -9,22 +9,22 @@ import signal
 import sys
 from typing import Any
 
-from config import HydraConfig, load_config_file
+from config import HydraFlowConfig, load_config_file
 from log import setup_logging
-from orchestrator import HydraOrchestrator
+from orchestrator import HydraFlowOrchestrator
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        prog="hydra",
-        description="Hydra — Intent in. Software out.",
+        prog="hydraflow",
+        description="HydraFlow — Intent in. Software out.",
     )
 
     parser.add_argument(
         "--ready-label",
         default=None,
-        help="GitHub issue labels to filter by, comma-separated (default: hydra-ready)",
+        help="GitHub issue labels to filter by, comma-separated (default: hydraflow-ready)",
     )
     parser.add_argument(
         "--batch-size",
@@ -123,42 +123,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--review-label",
         default=None,
-        help="Labels for issues/PRs under review, comma-separated (default: hydra-review)",
+        help="Labels for issues/PRs under review, comma-separated (default: hydraflow-review)",
     )
     parser.add_argument(
         "--hitl-label",
         default=None,
-        help="Labels for human-in-the-loop escalation, comma-separated (default: hydra-hitl)",
+        help="Labels for human-in-the-loop escalation, comma-separated (default: hydraflow-hitl)",
     )
     parser.add_argument(
         "--hitl-active-label",
         default=None,
-        help="Labels for HITL items being actively processed, comma-separated (default: hydra-hitl-active)",
+        help="Labels for HITL items being actively processed, comma-separated (default: hydraflow-hitl-active)",
     )
     parser.add_argument(
         "--fixed-label",
         default=None,
-        help="Labels applied after PR is merged, comma-separated (default: hydra-fixed)",
+        help="Labels applied after PR is merged, comma-separated (default: hydraflow-fixed)",
     )
     parser.add_argument(
         "--find-label",
         default=None,
-        help="Labels for new issues to discover, comma-separated (default: hydra-find)",
+        help="Labels for new issues to discover, comma-separated (default: hydraflow-find)",
     )
     parser.add_argument(
         "--planner-label",
         default=None,
-        help="Labels for issues needing plans, comma-separated (default: hydra-plan)",
+        help="Labels for issues needing plans, comma-separated (default: hydraflow-plan)",
     )
     parser.add_argument(
         "--improve-label",
         default=None,
-        help="Labels for self-improvement proposals, comma-separated (default: hydra-improve)",
+        help="Labels for self-improvement proposals, comma-separated (default: hydraflow-improve)",
     )
     parser.add_argument(
         "--memory-label",
         default=None,
-        help="Labels for accepted agent learnings, comma-separated (default: hydra-memory)",
+        help="Labels for accepted agent learnings, comma-separated (default: hydraflow-memory)",
     )
     parser.add_argument(
         "--memory-sync-interval",
@@ -169,12 +169,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--metrics-label",
         default=None,
-        help="Labels for the metrics persistence issue, comma-separated (default: hydra-metrics)",
+        help="Labels for the metrics persistence issue, comma-separated (default: hydraflow-metrics)",
     )
     parser.add_argument(
         "--epic-label",
         default=None,
-        help="Labels for epic tracking issues, comma-separated (default: hydra-epic)",
+        help="Labels for epic tracking issues, comma-separated (default: hydraflow-epic)",
     )
     parser.add_argument(
         "--metrics-sync-interval",
@@ -255,7 +255,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--docker-image",
         default=None,
-        help="Docker image for agent containers (default: ghcr.io/t-rav/hydra-agent:latest)",
+        help="Docker image for agent containers (default: ghcr.io/t-rav/hydraflow-agent:latest)",
     )
     parser.add_argument(
         "--docker-cpu-limit",
@@ -295,7 +295,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--gh-token",
         default=None,
-        help="GitHub token for gh CLI auth (overrides HYDRA_GH_TOKEN and shell GH_TOKEN)",
+        help="GitHub token for gh CLI auth (overrides HYDRAFLOW_GH_TOKEN and shell GH_TOKEN)",
     )
     parser.add_argument(
         "--git-user-name",
@@ -310,7 +310,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--config-file",
         default=None,
-        help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
+        help="Path to JSON config file for persisting runtime changes (default: .hydraflow/config.json)",
     )
     parser.add_argument(
         "--audit",
@@ -324,8 +324,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--log-file",
-        default=".hydra/logs/hydra.log",
-        help="Path to log file for structured JSON logging (default: .hydra/logs/hydra.log)",
+        default=".hydraflow/logs/hydraflow.log",
+        help="Path to log file for structured JSON logging (default: .hydraflow/logs/hydraflow.log)",
     )
     parser.add_argument(
         "--clean",
@@ -335,7 +335,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--prep",
         action="store_true",
-        help="Create Hydra lifecycle labels on the target repo, then exit",
+        help="Create HydraFlow lifecycle labels on the target repo, then exit",
     )
 
     return parser.parse_args(argv)
@@ -346,24 +346,24 @@ def _parse_label_arg(value: str) -> list[str]:
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
-def build_config(args: argparse.Namespace) -> HydraConfig:
-    """Convert parsed CLI args into a :class:`HydraConfig`.
+def build_config(args: argparse.Namespace) -> HydraFlowConfig:
+    """Convert parsed CLI args into a :class:`HydraFlowConfig`.
 
     Merge priority: defaults → config file → env vars → CLI args.
     Only explicitly-provided CLI values are passed through;
-    HydraConfig supplies all defaults.
+    HydraFlowConfig supplies all defaults.
     """
     # 0) Load config file values (lowest priority after defaults)
     from pathlib import Path  # noqa: PLC0415
 
-    config_file_path = getattr(args, "config_file", None) or ".hydra/config.json"
+    config_file_path = getattr(args, "config_file", None) or ".hydraflow/config.json"
     file_kwargs = load_config_file(Path(config_file_path))
 
     kwargs: dict[str, Any] = {}
 
     # Start from config file values, then overlay CLI args
-    # Filter config file values to known HydraConfig fields
-    _known_fields = set(HydraConfig.model_fields.keys())
+    # Filter config file values to known HydraFlowConfig fields
+    _known_fields = set(HydraFlowConfig.model_fields.keys())
     for key, val in file_kwargs.items():
         if key in _known_fields:
             kwargs[key] = val
@@ -371,7 +371,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     # Store config_file path
     kwargs["config_file"] = Path(config_file_path)
 
-    # 1) Simple 1:1 fields (CLI attr name == HydraConfig field name)
+    # 1) Simple 1:1 fields (CLI attr name == HydraFlowConfig field name)
     # CLI args override config file values
     for field in (
         "batch_size",
@@ -442,11 +442,11 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     if args.docker_no_new_privileges is True:
         kwargs["docker_no_new_privileges"] = True
 
-    return HydraConfig(**kwargs)
+    return HydraFlowConfig(**kwargs)
 
 
-async def _run_prep(config: HydraConfig) -> bool:
-    """Create Hydra lifecycle labels on the target repo.
+async def _run_prep(config: HydraFlowConfig) -> bool:
+    """Create HydraFlow lifecycle labels on the target repo.
 
     Returns ``True`` if all labels were created/updated successfully,
     ``False`` if any labels failed.
@@ -459,7 +459,7 @@ async def _run_prep(config: HydraConfig) -> bool:
     return not result.failed
 
 
-async def _run_audit(config: HydraConfig) -> bool:
+async def _run_audit(config: HydraFlowConfig) -> bool:
     """Run a repo audit and print the report. Returns True if critical gaps found."""
     from prep import RepoAuditor  # noqa: PLC0415
 
@@ -469,13 +469,13 @@ async def _run_audit(config: HydraConfig) -> bool:
     return result.has_critical_gaps
 
 
-async def _run_clean(config: HydraConfig) -> None:
+async def _run_clean(config: HydraFlowConfig) -> None:
     """Remove all worktrees and reset state."""
     from state import StateTracker
     from worktree import WorktreeManager
 
-    logger = logging.getLogger("hydra")
-    logger.info("Cleaning up all Hydra worktrees and state...")
+    logger = logging.getLogger("hydraflow")
+    logger.info("Cleaning up all HydraFlow worktrees and state...")
 
     wt_mgr = WorktreeManager(config)
     await wt_mgr.destroy_all()
@@ -486,11 +486,11 @@ async def _run_clean(config: HydraConfig) -> None:
     logger.info("Cleanup complete")
 
 
-async def _run_main(config: HydraConfig) -> None:
+async def _run_main(config: HydraFlowConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
     if config.dashboard_enabled:
-        from dashboard import HydraDashboard
-        from events import EventBus, EventLog, EventType, HydraEvent
+        from dashboard import HydraFlowDashboard
+        from events import EventBus, EventLog, EventType, HydraFlowEvent
         from models import Phase
         from state import StateTracker
 
@@ -503,7 +503,7 @@ async def _run_main(config: HydraConfig) -> None:
         await bus.load_history_from_disk()
         state = StateTracker(config.state_file)
 
-        dashboard = HydraDashboard(
+        dashboard = HydraFlowDashboard(
             config=config,
             event_bus=bus,
             state=state,
@@ -512,7 +512,7 @@ async def _run_main(config: HydraConfig) -> None:
 
         # Publish idle phase so the UI shows the Start button
         await bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.PHASE_CHANGE,
                 data={"phase": Phase.IDLE.value},
             )
@@ -539,7 +539,7 @@ async def _run_main(config: HydraConfig) -> None:
             config.event_log_retention_days,
         )
         await bus.load_history_from_disk()
-        orchestrator = HydraOrchestrator(config, event_bus=bus)
+        orchestrator = HydraFlowOrchestrator(config, event_bus=bus)
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
