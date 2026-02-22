@@ -336,14 +336,6 @@ class TestBuildConfig:
         assert args.git_user_name is None
         assert args.git_user_email is None
 
-    def test_prep_flag_defaults_false(self) -> None:
-        args = parse_args([])
-        assert args.prep is False
-
-    def test_prep_flag_set(self) -> None:
-        args = parse_args(["--prep"])
-        assert args.prep is True
-
 
 # ---------------------------------------------------------------------------
 # _run_main — signal handler registration

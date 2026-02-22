@@ -454,7 +454,8 @@ async def _run_prep(config: HydraConfig) -> bool:
     from prep import ensure_labels  # noqa: PLC0415
 
     result = await ensure_labels(config)
-    print(result.summary())  # noqa: T201
+    summary = result.summary()
+    print(f"[dry-run] {summary}" if config.dry_run else summary)  # noqa: T201
     return not result.failed
 
 

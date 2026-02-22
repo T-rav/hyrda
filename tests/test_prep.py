@@ -1112,10 +1112,6 @@ class TestCliPrep:
 
     def test_main_prep_exits_zero_on_success(self) -> None:
         """main() should exit 0 when all labels are created successfully."""
-        from unittest.mock import AsyncMock, patch
-
-        import pytest
-
         from cli import main
 
         with (
@@ -1131,10 +1127,6 @@ class TestCliPrep:
 
     def test_main_prep_exits_one_on_partial_failure(self) -> None:
         """main() should exit 1 when any labels fail to create."""
-        from unittest.mock import AsyncMock, patch
-
-        import pytest
-
         from cli import main
 
         with (
