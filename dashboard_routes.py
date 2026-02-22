@@ -368,6 +368,12 @@ def create_router(
         )
         set_orchestrator(new_orch)
         set_run_task(asyncio.create_task(new_orch.run()))
+        await event_bus.publish(
+            HydraFlowEvent(
+                type=EventType.ORCHESTRATOR_STATUS,
+                data={"status": "running", "reset": True},
+            )
+        )
         return JSONResponse({"status": "started"})
 
     @router.post("/api/control/stop")

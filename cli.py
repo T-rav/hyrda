@@ -255,7 +255,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--docker-image",
         default=None,
-        help="Docker image for agent containers (default: ghcr.io/t-rav/hydra-agent:latest)",
+        help="Docker image for agent containers (default: ghcr.io/t-rav/hydraflow-agent:latest)",
     )
     parser.add_argument(
         "--docker-cpu-limit",

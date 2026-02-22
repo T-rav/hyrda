@@ -114,11 +114,9 @@ describe('SystemPanel', () => {
       expect(screen.getByText('2400')).toBeInTheDocument()
     })
 
-    it('shows system badge on system workers', () => {
+    it('shows System section heading that groups system workers', () => {
       render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
-      const badges = screen.getAllByText('system')
-      const systemWorkerCount = BACKGROUND_WORKERS.filter(w => w.system).length
-      expect(badges.length).toBe(systemWorkerCount)
+      expect(screen.getByText('System')).toBeInTheDocument()
     })
 
     it('shows system worker status as colored pill (green for ok) when orchestrator running', () => {
@@ -270,12 +268,35 @@ describe('SystemPanel', () => {
       const dot = screen.getByTestId('dot-pipeline_poller')
       expect(dot.style.background).toBe('var(--red)')
     })
+
+    it('shows pipeline stage counts as details when orchestrator running', () => {
+      mockUseHydra.mockReturnValue(defaultMockContext({
+        pipelinePollerLastRun: '2026-02-20T10:00:00Z',
+        orchestratorStatus: 'running',
+        pipelineIssues: {
+          triage: [{ number: 1 }],
+          plan: [{ number: 2 }, { number: 3 }],
+          implement: [],
+          review: [{ number: 4 }],
+          hitl: [{ number: 5 }],
+        },
+      }))
+      render(<SystemPanel backgroundWorkers={[]} />)
+      // Pipeline poller card shows stage keys as detail labels
+      expect(screen.getByText('triage')).toBeInTheDocument()
+      expect(screen.getByText('plan')).toBeInTheDocument()
+      expect(screen.getByText('implement')).toBeInTheDocument()
+      expect(screen.getByText('review')).toBeInTheDocument()
+      expect(screen.getByText('hitl')).toBeInTheDocument()
+      expect(screen.getByText('total')).toBeInTheDocument()
+    })
   })
 
   describe('Sub-tab Navigation', () => {
-    it('shows Workers and Livestream sub-tab labels', () => {
+    it('shows Workers, Pipeline, and Livestream sub-tab labels', () => {
       render(<SystemPanel backgroundWorkers={[]} />)
       expect(screen.getByText('Workers')).toBeInTheDocument()
+      expect(screen.getByText('Pipeline')).toBeInTheDocument()
       expect(screen.getByText('Livestream')).toBeInTheDocument()
     })
 
@@ -316,6 +337,21 @@ describe('SystemPanel', () => {
       expect(screen.getByText('Livestream').style.borderLeftColor).toBe('var(--accent)')
       expect(screen.getByText('Workers').style.color).toBe('var(--text-muted)')
       expect(screen.getByText('Workers').style.borderLeftColor).toBe('transparent')
+    })
+
+    it('clicking Pipeline sub-tab shows pipeline controls', () => {
+      render(<SystemPanel backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Pipeline'))
+      expect(screen.getByText('Pipeline Controls')).toBeInTheDocument()
+      expect(screen.queryByText('Background Workers')).not.toBeInTheDocument()
+    })
+
+    it('clicking Workers sub-tab after Pipeline returns to worker content', () => {
+      render(<SystemPanel backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Pipeline'))
+      expect(screen.queryByText('Background Workers')).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText('Workers'))
+      expect(screen.getByText('Background Workers')).toBeInTheDocument()
     })
 
     it('renders event data in Livestream sub-tab', () => {

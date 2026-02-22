@@ -62,6 +62,7 @@ vi.mock('../../context/HydraFlowContext', () => ({
 beforeEach(() => {
   mockState.hitlItems = []
   mockState.prs = []
+  mockState.resetSession = undefined
   cleanup()
 })
 
@@ -212,49 +213,36 @@ describe('Main tab bar', () => {
   })
 })
 
-describe('Pipeline side panel', () => {
-  it('pipeline panel renders alongside Work Stream tab', async () => {
+describe('Start button dispatches session reset', () => {
+  it('calls resetSession when Start is clicked', async () => {
+    const resetMock = vi.fn()
+    mockState.resetSession = resetMock
+    mockState.orchestratorStatus = 'idle'
     const { default: App } = await import('../../App')
     render(<App />)
-    // Pipeline panel heading should be visible alongside the default Work Stream tab
-    expect(screen.getByText('Work Stream')).toBeInTheDocument()
-    // Pipeline panel should be present (expanded by default)
-    expect(screen.getByTestId('pipeline-panel-collapse')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Start'))
+    expect(resetMock).toHaveBeenCalledTimes(1)
+
+    // Restore
+    mockState.orchestratorStatus = 'running'
+  })
+})
+
+describe('Pipeline sub-tab under System', () => {
+  it('Pipeline is accessible as a sub-tab under System', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    fireEvent.click(screen.getByText('System'))
+    // Pipeline sub-tab should be visible
+    expect(screen.getByText('Pipeline')).toBeInTheDocument()
   })
 
-  it('pipeline panel toggle button in header collapses/expands the panel', async () => {
+  it('clicking Pipeline sub-tab shows pipeline controls', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    // Panel is open by default — collapse button should be visible
-    expect(screen.getByTestId('pipeline-panel-collapse')).toBeInTheDocument()
-    // Click the header toggle to collapse
-    fireEvent.click(screen.getByTestId('pipeline-panel-toggle'))
-    // Now the expand button should be visible instead
-    expect(screen.getByTestId('pipeline-panel-expand')).toBeInTheDocument()
-    expect(screen.queryByTestId('pipeline-panel-collapse')).not.toBeInTheDocument()
-  })
-
-  it('pipeline loop chips visible when panel is open', async () => {
-    const { default: App } = await import('../../App')
-    render(<App />)
-    expect(screen.getByText('Triage')).toBeInTheDocument()
-    expect(screen.getByText('Plan')).toBeInTheDocument()
-    expect(screen.getByText('Implement')).toBeInTheDocument()
-    expect(screen.getByText('Review')).toBeInTheDocument()
-  })
-
-  it('pipeline panel still visible when switching to Transcript tab', async () => {
-    const { default: App } = await import('../../App')
-    render(<App />)
-    fireEvent.click(screen.getByText('Transcript'))
-    // Pipeline panel should still be present
-    expect(screen.getByTestId('pipeline-panel-collapse')).toBeInTheDocument()
-  })
-
-  it('pipeline panel still visible when switching to Metrics tab', async () => {
-    const { default: App } = await import('../../App')
-    render(<App />)
-    fireEvent.click(screen.getByText('Metrics'))
-    expect(screen.getByTestId('pipeline-panel-collapse')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('System'))
+    fireEvent.click(screen.getByText('Pipeline'))
+    expect(screen.getByText('Pipeline Controls')).toBeInTheDocument()
   })
 })

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Literal
 from unittest.mock import AsyncMock, MagicMock
 
 
@@ -109,6 +110,16 @@ class ConfigFactory:
         max_transcript_summary_chars: int = 50_000,
         pr_unstick_interval: int = 3600,
         pr_unstick_batch_size: int = 10,
+        execution_mode: Literal["host", "docker"] = "host",
+        docker_image: str = "ghcr.io/t-rav/hydraflow-agent:latest",
+        docker_cpu_limit: float = 2.0,
+        docker_memory_limit: str = "4g",
+        docker_pids_limit: int = 256,
+        docker_tmp_size: str = "1g",
+        docker_network_mode: Literal["bridge", "none", "host"] = "bridge",
+        docker_spawn_delay: float = 2.0,
+        docker_read_only_root: bool = True,
+        docker_no_new_privileges: bool = True,
     ):
         """Create a HydraFlowConfig with test-friendly defaults."""
         from config import HydraFlowConfig
@@ -188,6 +199,16 @@ class ConfigFactory:
             max_transcript_summary_chars=max_transcript_summary_chars,
             pr_unstick_interval=pr_unstick_interval,
             pr_unstick_batch_size=pr_unstick_batch_size,
+            execution_mode=execution_mode,
+            docker_image=docker_image,
+            docker_cpu_limit=docker_cpu_limit,
+            docker_memory_limit=docker_memory_limit,
+            docker_pids_limit=docker_pids_limit,
+            docker_tmp_size=docker_tmp_size,
+            docker_network_mode=docker_network_mode,
+            docker_spawn_delay=docker_spawn_delay,
+            docker_read_only_root=docker_read_only_root,
+            docker_no_new_privileges=docker_no_new_privileges,
         )
 
 

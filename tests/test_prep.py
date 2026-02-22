@@ -393,7 +393,7 @@ class TestAuditResult:
         assert "Missing (2)" in report
         assert "CI" in report
         assert "Git hooks" in report
-        assert "hydra prep" in report
+        assert "hydraflow prep" in report
 
 
 # ---------------------------------------------------------------------------

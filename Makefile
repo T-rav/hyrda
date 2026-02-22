@@ -33,7 +33,7 @@ BLUE := \033[0;34m
 RESET := \033[0m
 
 # Docker agent image
-DOCKER_IMAGE ?= ghcr.io/t-rav/hydra-agent:latest
+DOCKER_IMAGE ?= ghcr.io/t-rav/hydraflow-agent:latest
 
 .PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test
 

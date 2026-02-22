@@ -464,3 +464,160 @@ describe('hitl_escalation reducer', () => {
     expect(next.workers[99]).toBeUndefined()
   })
 })
+
+describe('orchestrator_status reducer — session reset for other clients', () => {
+  it('clears session state when status is running and reset flag is true', () => {
+    const dirtyState = {
+      ...initialState,
+      orchestratorStatus: 'idle',
+      workers: { 42: { status: 'done', role: 'implementer', transcript: [] } },
+      prs: [{ pr: 100, issue: 42, merged: true }],
+      reviews: [{ pr: 100, verdict: 'approve' }],
+      mergedCount: 2,
+      sessionPrsCount: 3,
+      sessionTriaged: 1,
+      sessionPlanned: 2,
+      sessionImplemented: 1,
+      sessionReviewed: 1,
+      hitlItems: [{ issue: 42, title: 'Bug' }],
+      hitlEscalation: { pr: 99, issue: 42, cause: 'CI failed' },
+      humanInputRequests: { 42: { question: 'Continue?' } },
+      lastSeenId: 50,
+      intents: [{ text: 'Fix bug', issueNumber: 42, status: 'created' }],
+    }
+
+    const next = reducer(dirtyState, {
+      type: 'orchestrator_status',
+      data: { status: 'running', reset: true },
+      timestamp: '2026-01-01T00:00:00Z',
+    })
+
+    expect(next.orchestratorStatus).toBe('running')
+    expect(next.workers).toEqual({})
+    expect(next.prs).toEqual([])
+    expect(next.reviews).toEqual([])
+    expect(next.mergedCount).toBe(0)
+    expect(next.sessionPrsCount).toBe(0)
+    expect(next.sessionTriaged).toBe(0)
+    expect(next.sessionPlanned).toBe(0)
+    expect(next.sessionImplemented).toBe(0)
+    expect(next.sessionReviewed).toBe(0)
+    expect(next.hitlItems).toEqual([])
+    expect(next.hitlEscalation).toBeNull()
+    expect(next.humanInputRequests).toEqual({})
+    expect(next.lastSeenId).toBe(-1)
+    expect(next.intents).toEqual([])
+  })
+
+  it('does NOT reset session state when running without reset flag (reconnect case)', () => {
+    const dirtyState = {
+      ...initialState,
+      orchestratorStatus: 'running',
+      workers: { 42: { status: 'running', role: 'implementer', transcript: [] } },
+      mergedCount: 2,
+    }
+
+    const next = reducer(dirtyState, {
+      type: 'orchestrator_status',
+      data: { status: 'running' },
+      timestamp: '2026-01-01T00:00:00Z',
+    })
+
+    // State preserved — this is a reconnect to an already-running orchestrator
+    expect(next.workers).toEqual(dirtyState.workers)
+    expect(next.mergedCount).toBe(2)
+  })
+})
+
+describe('SESSION_RESET reducer', () => {
+  it('clears all session-scoped state fields', () => {
+    const dirtyState = {
+      ...initialState,
+      workers: {
+        42: { status: 'running', role: 'implementer', transcript: ['line1'] },
+        'plan-7': { status: 'done', role: 'planner', transcript: [] },
+      },
+      prs: [{ pr: 100, issue: 42, merged: true }, { pr: 101, issue: 43, merged: false }],
+      reviews: [{ pr: 100, verdict: 'approve' }],
+      mergedCount: 3,
+      sessionPrsCount: 5,
+      sessionTriaged: 2,
+      sessionPlanned: 4,
+      sessionImplemented: 3,
+      sessionReviewed: 1,
+      hitlItems: [{ issue: 42, title: 'Bug' }],
+      hitlEscalation: { pr: 99, issue: 42, cause: 'CI failed' },
+      humanInputRequests: { 42: { question: 'Continue?', timestamp: '2026-01-01' } },
+      lastSeenId: 50,
+      pipelineIssues: {
+        triage: [{ issue_number: 1, title: 'A', url: '', status: 'queued' }],
+        plan: [],
+        implement: [{ issue_number: 2, title: 'B', url: '', status: 'active' }],
+        review: [],
+        hitl: [],
+        merged: [{ issue_number: 3, title: 'C', url: '', status: 'done' }],
+      },
+      intents: [{ text: 'Fix bug', issueNumber: 42, status: 'created' }],
+    }
+
+    const next = reducer(dirtyState, { type: 'SESSION_RESET' })
+
+    expect(next.workers).toEqual({})
+    expect(next.prs).toEqual([])
+    expect(next.reviews).toEqual([])
+    expect(next.mergedCount).toBe(0)
+    expect(next.sessionPrsCount).toBe(0)
+    expect(next.sessionTriaged).toBe(0)
+    expect(next.sessionPlanned).toBe(0)
+    expect(next.sessionImplemented).toBe(0)
+    expect(next.sessionReviewed).toBe(0)
+    expect(next.hitlItems).toEqual([])
+    expect(next.hitlEscalation).toBeNull()
+    expect(next.humanInputRequests).toEqual({})
+    expect(next.lastSeenId).toBe(-1)
+    expect(next.pipelineIssues).toEqual({
+      triage: [],
+      plan: [],
+      implement: [],
+      review: [],
+      hitl: [],
+      merged: [],
+    })
+    expect(next.intents).toEqual([])
+  })
+
+  it('preserves non-session state', () => {
+    const state = {
+      ...initialState,
+      connected: true,
+      orchestratorStatus: 'running',
+      lifetimeStats: { issues_completed: 10, prs_merged: 5 },
+      config: { repo: 'test/repo' },
+      events: [{ type: 'batch_start', timestamp: '2026-01-01' }],
+      backgroundWorkers: [{ name: 'triage', status: 'ok', enabled: true }],
+      metrics: { lifetime: { issues_completed: 10 } },
+      githubMetrics: { open_by_label: {}, total_closed: 5, total_merged: 3 },
+      metricsHistory: [{ timestamp: '2026-01-01', value: 1 }],
+      // Dirty session state
+      workers: { 42: { status: 'done' } },
+      mergedCount: 5,
+    }
+
+    const next = reducer(state, { type: 'SESSION_RESET' })
+
+    // Non-session fields preserved
+    expect(next.connected).toBe(true)
+    expect(next.orchestratorStatus).toBe('running')
+    expect(next.lifetimeStats).toEqual({ issues_completed: 10, prs_merged: 5 })
+    expect(next.config).toEqual({ repo: 'test/repo' })
+    expect(next.events).toHaveLength(1)
+    expect(next.backgroundWorkers).toHaveLength(1)
+    expect(next.metrics).toEqual({ lifetime: { issues_completed: 10 } })
+    expect(next.githubMetrics).toEqual({ open_by_label: {}, total_closed: 5, total_merged: 3 })
+    expect(next.metricsHistory).toHaveLength(1)
+
+    // Session fields cleared
+    expect(next.workers).toEqual({})
+    expect(next.mergedCount).toBe(0)
+  })
+})

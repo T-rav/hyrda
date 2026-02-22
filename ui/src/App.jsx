@@ -7,7 +7,6 @@ import { HITLTable } from './components/HITLTable'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
-import { PipelineControlPanel } from './components/PipelineControlPanel'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
@@ -37,12 +36,11 @@ function AppContent() {
     connected, orchestratorStatus, workers, prs,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
-    requestChanges,
+    requestChanges, resetSession,
   } = useHydraFlow()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
-  const [pipelinePanelOpen, setPipelinePanelOpen] = useState(true)
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
@@ -57,10 +55,11 @@ function AppContent() {
   }, [workers, selectedWorker])
 
   const handleStart = useCallback(async () => {
+    resetSession()
     try {
       await fetch('/api/control/start', { method: 'POST' })
     } catch { /* ignore */ }
-  }, [])
+  }, [resetSession])
 
   const handleStop = useCallback(async () => {
     try {
@@ -92,10 +91,6 @@ function AppContent() {
     return ok
   }, [requestChanges])
 
-  const handleTogglePipelinePanel = useCallback(() => {
-    setPipelinePanelOpen(prev => !prev)
-  }, [])
-
   return (
     <div style={styles.layout}>
       <Header
@@ -103,8 +98,6 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        pipelinePanelOpen={pipelinePanelOpen}
-        onTogglePipelinePanel={handleTogglePipelinePanel}
       />
 
       <div style={styles.main}>
@@ -143,11 +136,6 @@ function AppContent() {
             {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
             {activeTab === 'metrics' && <MetricsPanel />}
           </div>
-          <PipelineControlPanel
-            collapsed={!pipelinePanelOpen}
-            onToggleCollapse={handleTogglePipelinePanel}
-            onToggleBgWorker={toggleBgWorker}
-          />
         </div>
       </div>
 

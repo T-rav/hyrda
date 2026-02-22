@@ -704,7 +704,7 @@ class AuditResult(BaseModel):
             names = ", ".join(c.name for c in missing)
             lines.append("")
             lines.append(f"Missing ({len(missing)}): {names}")
-            lines.append("Run `hydra prep` to scaffold missing pieces.")
+            lines.append("Run `hydraflow prep` to scaffold missing pieces.")
         else:
             lines.append("")
             lines.append("No gaps found. Repository is ready for HydraFlow.")
