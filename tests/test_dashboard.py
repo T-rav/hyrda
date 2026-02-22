@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraEvent
 from models import HITLItem, PRListItem
-from tests.conftest import make_orchestrator_mock
+from tests.conftest import EventFactory, make_orchestrator_mock
 
 if TYPE_CHECKING:
     from config import HydraConfig
@@ -371,7 +371,7 @@ class TestEventsRoute:
 
         async def publish() -> None:
             await event_bus.publish(
-                HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+                EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
             )
 
         asyncio.run(publish())
@@ -1128,10 +1128,12 @@ class TestWebSocketEndpoint:
 
         async def publish_events() -> None:
             await event_bus.publish(
-                HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+                EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
             )
             await event_bus.publish(
-                HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "implement"})
+                EventFactory.create(
+                    type=EventType.PHASE_CHANGE, data={"phase": "implement"}
+                )
             )
 
         asyncio.run(publish_events())
@@ -1160,7 +1162,7 @@ class TestWebSocketEndpoint:
 
         async def publish() -> None:
             await event_bus.publish(
-                HydraEvent(
+                EventFactory.create(
                     type=EventType.WORKER_UPDATE,
                     data={"issue": 42, "status": "running"},
                 )
@@ -1191,7 +1193,7 @@ class TestWebSocketEndpoint:
 
         from dashboard import HydraDashboard
 
-        event = HydraEvent(type=EventType.PR_CREATED, data={"pr": 99})
+        event = EventFactory.create(type=EventType.PR_CREATED, data={"pr": 99})
 
         original_subscribe = event_bus.subscribe
 
@@ -1221,7 +1223,7 @@ class TestWebSocketEndpoint:
 
         from dashboard import HydraDashboard
 
-        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+        event = EventFactory.create(type=EventType.BATCH_START, data={"x": 1})
 
         original_subscribe = event_bus.subscribe
 
@@ -1251,7 +1253,7 @@ class TestWebSocketEndpoint:
 
         from dashboard import HydraDashboard
 
-        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+        event = EventFactory.create(type=EventType.BATCH_START, data={"x": 1})
 
         original_subscribe = event_bus.subscribe
 
@@ -1291,10 +1293,10 @@ class TestWebSocketEndpoint:
 
         async def publish_events() -> None:
             await event_bus.publish(
-                HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+                EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
             )
             await event_bus.publish(
-                HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "plan"})
+                EventFactory.create(type=EventType.PHASE_CHANGE, data={"phase": "plan"})
             )
 
         asyncio.run(publish_events())
@@ -1326,13 +1328,13 @@ class TestWebSocketEndpoint:
 
         async def publish_events() -> None:
             await event_bus.publish(
-                HydraEvent(type=EventType.BATCH_START, data={"step": 1})
+                EventFactory.create(type=EventType.BATCH_START, data={"step": 1})
             )
             await event_bus.publish(
-                HydraEvent(type=EventType.PHASE_CHANGE, data={"step": 2})
+                EventFactory.create(type=EventType.PHASE_CHANGE, data={"step": 2})
             )
             await event_bus.publish(
-                HydraEvent(type=EventType.WORKER_UPDATE, data={"step": 3})
+                EventFactory.create(type=EventType.WORKER_UPDATE, data={"step": 3})
             )
 
         asyncio.run(publish_events())
@@ -2144,7 +2146,7 @@ class TestWebSocketErrorLogging:
         # Publish an event so history is non-empty
         async def publish() -> None:
             await event_bus.publish(
-                HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+                EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
             )
 
         asyncio.run(publish())
@@ -2180,7 +2182,7 @@ class TestWebSocketErrorLogging:
         client = TestClient(app)
 
         # Pre-populate a queue with one event so queue.get() returns immediately
-        event = HydraEvent(type=EventType.BATCH_START, data={"x": 1})
+        event = EventFactory.create(type=EventType.BATCH_START, data={"x": 1})
         pre_populated_queue: asyncio.Queue[HydraEvent] = asyncio.Queue()
         pre_populated_queue.put_nowait(event)
 

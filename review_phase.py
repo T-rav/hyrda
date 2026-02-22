@@ -11,6 +11,7 @@ from pathlib import Path
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from config import HydraConfig
+from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
 from models import (
@@ -57,6 +58,7 @@ class ReviewPhase:
         retrospective: RetrospectiveCollector | None = None,
         ac_generator: AcceptanceCriteriaGenerator | None = None,
         verification_judge: VerificationJudge | None = None,
+        epic_checker: EpicCompletionChecker | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -70,6 +72,7 @@ class ReviewPhase:
         self._retrospective = retrospective
         self._ac_generator = ac_generator
         self._verification_judge = verification_judge
+        self._epic_checker = epic_checker
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
         self._active_issues: set[int] = set()
 
@@ -324,7 +327,7 @@ class ReviewPhase:
         result: ReviewResult,
         diff: str,
     ) -> None:
-        """Run non-blocking post-merge hooks (AC, retrospective, judge)."""
+        """Run non-blocking post-merge hooks (AC, retrospective, judge, epic)."""
         if self._ac_generator:
             try:
                 await self._ac_generator.generate(
@@ -366,13 +369,15 @@ class ReviewPhase:
                     exc_info=True,
                 )
 
-        judge_result = await self._get_judge_result(issue, pr)
-        if judge_result is not None:
+        # Check if any parent epics can be closed
+        if self._epic_checker:
             try:
-                await self._create_verification_issue(issue, pr, judge_result)
+                await self._epic_checker.check_and_close_epics(
+                    pr.issue_number,
+                )
             except Exception:  # noqa: BLE001
                 logger.warning(
-                    "Verification issue creation failed for issue #%d",
+                    "Epic completion check failed for issue #%d",
                     pr.issue_number,
                     exc_info=True,
                 )
@@ -689,17 +694,6 @@ class ReviewPhase:
             )
             return False  # Destroy worktree
 
-    async def _get_judge_result(
-        self,
-        issue: GitHubIssue,  # noqa: ARG002
-        pr: PRInfo,  # noqa: ARG002
-    ) -> JudgeResult | None:
-        """Retrieve the judge result for a merged PR.
-
-        Returns None until the LLM judge (#268) is implemented.
-        """
-        return None
-
     async def _create_verification_issue(
         self,
         issue: GitHubIssue,
@@ -743,6 +737,8 @@ class ReviewPhase:
         agent to resolve them, and verifies with ``make quality``.
         Returns *True* if the conflicts were resolved successfully.
         """
+        from conflict_prompt import build_conflict_prompt
+
         if self._agents is None:
             logger.warning(
                 "No agent runner available for conflict resolution on PR #%d",
@@ -752,6 +748,10 @@ class ReviewPhase:
 
         max_attempts = self._config.max_merge_conflict_fix_attempts
         last_error: str | None = None
+
+        # Fetch context once before the attempt loop
+        pr_changed_files = await self._prs.get_pr_diff_names(pr.number)
+        main_commits = await self._worktrees.get_main_commits_since_diverge(wt_path)
 
         for attempt in range(1, max_attempts + 1):
             # Abort any prior failed merge before retrying
@@ -774,7 +774,9 @@ class ReviewPhase:
             )
 
             try:
-                prompt = self._build_conflict_prompt(issue, last_error, attempt)
+                prompt = build_conflict_prompt(
+                    issue, pr_changed_files, main_commits, last_error, attempt
+                )
                 cmd = self._agents._build_command(wt_path)
                 transcript = await self._agents._execute(
                     cmd, prompt, wt_path, issue.number
@@ -811,45 +813,6 @@ class ReviewPhase:
         # All attempts exhausted — abort and let caller escalate
         await self._worktrees.abort_merge(wt_path)
         return False
-
-    def _build_conflict_prompt(
-        self,
-        issue: GitHubIssue,
-        last_error: str | None,
-        attempt: int,
-    ) -> str:
-        """Build the conflict resolution prompt, adding error context on retries."""
-        prompt = (
-            f"The branch for issue #{issue.number} ({issue.title}) has "
-            f"merge conflicts with main.\n\n"
-            "There is a `git merge` in progress with conflict markers "
-            "in the working tree.\n\n"
-            "## Instructions\n\n"
-            "1. Run `git diff --name-only --diff-filter=U` to list "
-            "conflicted files.\n"
-            "2. Open each conflicted file, understand both sides of the "
-            "conflict, and resolve the markers.\n"
-            "3. Stage all resolved files with `git add`.\n"
-            "4. Complete the merge with "
-            "`git commit --no-edit`.\n"
-            "5. Run `make quality` to ensure everything passes.\n"
-            "6. If quality fails, fix the issues and commit again.\n\n"
-            "## Rules\n\n"
-            "- Keep the intent of the original PR changes.\n"
-            "- Incorporate upstream (main) changes correctly.\n"
-            "- Do NOT push to remote. Do NOT create pull requests.\n"
-            "- Ensure `make quality` passes before finishing.\n"
-        )
-        if last_error and attempt > 1:
-            prompt += (
-                f"\n## Previous Attempt Failed\n\n"
-                f"Attempt {attempt - 1} resolved the conflicts but "
-                f"failed verification:\n"
-                f"```\n{last_error[-3000:]}\n```\n"
-                f"Please resolve the conflicts again, paying attention "
-                f"to the above errors.\n"
-            )
-        return prompt
 
     def _save_conflict_transcript(
         self,

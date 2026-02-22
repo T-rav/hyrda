@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from events import EventBus, EventLog, EventType, HydraEvent
+from tests.conftest import EventFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -21,7 +22,7 @@ def _make_event(
     timestamp: str | None = None,
     data: dict | None = None,
 ) -> HydraEvent:
-    return HydraEvent(
+    return EventFactory.create(
         type=event_type,
         timestamp=timestamp or datetime.now(UTC).isoformat(),
         data=data or {},

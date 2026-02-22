@@ -12,8 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventType
 from hitl_runner import HITLRunner, _classify_cause
-from models import HITLResult
-from tests.conftest import IssueFactory
+from tests.conftest import HITLResultFactory, IssueFactory
 
 # ---------------------------------------------------------------------------
 # Cause classification
@@ -318,7 +317,7 @@ class TestHITLResult:
     """Tests for the HITLResult Pydantic model."""
 
     def test_defaults(self) -> None:
-        result = HITLResult(issue_number=42)
+        result = HITLResultFactory.create(success=False)
         assert result.issue_number == 42
         assert result.success is False
         assert result.error is None
@@ -326,6 +325,57 @@ class TestHITLResult:
         assert result.duration_seconds == 0.0
 
     def test_success_result(self) -> None:
-        result = HITLResult(issue_number=42, success=True, transcript="done")
+        result = HITLResultFactory.create(transcript="done")
         assert result.success is True
         assert result.transcript == "done"
+
+
+# ---------------------------------------------------------------------------
+# _verify_quality — timeout
+# ---------------------------------------------------------------------------
+
+
+class TestVerifyQualityTimeout:
+    """Tests for _verify_quality timeout behavior."""
+
+    @pytest.mark.asyncio
+    async def test_verify_quality_timeout_returns_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """_verify_quality should return (False, ...) when make quality times out."""
+        runner = HITLRunner(config, EventBus())
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+        ):
+            success, msg = await runner._verify_quality(Path("/tmp/wt"))
+
+        assert success is False
+        assert "timed out" in msg
+
+    @pytest.mark.asyncio
+    async def test_verify_quality_timeout_kills_process(
+        self, config: HydraConfig
+    ) -> None:
+        """_verify_quality should kill the process on timeout."""
+        runner = HITLRunner(config, EventBus())
+
+        mock_proc = AsyncMock()
+        mock_proc.returncode = None
+        mock_proc.kill = AsyncMock()
+        mock_proc.wait = AsyncMock()
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=mock_proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+        ):
+            await runner._verify_quality(Path("/tmp/wt"))
+
+        mock_proc.kill.assert_called_once()
+        mock_proc.wait.assert_awaited_once()

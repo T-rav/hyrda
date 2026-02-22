@@ -69,6 +69,7 @@ class ConfigFactory:
         improve_label: list[str] | None = None,
         memory_label: list[str] | None = None,
         dup_label: list[str] | None = None,
+        epic_label: list[str] | None = None,
         find_label: list[str] | None = None,
         planner_label: list[str] | None = None,
         planner_model: str = "opus",
@@ -103,6 +104,8 @@ class ConfigFactory:
         max_memory_prompt_chars: int = 4000,
         memory_sync_interval: int = 120,
         credit_pause_buffer_minutes: int = 1,
+        pr_unstick_interval: int = 3600,
+        pr_unstick_batch_size: int = 10,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -135,6 +138,7 @@ class ConfigFactory:
             else ["hydra-improve"],
             memory_label=memory_label if memory_label is not None else ["hydra-memory"],
             dup_label=dup_label if dup_label is not None else ["hydra-dup"],
+            epic_label=epic_label if epic_label is not None else ["hydra-epic"],
             find_label=find_label if find_label is not None else ["hydra-find"],
             planner_label=planner_label
             if planner_label is not None
@@ -172,6 +176,8 @@ class ConfigFactory:
             max_memory_prompt_chars=max_memory_prompt_chars,
             memory_sync_interval=memory_sync_interval,
             credit_pause_buffer_minutes=credit_pause_buffer_minutes,
+            pr_unstick_interval=pr_unstick_interval,
+            pr_unstick_batch_size=pr_unstick_batch_size,
         )
 
 

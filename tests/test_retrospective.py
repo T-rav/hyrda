@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import HydraConfig
 
-from models import ReviewResult, ReviewVerdict
 from retrospective import RetrospectiveCollector, RetrospectiveEntry
 from state import StateTracker
+from tests.conftest import ReviewResultFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,24 +39,6 @@ def _make_collector(
 
     collector = RetrospectiveCollector(config, state, mock_prs)
     return collector, mock_prs, state
-
-
-def _make_review_result(
-    pr_number: int = 101,
-    issue_number: int = 42,
-    verdict: ReviewVerdict = ReviewVerdict.APPROVE,
-    fixes_made: bool = False,
-    ci_fix_attempts: int = 0,
-) -> ReviewResult:
-    return ReviewResult(
-        pr_number=pr_number,
-        issue_number=issue_number,
-        verdict=verdict,
-        summary="Looks good.",
-        fixes_made=fixes_made,
-        ci_fix_attempts=ci_fix_attempts,
-        merged=True,
-    )
 
 
 def _write_plan(config: HydraConfig, issue_number: int, content: str) -> None:
@@ -314,7 +296,9 @@ class TestRecord:
             },
         )
 
-        review = _make_review_result(fixes_made=False, ci_fix_attempts=0)
+        review = ReviewResultFactory.create(
+            merged=True, fixes_made=False, ci_fix_attempts=0
+        )
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -343,7 +327,7 @@ class TestRecord:
         """When plan file doesn't exist, should still record with empty planned_files."""
         collector, _, _ = _make_collector(config, diff_names=["src/foo.py"])
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -358,7 +342,7 @@ class TestRecord:
         collector, _, _ = _make_collector(config, diff_names=[])
 
         _write_plan(config, 42, "## Files to Modify\n\n- `src/foo.py`\n")
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -374,7 +358,7 @@ class TestRecord:
         """When worker metadata not in state, should use defaults."""
         collector, _, _ = _make_collector(config, diff_names=["src/foo.py"])
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         await collector.record(42, 101, review)
 
         retro_path = config.repo_root / ".hydra" / "memory" / "retrospectives.jsonl"
@@ -391,7 +375,7 @@ class TestRecord:
             side_effect=RuntimeError("network error")
         )
 
-        review = _make_review_result()
+        review = ReviewResultFactory.create(merged=True)
         # Should not raise
         await collector.record(42, 101, review)
 

@@ -134,6 +134,47 @@ class TestOrchestratorBgWorkerTracking:
         assert orch.get_bg_worker_states() == {}
 
 
+class TestBgWorkerEnabled:
+    """Tests for is_bg_worker_enabled / set_bg_worker_enabled."""
+
+    def test_is_bg_worker_enabled_defaults_to_true(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        assert orch.is_bg_worker_enabled("memory_sync") is True
+
+    def test_set_bg_worker_enabled_false(self, config, event_bus: EventBus) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("memory_sync", False)
+        assert orch.is_bg_worker_enabled("memory_sync") is False
+
+    def test_set_bg_worker_enabled_true_after_disable(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("metrics", False)
+        orch.set_bg_worker_enabled("metrics", True)
+        assert orch.is_bg_worker_enabled("metrics") is True
+
+    def test_get_bg_worker_states_includes_enabled_flag(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.update_bg_worker_status("memory_sync", "ok")
+        orch.set_bg_worker_enabled("memory_sync", False)
+
+        states = orch.get_bg_worker_states()
+        assert states["memory_sync"]["enabled"] is False
+
+
 class TestSystemWorkersEndpoint:
     """Tests for GET /api/system/workers."""
 
@@ -182,7 +223,7 @@ class TestSystemWorkersEndpoint:
 
         response = await endpoint()
         data = json.loads(response.body)
-        assert len(data["workers"]) == 8
+        assert len(data["workers"]) == 9
         names = [w["name"] for w in data["workers"]]
         assert names == [
             "triage",
@@ -193,6 +234,7 @@ class TestSystemWorkersEndpoint:
             "retrospective",
             "metrics",
             "review_insights",
+            "pr_unsticker",
         ]
 
     @pytest.mark.asyncio

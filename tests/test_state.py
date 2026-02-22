@@ -678,46 +678,54 @@ class TestLifetimeStats:
         """A fresh tracker should include zeroed lifetime_stats."""
         tracker = make_tracker(tmp_path)
         stats = tracker.get_lifetime_stats()
-        assert stats["issues_completed"] == 0
-        assert stats["prs_merged"] == 0
-        assert stats["issues_created"] == 0
-        assert stats["total_quality_fix_rounds"] == 0
-        assert stats["total_ci_fix_rounds"] == 0
-        assert stats["total_hitl_escalations"] == 0
-        assert stats["total_review_request_changes"] == 0
-        assert stats["total_review_approvals"] == 0
-        assert stats["total_reviewer_fixes"] == 0
-        assert stats["total_implementation_seconds"] == 0.0
-        assert stats["total_review_seconds"] == 0.0
+        assert stats.issues_completed == 0
+        assert stats.prs_merged == 0
+        assert stats.issues_created == 0
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_ci_fix_rounds == 0
+        assert stats.total_hitl_escalations == 0
+        assert stats.total_review_request_changes == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_reviewer_fixes == 0
+        assert stats.total_implementation_seconds == 0.0
+        assert stats.total_review_seconds == 0.0
 
     def test_record_issue_completed_increments(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_issue_completed()
-        assert tracker.get_lifetime_stats()["issues_completed"] == 1
+        assert tracker.get_lifetime_stats().issues_completed == 1
 
     def test_record_pr_merged_increments(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_pr_merged()
-        assert tracker.get_lifetime_stats()["prs_merged"] == 1
+        assert tracker.get_lifetime_stats().prs_merged == 1
 
     def test_record_issue_created_increments(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_issue_created()
-        assert tracker.get_lifetime_stats()["issues_created"] == 1
+        assert tracker.get_lifetime_stats().issues_created == 1
 
     def test_multiple_increments_accumulate(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         for _ in range(3):
             tracker.record_pr_merged()
-        assert tracker.get_lifetime_stats()["prs_merged"] == 3
+        assert tracker.get_lifetime_stats().prs_merged == 3
 
     def test_get_lifetime_stats_returns_copy(self, tmp_path: Path) -> None:
-        """Mutating the returned dict must not affect internal state."""
+        """Mutating the returned model must not affect internal state."""
         tracker = make_tracker(tmp_path)
         tracker.record_issue_completed()
         stats = tracker.get_lifetime_stats()
-        stats["issues_completed"] = 999
-        assert tracker.get_lifetime_stats()["issues_completed"] == 1
+        stats.issues_completed = 999
+        assert tracker.get_lifetime_stats().issues_completed == 1
+
+    def test_get_lifetime_stats_returns_lifetime_stats_instance(
+        self, tmp_path: Path
+    ) -> None:
+        """get_lifetime_stats should return a LifetimeStats model instance."""
+        tracker = make_tracker(tmp_path)
+        result = tracker.get_lifetime_stats()
+        assert isinstance(result, LifetimeStats)
 
     def test_lifetime_stats_persist_across_reload(self, tmp_path: Path) -> None:
         state_file = tmp_path / "state.json"
@@ -728,8 +736,8 @@ class TestLifetimeStats:
 
         tracker2 = StateTracker(state_file)
         stats = tracker2.get_lifetime_stats()
-        assert stats["prs_merged"] == 1
-        assert stats["issues_created"] == 2
+        assert stats.prs_merged == 1
+        assert stats.issues_created == 2
 
     def test_reset_preserves_lifetime_stats(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
@@ -746,9 +754,9 @@ class TestLifetimeStats:
         assert tracker.get_issue_status(1) is None
         # Lifetime stats should survive
         stats = tracker.get_lifetime_stats()
-        assert stats["prs_merged"] == 1
-        assert stats["issues_completed"] == 1
-        assert stats["issues_created"] == 1
+        assert stats.prs_merged == 1
+        assert stats.issues_completed == 1
+        assert stats.issues_created == 1
 
     def test_migration_adds_lifetime_stats_to_old_file(self, tmp_path: Path) -> None:
         """Loading a state file without lifetime_stats should inject zero defaults."""
@@ -765,11 +773,11 @@ class TestLifetimeStats:
 
         tracker = StateTracker(state_file)
         stats = tracker.get_lifetime_stats()
-        assert stats["issues_completed"] == 0
-        assert stats["prs_merged"] == 0
-        assert stats["issues_created"] == 0
-        assert stats["total_quality_fix_rounds"] == 0
-        assert stats["total_hitl_escalations"] == 0
+        assert stats.issues_completed == 0
+        assert stats.prs_merged == 0
+        assert stats.issues_created == 0
+        assert stats.total_quality_fix_rounds == 0
+        assert stats.total_hitl_escalations == 0
         # Existing data is preserved
         assert tracker.get_current_batch() == 5
         assert tracker.get_issue_status(1) == "success"
@@ -1138,58 +1146,58 @@ class TestRecordingMethods:
     def test_record_quality_fix_rounds(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_quality_fix_rounds(3)
-        assert tracker.get_lifetime_stats()["total_quality_fix_rounds"] == 3
+        assert tracker.get_lifetime_stats().total_quality_fix_rounds == 3
 
     def test_record_quality_fix_rounds_accumulates(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_quality_fix_rounds(2)
         tracker.record_quality_fix_rounds(1)
-        assert tracker.get_lifetime_stats()["total_quality_fix_rounds"] == 3
+        assert tracker.get_lifetime_stats().total_quality_fix_rounds == 3
 
     def test_record_ci_fix_rounds(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_ci_fix_rounds(2)
-        assert tracker.get_lifetime_stats()["total_ci_fix_rounds"] == 2
+        assert tracker.get_lifetime_stats().total_ci_fix_rounds == 2
 
     def test_record_ci_fix_rounds_accumulates(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_ci_fix_rounds(1)
         tracker.record_ci_fix_rounds(3)
-        assert tracker.get_lifetime_stats()["total_ci_fix_rounds"] == 4
+        assert tracker.get_lifetime_stats().total_ci_fix_rounds == 4
 
     def test_record_hitl_escalation(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_hitl_escalation()
-        assert tracker.get_lifetime_stats()["total_hitl_escalations"] == 1
+        assert tracker.get_lifetime_stats().total_hitl_escalations == 1
 
     def test_record_hitl_escalation_increments(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_hitl_escalation()
         tracker.record_hitl_escalation()
-        assert tracker.get_lifetime_stats()["total_hitl_escalations"] == 2
+        assert tracker.get_lifetime_stats().total_hitl_escalations == 2
 
     def test_record_review_verdict_approve(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_review_verdict("approve", fixes_made=False)
         stats = tracker.get_lifetime_stats()
-        assert stats["total_review_approvals"] == 1
-        assert stats["total_review_request_changes"] == 0
-        assert stats["total_reviewer_fixes"] == 0
+        assert stats.total_review_approvals == 1
+        assert stats.total_review_request_changes == 0
+        assert stats.total_reviewer_fixes == 0
 
     def test_record_review_verdict_request_changes(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_review_verdict("request-changes", fixes_made=False)
         stats = tracker.get_lifetime_stats()
-        assert stats["total_review_approvals"] == 0
-        assert stats["total_review_request_changes"] == 1
-        assert stats["total_reviewer_fixes"] == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_review_request_changes == 1
+        assert stats.total_reviewer_fixes == 0
 
     def test_record_review_verdict_with_fixes(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_review_verdict("approve", fixes_made=True)
         stats = tracker.get_lifetime_stats()
-        assert stats["total_review_approvals"] == 1
-        assert stats["total_reviewer_fixes"] == 1
+        assert stats.total_review_approvals == 1
+        assert stats.total_reviewer_fixes == 1
 
     def test_record_review_verdict_comment_does_not_affect_counts(
         self, tmp_path: Path
@@ -1197,38 +1205,36 @@ class TestRecordingMethods:
         tracker = make_tracker(tmp_path)
         tracker.record_review_verdict("comment", fixes_made=False)
         stats = tracker.get_lifetime_stats()
-        assert stats["total_review_approvals"] == 0
-        assert stats["total_review_request_changes"] == 0
+        assert stats.total_review_approvals == 0
+        assert stats.total_review_request_changes == 0
 
     def test_record_implementation_duration(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_implementation_duration(45.5)
-        assert tracker.get_lifetime_stats()[
-            "total_implementation_seconds"
-        ] == pytest.approx(45.5)
+        assert (
+            tracker.get_lifetime_stats().total_implementation_seconds
+            == pytest.approx(45.5)
+        )
 
     def test_record_implementation_duration_accumulates(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_implementation_duration(10.0)
         tracker.record_implementation_duration(20.5)
-        assert tracker.get_lifetime_stats()[
-            "total_implementation_seconds"
-        ] == pytest.approx(30.5)
+        assert (
+            tracker.get_lifetime_stats().total_implementation_seconds
+            == pytest.approx(30.5)
+        )
 
     def test_record_review_duration(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_review_duration(30.0)
-        assert tracker.get_lifetime_stats()["total_review_seconds"] == pytest.approx(
-            30.0
-        )
+        assert tracker.get_lifetime_stats().total_review_seconds == pytest.approx(30.0)
 
     def test_record_review_duration_accumulates(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         tracker.record_review_duration(15.0)
         tracker.record_review_duration(25.0)
-        assert tracker.get_lifetime_stats()["total_review_seconds"] == pytest.approx(
-            40.0
-        )
+        assert tracker.get_lifetime_stats().total_review_seconds == pytest.approx(40.0)
 
     def test_new_stats_persist_across_reload(self, tmp_path: Path) -> None:
         state_file = tmp_path / "state.json"
@@ -1242,13 +1248,13 @@ class TestRecordingMethods:
 
         tracker2 = StateTracker(state_file)
         stats = tracker2.get_lifetime_stats()
-        assert stats["total_quality_fix_rounds"] == 2
-        assert stats["total_ci_fix_rounds"] == 1
-        assert stats["total_hitl_escalations"] == 1
-        assert stats["total_review_approvals"] == 1
-        assert stats["total_reviewer_fixes"] == 1
-        assert stats["total_implementation_seconds"] == pytest.approx(60.0)
-        assert stats["total_review_seconds"] == pytest.approx(30.0)
+        assert stats.total_quality_fix_rounds == 2
+        assert stats.total_ci_fix_rounds == 1
+        assert stats.total_hitl_escalations == 1
+        assert stats.total_review_approvals == 1
+        assert stats.total_reviewer_fixes == 1
+        assert stats.total_implementation_seconds == pytest.approx(60.0)
+        assert stats.total_review_seconds == pytest.approx(30.0)
 
     def test_new_stats_preserved_across_reset(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
@@ -1261,9 +1267,9 @@ class TestRecordingMethods:
 
         assert tracker.get_issue_status(1) is None
         stats = tracker.get_lifetime_stats()
-        assert stats["total_quality_fix_rounds"] == 3
-        assert stats["total_hitl_escalations"] == 1
-        assert stats["total_implementation_seconds"] == pytest.approx(100.0)
+        assert stats.total_quality_fix_rounds == 3
+        assert stats.total_hitl_escalations == 1
+        assert stats.total_implementation_seconds == pytest.approx(100.0)
 
 
 # ---------------------------------------------------------------------------

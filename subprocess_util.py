@@ -18,6 +18,10 @@ class AuthenticationError(RuntimeError):
     """Raised when a subprocess fails due to GitHub authentication issues."""
 
 
+class SubprocessTimeoutError(RuntimeError):
+    """Raised when a subprocess exceeds its allowed execution time."""
+
+
 class CreditExhaustedError(RuntimeError):
     """Raised when a subprocess fails because API credits are exhausted.
 
@@ -125,6 +129,7 @@ async def run_subprocess(
     *cmd: str,
     cwd: Path | None = None,
     gh_token: str = "",
+    timeout: float = 120.0,
 ) -> str:
     """Run a subprocess and return stripped stdout.
 
@@ -132,6 +137,7 @@ async def run_subprocess(
     nesting detection.  When *gh_token* is non-empty it is injected
     as ``GH_TOKEN``.
 
+    Raises :class:`SubprocessTimeoutError` if the command exceeds *timeout* seconds.
     Raises :class:`RuntimeError` on non-zero exit.
     """
     env = make_clean_env(gh_token)
@@ -143,7 +149,14 @@ async def run_subprocess(
         stderr=asyncio.subprocess.PIPE,
         env=env,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except TimeoutError:
+        proc.kill()
+        await proc.wait()
+        raise SubprocessTimeoutError(
+            f"Command {cmd!r} timed out after {timeout}s"
+        ) from None
     if proc.returncode != 0:
         stderr_text = stderr.decode().strip()
         msg = f"Command {cmd!r} failed (rc={proc.returncode}): {stderr_text}"
@@ -153,7 +166,15 @@ async def run_subprocess(
     return stdout.decode().strip()
 
 
-_RETRYABLE_PATTERNS = ("rate limit", "timeout", "connection", "502", "503", "504")
+_RETRYABLE_PATTERNS = (
+    "rate limit",
+    "timeout",
+    "timed out",
+    "connection",
+    "502",
+    "503",
+    "504",
+)
 _NON_RETRYABLE_PATTERNS = ("401", "403", "404")
 
 
@@ -176,6 +197,7 @@ async def run_subprocess_with_retry(
     max_retries: int = 3,
     base_delay_seconds: float = 1.0,
     max_delay_seconds: float = 30.0,
+    timeout: float = 120.0,
 ) -> str:
     """Run a subprocess with exponential backoff retry on transient errors.
 
@@ -187,9 +209,11 @@ async def run_subprocess_with_retry(
     last_error: RuntimeError | None = None
     for attempt in range(max_retries + 1):
         try:
-            return await run_subprocess(*cmd, cwd=cwd, gh_token=gh_token)
+            return await run_subprocess(
+                *cmd, cwd=cwd, gh_token=gh_token, timeout=timeout
+            )
         except RuntimeError as exc:
-            if isinstance(exc, (AuthenticationError, CreditExhaustedError)):
+            if isinstance(exc, AuthenticationError | CreditExhaustedError):
                 raise
             last_error = exc
             error_msg = str(exc)

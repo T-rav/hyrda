@@ -233,14 +233,17 @@ class HITLRunner:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                output = stdout.decode(errors="replace") + stderr.decode(
-                    errors="replace"
-                )
-                return False, f"`make quality` failed:\n{output[-3000:]}"
         except FileNotFoundError:
             return False, "make not found — cannot run quality checks"
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return False, "make quality timed out after 3600s"
+        if proc.returncode != 0:
+            output = stdout.decode(errors="replace") + stderr.decode(errors="replace")
+            return False, f"`make quality` failed:\n{output[-3000:]}"
         return True, "OK"
 
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
