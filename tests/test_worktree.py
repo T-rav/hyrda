@@ -1148,6 +1148,112 @@ class TestAbortMerge:
             await manager.abort_merge(tmp_path)
 
 
+# ---------------------------------------------------------------------------
+# WorktreeManager.get_main_commits_since_diverge
+# ---------------------------------------------------------------------------
+
+
+class TestGetMainCommitsSinceDiverge:
+    """Tests for WorktreeManager.get_main_commits_since_diverge."""
+
+    @pytest.mark.asyncio
+    async def test_returns_commit_log(self, config, tmp_path: Path) -> None:
+        """Should return oneline commits from HEAD..origin/main."""
+        manager = WorktreeManager(config)
+
+        fetch_proc = _make_proc(returncode=0)
+        log_output = b"abc1234 Add feature X\ndef5678 Fix bug Y\n"
+        log_proc = _make_proc(returncode=0, stdout=log_output)
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return fetch_proc
+            return log_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_commits_since_diverge(tmp_path)
+
+        assert "abc1234 Add feature X" in result
+        assert "def5678 Fix bug Y" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_fetch_failure(self, config, tmp_path: Path) -> None:
+        """Should return empty string when git fetch fails."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            result = await manager.get_main_commits_since_diverge(tmp_path)
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_log_failure(self, config, tmp_path: Path) -> None:
+        """Should return empty string when git log fails."""
+        manager = WorktreeManager(config)
+
+        fetch_proc = _make_proc(returncode=0)
+        log_fail_proc = _make_proc(returncode=1, stderr=b"fatal: bad revision")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return fetch_proc
+            return log_fail_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_commits_since_diverge(tmp_path)
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_diverged_commits(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return empty string when branch is up to date with main."""
+        manager = WorktreeManager(config)
+
+        fetch_proc = _make_proc(returncode=0)
+        log_proc = _make_proc(returncode=0, stdout=b"")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return fetch_proc
+            return log_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_commits_since_diverge(tmp_path)
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_passes_limit_flag(self, config, tmp_path: Path) -> None:
+        """Should pass -30 to limit the number of commits."""
+        manager = WorktreeManager(config)
+
+        success_proc = _make_proc(returncode=0, stdout=b"abc123 commit\n")
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager.get_main_commits_since_diverge(tmp_path)
+
+        # Second call is git log
+        log_call = mock_exec.call_args_list[1]
+        assert "-30" in log_call.args
+
+
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,
 # GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
 # since the logic was extracted into subprocess_util.run_subprocess.

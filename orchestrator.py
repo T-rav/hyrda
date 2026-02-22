@@ -11,38 +11,33 @@ from typing import Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
-from analysis import PlanAnalyzer
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from hitl_phase import HITLPhase
 from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
 from issue_fetcher import IssueFetcher
 from issue_store import IssueStore
-from memory import MemorySyncWorker, build_memory_issue_body, parse_memory_suggestion
-from models import (
-    GitHubIssue,
-    Phase,
-    PlanResult,
-)
+from memory import MemorySyncWorker, file_memory_suggestion
+from memory_sync_loop import MemorySyncLoop
+from metrics_sync_loop import MetricsSyncLoop
+from models import Phase
+from plan_phase import PlanPhase
 from planner import PlannerRunner
 from pr_manager import PRManager
+from pr_unsticker import PRUnsticker
+from pr_unsticker_loop import PRUnstickerLoop
 from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
 from subprocess_util import AuthenticationError, CreditExhaustedError
 from triage import TriageRunner
+from triage_phase import TriagePhase
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
 logger = logging.getLogger("hydra.orchestrator")
-
-_HITL_ORIGIN_DISPLAY: dict[str, str] = {
-    "hydra-find": "from triage",
-    "hydra-plan": "from plan",
-    "hydra-ready": "from implement",
-    "hydra-review": "from review",
-}
 
 
 class HydraOrchestrator:
@@ -77,11 +72,8 @@ class HydraOrchestrator:
         # In-memory tracking of active issues (avoids double-processing)
         self._active_impl_issues: set[int] = set()
         self._active_review_issues: set[int] = set()
-        self._active_hitl_issues: set[int] = set()
         # Issues recovered from persisted state on startup (one-cycle grace period)
         self._recovered_issues: set[int] = set()
-        # HITL corrections: {issue_number: correction_text}
-        self._hitl_corrections: dict[int, str] = {}
         # Stop mechanism for dashboard control
         self._stop_event = asyncio.Event()
         self._running = False
@@ -100,6 +92,36 @@ class HydraOrchestrator:
         self._store = IssueStore(config, self._fetcher, self._bus)
 
         # Delegate phases to focused modules
+        self._triager = TriagePhase(
+            config,
+            self._state,
+            self._store,
+            self._triage,
+            self._prs,
+            self._bus,
+            self._stop_event,
+        )
+        self._planner_phase = PlanPhase(
+            config,
+            self._state,
+            self._store,
+            self._planners,
+            self._prs,
+            self._bus,
+            self._stop_event,
+        )
+        self._hitl_phase = HITLPhase(
+            config,
+            self._state,
+            self._store,
+            self._fetcher,
+            self._worktrees,
+            self._hitl_runner,
+            self._prs,
+            self._bus,
+            self._stop_event,
+            active_issues_cb=self._sync_active_issue_numbers,
+        )
         self._implementer = ImplementPhase(
             config,
             self._state,
@@ -113,6 +135,15 @@ class HydraOrchestrator:
 
         self._metrics_manager = MetricsManager(
             config, self._state, self._prs, self._bus
+        )
+        self._pr_unsticker = PRUnsticker(
+            config,
+            self._state,
+            self._bus,
+            self._prs,
+            self._agents,
+            self._worktrees,
+            self._fetcher,
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
@@ -131,6 +162,36 @@ class HydraOrchestrator:
             retrospective=self._retrospective,
             ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
+        )
+        self._memory_sync_bg = MemorySyncLoop(
+            config,
+            self._fetcher,
+            self._memory_sync,
+            self._bus,
+            self._stop_event,
+            status_cb=self.update_bg_worker_status,
+            enabled_cb=self.is_bg_worker_enabled,
+            sleep_fn=self._sleep_or_stop,
+        )
+        self._metrics_sync_bg = MetricsSyncLoop(
+            config,
+            self._store,
+            self._metrics_manager,
+            self._bus,
+            self._stop_event,
+            status_cb=self.update_bg_worker_status,
+            enabled_cb=self.is_bg_worker_enabled,
+            sleep_fn=self._sleep_or_stop,
+        )
+        self._pr_unsticker_loop = PRUnstickerLoop(
+            config,
+            self._pr_unsticker,
+            self._prs,
+            self._bus,
+            self._stop_event,
+            status_cb=self.update_bg_worker_status,
+            enabled_cb=self.is_bg_worker_enabled,
+            sleep_fn=self._sleep_or_stop,
         )
 
     @property
@@ -204,29 +265,15 @@ class HydraOrchestrator:
 
     def submit_hitl_correction(self, issue_number: int, correction: str) -> None:
         """Store a correction for a HITL issue to guide retry."""
-        self._hitl_corrections[issue_number] = correction
+        self._hitl_phase.submit_correction(issue_number, correction)
 
     def get_hitl_status(self, issue_number: int) -> str:
-        """Return the HITL status for an issue.
-
-        Returns ``"processing"`` for actively-running issues, or a
-        human-readable origin label (e.g. ``"from review"``) for items
-        waiting on human action.  Falls back to ``"pending"`` when no
-        origin data is available.
-        """
-        if (
-            self._store.is_active(issue_number)
-            or issue_number in self._active_hitl_issues
-        ):
-            return "processing"
-        origin = self._state.get_hitl_origin(issue_number)
-        if origin:
-            return _HITL_ORIGIN_DISPLAY.get(origin, "pending")
-        return "pending"
+        """Return the HITL status for an issue."""
+        return self._hitl_phase.get_status(issue_number)
 
     def skip_hitl_issue(self, issue_number: int) -> None:
         """Remove an issue from HITL tracking."""
-        self._hitl_corrections.pop(issue_number, None)
+        self._hitl_phase.skip_issue(issue_number)
 
     async def stop(self) -> None:
         """Signal the orchestrator to stop and kill active subprocesses."""
@@ -250,7 +297,27 @@ class HydraOrchestrator:
         self._store.clear_active()
         self._active_impl_issues.clear()
         self._active_review_issues.clear()
-        self._active_hitl_issues.clear()
+        self._hitl_phase.active_hitl_issues.clear()
+
+    @property
+    def _active_hitl_issues(self) -> set[int]:
+        """Backward-compatible access to HITL active issues."""
+        return self._hitl_phase.active_hitl_issues
+
+    @property
+    def _hitl_corrections(self) -> dict[int, str]:
+        """Backward-compatible access to HITL corrections dict."""
+        return self._hitl_phase.hitl_corrections
+
+    def _sync_active_issue_numbers(self) -> None:
+        """Persist the combined active issue set to state."""
+        self._state.set_active_issue_numbers(
+            list(
+                self._active_impl_issues
+                | self._active_review_issues
+                | self._hitl_phase.active_hitl_issues
+            )
+        )
 
     def update_bg_worker_status(
         self, name: str, status: str, details: dict[str, Any] | None = None
@@ -347,6 +414,7 @@ class HydraOrchestrator:
             ("hitl", self._hitl_loop),
             ("memory_sync", self._memory_sync_loop),
             ("metrics", self._metrics_sync_loop),
+            ("pr_unsticker", self._pr_unsticker_loop.run),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -448,7 +516,7 @@ class HydraOrchestrator:
         """Continuously poll for find-labeled issues and triage them."""
         await self._polling_loop(
             "triage",
-            self._triage_find_issues,
+            self._triager.triage_issues,
             self._config.poll_interval,
             enabled_name="triage",
         )
@@ -457,7 +525,7 @@ class HydraOrchestrator:
         """Continuously poll for planner-labeled issues."""
         await self._polling_loop(
             "plan",
-            self._plan_issues,
+            self._planner_phase.plan_issues,
             self._config.poll_interval,
             enabled_name="plan",
         )
@@ -484,27 +552,17 @@ class HydraOrchestrator:
         """Continuously process HITL corrections submitted via the dashboard."""
         await self._polling_loop(
             "hitl",
-            self._process_hitl_corrections,
+            self._hitl_phase.process_corrections,
             self._config.poll_interval,
         )
 
     async def _memory_sync_loop(self) -> None:
         """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
-        await self._polling_loop(
-            "memory_sync",
-            self._do_memory_sync_work,
-            self._config.memory_sync_interval,
-            enabled_name="memory_sync",
-        )
+        await self._memory_sync_bg.run()
 
     async def _metrics_sync_loop(self) -> None:
         """Continuously aggregate and persist metrics snapshots."""
-        await self._polling_loop(
-            "metrics",
-            self._do_metrics_sync_work,
-            self._config.metrics_sync_interval,
-            enabled_name="metrics",
-        )
+        await self._metrics_sync_bg.run()
 
     async def _do_implement_work(self) -> None:
         """Work function for the implement loop."""
@@ -523,10 +581,13 @@ class HydraOrchestrator:
         for result in results:
             if result.transcript:
                 try:
-                    await self._file_memory_suggestion(
+                    await file_memory_suggestion(
                         result.transcript,
                         "implementer",
                         f"issue #{result.issue_number}",
+                        self._config,
+                        self._prs,
+                        self._state,
                     )
                 except Exception:
                     logger.exception(
@@ -549,10 +610,13 @@ class HydraOrchestrator:
         for result in review_results:
             if result.transcript:
                 try:
-                    await self._file_memory_suggestion(
+                    await file_memory_suggestion(
                         result.transcript,
                         "reviewer",
                         f"PR #{result.pr_number}",
+                        self._config,
+                        self._prs,
+                        self._state,
                     )
                 except Exception:
                     logger.exception(
@@ -562,242 +626,6 @@ class HydraOrchestrator:
         if any(r.merged for r in review_results):
             await asyncio.sleep(5)
             await self._prs.pull_main()
-
-    async def _do_memory_sync_work(self) -> None:
-        """Work function for the memory sync loop."""
-        try:
-            issues = await self._fetcher.fetch_issues_by_labels(
-                self._config.memory_label, limit=100
-            )
-            issue_dicts = [
-                {
-                    "number": i.number,
-                    "title": i.title,
-                    "body": i.body,
-                    "createdAt": i.created_at,
-                }
-                for i in issues
-            ]
-            stats = await self._memory_sync.sync(issue_dicts)
-            await self._memory_sync.publish_sync_event(stats)
-            self.update_bg_worker_status("memory_sync", "ok", details=stats)
-        except Exception:
-            self.update_bg_worker_status("memory_sync", "error")
-            raise
-
-    async def _do_metrics_sync_work(self) -> None:
-        """Work function for the metrics sync loop."""
-        try:
-            queue_stats = self._store.get_queue_stats()
-            stats = await self._metrics_manager.sync(queue_stats)
-            self.update_bg_worker_status("metrics", "ok", details=stats)
-        except Exception:
-            self.update_bg_worker_status("metrics", "error")
-            raise
-
-    async def _file_memory_suggestion(
-        self, transcript: str, source: str, reference: str
-    ) -> None:
-        """Parse and file a memory suggestion from an agent transcript."""
-        suggestion = parse_memory_suggestion(transcript)
-        if not suggestion:
-            return
-
-        body = build_memory_issue_body(
-            learning=suggestion["learning"],
-            context=suggestion["context"],
-            source=source,
-            reference=reference,
-        )
-        title = f"[Memory] {suggestion['title']}"
-        labels = list(self._config.improve_label) + list(self._config.hitl_label)
-        issue_num = await self._prs.create_issue(title, body, labels)
-        if issue_num:
-            self._state.set_hitl_origin(issue_num, self._config.improve_label[0])
-            self._state.set_hitl_cause(issue_num, "Memory suggestion")
-            logger.info(
-                "Filed memory suggestion as issue #%d: %s",
-                issue_num,
-                suggestion["title"],
-            )
-
-    async def _process_hitl_corrections(self) -> None:
-        """Process all pending HITL corrections."""
-        if not self._hitl_corrections:
-            return
-
-        semaphore = asyncio.Semaphore(self._config.max_hitl_workers)
-
-        # Snapshot and clear pending corrections to avoid re-processing
-        pending = dict(self._hitl_corrections)
-        for issue_number in pending:
-            self._hitl_corrections.pop(issue_number, None)
-
-        tasks = [
-            asyncio.create_task(
-                self._process_one_hitl(issue_number, correction, semaphore)
-            )
-            for issue_number, correction in pending.items()
-        ]
-
-        for task in asyncio.as_completed(tasks):
-            await task
-            if self._stop_event.is_set():
-                for t in tasks:
-                    t.cancel()
-                break
-
-    async def _process_one_hitl(
-        self,
-        issue_number: int,
-        correction: str,
-        semaphore: asyncio.Semaphore,
-    ) -> None:
-        """Process a single HITL correction for *issue_number*."""
-        async with semaphore:
-            if self._stop_event.is_set():
-                return
-
-            self._active_hitl_issues.add(issue_number)
-            self._state.set_active_issue_numbers(
-                list(
-                    self._active_impl_issues
-                    | self._active_review_issues
-                    | self._active_hitl_issues
-                )
-            )
-            try:
-                issue = await self._fetcher.fetch_issue_by_number(issue_number)
-                if not issue:
-                    logger.warning(
-                        "Could not fetch issue #%d for HITL correction",
-                        issue_number,
-                    )
-                    return
-
-                cause = self._state.get_hitl_cause(issue_number) or "Unknown escalation"
-                origin = self._state.get_hitl_origin(issue_number)
-
-                branch = self._config.branch_for_issue(issue_number)
-                wt_path = self._config.worktree_path_for_issue(issue_number)
-                if not wt_path.is_dir():
-                    wt_path = await self._worktrees.create(issue_number, branch)
-                self._state.set_worktree(issue_number, str(wt_path))
-
-                for lbl in self._config.hitl_label:
-                    await self._prs.remove_label(issue_number, lbl)
-                await self._prs.add_labels(
-                    issue_number, [self._config.hitl_active_label[0]]
-                )
-
-                result = await self._hitl_runner.run(issue, correction, cause, wt_path)
-
-                for lbl in self._config.hitl_active_label:
-                    await self._prs.remove_label(issue_number, lbl)
-
-                if result.success:
-                    await self._hitl_handle_success(
-                        issue_number, origin, wt_path, branch
-                    )
-                else:
-                    await self._hitl_handle_failure(issue_number, result)
-            except Exception:
-                logger.exception("HITL processing failed for issue #%d", issue_number)
-            finally:
-                self._active_hitl_issues.discard(issue_number)
-                self._state.set_active_issue_numbers(
-                    list(
-                        self._active_impl_issues
-                        | self._active_review_issues
-                        | self._active_hitl_issues
-                    )
-                )
-
-    async def _hitl_handle_success(
-        self,
-        issue_number: int,
-        origin: str | None,
-        wt_path: Any,
-        branch: str,
-    ) -> None:
-        """Handle a successful HITL correction: push, re-label, clean up."""
-        await self._prs.push_branch(wt_path, branch)
-
-        if origin and origin in self._config.improve_label:
-            for lbl in self._config.improve_label:
-                await self._prs.remove_label(issue_number, lbl)
-            if self._config.find_label:
-                await self._prs.add_labels(issue_number, [self._config.find_label[0]])
-            target_stage = (
-                self._config.find_label[0] if self._config.find_label else "pipeline"
-            )
-        elif origin:
-            await self._prs.add_labels(issue_number, [origin])
-            target_stage = origin
-        else:
-            target_stage = "pipeline"
-
-        self._state.remove_hitl_origin(issue_number)
-        self._state.remove_hitl_cause(issue_number)
-        self._state.reset_issue_attempts(issue_number)
-
-        await self._prs.post_comment(
-            issue_number,
-            f"**HITL correction applied successfully.**\n\n"
-            f"Returning issue to `{target_stage}` stage."
-            f"\n\n---\n*Applied by Hydra HITL*",
-        )
-        await self._bus.publish(
-            HydraEvent(
-                type=EventType.HITL_UPDATE,
-                data={
-                    "issue": issue_number,
-                    "action": "resolved",
-                    "status": "resolved",
-                },
-            )
-        )
-        logger.info(
-            "HITL correction succeeded for issue #%d — returning to %s",
-            issue_number,
-            origin,
-        )
-
-        try:
-            await self._worktrees.destroy(issue_number)
-            self._state.remove_worktree(issue_number)
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not destroy worktree for issue #%d: %s",
-                issue_number,
-                exc,
-            )
-
-    async def _hitl_handle_failure(self, issue_number: int, result: Any) -> None:
-        """Handle a failed HITL correction: re-add label, post comment."""
-        await self._prs.add_labels(issue_number, [self._config.hitl_label[0]])
-        await self._prs.post_comment(
-            issue_number,
-            f"**HITL correction failed.**\n\n"
-            f"Error: {result.error or 'No details available'}"
-            f"\n\nPlease retry with different guidance."
-            f"\n\n---\n*Applied by Hydra HITL*",
-        )
-        await self._bus.publish(
-            HydraEvent(
-                type=EventType.HITL_UPDATE,
-                data={
-                    "issue": issue_number,
-                    "action": "failed",
-                    "status": "pending",
-                },
-            )
-        )
-        logger.warning(
-            "HITL correction failed for issue #%d: %s",
-            issue_number,
-            result.error,
-        )
 
     async def _sleep_or_stop(self, seconds: int | float) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -898,234 +726,6 @@ class HydraOrchestrator:
         )
         for loop_name, factory in loop_factories:
             tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
-
-    # --- Phase implementations (triage + plan remain here) ---
-
-    async def _triage_find_issues(self) -> None:
-        """Evaluate ``find_label`` issues and route them.
-
-        Issues with enough context go to ``planner_label`` (planning).
-        Issues lacking detail are escalated to ``hitl_label`` with a
-        comment explaining what is missing so the dashboard surfaces
-        them as "needs attention".
-        """
-        if not self._config.find_label:
-            return
-
-        issues = self._store.get_triageable(self._config.batch_size)
-        if not issues:
-            return
-
-        logger.info("Triaging %d found issues", len(issues))
-        for issue in issues:
-            if self._stop_event.is_set():
-                logger.info("Stop requested — aborting triage loop")
-                return
-
-            self._store.mark_active(issue.number, "find")
-            try:
-                result = await self._triage.evaluate(issue)
-
-                if self._config.dry_run:
-                    continue
-
-                # Remove find label regardless of outcome
-                for lbl in self._config.find_label:
-                    await self._prs.remove_label(issue.number, lbl)
-
-                if result.ready:
-                    await self._prs.add_labels(
-                        issue.number, [self._config.planner_label[0]]
-                    )
-                    logger.info(
-                        "Issue #%d triaged → %s (ready for planning)",
-                        issue.number,
-                        self._config.planner_label[0],
-                    )
-                else:
-                    await self._escalate_triage_to_hitl(issue, result.reasons)
-            finally:
-                self._store.mark_complete(issue.number)
-
-    async def _escalate_triage_to_hitl(
-        self, issue: GitHubIssue, reasons: list[str]
-    ) -> None:
-        """Escalate a triage issue to HITL with missing-info comment."""
-        self._state.set_hitl_origin(issue.number, self._config.find_label[0])
-        self._state.set_hitl_cause(issue.number, "Insufficient issue detail for triage")
-        self._state.record_hitl_escalation()
-        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
-        note = (
-            "## Needs More Information\n\n"
-            "This issue was picked up by Hydra but doesn't have "
-            "enough detail to begin planning.\n\n"
-            "**Missing:**\n" + "\n".join(f"- {r}" for r in reasons) + "\n\n"
-            "Please update the issue with more context and re-apply "
-            f"the `{self._config.find_label[0]}` label when ready.\n\n"
-            "---\n*Generated by Hydra Triage*"
-        )
-        await self._prs.post_comment(issue.number, note)
-        await self._bus.publish(
-            HydraEvent(
-                type=EventType.HITL_UPDATE,
-                data={"issue": issue.number, "action": "escalated"},
-            )
-        )
-        logger.info(
-            "Issue #%d triaged → %s (needs attention: %s)",
-            issue.number,
-            self._config.hitl_label[0],
-            "; ".join(reasons),
-        )
-
-    async def _plan_issues(self) -> list[PlanResult]:
-        """Run planning agents on issues from the plan queue."""
-        issues = self._store.get_plannable(self._config.batch_size)
-        if not issues:
-            return []
-
-        semaphore = asyncio.Semaphore(self._config.max_planners)
-        results: list[PlanResult] = []
-
-        all_tasks = [
-            asyncio.create_task(self._plan_one(i, issue, semaphore))
-            for i, issue in enumerate(issues)
-        ]
-        for task in asyncio.as_completed(all_tasks):
-            results.append(await task)
-            if self._stop_event.is_set():
-                for t in all_tasks:
-                    t.cancel()
-                break
-
-        return results
-
-    async def _plan_one(
-        self, idx: int, issue: GitHubIssue, semaphore: asyncio.Semaphore
-    ) -> PlanResult:
-        """Plan a single issue under the given semaphore."""
-        if self._stop_event.is_set():
-            return PlanResult(issue_number=issue.number, error="stopped")
-
-        async with semaphore:
-            if self._stop_event.is_set():
-                return PlanResult(issue_number=issue.number, error="stopped")
-
-            self._store.mark_active(issue.number, "plan")
-            try:
-                result = await self._planners.plan(issue, worker_id=idx)
-
-                if result.already_satisfied:
-                    await self._handle_plan_already_satisfied(issue, result)
-                    return result
-
-                if result.success and result.plan:
-                    await self._handle_plan_success(issue, result)
-                elif result.retry_attempted:
-                    await self._handle_plan_retry_failure(issue, result)
-                else:
-                    logger.warning(
-                        "Planning failed for issue #%d — skipping label swap",
-                        issue.number,
-                    )
-
-                if result.transcript:
-                    try:
-                        await self._file_memory_suggestion(
-                            result.transcript, "planner", f"issue #{issue.number}"
-                        )
-                    except Exception:
-                        logger.exception(
-                            "Failed to file memory suggestion for issue #%d",
-                            issue.number,
-                        )
-
-                return result
-            finally:
-                self._store.mark_complete(issue.number)
-
-    async def _handle_plan_already_satisfied(
-        self, issue: GitHubIssue, result: PlanResult
-    ) -> None:
-        """Handle a plan result where the issue is already satisfied."""
-        for lbl in self._config.planner_label:
-            await self._prs.remove_label(issue.number, lbl)
-        await self._prs.add_labels(issue.number, self._config.dup_label)
-        await self._prs.post_comment(
-            issue.number,
-            f"## Already Satisfied\n\n"
-            f"The planner determined that this issue's requirements "
-            f"are already met by the existing codebase.\n\n"
-            f"{result.summary}\n\n"
-            f"---\n"
-            f"*Generated by Hydra Planner*",
-        )
-        await self._prs.close_issue(issue.number)
-        logger.info("Issue #%d closed as already satisfied", issue.number)
-
-    async def _handle_plan_success(
-        self, issue: GitHubIssue, result: PlanResult
-    ) -> None:
-        """Post plan comment, run analysis, swap labels, file new issues."""
-        branch = self._config.branch_for_issue(issue.number)
-        comment_body = (
-            f"## Implementation Plan\n\n"
-            f"{result.plan}\n\n"
-            f"**Branch:** `{branch}`\n\n"
-            f"---\n"
-            f"*Generated by Hydra Planner*"
-        )
-        await self._prs.post_comment(issue.number, comment_body)
-
-        analyzer = PlanAnalyzer(repo_root=self._config.repo_root)
-        analysis = analyzer.analyze(result.plan, issue.number)
-        await self._prs.post_comment(issue.number, analysis.format_comment())
-
-        for lbl in self._config.planner_label:
-            await self._prs.remove_label(issue.number, lbl)
-        await self._prs.add_labels(issue.number, [self._config.ready_label[0]])
-
-        for new_issue in result.new_issues:
-            if len(new_issue.body) < 50:
-                logger.warning(
-                    "Skipping discovered issue %r — body too short "
-                    "(%d chars, need ≥50)",
-                    new_issue.title,
-                    len(new_issue.body),
-                )
-                continue
-            labels = new_issue.labels or (
-                [self._config.planner_label[0]] if self._config.planner_label else []
-            )
-            await self._prs.create_issue(new_issue.title, new_issue.body, labels)
-            self._state.record_issue_created()
-
-        logger.info("Plan posted and labels swapped for issue #%d", issue.number)
-
-    async def _handle_plan_retry_failure(
-        self, issue: GitHubIssue, result: PlanResult
-    ) -> None:
-        """Escalate to HITL after plan validation failed on retry."""
-        error_list = "\n".join(f"- {e}" for e in result.validation_errors)
-        hitl_comment = (
-            f"## Plan Validation Failed\n\n"
-            f"The planner was unable to produce a valid plan "
-            f"after two attempts for issue #{issue.number}.\n\n"
-            f"**Validation errors:**\n{error_list}\n\n"
-            f"---\n"
-            f"*Generated by Hydra Planner*"
-        )
-        await self._prs.post_comment(issue.number, hitl_comment)
-        for lbl in self._config.planner_label:
-            await self._prs.remove_label(issue.number, lbl)
-        self._state.set_hitl_origin(issue.number, self._config.planner_label[0])
-        self._state.set_hitl_cause(issue.number, "Plan validation failed after retry")
-        self._state.record_hitl_escalation()
-        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
-        logger.warning(
-            "Planning failed validation for issue #%d after retry — escalated to HITL",
-            issue.number,
-        )
 
     async def _set_phase(self, phase: Phase) -> None:
         """Update the current phase and broadcast."""

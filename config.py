@@ -323,6 +323,18 @@ class HydraConfig(BaseModel):
         le=600,
         description="Seconds between centralized GitHub issue store polls",
     )
+    pr_unstick_interval: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="Seconds between PR unsticker polls",
+    )
+    pr_unstick_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Max HITL items to process per unsticker cycle",
+    )
 
     # Acceptance criteria generation
     ac_model: str = Field(
@@ -449,6 +461,101 @@ class HydraConfig(BaseModel):
             parsed = [lbl.strip() for lbl in env_lite_labels.split(",") if lbl.strip()]
             if parsed:
                 object.__setattr__(self, "lite_plan_labels", parsed)
+
+        # Review fix attempts override
+        if self.max_review_fix_attempts == 2:  # still at default
+            env_review_fix = os.environ.get("HYDRA_MAX_REVIEW_FIX_ATTEMPTS")
+            if env_review_fix is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_review_fix_attempts", int(env_review_fix)
+                    )
+
+        # Min review findings override
+        if self.min_review_findings == 3:  # still at default
+            env_min_findings = os.environ.get("HYDRA_MIN_REVIEW_FINDINGS")
+            if env_min_findings is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "min_review_findings", int(env_min_findings)
+                    )
+
+        # Agent prompt config overrides
+        env_test_cmd = os.environ.get("HYDRA_TEST_COMMAND")
+        if env_test_cmd is not None and self.test_command == "make test":
+            object.__setattr__(self, "test_command", env_test_cmd)
+
+        env_max_body = os.environ.get("HYDRA_MAX_ISSUE_BODY_CHARS")
+        if env_max_body is not None and self.max_issue_body_chars == 10_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_issue_body_chars", int(env_max_body))
+
+        env_max_diff = os.environ.get("HYDRA_MAX_REVIEW_DIFF_CHARS")
+        if env_max_diff is not None and self.max_review_diff_chars == 15_000:
+            with contextlib.suppress(ValueError):
+                object.__setattr__(self, "max_review_diff_chars", int(env_max_diff))
+
+        # gh retry override
+        if self.gh_max_retries == 3:  # still at default
+            env_retries = os.environ.get("HYDRA_GH_MAX_RETRIES")
+            if env_retries is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "gh_max_retries", int(env_retries))
+
+        # issue attempt cap override
+        if self.max_issue_attempts == 3:  # still at default
+            env_issue_attempts = os.environ.get("HYDRA_MAX_ISSUE_ATTEMPTS")
+            if env_issue_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_issue_attempts", int(env_issue_attempts)
+                    )
+
+        # Memory sync interval override
+        if self.memory_sync_interval == 120:  # still at default
+            env_mem_sync = os.environ.get("HYDRA_MEMORY_SYNC_INTERVAL")
+            if env_mem_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "memory_sync_interval", int(env_mem_sync))
+
+        # Metrics sync interval override
+        if self.metrics_sync_interval == 300:  # still at default
+            env_metrics_sync = os.environ.get("HYDRA_METRICS_SYNC_INTERVAL")
+            if env_metrics_sync is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "metrics_sync_interval", int(env_metrics_sync)
+                    )
+
+        # merge conflict fix attempts override
+        if self.max_merge_conflict_fix_attempts == 3:  # still at default
+            env_attempts = os.environ.get("HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS")
+            if env_attempts is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_merge_conflict_fix_attempts", int(env_attempts)
+                    )
+
+        # Data poll interval override
+        if self.data_poll_interval == 60:  # still at default
+            env_data_poll = os.environ.get("HYDRA_DATA_POLL_INTERVAL")
+            if env_data_poll is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "data_poll_interval", int(env_data_poll))
+
+        # PR unstick interval override
+        if self.pr_unstick_interval == 3600:  # still at default
+            env_unstick = os.environ.get("HYDRA_PR_UNSTICK_INTERVAL")
+            if env_unstick is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_interval", int(env_unstick))
+
+        # PR unstick batch size override
+        if self.pr_unstick_batch_size == 10:  # still at default
+            env_batch = os.environ.get("HYDRA_PR_UNSTICK_BATCH_SIZE")
+            if env_batch is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_batch_size", int(env_batch))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

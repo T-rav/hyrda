@@ -380,6 +380,8 @@ def create_router(
         "ci_check_timeout",
         "ci_poll_interval",
         "poll_interval",
+        "pr_unstick_interval",
+        "pr_unstick_batch_size",
     }
 
     @router.patch("/api/control/config")
@@ -435,6 +437,7 @@ def create_router(
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
+        ("pr_unsticker", "PR Unsticker"),
     ]
 
     @router.get("/api/system/workers")

@@ -52,9 +52,11 @@ def _make_phase(
 
     mock_wt = AsyncMock()
     mock_wt.destroy = AsyncMock()
+    mock_wt.get_main_commits_since_diverge = AsyncMock(return_value="")
 
     mock_reviewers = AsyncMock()
     mock_prs = AsyncMock()
+    mock_prs.get_pr_diff_names = AsyncMock(return_value=[])
 
     mock_store = AsyncMock(spec=IssueStore)
     mock_store.mark_active = lambda num, stage: None
