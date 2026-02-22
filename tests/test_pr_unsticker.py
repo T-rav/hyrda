@@ -357,6 +357,4 @@ class TestSaveTranscript:
             mp.setattr(Path, "write_text", _raise_oserror)
             unsticker._save_transcript(42, 1, "transcript content here")
 
-        assert any(
-            "Could not save unsticker transcript" in msg for msg in caplog.messages
-        )
+        assert "Could not save unsticker transcript" in caplog.text

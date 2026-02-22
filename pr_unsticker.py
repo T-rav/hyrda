@@ -280,4 +280,5 @@ class PRUnsticker:
                 "Could not save unsticker transcript to %s",
                 log_dir,
                 exc_info=True,
+                extra={"issue": issue_number},
             )
