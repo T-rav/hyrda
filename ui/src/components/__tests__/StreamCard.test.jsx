@@ -130,3 +130,50 @@ describe('StreamCard issue link', () => {
     expect(container.querySelector('[style*="border-top"]')).toBeNull()
   })
 })
+
+describe('StreamCard transcript rendering', () => {
+  it('renders TranscriptPreview when active and transcript is non-empty', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1', 'line 2', 'line 3']} />)
+    expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+    expect(screen.getByText('line 1')).toBeInTheDocument()
+    expect(screen.getByText('line 2')).toBeInTheDocument()
+    expect(screen.getByText('line 3')).toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is queued', () => {
+    const issue = makeIssue({ overallStatus: 'queued' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is done', () => {
+    const issue = makeIssue({ overallStatus: 'done' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is failed', () => {
+    const issue = makeIssue({ overallStatus: 'failed' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when transcript is empty', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={[]} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when card is collapsed', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={false} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('defaults transcript to empty array when not provided', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+})
