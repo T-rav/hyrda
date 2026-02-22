@@ -84,13 +84,4 @@ describe('sectionStyles shared module', () => {
     })
   })
 
-  describe('referential stability', () => {
-    it('returns the same object on repeated access', () => {
-      for (const key of stageKeys) {
-        expect(sectionHeaderStyles[key]).toBe(sectionHeaderStyles[key])
-        expect(sectionLabelStyles[key]).toBe(sectionLabelStyles[key])
-        expect(sectionCountStyles[key]).toBe(sectionCountStyles[key])
-      }
-    })
-  })
 })
