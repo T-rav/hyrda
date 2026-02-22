@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -178,3 +179,47 @@ class ConfigFactory:
             pr_unstick_interval=pr_unstick_interval,
             pr_unstick_batch_size=pr_unstick_batch_size,
         )
+
+
+def make_review_phase(
+    config,
+    *,
+    agents=None,
+    event_bus=None,
+    ac_generator=None,
+):
+    """Build a ReviewPhase with standard mock dependencies.
+
+    Promoted from test_review_phase._make_phase() for reuse across test files.
+    """
+    from events import EventBus
+    from issue_store import IssueStore
+    from review_phase import ReviewPhase
+    from state import StateTracker
+
+    state = StateTracker(config.state_file)
+    stop_event = asyncio.Event()
+
+    mock_wt = AsyncMock()
+    mock_wt.destroy = AsyncMock()
+
+    mock_reviewers = AsyncMock()
+    mock_prs = AsyncMock()
+
+    mock_store = AsyncMock(spec=IssueStore)
+    mock_store.mark_active = lambda _num, _stage: None
+    mock_store.mark_complete = lambda _num: None
+    mock_store.is_active = lambda _num: False
+
+    return ReviewPhase(
+        config=config,
+        state=state,
+        worktrees=mock_wt,
+        reviewers=mock_reviewers,
+        prs=mock_prs,
+        stop_event=stop_event,
+        store=mock_store,
+        agents=agents,
+        event_bus=event_bus or EventBus(),
+        ac_generator=ac_generator,
+    )

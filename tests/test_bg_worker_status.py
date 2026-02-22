@@ -184,13 +184,13 @@ class TestSystemWorkersEndpoint:
         self,
         config,
         event_bus: EventBus,
+        state,
         tmp_path: Path,
         orch=None,
     ):
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         return create_router(
@@ -217,9 +217,9 @@ class TestSystemWorkersEndpoint:
 
     @pytest.mark.asyncio
     async def test_returns_all_workers(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
-        router = self._make_router(config, event_bus, tmp_path)
+        router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         assert endpoint is not None
 
@@ -241,9 +241,9 @@ class TestSystemWorkersEndpoint:
 
     @pytest.mark.asyncio
     async def test_returns_disabled_when_no_orchestrator(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
-        router = self._make_router(config, event_bus, tmp_path, orch=None)
+        router = self._make_router(config, event_bus, state, tmp_path, orch=None)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
         data = json.loads(response.body)
@@ -253,14 +253,14 @@ class TestSystemWorkersEndpoint:
 
     @pytest.mark.asyncio
     async def test_returns_tracked_state(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from orchestrator import HydraOrchestrator
 
         orch = HydraOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok", {"item_count": 12})
 
-        router = self._make_router(config, event_bus, tmp_path, orch=orch)
+        router = self._make_router(config, event_bus, state, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
         data = json.loads(response.body)
@@ -280,12 +280,11 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_returns_lifetime_stats(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         state.record_issue_completed()
         state.record_issue_completed()
         state.record_pr_merged()
@@ -322,12 +321,11 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_returns_empty_rates_when_no_issues(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
         router = create_router(
             config=config,
@@ -358,12 +356,11 @@ class TestRouteRegistration:
     """Verify new routes are registered."""
 
     def test_system_workers_and_metrics_routes_registered(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
         router = create_router(
             config=config,

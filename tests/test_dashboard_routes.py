@@ -12,21 +12,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus
 from models import HITLItem
-from tests.conftest import make_state
 
 
 class TestCreateRouter:
     """Tests for create_router factory function."""
 
     def test_create_router_returns_api_router(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from fastapi import APIRouter
 
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -44,12 +42,11 @@ class TestCreateRouter:
         assert isinstance(router, APIRouter)
 
     def test_router_registers_expected_routes(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -106,13 +103,12 @@ class TestControlStatusImproveLabel:
 
     @pytest.mark.asyncio
     async def test_control_status_includes_improve_label(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """GET /api/control/status should include improve_label from config."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -152,13 +148,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_includes_cause_from_state(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When a HITL cause is set in state, it should appear in the response."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -202,13 +197,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_omits_cause_when_not_set(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When no cause is set, the default empty string from model should be present."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -248,13 +242,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_includes_is_memory_suggestion_when_origin_is_improve(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When HITL origin matches improve_label, isMemorySuggestion should be True."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         state.set_hitl_origin(42, "hydra-improve")
         pr_mgr = PRManager(config, event_bus)
 
@@ -293,13 +286,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_is_memory_suggestion_false_when_origin_is_other(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When HITL origin is not improve_label, isMemorySuggestion should be False."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         state.set_hitl_origin(42, "hydra-review")
         pr_mgr = PRManager(config, event_bus)
 
@@ -338,13 +330,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_is_memory_suggestion_false_when_no_origin(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When no HITL origin is set at all, isMemorySuggestion should be False."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -382,13 +373,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_falls_back_to_origin_label(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When no cause is set but origin is, should fall back to origin description."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -429,13 +419,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_origin_fallback_unknown_label(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Unknown origin label should produce generic fallback message."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -475,13 +464,12 @@ class TestHITLEndpointCause:
 
     @pytest.mark.asyncio
     async def test_hitl_endpoint_cause_takes_precedence_over_origin(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """When both cause and origin are set, cause should take precedence."""
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state = make_state(tmp_path)
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -558,11 +546,10 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_metrics_returns_zero_rates_when_no_data(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         router = self._make_router(config, event_bus, state, tmp_path)
         get_metrics = self._find_endpoint(router, "/api/metrics")
         assert get_metrics is not None
@@ -578,11 +565,10 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_metrics_returns_computed_rates(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         # Set up some stats
         for _ in range(10):
             state.record_issue_completed()
@@ -615,12 +601,11 @@ class TestMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_metrics_no_division_by_zero_on_reviews(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         """When no reviews exist, approval rate should be 0 not crash."""
         import json
 
-        state = make_state(tmp_path)
         for _ in range(5):
             state.record_issue_completed()
 
@@ -665,11 +650,10 @@ class TestGitHubMetricsEndpoint:
 
     @pytest.mark.asyncio
     async def test_github_metrics_returns_label_counts(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
 
         mock_counts = {
@@ -728,11 +712,10 @@ class TestBgWorkerToggleEndpoint:
 
     @pytest.mark.asyncio
     async def test_bg_worker_toggle_returns_error_without_orchestrator(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         router = self._make_router(config, event_bus, state, tmp_path)
         toggle = self._find_endpoint(router, "/api/control/bg-worker")
         assert toggle is not None
@@ -744,9 +727,8 @@ class TestBgWorkerToggleEndpoint:
 
     @pytest.mark.asyncio
     async def test_bg_worker_toggle_requires_name_and_enabled(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
-        state = make_state(tmp_path)
         mock_orch = AsyncMock()
         router = self._make_router(
             config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
@@ -762,11 +744,10 @@ class TestBgWorkerToggleEndpoint:
 
     @pytest.mark.asyncio
     async def test_bg_worker_toggle_calls_orchestrator(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         mock_orch = MagicMock()
         mock_orch.set_bg_worker_enabled = MagicMock()
         router = self._make_router(
@@ -782,8 +763,7 @@ class TestBgWorkerToggleEndpoint:
         assert data["enabled"] is False
         mock_orch.set_bg_worker_enabled.assert_called_once_with("memory_sync", False)
 
-    def test_route_is_registered(self, config, event_bus, tmp_path) -> None:
-        state = make_state(tmp_path)
+    def test_route_is_registered(self, config, event_bus, state, tmp_path) -> None:
         router = self._make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
         assert "/api/control/bg-worker" in paths
@@ -824,19 +804,19 @@ class TestPipelineEndpoint:
                 return route.endpoint
         return None
 
-    def test_pipeline_route_is_registered(self, config, event_bus, tmp_path) -> None:
-        state = make_state(tmp_path)
+    def test_pipeline_route_is_registered(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
         router = self._make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
         assert "/api/pipeline" in paths
 
     @pytest.mark.asyncio
     async def test_pipeline_returns_empty_without_orchestrator(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
 
-        state = make_state(tmp_path)
         router = self._make_router(config, event_bus, state, tmp_path)
         get_pipeline = self._find_endpoint(router, "/api/pipeline")
         assert get_pipeline is not None
@@ -848,11 +828,9 @@ class TestPipelineEndpoint:
 
     @pytest.mark.asyncio
     async def test_pipeline_maps_backend_stage_names_to_frontend(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         import json
-
-        state = make_state(tmp_path)
 
         mock_orch = MagicMock()
         mock_orch.issue_store = MagicMock()
@@ -937,10 +915,9 @@ class TestHITLSkipImproveTransition:
 
     @pytest.mark.asyncio
     async def test_hitl_skip_improve_origin_transitions_to_triage(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         """Skipping an improve-origin HITL item should remove improve and add find label."""
-        state = make_state(tmp_path)
         state.set_hitl_origin(42, "hydra-improve")
         state.set_hitl_cause(42, "Memory suggestion")
 
@@ -970,10 +947,9 @@ class TestHITLSkipImproveTransition:
 
     @pytest.mark.asyncio
     async def test_hitl_skip_non_improve_origin_no_triage_transition(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         """Non-improve HITL items should not get triage label on skip."""
-        state = make_state(tmp_path)
         state.set_hitl_origin(42, "hydra-review")
 
         mock_orch = MagicMock()
@@ -993,10 +969,9 @@ class TestHITLSkipImproveTransition:
 
     @pytest.mark.asyncio
     async def test_hitl_skip_no_origin_no_triage_transition(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         """When no origin is set, skip should not add find label."""
-        state = make_state(tmp_path)
 
         mock_orch = MagicMock()
         mock_orch.skip_hitl_issue = MagicMock()
@@ -1015,10 +990,9 @@ class TestHITLSkipImproveTransition:
 
     @pytest.mark.asyncio
     async def test_hitl_skip_cleans_up_hitl_cause(
-        self, config, event_bus, tmp_path
+        self, config, event_bus, state, tmp_path
     ) -> None:
         """Skip should clean up hitl_cause in addition to hitl_origin."""
-        state = make_state(tmp_path)
         state.set_hitl_origin(42, "hydra-review")
         state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
 

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from events import EventBus
-from tests.conftest import make_state
 from tests.helpers import ConfigFactory
 
 
@@ -48,10 +47,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_route_exists(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Router should include PATCH /api/control/config."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
 
         paths = set()
@@ -63,10 +61,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_updates_runtime_config(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH should update config fields in memory."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -80,7 +77,7 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_with_persist_writes_file(
-        self, event_bus: EventBus, tmp_path: Path
+        self, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH with persist=true should write changes to config file."""
         config_path = tmp_path / ".hydra" / "config.json"
@@ -91,8 +88,6 @@ class TestPatchConfigEndpoint:
         )
         # Set config_file path on config
         object.__setattr__(cfg, "config_file", config_path)
-
-        state = make_state(tmp_path)
         router = _make_router(cfg, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -110,13 +105,11 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_without_persist_does_not_write(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH without persist should not write to disk."""
         config_path = tmp_path / ".hydra" / "config.json"
         object.__setattr__(config, "config_file", config_path)
-
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -127,10 +120,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_ignores_unknown_fields(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Unknown fields in PATCH body should be silently ignored."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -144,10 +136,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_returns_updated_values(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH response should include the updated config values."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -160,7 +151,7 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_persist_flag_not_saved_to_file(
-        self, event_bus: EventBus, tmp_path: Path
+        self, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """The 'persist' flag itself should not be saved to the config file."""
         config_path = tmp_path / ".hydra" / "config.json"
@@ -170,8 +161,6 @@ class TestPatchConfigEndpoint:
             state_file=tmp_path / "state.json",
         )
         object.__setattr__(cfg, "config_file", config_path)
-
-        state = make_state(tmp_path)
         router = _make_router(cfg, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -183,10 +172,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_rejects_invalid_int_below_min(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH should reject values that violate Pydantic field constraints (ge)."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -201,10 +189,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_rejects_invalid_int_above_max(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH should reject values that violate Pydantic field constraints (le)."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -219,10 +206,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_rejects_negative_budget(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH should reject negative budget values (ge=0 constraint)."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None
@@ -235,10 +221,9 @@ class TestPatchConfigEndpoint:
 
     @pytest.mark.asyncio
     async def test_patch_config_accepts_valid_boundary_values(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """PATCH should accept values at the boundary of valid ranges."""
-        state = make_state(tmp_path)
         router = _make_router(config, event_bus, state, tmp_path)
         endpoint = _find_endpoint(router, "/api/control/config")
         assert endpoint is not None

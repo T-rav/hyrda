@@ -519,28 +519,26 @@ class TestEventPublishing:
     """QUEUE_UPDATE events are published after refresh."""
 
     @pytest.mark.asyncio
-    async def test_queue_update_event_published_after_refresh(self) -> None:
-        bus = EventBus()
-        store = _make_store(event_bus=bus)
+    async def test_queue_update_event_published_after_refresh(self, event_bus) -> None:
+        store = _make_store(event_bus=event_bus)
 
         await store.refresh()
 
-        events = bus.get_history()
+        events = event_bus.get_history()
         queue_events = [e for e in events if e.type == EventType.QUEUE_UPDATE]
         assert len(queue_events) == 1
 
     @pytest.mark.asyncio
-    async def test_queue_update_event_contains_depth_data(self) -> None:
+    async def test_queue_update_event_contains_depth_data(self, event_bus) -> None:
         fetcher = AsyncMock()
         fetcher.fetch_all_hydra_issues = AsyncMock(
             return_value=[_make_issue(1, ["hydra-find"])]
         )
-        bus = EventBus()
-        store = _make_store(fetcher=fetcher, event_bus=bus)
+        store = _make_store(fetcher=fetcher, event_bus=event_bus)
 
         await store.refresh()
 
-        events = bus.get_history()
+        events = event_bus.get_history()
         queue_event = [e for e in events if e.type == EventType.QUEUE_UPDATE][0]
         assert queue_event.data["queue_depth"]["find"] == 1
 

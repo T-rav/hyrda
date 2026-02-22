@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -358,6 +358,16 @@ class AnalysisResultFactory:
         )
 
 
+# --- State Fixture ---
+
+
+@pytest.fixture
+def state(tmp_path: Path):
+    from state import StateTracker
+
+    return StateTracker(tmp_path / "state.json")
+
+
 # --- State Factory ---
 
 
@@ -376,6 +386,40 @@ def event_bus():
     from events import EventBus
 
     return EventBus()
+
+
+# --- HITL Runner Fixture ---
+
+
+@pytest.fixture
+def hitl_runner(config, event_bus):
+    from hitl_runner import HITLRunner
+
+    return HITLRunner(config, event_bus)
+
+
+# --- Orchestrator Mock ---
+
+
+def make_orchestrator_mock(
+    requests: dict | None = None,
+    running: bool = False,
+    run_status: str = "idle",
+) -> MagicMock:
+    """Return a minimal orchestrator mock."""
+    orch = MagicMock()
+    orch.human_input_requests = requests or {}
+    orch.provide_human_input = MagicMock()
+    orch.running = running
+    orch.run_status = run_status
+    orch.stop = AsyncMock()
+    orch.request_stop = AsyncMock()
+    return orch
+
+
+@pytest.fixture
+def orchestrator_mock():
+    return make_orchestrator_mock()
 
 
 # --- Subprocess Mock ---

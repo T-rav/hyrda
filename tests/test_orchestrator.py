@@ -520,10 +520,9 @@ class TestRunFinallyTerminatesRunners:
 class TestConstructorInjection:
     """Tests for optional event_bus / state constructor params."""
 
-    def test_uses_provided_event_bus(self, config: HydraConfig) -> None:
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
-        assert orch._bus is bus
+    def test_uses_provided_event_bus(self, config: HydraConfig, event_bus) -> None:
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        assert orch._bus is event_bus
 
     def test_uses_provided_state(self, config: HydraConfig) -> None:
         state = StateTracker(config.state_file)
@@ -538,10 +537,9 @@ class TestConstructorInjection:
         orch = HydraOrchestrator(config)
         assert isinstance(orch._state, StateTracker)
 
-    def test_shared_bus_receives_events(self, config: HydraConfig) -> None:
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
-        assert orch.event_bus is bus
+    def test_shared_bus_receives_events(self, config: HydraConfig, event_bus) -> None:
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        assert orch.event_bus is event_bus
 
 
 # ---------------------------------------------------------------------------
@@ -1619,11 +1617,10 @@ class TestAuthFailure:
 
     @pytest.mark.asyncio
     async def test_auth_failure_publishes_system_alert_event(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Auth failure should publish a SYSTEM_ALERT event."""
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
+        orch = HydraOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
 
         async def auth_failing_plan() -> list[PlanResult]:
@@ -1642,7 +1639,7 @@ class TestAuthFailure:
         await orch.run()
 
         alert_events = [
-            e for e in bus.get_history() if e.type == EventType.SYSTEM_ALERT
+            e for e in event_bus.get_history() if e.type == EventType.SYSTEM_ALERT
         ]
         assert len(alert_events) == 1
         assert "authentication" in alert_events[0].data["message"].lower()

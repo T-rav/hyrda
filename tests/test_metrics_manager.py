@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from config import HydraConfig
-from events import EventBus, EventType
+from events import EventType
 from metrics_manager import MetricsManager
 from models import MetricsSnapshot, QueueStats
-from state import StateTracker
-from tests.conftest import make_state
+
+if TYPE_CHECKING:
+    from events import EventBus
+    from state import StateTracker
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,21 +48,14 @@ def make_pr_manager() -> MagicMock:
     return pr
 
 
-def make_event_bus() -> EventBus:
-    """Return an EventBus for testing."""
-    return EventBus()
-
-
 def make_manager(
-    tmp_path: Path, **config_overrides: Any
+    state: StateTracker, event_bus: EventBus, **config_overrides: Any
 ) -> tuple[MetricsManager, StateTracker, MagicMock, EventBus]:
     """Create a fully-wired MetricsManager with test dependencies."""
     config = make_config(**config_overrides)
-    state = make_state(tmp_path)
     prs = make_pr_manager()
-    bus = make_event_bus()
-    mgr = MetricsManager(config, state, prs, bus)
-    return mgr, state, prs, bus
+    mgr = MetricsManager(config, state, prs, event_bus)
+    return mgr, state, prs, event_bus
 
 
 # ---------------------------------------------------------------------------
@@ -71,9 +65,9 @@ def make_manager(
 
 class TestBuildSnapshot:
     @pytest.mark.asyncio
-    async def test_builds_from_lifetime_stats(self, tmp_path: Path) -> None:
+    async def test_builds_from_lifetime_stats(self, state, event_bus) -> None:
         """Snapshot includes lifetime stats and computed rates."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         # Record some lifetime data
         state.record_issue_completed()
         state.record_issue_completed()
@@ -86,9 +80,9 @@ class TestBuildSnapshot:
         assert snapshot.timestamp  # non-empty
 
     @pytest.mark.asyncio
-    async def test_handles_zero_issues(self, tmp_path: Path) -> None:
+    async def test_handles_zero_issues(self, state, event_bus) -> None:
         """Rates are 0.0 when no issues have been completed."""
-        mgr, _, _, _ = make_manager(tmp_path)
+        mgr, _, _, _ = make_manager(state, event_bus)
         snapshot = await mgr._build_snapshot()
         assert snapshot.merge_rate == 0.0
         assert snapshot.quality_fix_rate == 0.0
@@ -97,26 +91,26 @@ class TestBuildSnapshot:
         assert snapshot.avg_implementation_seconds == 0.0
 
     @pytest.mark.asyncio
-    async def test_includes_queue_stats(self, tmp_path: Path) -> None:
+    async def test_includes_queue_stats(self, state, event_bus) -> None:
         """Queue depth is captured from the provided QueueStats."""
-        mgr, _, _, _ = make_manager(tmp_path)
+        mgr, _, _, _ = make_manager(state, event_bus)
         queue = QueueStats(queue_depth={"plan": 5, "implement": 2})
         snapshot = await mgr._build_snapshot(queue)
         assert snapshot.queue_depth == {"plan": 5, "implement": 2}
 
     @pytest.mark.asyncio
-    async def test_includes_github_label_counts(self, tmp_path: Path) -> None:
+    async def test_includes_github_label_counts(self, state, event_bus) -> None:
         """GitHub label counts are fetched and included."""
-        mgr, _, _, _ = make_manager(tmp_path)
+        mgr, _, _, _ = make_manager(state, event_bus)
         snapshot = await mgr._build_snapshot()
         assert snapshot.github_open_by_label == {"hydra-plan": 3, "hydra-review": 1}
         assert snapshot.github_total_closed == 10
         assert snapshot.github_total_merged == 8
 
     @pytest.mark.asyncio
-    async def test_handles_github_api_failure(self, tmp_path: Path) -> None:
+    async def test_handles_github_api_failure(self, state, event_bus) -> None:
         """GitHub label counts default to empty on API failure."""
-        mgr, _, prs, _ = make_manager(tmp_path)
+        mgr, _, prs, _ = make_manager(state, event_bus)
         prs.get_label_counts = AsyncMock(side_effect=RuntimeError("API down"))
         snapshot = await mgr._build_snapshot()
         assert snapshot.github_open_by_label == {}
@@ -124,9 +118,9 @@ class TestBuildSnapshot:
         assert snapshot.github_total_merged == 0
 
     @pytest.mark.asyncio
-    async def test_computes_derived_rates(self, tmp_path: Path) -> None:
+    async def test_computes_derived_rates(self, state, event_bus) -> None:
         """All derived rates are computed correctly."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         for _ in range(10):
             state.record_issue_completed()
         for _ in range(8):
@@ -153,9 +147,9 @@ class TestBuildSnapshot:
 
 class TestSync:
     @pytest.mark.asyncio
-    async def test_first_run_creates_issue_and_posts(self, tmp_path: Path) -> None:
+    async def test_first_run_creates_issue_and_posts(self, state, event_bus) -> None:
         """First sync creates the metrics issue and posts a snapshot comment."""
-        mgr, state, prs, bus = make_manager(tmp_path)
+        mgr, state, prs, bus = make_manager(state, event_bus)
         state.record_issue_completed()
 
         with patch.object(
@@ -169,9 +163,9 @@ class TestSync:
         prs.post_comment.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_unchanged_skips_post(self, tmp_path: Path) -> None:
+    async def test_unchanged_skips_post(self, state, event_bus) -> None:
         """When snapshot hash matches, no comment is posted."""
-        mgr, state, prs, _ = make_manager(tmp_path)
+        mgr, state, prs, _ = make_manager(state, event_bus)
 
         # Fix the timestamp so the hash is stable between calls
         fixed_snapshot = MetricsSnapshot(timestamp="2025-01-01T00:00:00")
@@ -196,9 +190,9 @@ class TestSync:
         prs.post_comment.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_detects_change_and_posts(self, tmp_path: Path) -> None:
+    async def test_detects_change_and_posts(self, state, event_bus) -> None:
         """When data changes between syncs, a new comment is posted."""
-        mgr, state, prs, _ = make_manager(tmp_path)
+        mgr, state, prs, _ = make_manager(state, event_bus)
 
         with patch.object(
             mgr, "_ensure_metrics_issue", new_callable=AsyncMock, return_value=42
@@ -211,9 +205,9 @@ class TestSync:
         assert prs.post_comment.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_publishes_metrics_update_event(self, tmp_path: Path) -> None:
+    async def test_publishes_metrics_update_event(self, state, event_bus) -> None:
         """A METRICS_UPDATE event is published on successful post."""
-        mgr, state, _, bus = make_manager(tmp_path)
+        mgr, state, _, bus = make_manager(state, event_bus)
         published_events: list = []
         bus.publish = AsyncMock(side_effect=published_events.append)
 
@@ -228,17 +222,17 @@ class TestSync:
         assert len(metrics_events) == 1
 
     @pytest.mark.asyncio
-    async def test_dry_run_skips_post(self, tmp_path: Path) -> None:
+    async def test_dry_run_skips_post(self, state, event_bus) -> None:
         """In dry-run mode, no comment is posted."""
-        mgr, state, prs, _ = make_manager(tmp_path, dry_run=True)
+        mgr, state, prs, _ = make_manager(state, event_bus, dry_run=True)
         result = await mgr.sync()
         assert result["status"] == "dry_run"
         prs.post_comment.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_no_metrics_issue_returns_error(self, tmp_path: Path) -> None:
+    async def test_no_metrics_issue_returns_error(self, state, event_bus) -> None:
         """When metrics issue cannot be created, returns error status."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         state.record_issue_completed()
 
         with patch.object(
@@ -250,9 +244,9 @@ class TestSync:
         assert result["reason"] == "no_metrics_issue"
 
     @pytest.mark.asyncio
-    async def test_stores_latest_snapshot(self, tmp_path: Path) -> None:
+    async def test_stores_latest_snapshot(self, state, event_bus) -> None:
         """The latest snapshot is cached in memory."""
-        mgr, _, _, _ = make_manager(tmp_path)
+        mgr, _, _, _ = make_manager(state, event_bus)
         assert mgr.latest_snapshot is None
 
         with patch.object(
@@ -271,9 +265,9 @@ class TestSync:
 
 class TestEnsureMetricsIssue:
     @pytest.mark.asyncio
-    async def test_uses_cached_number(self, tmp_path: Path) -> None:
+    async def test_uses_cached_number(self, state, event_bus) -> None:
         """If issue number is already cached, returns it immediately."""
-        mgr, state, prs, _ = make_manager(tmp_path)
+        mgr, state, prs, _ = make_manager(state, event_bus)
         state.set_metrics_issue_number(99)
 
         result = await mgr._ensure_metrics_issue()
@@ -281,9 +275,9 @@ class TestEnsureMetricsIssue:
         prs.create_issue.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_finds_by_label(self, tmp_path: Path) -> None:
+    async def test_finds_by_label(self, state, event_bus) -> None:
         """Searches by label and caches the found issue number."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
 
         mock_issue = MagicMock()
         mock_issue.number = 77
@@ -297,9 +291,9 @@ class TestEnsureMetricsIssue:
         assert state.get_metrics_issue_number() == 77
 
     @pytest.mark.asyncio
-    async def test_creates_when_none_exists(self, tmp_path: Path) -> None:
+    async def test_creates_when_none_exists(self, state, event_bus) -> None:
         """When no issue exists, creates one and caches the number."""
-        mgr, state, prs, _ = make_manager(tmp_path)
+        mgr, state, prs, _ = make_manager(state, event_bus)
         prs.create_issue = AsyncMock(return_value=55)
 
         with patch("issue_fetcher.IssueFetcher") as MockFetcher:
@@ -360,9 +354,9 @@ class TestFormatComment:
 
 class TestFetchHistory:
     @pytest.mark.asyncio
-    async def test_parses_json_from_comments(self, tmp_path: Path) -> None:
+    async def test_parses_json_from_comments(self, state, event_bus) -> None:
         """Parses MetricsSnapshot JSON from issue comments."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         state.set_metrics_issue_number(42)
 
         snap_json = MetricsSnapshot(
@@ -380,16 +374,16 @@ class TestFetchHistory:
         assert result[0].issues_completed == 5
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_issue(self, tmp_path: Path) -> None:
+    async def test_returns_empty_when_no_issue(self, state, event_bus) -> None:
         """Returns empty list when no metrics issue is configured."""
-        mgr, _, _, _ = make_manager(tmp_path)
+        mgr, _, _, _ = make_manager(state, event_bus)
         result = await mgr.fetch_history_from_issue()
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_skips_invalid_json(self, tmp_path: Path) -> None:
+    async def test_skips_invalid_json(self, state, event_bus) -> None:
         """Skips comments with invalid JSON gracefully."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         state.set_metrics_issue_number(42)
 
         comments = [
@@ -405,9 +399,9 @@ class TestFetchHistory:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_returns_oldest_first(self, tmp_path: Path) -> None:
+    async def test_returns_oldest_first(self, state, event_bus) -> None:
         """Snapshots are returned in oldest-first order."""
-        mgr, state, _, _ = make_manager(tmp_path)
+        mgr, state, _, _ = make_manager(state, event_bus)
         state.set_metrics_issue_number(42)
 
         snap1 = MetricsSnapshot(timestamp="2025-01-01T00:00:00").model_dump_json()

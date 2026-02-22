@@ -22,7 +22,6 @@ from acceptance_criteria import (
     _VERIFY_START,
     AcceptanceCriteriaGenerator,
 )
-from events import EventBus
 from models import GitHubIssue, VerificationCriteria
 
 # ---------------------------------------------------------------------------
@@ -48,12 +47,12 @@ def _make_issue(
 
 def _make_generator(
     config: HydraConfig,
+    event_bus,
 ) -> tuple[AcceptanceCriteriaGenerator, AsyncMock]:
     """Build a generator with mocked PRManager."""
     mock_prs = AsyncMock()
     mock_prs.post_comment = AsyncMock()
-    bus = EventBus()
-    gen = AcceptanceCriteriaGenerator(config, mock_prs, bus)
+    gen = AcceptanceCriteriaGenerator(config, mock_prs, event_bus)
     return gen, mock_prs
 
 
@@ -108,48 +107,54 @@ new file mode 100644
 class TestBuildPrompt:
     """Tests for prompt construction."""
 
-    def test_includes_issue_body(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_issue_body(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue(body="The frobnicator needs fixing")
         prompt = gen._build_prompt(issue, "", "", [])
         assert "The frobnicator needs fixing" in prompt
 
-    def test_includes_issue_title_and_number(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_issue_title_and_number(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue(number=99, title="Fix the widget")
         prompt = gen._build_prompt(issue, "", "", [])
         assert "#99" in prompt
         assert "Fix the widget" in prompt
 
-    def test_includes_plan_when_present(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_plan_when_present(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "## Step 1\nDo the thing", "", [])
         assert "## Step 1" in prompt
         assert "Do the thing" in prompt
         assert "## Implementation Plan" in prompt
 
-    def test_excludes_plan_section_when_empty(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_excludes_plan_section_when_empty(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "", [])
         assert "## Implementation Plan" not in prompt
 
-    def test_includes_diff_summary(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_diff_summary(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "some diff content", [])
         assert "some diff content" in prompt
         assert "## PR Diff Summary" in prompt
 
-    def test_excludes_diff_section_when_empty(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_excludes_diff_section_when_empty(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "", [])
         assert "## PR Diff Summary" not in prompt
 
-    def test_includes_test_files(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_test_files(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(
             issue, "", "", ["tests/test_foo.py", "tests/test_bar.py"]
@@ -158,14 +163,18 @@ class TestBuildPrompt:
         assert "tests/test_bar.py" in prompt
         assert "## Test Files" in prompt
 
-    def test_excludes_test_files_section_when_empty(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_excludes_test_files_section_when_empty(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "", [])
         assert "## Test Files" not in prompt
 
-    def test_includes_ac_marker_instructions(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_ac_marker_instructions(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "", [])
         assert _AC_START in prompt
@@ -173,8 +182,10 @@ class TestBuildPrompt:
         assert _VERIFY_START in prompt
         assert _VERIFY_END in prompt
 
-    def test_instructs_functional_uat_focus(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_instructs_functional_uat_focus(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         issue = _make_issue()
         prompt = gen._build_prompt(issue, "", "", [])
         assert "UAT" in prompt
@@ -189,8 +200,8 @@ class TestBuildPrompt:
 class TestExtractCriteria:
     """Tests for extracting criteria from transcripts."""
 
-    def test_parses_ac_and_verify_markers(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_parses_ac_and_verify_markers(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         transcript = _make_transcript()
         criteria = gen._extract_criteria(transcript, 42, 101)
         assert criteria is not None
@@ -198,37 +209,37 @@ class TestExtractCriteria:
         assert "AC-2" in criteria.acceptance_criteria
         assert "Open the application" in criteria.verification_instructions
 
-    def test_returns_none_when_no_markers(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_returns_none_when_no_markers(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = gen._extract_criteria("No markers here.", 42, 101)
         assert criteria is None
 
-    def test_parses_ac_only(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_parses_ac_only(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         transcript = f"{_AC_START}\nAC-1: Something\n{_AC_END}\nNo verify section."
         criteria = gen._extract_criteria(transcript, 42, 101)
         assert criteria is not None
         assert "AC-1: Something" in criteria.acceptance_criteria
         assert criteria.verification_instructions == ""
 
-    def test_parses_verify_only(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_parses_verify_only(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         transcript = f"No AC section.\n{_VERIFY_START}\n1. Do this\n{_VERIFY_END}\n"
         criteria = gen._extract_criteria(transcript, 42, 101)
         assert criteria is not None
         assert criteria.acceptance_criteria == ""
         assert "1. Do this" in criteria.verification_instructions
 
-    def test_sets_issue_and_pr_numbers(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_sets_issue_and_pr_numbers(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         transcript = _make_transcript()
         criteria = gen._extract_criteria(transcript, 99, 200)
         assert criteria is not None
         assert criteria.issue_number == 99
         assert criteria.pr_number == 200
 
-    def test_sets_timestamp(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_sets_timestamp(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         transcript = _make_transcript()
         criteria = gen._extract_criteria(transcript, 42, 101)
         assert criteria is not None
@@ -243,20 +254,24 @@ class TestExtractCriteria:
 class TestExtractTestFiles:
     """Tests for extracting test file paths from diffs."""
 
-    def test_extracts_test_files_from_diff(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_extracts_test_files_from_diff(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         files = gen._extract_test_files(SAMPLE_DIFF)
         assert "tests/test_settings.py" in files
         assert "tests/test_theme.py" in files
 
-    def test_returns_empty_list_for_no_tests(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_returns_empty_list_for_no_tests(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         diff = "diff --git a/src/main.py b/src/main.py\n+++ b/src/main.py\n"
         files = gen._extract_test_files(diff)
         assert files == []
 
-    def test_deduplicates_files(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_deduplicates_files(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         diff = (
             "diff --git a/tests/test_foo.py b/tests/test_foo.py\n"
             "+++ b/tests/test_foo.py\n"
@@ -275,13 +290,13 @@ class TestExtractTestFiles:
 class TestSummarizeDiff:
     """Tests for diff truncation."""
 
-    def test_short_diff_unchanged(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_short_diff_unchanged(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         diff = "short diff"
         assert gen._summarize_diff(diff) == "short diff"
 
-    def test_long_diff_truncated(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_long_diff_truncated(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         diff = "x" * 20_000
         result = gen._summarize_diff(diff)
         assert result.endswith("... (truncated)")
@@ -296,15 +311,17 @@ class TestSummarizeDiff:
 class TestReadPlanFile:
     """Tests for reading plan files."""
 
-    def test_reads_existing_plan(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_reads_existing_plan(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         plan_dir = config.repo_root / ".hydra" / "plans"
         plan_dir.mkdir(parents=True, exist_ok=True)
         (plan_dir / "issue-42.md").write_text("## The Plan\nDo stuff.")
         assert gen._read_plan_file(42) == "## The Plan\nDo stuff."
 
-    def test_returns_empty_for_missing_plan(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_returns_empty_for_missing_plan(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         assert gen._read_plan_file(999) == ""
 
 
@@ -316,8 +333,8 @@ class TestReadPlanFile:
 class TestFormatComment:
     """Tests for formatting the GitHub comment."""
 
-    def test_formats_ac_as_checkboxes(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_formats_ac_as_checkboxes(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -330,8 +347,8 @@ class TestFormatComment:
         assert "- [ ] Second criterion" in comment
         assert "## Acceptance Criteria & Verification Instructions" in comment
 
-    def test_formats_verification_steps(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_formats_verification_steps(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -344,8 +361,8 @@ class TestFormatComment:
         assert "2. Verify that" in comment
         assert "### Human Verification Steps" in comment
 
-    def test_includes_generator_footer(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_generator_footer(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -356,8 +373,8 @@ class TestFormatComment:
         comment = gen._format_comment(criteria)
         assert "*Generated by Hydra AC Generator*" in comment
 
-    def test_handles_empty_ac(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_handles_empty_ac(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -369,8 +386,8 @@ class TestFormatComment:
         assert "### Acceptance Criteria" not in comment
         assert "1. Do thing" in comment
 
-    def test_handles_empty_verification(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_handles_empty_verification(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -391,8 +408,10 @@ class TestFormatComment:
 class TestPersist:
     """Tests for file persistence."""
 
-    def test_creates_verification_directory(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_creates_verification_directory(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -404,8 +423,8 @@ class TestPersist:
         verification_dir = config.repo_root / ".hydra" / "verification"
         assert verification_dir.exists()
 
-    def test_writes_verification_file(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_writes_verification_file(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -422,8 +441,8 @@ class TestPersist:
         assert "AC-1: Feature works" in content
         assert "1. Open the app" in content
 
-    def test_overwrites_existing_file(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_overwrites_existing_file(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         criteria_v1 = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -448,9 +467,9 @@ class TestPersist:
         assert "AC-1: Old" not in content
 
     def test_persist_handles_oserror(
-        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+        self, config: HydraConfig, event_bus, caplog: pytest.LogCaptureFixture
     ) -> None:
-        gen, _ = _make_generator(config)
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,
@@ -473,20 +492,20 @@ class TestPersist:
 class TestBuildCommand:
     """Tests for building the claude command."""
 
-    def test_includes_model(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_model(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         cmd = gen._build_command()
         assert "--model" in cmd
         model_idx = cmd.index("--model")
         assert cmd[model_idx + 1] == config.ac_model
 
-    def test_includes_disallowed_tools(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_includes_disallowed_tools(self, config: HydraConfig, event_bus) -> None:
+        gen, _ = _make_generator(config, event_bus)
         cmd = gen._build_command()
         assert "--disallowedTools" in cmd
 
     def test_includes_max_cost_when_budget_set(
-        self, config: HydraConfig, tmp_path: Path
+        self, config: HydraConfig, event_bus, tmp_path: Path
     ) -> None:
         from tests.helpers import ConfigFactory
 
@@ -496,14 +515,16 @@ class TestBuildCommand:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "state.json",
         )
-        gen, _ = _make_generator(cfg)
+        gen, _ = _make_generator(cfg, event_bus)
         cmd = gen._build_command()
         assert "--max-cost" in cmd
         cost_idx = cmd.index("--max-cost")
         assert cmd[cost_idx + 1] == "1.5"
 
-    def test_excludes_max_cost_when_budget_zero(self, config: HydraConfig) -> None:
-        gen, _ = _make_generator(config)
+    def test_excludes_max_cost_when_budget_zero(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, _ = _make_generator(config, event_bus)
         cmd = gen._build_command()
         assert "--max-cost" not in cmd
 
@@ -518,9 +539,9 @@ class TestGenerate:
 
     @pytest.mark.asyncio
     async def test_generate_posts_comment_and_persists(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
-        gen, mock_prs = _make_generator(config)
+        gen, mock_prs = _make_generator(config, event_bus)
         issue = _make_issue()
         transcript = _make_transcript()
 
@@ -542,8 +563,10 @@ class TestGenerate:
         assert path.exists()
 
     @pytest.mark.asyncio
-    async def test_generate_dry_run_skips(self, dry_config: HydraConfig) -> None:
-        gen, mock_prs = _make_generator(dry_config)
+    async def test_generate_dry_run_skips(
+        self, dry_config: HydraConfig, event_bus
+    ) -> None:
+        gen, mock_prs = _make_generator(dry_config, event_bus)
         issue = _make_issue()
 
         await gen.generate(
@@ -556,9 +579,9 @@ class TestGenerate:
 
     @pytest.mark.asyncio
     async def test_generate_handles_subprocess_failure(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
-        gen, mock_prs = _make_generator(config)
+        gen, mock_prs = _make_generator(config, event_bus)
         issue = _make_issue()
 
         with (
@@ -579,8 +602,10 @@ class TestGenerate:
         mock_prs.post_comment.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_generate_no_markers_skips_posting(self, config: HydraConfig) -> None:
-        gen, mock_prs = _make_generator(config)
+    async def test_generate_no_markers_skips_posting(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, mock_prs = _make_generator(config, event_bus)
         issue = _make_issue()
 
         with patch(
@@ -595,8 +620,10 @@ class TestGenerate:
         mock_prs.post_comment.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_generate_reads_plan_file(self, config: HydraConfig) -> None:
-        gen, mock_prs = _make_generator(config)
+    async def test_generate_reads_plan_file(
+        self, config: HydraConfig, event_bus
+    ) -> None:
+        gen, mock_prs = _make_generator(config, event_bus)
         issue = _make_issue()
 
         # Write a plan file

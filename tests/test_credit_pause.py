@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events import EventBus, EventType
+from events import EventType
 from models import PlanResult
 from orchestrator import HydraOrchestrator
 from subprocess_util import (
@@ -35,14 +35,14 @@ from runner_utils import stream_claude_process
 # ---------------------------------------------------------------------------
 
 
-def _default_stream_kwargs(**overrides):
+def _default_stream_kwargs(event_bus, **overrides):
     """Build default kwargs for stream_claude_process."""
     defaults = {
         "cmd": ["claude", "-p"],
         "prompt": "test prompt",
         "cwd": Path("/tmp/test"),
         "active_procs": set(),
-        "event_bus": EventBus(),
+        "event_bus": event_bus,
         "event_data": {"issue": 1},
         "logger": logging.getLogger("test"),
     }
@@ -202,7 +202,7 @@ class TestStreamClaudeProcessCreditDetection:
     """Tests for credit exhaustion detection in stream_claude_process."""
 
     @pytest.mark.asyncio
-    async def test_raises_credit_exhausted_on_stderr_match(self) -> None:
+    async def test_raises_credit_exhausted_on_stderr_match(self, event_bus) -> None:
         """stderr with credit message should raise CreditExhaustedError."""
         mock_create = make_streaming_proc(
             returncode=1,
@@ -214,12 +214,12 @@ class TestStreamClaudeProcessCreditDetection:
             patch("asyncio.create_subprocess_exec", mock_create),
             pytest.raises(CreditExhaustedError) as exc_info,
         ):
-            await stream_claude_process(**_default_stream_kwargs())
+            await stream_claude_process(**_default_stream_kwargs(event_bus))
 
         assert exc_info.value.resume_at is not None
 
     @pytest.mark.asyncio
-    async def test_raises_credit_exhausted_on_transcript_match(self) -> None:
+    async def test_raises_credit_exhausted_on_transcript_match(self, event_bus) -> None:
         """stdout with credit message should raise CreditExhaustedError."""
         mock_create = make_streaming_proc(
             returncode=0,
@@ -231,20 +231,20 @@ class TestStreamClaudeProcessCreditDetection:
             patch("asyncio.create_subprocess_exec", mock_create),
             pytest.raises(CreditExhaustedError),
         ):
-            await stream_claude_process(**_default_stream_kwargs())
+            await stream_claude_process(**_default_stream_kwargs(event_bus))
 
     @pytest.mark.asyncio
-    async def test_does_not_raise_for_normal_output(self) -> None:
+    async def test_does_not_raise_for_normal_output(self, event_bus) -> None:
         """Normal output should not raise CreditExhaustedError."""
         mock_create = make_streaming_proc(returncode=0, stdout="All good", stderr="")
 
         with patch("asyncio.create_subprocess_exec", mock_create):
-            result = await stream_claude_process(**_default_stream_kwargs())
+            result = await stream_claude_process(**_default_stream_kwargs(event_bus))
 
         assert result == "All good"
 
     @pytest.mark.asyncio
-    async def test_no_false_positive_when_early_killed(self) -> None:
+    async def test_no_false_positive_when_early_killed(self, event_bus) -> None:
         """Credit phrases in transcript should not raise when early_killed=True.
 
         If on_output kills the process early because it got what it needed,
@@ -259,18 +259,20 @@ class TestStreamClaudeProcessCreditDetection:
             stderr="",
         )
 
-        # on_output returns True immediately → early_killed=True
+        # on_output returns True immediately -> early_killed=True
         def kill_immediately(_text: str) -> bool:
             return True
 
         with patch("asyncio.create_subprocess_exec", mock_create):
             # Should NOT raise CreditExhaustedError
             await stream_claude_process(
-                **_default_stream_kwargs(on_output=kill_immediately)
+                **_default_stream_kwargs(event_bus, on_output=kill_immediately)
             )
 
     @pytest.mark.asyncio
-    async def test_credit_exhausted_with_no_time_has_none_resume(self) -> None:
+    async def test_credit_exhausted_with_no_time_has_none_resume(
+        self, event_bus
+    ) -> None:
         """Credit exhaustion without reset time info should have resume_at=None."""
         mock_create = make_streaming_proc(
             returncode=1,
@@ -282,7 +284,7 @@ class TestStreamClaudeProcessCreditDetection:
             patch("asyncio.create_subprocess_exec", mock_create),
             pytest.raises(CreditExhaustedError) as exc_info,
         ):
-            await stream_claude_process(**_default_stream_kwargs())
+            await stream_claude_process(**_default_stream_kwargs(event_bus))
 
         assert exc_info.value.resume_at is None
 
@@ -338,11 +340,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_publishes_system_alert(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Credit exhaustion in a loop should publish a SYSTEM_ALERT event."""
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
+        orch = HydraOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -376,7 +377,7 @@ class TestCreditExhaustionPauseResume:
         await asyncio.gather(orch.run(), stop_soon())
 
         alert_events = [
-            e for e in bus.get_history() if e.type == EventType.SYSTEM_ALERT
+            e for e in event_bus.get_history() if e.type == EventType.SYSTEM_ALERT
         ]
         # Should have at least the credit pause alert
         credit_alerts = [
@@ -387,11 +388,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_pauses_and_resumes(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """Credit exhaustion should pause all loops and resume after the wait."""
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
+        orch = HydraOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -429,11 +429,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_default_pause_when_no_time(
-        self, config: HydraConfig
+        self, config: HydraConfig, event_bus
     ) -> None:
         """When no resume time is parseable, a default pause duration is used."""
-        bus = EventBus()
-        orch = HydraOrchestrator(config, event_bus=bus)
+        orch = HydraOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 

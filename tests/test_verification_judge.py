@@ -664,19 +664,17 @@ class TestUpdateCriteriaFile:
 
 class TestJudgeIntegration:
     @pytest.mark.asyncio
-    async def test_returns_none_when_no_criteria_file(self, tmp_path):
+    async def test_returns_none_when_no_criteria_file(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         result = await judge.judge(issue_number=42, pr_number=101, diff="some diff")
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_dry_run_returns_early(self, tmp_path):
+    async def test_dry_run_returns_early(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(dry_run=True, repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         # Create criteria file so we don't skip for missing file
         criteria_dir = tmp_path / ".hydra" / "verification"
@@ -689,10 +687,9 @@ class TestJudgeIntegration:
         assert result.criteria_results == []
 
     @pytest.mark.asyncio
-    async def test_success_all_pass(self, tmp_path):
+    async def test_success_all_pass(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         # Create criteria file
         criteria_dir = tmp_path / ".hydra" / "verification"
@@ -727,10 +724,9 @@ class TestJudgeIntegration:
         assert result.refined is False
 
     @pytest.mark.asyncio
-    async def test_some_criteria_fail(self, tmp_path):
+    async def test_some_criteria_fail(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -756,10 +752,9 @@ class TestJudgeIntegration:
         assert fail_count == 1
 
     @pytest.mark.asyncio
-    async def test_instructions_refined(self, tmp_path):
+    async def test_instructions_refined(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -789,11 +784,10 @@ class TestJudgeIntegration:
         assert call_count == 4
 
     @pytest.mark.asyncio
-    async def test_refinement_still_fails(self, tmp_path):
+    async def test_refinement_still_fails(self, tmp_path, event_bus):
         """Max 1 retry — if still NEEDS_REFINEMENT after refinement, accept it."""
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -823,11 +817,10 @@ class TestJudgeIntegration:
         assert call_count == 4
 
     @pytest.mark.asyncio
-    async def test_refined_false_when_extraction_fails(self, tmp_path):
+    async def test_refined_false_when_extraction_fails(self, tmp_path, event_bus):
         """When refinement extraction returns empty, refined should be False."""
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -856,10 +849,9 @@ class TestJudgeIntegration:
         assert result.refined is False
 
     @pytest.mark.asyncio
-    async def test_saves_report(self, tmp_path):
+    async def test_saves_report(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -887,10 +879,9 @@ class TestJudgeIntegration:
         assert "ready" in content
 
     @pytest.mark.asyncio
-    async def test_publishes_event(self, tmp_path):
+    async def test_publishes_event(self, tmp_path, event_bus):
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -902,18 +893,17 @@ class TestJudgeIntegration:
         with patch.object(judge, "_execute", side_effect=mock_execute):
             await judge.judge(issue_number=42, pr_number=101, diff="diff")
 
-        events = bus.get_history()
+        events = event_bus.get_history()
         judge_events = [e for e in events if e.type == EventType.VERIFICATION_JUDGE]
         assert len(judge_events) == 1
         assert judge_events[0].data["issue"] == 42
         assert judge_events[0].data["pr"] == 101
 
     @pytest.mark.asyncio
-    async def test_handles_execution_error(self, tmp_path):
+    async def test_handles_execution_error(self, tmp_path, event_bus):
         """Execution errors should not crash the judge — partial results returned."""
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -931,11 +921,10 @@ class TestJudgeIntegration:
         assert result.all_criteria_pass is False
 
     @pytest.mark.asyncio
-    async def test_summary_format(self, tmp_path):
+    async def test_summary_format(self, tmp_path, event_bus):
         """verdict.summary should follow the expected format."""
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_dir = tmp_path / ".hydra" / "verification"
         criteria_dir.mkdir(parents=True)
@@ -957,11 +946,10 @@ class TestJudgeIntegration:
         assert result.summary == "2/3 criteria passed, instructions: ready"
 
     @pytest.mark.asyncio
-    async def test_criteria_file_with_no_instructions(self, tmp_path):
+    async def test_criteria_file_with_no_instructions(self, tmp_path, event_bus):
         """Should handle criteria files without an instructions section."""
         cfg = ConfigFactory.create(repo_root=tmp_path)
-        bus = EventBus()
-        judge = VerificationJudge(cfg, bus)
+        judge = VerificationJudge(cfg, event_bus)
 
         criteria_text = "## Acceptance Criteria\n\n- [ ] First\n- [ ] Second\n"
         criteria_dir = tmp_path / ".hydra" / "verification"
@@ -1016,7 +1004,9 @@ class TestTerminate:
 
 class TestReviewPhaseWiring:
     @pytest.mark.asyncio
-    async def test_review_phase_runs_judge_after_merge(self, config, tmp_path):
+    async def test_review_phase_runs_judge_after_merge(
+        self, config, tmp_path, event_bus
+    ):
         """When verification_judge is provided, it should be called after merge."""
         from review_phase import ReviewPhase
         from state import StateTracker
@@ -1060,7 +1050,7 @@ class TestReviewPhaseWiring:
             prs=mock_prs,
             stop_event=stop_event,
             store=MagicMock(),
-            event_bus=EventBus(),
+            event_bus=event_bus,
             verification_judge=mock_judge,
         )
 
@@ -1086,7 +1076,9 @@ class TestReviewPhaseWiring:
         )
 
     @pytest.mark.asyncio
-    async def test_review_phase_skips_judge_when_none(self, config, tmp_path):
+    async def test_review_phase_skips_judge_when_none(
+        self, config, tmp_path, event_bus
+    ):
         """When verification_judge is None, no judge call should happen."""
         from review_phase import ReviewPhase
         from state import StateTracker
@@ -1126,7 +1118,7 @@ class TestReviewPhaseWiring:
             prs=mock_prs,
             stop_event=stop_event,
             store=MagicMock(),
-            event_bus=EventBus(),
+            event_bus=event_bus,
             # No verification_judge
         )
 

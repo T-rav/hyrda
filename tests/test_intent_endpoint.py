@@ -12,14 +12,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus
-from tests.conftest import make_state
 
 
-def _make_router(config, event_bus, tmp_path):
+def _make_router(config, event_bus, state, tmp_path):
     from dashboard_routes import create_router
     from pr_manager import PRManager
 
-    state = make_state(tmp_path)
     pr_mgr = PRManager(config, event_bus)
     return create_router(
         config=config,
@@ -48,21 +46,21 @@ class TestIntentEndpoint:
     """Tests for POST /api/intent."""
 
     def test_intent_route_is_registered(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Verify /api/intent appears in router paths."""
-        router, _ = _make_router(config, event_bus, tmp_path)
+        router, _ = _make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
         assert "/api/intent" in paths
 
     @pytest.mark.asyncio
     async def test_intent_creates_issue_with_planner_label(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Mock pr_manager.create_issue, verify it's called with planner_label."""
         from models import IntentRequest
 
-        router, pr_mgr = _make_router(config, event_bus, tmp_path)
+        router, pr_mgr = _make_router(config, event_bus, state, tmp_path)
         pr_mgr.create_issue = AsyncMock(return_value=42)
 
         endpoint = _find_endpoint(router, "/api/intent")
@@ -82,12 +80,12 @@ class TestIntentEndpoint:
 
     @pytest.mark.asyncio
     async def test_intent_returns_issue_number_and_url(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Happy path response validation."""
         from models import IntentRequest
 
-        router, pr_mgr = _make_router(config, event_bus, tmp_path)
+        router, pr_mgr = _make_router(config, event_bus, state, tmp_path)
         pr_mgr.create_issue = AsyncMock(return_value=99)
 
         endpoint = _find_endpoint(router, "/api/intent")
@@ -104,12 +102,12 @@ class TestIntentEndpoint:
 
     @pytest.mark.asyncio
     async def test_intent_returns_500_on_create_failure(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """create_issue returns 0 → verify error response."""
         from models import IntentRequest
 
-        router, pr_mgr = _make_router(config, event_bus, tmp_path)
+        router, pr_mgr = _make_router(config, event_bus, state, tmp_path)
         pr_mgr.create_issue = AsyncMock(return_value=0)
 
         endpoint = _find_endpoint(router, "/api/intent")
@@ -124,12 +122,12 @@ class TestIntentEndpoint:
 
     @pytest.mark.asyncio
     async def test_intent_truncates_long_title(
-        self, config, event_bus: EventBus, tmp_path: Path
+        self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
         """Text > 120 chars: title is truncated, body is full text."""
         from models import IntentRequest
 
-        router, pr_mgr = _make_router(config, event_bus, tmp_path)
+        router, pr_mgr = _make_router(config, event_bus, state, tmp_path)
         pr_mgr.create_issue = AsyncMock(return_value=55)
 
         endpoint = _find_endpoint(router, "/api/intent")
