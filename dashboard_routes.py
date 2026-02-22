@@ -37,6 +37,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("hydra.dashboard")
 
+# Backend stage keys → frontend stage names
+_STAGE_NAME_MAP = {
+    "find": "triage",
+    "plan": "plan",
+    "ready": "implement",
+    "review": "review",
+    "hitl": "hitl",
+}
+
+# Frontend stage key → config label field name (for request-changes)
+_FRONTEND_STAGE_TO_LABEL_FIELD = {
+    "triage": "find_label",
+    "plan": "planner_label",
+    "implement": "ready_label",
+    "review": "review_label",
+}
+
 
 def create_router(
     config: HydraConfig,
@@ -85,23 +102,6 @@ def create_router(
         if orch:
             return JSONResponse(orch.issue_store.get_queue_stats().model_dump())
         return JSONResponse(QueueStats().model_dump())
-
-    # Backend stage keys → frontend stage names
-    _STAGE_NAME_MAP = {
-        "find": "triage",
-        "plan": "plan",
-        "ready": "implement",
-        "review": "review",
-        "hitl": "hitl",
-    }
-
-    # Frontend stage key → config label field name (for request-changes)
-    _FRONTEND_STAGE_TO_LABEL_FIELD = {
-        "triage": "find_label",
-        "plan": "planner_label",
-        "implement": "ready_label",
-        "review": "review_label",
-    }
 
     @router.post("/api/request-changes")
     async def request_changes(body: dict) -> JSONResponse:  # type: ignore[type-arg]
