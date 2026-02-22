@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
 import { formatDuration, STAGE_META, STAGE_KEYS } from '../hooks/useTimeline'
+import { TranscriptPreview } from './TranscriptPreview'
 
 export function StatusDot({ status }) {
   if (status === 'active') return <span style={dotStyles.active} />
@@ -61,7 +62,7 @@ function StageRow({ stageKey, stageData, isLast }) {
   )
 }
 
-export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges }) {
+export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges, transcript = [] }) {
   const [expanded, setExpanded] = useState(defaultExpanded || false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
@@ -97,7 +98,19 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
       <style>{pulseKeyframes}</style>
       <div style={styles.header} onClick={toggle}>
         <div style={styles.headerLeft}>
-          <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          {issue.issueUrl ? (
+            <a
+              style={styles.issueLink}
+              href={issue.issueUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{issue.issueNumber}
+            </a>
+          ) : (
+            <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          )}
           <span style={styles.title}>{intent?.text || issue.title}</span>
         </div>
         <div style={styles.headerRight}>
@@ -146,6 +159,9 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
               />
             ))}
           </div>
+          {isActive && transcript.length > 0 && (
+            <TranscriptPreview transcript={transcript} />
+          )}
           <div style={styles.actions}>
             {onViewTranscript && (
               <span
@@ -297,6 +313,7 @@ const styles = {
     fontWeight: 700,
     color: theme.textBright,
     flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   title: {
     fontSize: 12,
@@ -329,6 +346,14 @@ const styles = {
     fontSize: 10,
     color: theme.accent,
     textDecoration: 'none',
+    whiteSpace: 'nowrap',
+  },
+  issueLink: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: theme.accent,
+    textDecoration: 'none',
+    flexShrink: 0,
     whiteSpace: 'nowrap',
   },
   arrow: {
