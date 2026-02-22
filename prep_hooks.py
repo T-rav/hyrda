@@ -153,7 +153,9 @@ def scaffold_pre_commit_hook(
     os.chmod(hook_path, 0o755)  # noqa: S103
 
     message = (
-        warn_msg if warned else f"Created {detected} pre-commit hook at {hook_path}"
+        f"{warn_msg}; created hook at {hook_path}"
+        if warned
+        else f"Created {detected} pre-commit hook at {hook_path}"
     )
     return PrepHookResult(
         created=True,

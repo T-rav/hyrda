@@ -176,6 +176,17 @@ class TestScaffoldPreCommitHook:
         result = scaffold_pre_commit_hook(tmp_path, language="python")
         assert result.hook_path == tmp_path / ".githooks" / "pre-commit"
 
+    def test_message_on_successful_creation_includes_path(self, tmp_path: Path) -> None:
+        result = scaffold_pre_commit_hook(tmp_path, language="python")
+        assert "python" in result.message
+        assert str(tmp_path / ".githooks" / "pre-commit") in result.message
+
+    def test_warned_message_includes_hook_path(self, tmp_path: Path) -> None:
+        (tmp_path / ".husky").mkdir()
+        result = scaffold_pre_commit_hook(tmp_path, language="python")
+        assert ".husky" in result.message
+        assert str(tmp_path / ".githooks" / "pre-commit") in result.message
+
 
 # ---------------------------------------------------------------------------
 # TestConfigureHooksPath
@@ -241,4 +252,16 @@ class TestSetupHooks:
             result = await setup_hooks(tmp_path)
             assert result.skipped is True
             # git config should still be called even when hook already exists
-            mock_sub.assert_called_once()
+            mock_sub.assert_called_once_with(
+                "git", "config", "core.hooksPath", ".githooks", cwd=tmp_path
+            )
+
+    @pytest.mark.asyncio
+    async def test_explicit_language_passed_through_to_scaffold(
+        self, tmp_path: Path
+    ) -> None:
+        with patch("prep_hooks.run_subprocess", new_callable=AsyncMock):
+            result = await setup_hooks(tmp_path, language="javascript")
+            assert result.language == "javascript"
+            hook = tmp_path / ".githooks" / "pre-commit"
+            assert "npx eslint ." in hook.read_text()
