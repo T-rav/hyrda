@@ -265,6 +265,7 @@ const styles = {
     fontWeight: 700,
     color: theme.textBright,
     flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   title: {
     fontSize: 12,

@@ -541,6 +541,8 @@ describe('Merged stage rendering', () => {
     render(<StreamView {...defaultProps} />)
     expect(screen.getByText('#10')).toBeInTheDocument()
     expect(screen.getByText('Fix bug')).toBeInTheDocument()
+    // Merged-from-PR cards should NOT use the PR url as an issue link
+    expect(screen.getByText('#10').tagName).toBe('SPAN')
   })
 
   it('renders merged PR issue as a dot in PipelineFlow', () => {
