@@ -57,6 +57,7 @@ def _make_phase(
     prs.post_comment = AsyncMock()
     prs.remove_label = AsyncMock()
     prs.add_labels = AsyncMock()
+    prs.swap_pipeline_labels = AsyncMock()
     prs.create_issue = AsyncMock(return_value=99)
     prs.close_issue = AsyncMock()
     stop_event = asyncio.Event()
@@ -117,11 +118,7 @@ class TestPlanPhase:
 
         await phase.plan_issues()
 
-        # With multi-label, remove_label is called once per planner label
-        remove_calls = [c.args for c in prs.remove_label.call_args_list]
-        for lbl in config.planner_label:
-            assert (42, lbl) in remove_calls
-        prs.add_labels.assert_awaited_once_with(42, [config.ready_label[0]])
+        prs.swap_pipeline_labels.assert_awaited_once_with(42, config.ready_label[0])
 
     @pytest.mark.asyncio
     async def test_plan_issues_skips_label_swap_on_failure(
@@ -428,11 +425,8 @@ class TestPlanPhase:
         assert "Plan Validation Failed" in comment
         assert "Testing Strategy" in comment
 
-        # Planner label removed, HITL label added
-        remove_calls = [c.args for c in prs.remove_label.call_args_list]
-        for lbl in config.planner_label:
-            assert (42, lbl) in remove_calls
-        prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
+        # Planner label removed, HITL label added via swap
+        prs.swap_pipeline_labels.assert_awaited_once_with(42, config.hitl_label[0])
 
         # HITL origin and cause tracked in state
         assert state.get_hitl_origin(42) == config.planner_label[0]
@@ -526,9 +520,8 @@ class TestPlanPhase:
         with mock_patch.object(PlanAnalyzer, "analyze", return_value=pass_result):
             await phase.plan_issues()
 
-        # Should add ready label
-        add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.ready_label[0]]) in add_calls
+        # Should swap to ready label
+        prs.swap_pipeline_labels.assert_awaited_once_with(42, config.ready_label[0])
 
     @pytest.mark.asyncio
     async def test_plan_issues_proceeds_on_analysis_warn(
@@ -564,9 +557,8 @@ class TestPlanPhase:
         with mock_patch.object(PlanAnalyzer, "analyze", return_value=warn_result):
             await phase.plan_issues()
 
-        # Should add ready label (warn doesn't block)
-        add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.ready_label[0]]) in add_calls
+        # Should swap to ready label (warn doesn't block)
+        prs.swap_pipeline_labels.assert_awaited_once_with(42, config.ready_label[0])
 
 
 # ---------------------------------------------------------------------------
@@ -596,13 +588,8 @@ class TestPlanPhaseAlreadySatisfied:
 
         await phase.plan_issues()
 
-        # Planner labels should be removed
-        remove_calls = [c.args for c in prs.remove_label.call_args_list]
-        for lbl in config.planner_label:
-            assert (42, lbl) in remove_calls
-
-        # Dup labels should be added
-        prs.add_labels.assert_awaited_once_with(42, config.dup_label)
+        # Should swap to dup label
+        prs.swap_pipeline_labels.assert_awaited_once_with(42, config.dup_label[0])
 
         # Comment should be posted
         prs.post_comment.assert_awaited_once()

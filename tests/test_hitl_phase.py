@@ -62,6 +62,7 @@ def _make_phase(
     prs = AsyncMock()
     prs.remove_label = AsyncMock()
     prs.add_labels = AsyncMock()
+    prs.swap_pipeline_labels = AsyncMock()
     prs.push_branch = AsyncMock(return_value=True)
     prs.post_comment = AsyncMock()
     stop_event = asyncio.Event()
@@ -114,9 +115,8 @@ class TestHITLPhaseProcessing:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Fix the tests", semaphore)
 
-        # Verify origin label was restored
-        add_labels_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, ["hydra-review"]) in add_labels_calls
+        # Verify origin label was restored via swap
+        prs.swap_pipeline_labels.assert_any_call(42, "hydra-review")
 
         # Verify HITL state was cleaned up
         assert state.get_hitl_origin(42) is None
@@ -143,9 +143,8 @@ class TestHITLPhaseProcessing:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Fix the tests", semaphore)
 
-        # Verify HITL label was re-applied
-        add_labels_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.hitl_label[0]]) in add_labels_calls
+        # Verify HITL label was re-applied via swap
+        prs.swap_pipeline_labels.assert_any_call(42, config.hitl_label[0])
 
         # Verify HITL state is preserved (not cleaned up)
         assert state.get_hitl_origin(42) == "hydra-review"
@@ -288,9 +287,8 @@ class TestHITLPhaseProcessing:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Fix it", semaphore)
 
-        # Check that hitl_active_label was added
-        add_labels_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.hitl_active_label[0]]) in add_labels_calls
+        # Check that hitl_active_label was set via swap
+        prs.swap_pipeline_labels.assert_any_call(42, config.hitl_active_label[0])
 
     @pytest.mark.asyncio
     async def test_success_destroys_worktree(self, config: HydraConfig) -> None:
@@ -422,15 +420,8 @@ class TestHITLImproveTransition:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Improve the prompt", semaphore)
 
-        # Verify improve label was removed
-        remove_calls = [c.args for c in prs.remove_label.call_args_list]
-        assert (42, "hydra-improve") in remove_calls
-
-        # Verify find/triage label was added (not the improve label)
-        add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.find_label[0]]) in add_calls
-        # Ensure hydra-improve was NOT restored as a label
-        assert (42, ["hydra-improve"]) not in add_calls
+        # Verify find/triage label was set via swap (not the improve label)
+        prs.swap_pipeline_labels.assert_any_call(42, config.find_label[0])
 
         # Verify HITL state was cleaned up
         assert state.get_hitl_origin(42) is None
@@ -455,12 +446,12 @@ class TestHITLImproveTransition:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Fix the tests", semaphore)
 
-        # Verify review label was restored (existing behavior)
-        add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, ["hydra-review"]) in add_calls
+        # Verify review label was restored via swap
+        prs.swap_pipeline_labels.assert_any_call(42, "hydra-review")
 
-        # Verify find label was NOT added
-        assert (42, [config.find_label[0]]) not in add_calls
+        # Verify find label was NOT set
+        swap_calls = [c.args for c in prs.swap_pipeline_labels.call_args_list]
+        assert (42, config.find_label[0]) not in swap_calls
 
     @pytest.mark.asyncio
     async def test_failure_improve_origin_preserves_state(
@@ -485,9 +476,8 @@ class TestHITLImproveTransition:
         semaphore = asyncio.Semaphore(1)
         await phase._process_one_hitl(42, "Improve the prompt", semaphore)
 
-        # Verify HITL label was re-applied
-        add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, [config.hitl_label[0]]) in add_calls
+        # Verify HITL label was re-applied via swap
+        prs.swap_pipeline_labels.assert_any_call(42, config.hitl_label[0])
 
         # Verify improve origin state is preserved for retry
         assert state.get_hitl_origin(42) == "hydra-improve"

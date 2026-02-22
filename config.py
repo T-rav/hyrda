@@ -453,6 +453,23 @@ class HydraConfig(BaseModel):
 
     model_config = {"arbitrary_types_allowed": True}
 
+    @property
+    def all_pipeline_labels(self) -> list[str]:
+        """Return a flat list of every pipeline-stage label (for cleanup)."""
+        result: list[str] = []
+        for labels in (
+            self.find_label,
+            self.planner_label,
+            self.ready_label,
+            self.review_label,
+            self.hitl_label,
+            self.hitl_active_label,
+            self.fixed_label,
+            self.improve_label,
+        ):
+            result.extend(labels)
+        return result
+
     def branch_for_issue(self, issue_number: int) -> str:
         """Return the canonical branch name for a given issue number."""
         return f"agent/issue-{issue_number}"

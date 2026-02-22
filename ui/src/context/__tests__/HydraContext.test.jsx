@@ -543,5 +543,54 @@ describe('SELECT_SESSION reducer', () => {
     })
     expect(result.sessions).toHaveLength(1)
     expect(result.currentSessionId).toBe('s1')
+
+describe('hitl_escalation reducer', () => {
+  it('marks review worker as escalated when pr is present (automated escalation)', () => {
+    const state = {
+      ...initialState,
+      workers: {
+        'review-99': { status: 'active', role: 'reviewer', transcript: [] },
+      },
+    }
+    const next = reducer(state, {
+      type: 'hitl_escalation',
+      data: { pr: 99, issue: 42, cause: 'CI failed', origin: 'hydra-review' },
+      timestamp: new Date().toISOString(),
+    })
+    expect(next.workers['review-99'].status).toBe('escalated')
+    expect(next.hitlEscalation).toEqual({ pr: 99, issue: 42, cause: 'CI failed', origin: 'hydra-review' })
+  })
+
+  it('marks issue worker as escalated when pr is absent (manual request-changes)', () => {
+    const state = {
+      ...initialState,
+      workers: {
+        42: { status: 'active', role: 'implementer', transcript: [] },
+      },
+    }
+    const next = reducer(state, {
+      type: 'hitl_escalation',
+      data: { issue: 42, cause: 'Needs rework', origin: 'hydra-review' },
+      timestamp: new Date().toISOString(),
+    })
+    expect(next.workers[42].status).toBe('escalated')
+    expect(next.hitlEscalation).toEqual({ issue: 42, cause: 'Needs rework', origin: 'hydra-review' })
+  })
+
+  it('leaves workers unchanged when no matching worker found', () => {
+    const state = {
+      ...initialState,
+      workers: {
+        7: { status: 'active', role: 'implementer', transcript: [] },
+      },
+    }
+    const next = reducer(state, {
+      type: 'hitl_escalation',
+      data: { issue: 99, cause: 'Escalated', origin: 'hydra-review' },
+      timestamp: new Date().toISOString(),
+    })
+    expect(next.workers[7].status).toBe('active')
+    expect(next.workers[99]).toBeUndefined()
+
   })
 })

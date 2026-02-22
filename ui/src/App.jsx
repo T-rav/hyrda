@@ -59,6 +59,7 @@ function AppContent() {
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
     selectedSession, selectSession,
+    requestChanges,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -105,9 +106,13 @@ function AppContent() {
     setActiveTab('transcript')
   }, [workers])
 
-  const handleRequestChanges = useCallback(() => {
-    setActiveTab('hitl')
-  }, [])
+  const handleRequestChanges = useCallback(async (issueNumber, feedback, stage) => {
+    const ok = await requestChanges(issueNumber, feedback, stage)
+    if (ok) {
+      setActiveTab('hitl')
+    }
+    return ok
+  }, [requestChanges])
 
   const handleTogglePipelinePanel = useCallback(() => {
     setPipelinePanelOpen(prev => !prev)
