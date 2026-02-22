@@ -439,11 +439,12 @@ class HydraOrchestrator:
 
         # Start a new session
         repo_slug = self._config.repo.replace("/", "-")
-        session_id = f"{repo_slug}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}"
+        session_start_time = datetime.now(UTC)
+        session_id = f"{repo_slug}-{session_start_time.strftime('%Y%m%dT%H%M%S')}"
         self._current_session = SessionLog(
             id=session_id,
             repo=self._config.repo,
-            started_at=datetime.now(UTC).isoformat(),
+            started_at=session_start_time.isoformat(),
         )
         self._session_issue_results = {}
         self._state.save_session(self._current_session)
