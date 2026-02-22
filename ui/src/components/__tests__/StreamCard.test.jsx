@@ -202,4 +202,49 @@ describe('StreamCard request changes feedback flow', () => {
     })
     expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
   })
+
+  it('disables submit button and shows Submitting text while in-flight', async () => {
+    const issue = makeIssue()
+    let resolveRequest
+    const onRequestChanges = vi.fn(() => new Promise(r => { resolveRequest = r }))
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    // During submission the button must be disabled and show "Submitting..."
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-submit-42').disabled).toBe(true)
+    })
+    expect(screen.getByTestId('request-changes-submit-42').textContent).toBe('Submitting...')
+
+    // Resolve and let the component settle
+    resolveRequest(true)
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
+  it('clears feedback text so re-opened panel starts empty after success', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(true)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+
+    // Re-open and verify text was reset
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
+  })
 })
