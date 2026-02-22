@@ -80,14 +80,14 @@ HydraFlow's pipeline draws from three open-source spec-driven development framew
 
 ```bash
 cd your-project
-git submodule add https://github.com/T-rav/hyrda.git hydra
+git submodule add https://github.com/T-rav/hyrda.git hydraflow
 git submodule update --init
 ```
 
 ### 2. Set up the Python environment
 
 ```bash
-cd hydra
+cd hydraflow
 uv venv venv --python 3.11
 uv pip install -e ".[test,dev,dashboard]" --python venv/bin/python
 ```
@@ -116,7 +116,7 @@ HYDRAFLOW_LABEL_FIXED=hydraflow-fixed
 HydraFlow uses 7 lifecycle labels. Create them in your repo (reads label names from `.env`):
 
 ```bash
-# From the hydra directory (auto-detects your repo from git remote)
+# From the hydraflow directory (auto-detects your repo from git remote)
 make ensure-labels
 ```
 
@@ -135,10 +135,10 @@ Copy HydraFlow's Claude Code slash commands into your project so you can use `/g
 mkdir -p .claude/commands
 
 # Copy the commands you want
-cp hydra/.claude/commands/gh-issue.md .claude/commands/
-cp hydra/.claude/commands/audit-tests.md .claude/commands/
-cp hydra/.claude/commands/audit-integration-tests.md .claude/commands/
-cp hydra/.claude/commands/audit-hooks.md .claude/commands/
+cp hydraflow/.claude/commands/gh-issue.md .claude/commands/
+cp hydraflow/.claude/commands/audit-tests.md .claude/commands/
+cp hydraflow/.claude/commands/audit-integration-tests.md .claude/commands/
+cp hydraflow/.claude/commands/audit-hooks.md .claude/commands/
 ```
 
 These commands auto-detect your repo from `git remote` and default to the `hydraflow-plan` label, so created issues feed directly into HydraFlow's pipeline.
@@ -158,7 +158,7 @@ HydraFlow ships with Claude Code hooks that enforce quality gates during develop
 ```bash
 # From your project root
 mkdir -p .claude/hooks
-cp hydra/.claude/hooks/*.sh .claude/hooks/
+cp hydraflow/.claude/hooks/*.sh .claude/hooks/
 chmod +x .claude/hooks/*.sh
 ```
 
@@ -185,7 +185,7 @@ Then merge HydraFlow's hook configuration into your `.claude/settings.json`. The
 ### 7. Install git hooks (optional)
 
 ```bash
-cd hydra
+cd hydraflow
 make setup
 ```
 
@@ -196,7 +196,7 @@ This configures:
 ### 8. Run HydraFlow
 
 ```bash
-cd hydra
+cd hydraflow
 
 # Start with dashboard (opens http://localhost:5556)
 make run
