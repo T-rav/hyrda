@@ -505,14 +505,14 @@ describe('BackgroundWorkerCard schedule display', () => {
   })
 
   it('shows schedule for pipeline_poller from SYSTEM_WORKER_INTERVALS fallback', () => {
-    mockUseHydra.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
     render(<SystemPanel backgroundWorkers={[]} />)
     expect(screen.getByTestId('schedule-pipeline_poller')).toBeInTheDocument()
     expect(screen.getByTestId('schedule-pipeline_poller').textContent).toMatch(/Runs every 5s/)
   })
 
   it('shows schedule for pr_unsticker from backend interval_seconds', () => {
-    mockUseHydra.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
     const bgWorkers = [
       { name: 'pr_unsticker', status: 'ok', enabled: true, last_run: '2026-02-20T10:00:00Z', interval_seconds: 3600, details: {} },
     ]
@@ -522,7 +522,7 @@ describe('BackgroundWorkerCard schedule display', () => {
   })
 
   it('shows schedule for pr_unsticker from fallback when no state reported', () => {
-    mockUseHydra.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
     render(<SystemPanel backgroundWorkers={[]} />)
     expect(screen.getByTestId('schedule-pr_unsticker')).toBeInTheDocument()
     expect(screen.getByTestId('schedule-pr_unsticker').textContent).toMatch(/Runs every 1h/)
@@ -530,7 +530,7 @@ describe('BackgroundWorkerCard schedule display', () => {
 
   it('shows "Next in" for pipeline_poller when lastRun is available', () => {
     const recentTime = new Date(Date.now() - 1000).toISOString()
-    mockUseHydra.mockReturnValue(defaultMockContext({
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({
       orchestratorStatus: 'running',
       pipelinePollerLastRun: recentTime,
     }))
@@ -540,7 +540,7 @@ describe('BackgroundWorkerCard schedule display', () => {
   })
 
   it('shows schedule for memory_sync from fallback when no backend state', () => {
-    mockUseHydra.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
     render(<SystemPanel backgroundWorkers={[]} />)
     expect(screen.getByTestId('schedule-memory_sync')).toBeInTheDocument()
     expect(screen.getByTestId('schedule-memory_sync').textContent).toMatch(/Runs every 1h/)
