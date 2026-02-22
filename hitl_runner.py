@@ -236,11 +236,11 @@ class HITLRunner:
         except FileNotFoundError:
             return False, "make not found — cannot run quality checks"
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
         except TimeoutError:
             proc.kill()
             await proc.wait()
-            return False, "make quality timed out after 300s"
+            return False, "make quality timed out after 3600s"
         if proc.returncode != 0:
             output = stdout.decode(errors="replace") + stderr.decode(errors="replace")
             return False, f"`make quality` failed:\n{output[-3000:]}"

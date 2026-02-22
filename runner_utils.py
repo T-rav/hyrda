@@ -146,7 +146,9 @@ async def stream_claude_process(
             combined = f"{stderr_text}\n{accumulated_text}"
             if not early_killed and is_credit_exhaustion(combined):
                 resume_at = parse_credit_resume_time(combined)
-                raise CreditExhaustedError("API credit limit reached", resume_at=resume_at)
+                raise CreditExhaustedError(
+                    "API credit limit reached", resume_at=resume_at
+                )
 
             return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
 
