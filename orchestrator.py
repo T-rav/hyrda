@@ -87,6 +87,8 @@ class HydraOrchestrator:
         self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
         self._auth_failed = False
+        # Dynamic interval overrides: {worker_name: seconds}
+        self._bg_worker_intervals: dict[str, int] = {}
         # Credit pause — set when API credits are exhausted
         self._credits_paused_until: datetime | None = None
         self._credit_pause_lock = asyncio.Lock()
@@ -178,6 +180,7 @@ class HydraOrchestrator:
             status_cb=self.update_bg_worker_status,
             enabled_cb=self.is_bg_worker_enabled,
             sleep_fn=self._sleep_or_stop,
+            interval_cb=self.get_bg_worker_interval,
         )
         self._metrics_sync_bg = MetricsSyncLoop(
             config,
@@ -188,6 +191,7 @@ class HydraOrchestrator:
             status_cb=self.update_bg_worker_status,
             enabled_cb=self.is_bg_worker_enabled,
             sleep_fn=self._sleep_or_stop,
+            interval_cb=self.get_bg_worker_interval,
         )
         self._pr_unsticker_loop = PRUnstickerLoop(
             config,
@@ -351,6 +355,24 @@ class HydraOrchestrator:
             result[name] = {**state_dict, "enabled": self.is_bg_worker_enabled(name)}
         return result
 
+    def set_bg_worker_interval(self, name: str, seconds: int) -> None:
+        """Set a dynamic interval override for a background worker."""
+        self._bg_worker_intervals[name] = seconds
+        self._state.set_worker_intervals(dict(self._bg_worker_intervals))
+
+    def get_bg_worker_interval(self, name: str) -> int:
+        """Return the effective interval for a background worker.
+
+        Returns the dynamic override if set, otherwise the config default.
+        """
+        if name in self._bg_worker_intervals:
+            return self._bg_worker_intervals[name]
+        if name == "memory_sync":
+            return self._config.memory_sync_interval
+        if name == "metrics":
+            return self._config.metrics_sync_interval
+        return self._config.poll_interval
+
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
         await self._bus.publish(
@@ -369,6 +391,15 @@ class HydraOrchestrator:
         """
         self._stop_event.clear()
         self._running = True
+
+        # Restore interval overrides from persisted state
+        saved_intervals = self._state.get_worker_intervals()
+        if saved_intervals:
+            self._bg_worker_intervals.update(saved_intervals)
+            logger.info(
+                "Restored %d worker interval override(s) from state",
+                len(saved_intervals),
+            )
 
         # Restore active issues from persisted state for crash recovery
         recovered = set(self._state.get_active_issue_numbers())
