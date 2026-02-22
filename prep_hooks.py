@@ -126,7 +126,7 @@ def scaffold_pre_commit_hook(
     Skips creation when the hook already exists.  Warns (but still creates)
     when a ``.husky/`` directory is found.
     """
-    detected = language or detect_language(repo_root)
+    detected = detect_language(repo_root) if language is None else language
     hook_path = repo_root / ".githooks" / "pre-commit"
 
     # Skip if hook already exists
@@ -141,7 +141,7 @@ def scaffold_pre_commit_hook(
     # Warn if Husky is present
     warned = False
     warn_msg = ""
-    if (repo_root / ".husky").exists():
+    if (repo_root / ".husky").is_dir():
         warned = True
         warn_msg = "Existing .husky/ directory found; creating .githooks/ hook anyway"
         logger.warning(warn_msg)

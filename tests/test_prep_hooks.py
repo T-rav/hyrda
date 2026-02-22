@@ -39,6 +39,10 @@ class TestDetectLanguage:
         (tmp_path / "requirements.txt").write_text("requests\n")
         assert detect_language(tmp_path) == "python"
 
+    def test_detects_python_from_setup_cfg(self, tmp_path: Path) -> None:
+        (tmp_path / "setup.cfg").write_text("[metadata]\nname = foo\n")
+        assert detect_language(tmp_path) == "python"
+
     def test_detects_javascript_from_package_json(self, tmp_path: Path) -> None:
         (tmp_path / "package.json").write_text(json.dumps({"name": "my-app"}))
         assert detect_language(tmp_path) == "javascript"
@@ -190,14 +194,21 @@ class TestConfigureHooksPath:
             )
 
     @pytest.mark.asyncio
-    async def test_handles_failure_gracefully(self) -> None:
-        with patch(
-            "prep_hooks.run_subprocess",
-            new_callable=AsyncMock,
-            side_effect=RuntimeError("git not found"),
+    async def test_handles_failure_gracefully(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        with (
+            patch(
+                "prep_hooks.run_subprocess",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("git not found"),
+            ),
+            caplog.at_level(logging.WARNING, logger="hydra.prep_hooks"),
         ):
-            # Should not raise
             await configure_hooks_path(Path("/fake/repo"))
+        assert "Failed to configure git hooks path" in caplog.text
 
 
 # ---------------------------------------------------------------------------
