@@ -218,6 +218,24 @@ class TestHostRunnerRunSimple:
         assert result.stdout == "hello world"
         assert result.stderr == "warn"
 
+    @pytest.mark.asyncio
+    async def test_non_utf8_bytes_are_replaced_not_raised(self) -> None:
+        """Non-UTF-8 bytes must be replaced, not raise UnicodeDecodeError."""
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 1
+        # \xff\xfe is invalid in UTF-8 (valid only in UTF-16 BOM context)
+        mock_proc.communicate = AsyncMock(
+            return_value=(b"\xff\xfe bad output", b"\xff")
+        )
+
+        runner = HostRunner()
+        with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=mock_proc)):
+            result = await runner.run_simple(["make", "quality"])
+
+        assert result.returncode == 1
+        assert "\ufffd" in result.stdout  # replacement character present
+        assert "\ufffd" in result.stderr
+
 
 # ---------------------------------------------------------------------------
 # get_default_runner

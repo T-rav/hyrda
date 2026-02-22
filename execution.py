@@ -54,6 +54,8 @@ class SubprocessRunner(Protocol):
 
         Raises ``TimeoutError`` if the command exceeds *timeout* seconds
         (the process is killed before re-raising).
+
+        Raises ``FileNotFoundError`` if the executable is not found on the host.
         """
         ...
 
@@ -108,8 +110,8 @@ class HostRunner:
             await proc.wait()
             raise
         return SimpleResult(
-            stdout=stdout.decode().strip(),
-            stderr=stderr.decode().strip(),
+            stdout=stdout.decode(errors="replace").strip(),
+            stderr=stderr.decode(errors="replace").strip(),
             returncode=proc.returncode if proc.returncode is not None else -1,
         )
 
