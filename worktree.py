@@ -371,8 +371,8 @@ class WorktreeManager:
                 logger.debug(
                     "Could not %s %s → %s",
                     "copy" if docker else "symlink",
-                    env_dst,
                     env_src,
+                    env_dst,
                     exc_info=True,
                 )
 
@@ -405,8 +405,8 @@ class WorktreeManager:
                     logger.debug(
                         "Could not %s %s → %s",
                         "copy" if docker else "symlink",
-                        nm_dst,
                         nm_src,
+                        nm_dst,
                         exc_info=True,
                     )
 

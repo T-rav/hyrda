@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import stat
 import sys
 from pathlib import Path
 
@@ -1432,8 +1433,6 @@ class TestInstallHooksDocker:
         assert copied_hook.exists()
         assert copied_hook.read_text() == "#!/bin/sh\nexit 0\n"
         # Check executable permission
-        import stat
-
         assert copied_hook.stat().st_mode & stat.S_IXUSR
 
     @pytest.mark.asyncio
