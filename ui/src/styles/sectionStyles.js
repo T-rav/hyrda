@@ -25,6 +25,11 @@ const sectionCountBase = {
   marginLeft: 'auto',
 }
 
+// Note: `${s.color}33` appends a hex alpha suffix to the CSS variable reference string
+// (e.g. `var(--accent)33`). After browser CSS variable substitution this becomes a valid
+// 8-digit hex color (e.g. `#58a6ff33`, ~20% opacity) — but only because all stage color
+// CSS variables in index.html are defined as 6-digit hex values.
+// If any variable is changed to rgb() / hsl() format, these borders will silently break.
 export const sectionHeaderStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, {
     ...sectionHeaderBase,
