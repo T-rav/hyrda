@@ -181,8 +181,14 @@ class PRUnsticker:
         branch: str,
     ) -> bool:
         """Run the conflict resolution loop, mirroring ReviewPhase logic."""
+        from conflict_prompt import build_conflict_prompt
+
         max_attempts = self._config.max_merge_conflict_fix_attempts
         last_error: str | None = None
+
+        # Fetch context once before the attempt loop
+        pr_changed_files = await self._prs.get_pr_diff_names(issue.number)
+        main_commits = await self._worktrees.get_main_commits_since_diverge(wt_path)
 
         for attempt in range(1, max_attempts + 1):
             # Abort any prior failed merge before retrying
@@ -202,7 +208,9 @@ class PRUnsticker:
             )
 
             try:
-                prompt = self._build_conflict_prompt(issue, last_error, attempt)
+                prompt = build_conflict_prompt(
+                    issue, pr_changed_files, main_commits, last_error, attempt
+                )
                 cmd = self._agents._build_command(wt_path)
                 transcript = await self._agents._execute(
                     cmd, prompt, wt_path, issue_number
@@ -252,45 +260,6 @@ class PRUnsticker:
         """Return *True* if *cause* indicates a merge conflict."""
         lower = cause.lower()
         return any(kw in lower for kw in _MERGE_CONFLICT_KEYWORDS)
-
-    def _build_conflict_prompt(
-        self,
-        issue: Any,
-        last_error: str | None,
-        attempt: int,
-    ) -> str:
-        """Build the conflict resolution prompt, adding error context on retries."""
-        prompt = (
-            f"The branch for issue #{issue.number} ({issue.title}) has "
-            f"merge conflicts with main.\n\n"
-            "There is a `git merge` in progress with conflict markers "
-            "in the working tree.\n\n"
-            "## Instructions\n\n"
-            "1. Run `git diff --name-only --diff-filter=U` to list "
-            "conflicted files.\n"
-            "2. Open each conflicted file, understand both sides of the "
-            "conflict, and resolve the markers.\n"
-            "3. Stage all resolved files with `git add`.\n"
-            "4. Complete the merge with "
-            "`git commit --no-edit`.\n"
-            "5. Run `make quality` to ensure everything passes.\n"
-            "6. If quality fails, fix the issues and commit again.\n\n"
-            "## Rules\n\n"
-            "- Keep the intent of the original PR changes.\n"
-            "- Incorporate upstream (main) changes correctly.\n"
-            "- Do NOT push to remote. Do NOT create pull requests.\n"
-            "- Ensure `make quality` passes before finishing.\n"
-        )
-        if last_error and attempt > 1:
-            prompt += (
-                f"\n## Previous Attempt Failed\n\n"
-                f"Attempt {attempt - 1} resolved the conflicts but "
-                f"failed verification:\n"
-                f"```\n{last_error[-3000:]}\n```\n"
-                f"Please resolve the conflicts again, paying attention "
-                f"to the above errors.\n"
-            )
-        return prompt
 
     def _save_transcript(
         self, issue_number: int, attempt: int, transcript: str

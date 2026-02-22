@@ -317,6 +317,39 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
+    async def get_main_commits_since_diverge(self, worktree_path: Path) -> str:
+        """Return recent commits on main since the branch diverged.
+
+        Runs ``git log --oneline HEAD..origin/main`` in *worktree_path*
+        (after fetching main) and returns up to 30 commit summaries as a
+        newline-separated string.  Returns an empty string on failure.
+        """
+        try:
+            await run_subprocess(
+                "git",
+                "fetch",
+                "origin",
+                self._config.main_branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            output = await run_subprocess(
+                "git",
+                "log",
+                "--oneline",
+                f"HEAD..origin/{self._config.main_branch}",
+                "-30",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return output.strip()
+        except RuntimeError:
+            logger.warning(
+                "Could not get main commits since diverge in %s",
+                worktree_path,
+            )
+            return ""
+
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
