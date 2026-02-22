@@ -463,7 +463,7 @@ describe('BackgroundWorkerCard schedule display', () => {
     ]
     render(<SystemPanel backgroundWorkers={bgWorkers} />)
     expect(screen.getByTestId('schedule-memory_sync')).toBeInTheDocument()
-    expect(screen.getByText(/Runs every 1h/)).toBeInTheDocument()
+    expect(screen.getByTestId('schedule-memory_sync').textContent).toMatch(/Runs every 1h/)
   })
 
   it('does not show schedule when interval_seconds is null', () => {
@@ -502,5 +502,47 @@ describe('BackgroundWorkerCard schedule display', () => {
     fireEvent.click(screen.getByTestId('edit-interval-memory_sync'))
     fireEvent.click(screen.getByTestId('preset-2h'))
     expect(onUpdate).toHaveBeenCalledWith('memory_sync', 7200)
+  })
+
+  it('shows schedule for pipeline_poller from SYSTEM_WORKER_INTERVALS fallback', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    render(<SystemPanel backgroundWorkers={[]} />)
+    expect(screen.getByTestId('schedule-pipeline_poller')).toBeInTheDocument()
+    expect(screen.getByTestId('schedule-pipeline_poller').textContent).toMatch(/Runs every 5s/)
+  })
+
+  it('shows schedule for pr_unsticker from backend interval_seconds', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    const bgWorkers = [
+      { name: 'pr_unsticker', status: 'ok', enabled: true, last_run: '2026-02-20T10:00:00Z', interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} />)
+    expect(screen.getByTestId('schedule-pr_unsticker')).toBeInTheDocument()
+    expect(screen.getByTestId('schedule-pr_unsticker').textContent).toMatch(/Runs every 1h/)
+  })
+
+  it('shows schedule for pr_unsticker from fallback when no state reported', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    render(<SystemPanel backgroundWorkers={[]} />)
+    expect(screen.getByTestId('schedule-pr_unsticker')).toBeInTheDocument()
+    expect(screen.getByTestId('schedule-pr_unsticker').textContent).toMatch(/Runs every 1h/)
+  })
+
+  it('shows "Next in" for pipeline_poller when lastRun is available', () => {
+    const recentTime = new Date(Date.now() - 1000).toISOString()
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({
+      orchestratorStatus: 'running',
+      pipelinePollerLastRun: recentTime,
+    }))
+    render(<SystemPanel backgroundWorkers={[]} />)
+    const scheduleRow = screen.getByTestId('schedule-pipeline_poller')
+    expect(scheduleRow.textContent).toMatch(/Next/)
+  })
+
+  it('shows schedule for memory_sync from fallback when no backend state', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    render(<SystemPanel backgroundWorkers={[]} />)
+    expect(screen.getByTestId('schedule-memory_sync')).toBeInTheDocument()
+    expect(screen.getByTestId('schedule-memory_sync').textContent).toMatch(/Runs every 1h/)
   })
 })

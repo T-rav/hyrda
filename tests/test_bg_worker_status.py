@@ -471,6 +471,33 @@ class TestSystemWorkersEndpointIntervals:
         assert ms["last_run"] is not None
 
     @pytest.mark.asyncio
+    async def test_pr_unsticker_has_interval_seconds(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from orchestrator import HydraFlowOrchestrator
+
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
+        router = self._make_router(config, event_bus, tmp_path, orch=orch)
+        endpoint = self._find_endpoint(router, "/api/system/workers")
+        response = await endpoint()
+        data = json.loads(response.body)
+
+        unsticker = next(w for w in data["workers"] if w["name"] == "pr_unsticker")
+        assert unsticker["interval_seconds"] == config.pr_unstick_interval
+
+    @pytest.mark.asyncio
+    async def test_pr_unsticker_has_interval_without_orchestrator(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        router = self._make_router(config, event_bus, tmp_path, orch=None)
+        endpoint = self._find_endpoint(router, "/api/system/workers")
+        response = await endpoint()
+        data = json.loads(response.body)
+
+        unsticker = next(w for w in data["workers"] if w["name"] == "pr_unsticker")
+        assert unsticker["interval_seconds"] == config.pr_unstick_interval
+
+    @pytest.mark.asyncio
     async def test_event_driven_workers_have_no_interval(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
@@ -661,6 +688,14 @@ class TestOrchestratorIntervalManagement:
 
         intervals = state.get_worker_intervals()
         assert intervals["metrics"] == 600
+
+    def test_pr_unsticker_returns_pr_unstick_interval(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraFlowOrchestrator
+
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
+        assert orch.get_bg_worker_interval("pr_unsticker") == config.pr_unstick_interval
 
     def test_unknown_worker_returns_poll_interval(
         self, config, event_bus: EventBus
