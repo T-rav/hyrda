@@ -358,6 +358,34 @@ class AnalysisResultFactory:
         )
 
 
+# --- Test Scaffold Result Factory ---
+
+
+class TestScaffoldResultFactory:
+    """Factory for TestScaffoldResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        created_dirs: list[str] | None = None,
+        created_files: list[str] | None = None,
+        modified_files: list[str] | None = None,
+        skipped: bool = False,
+        skip_reason: str = "",
+        language: str = "python",
+    ):
+        from test_scaffold import TestScaffoldResult
+
+        return TestScaffoldResult(
+            created_dirs=created_dirs or [],
+            created_files=created_files or [],
+            modified_files=modified_files or [],
+            skipped=skipped,
+            skip_reason=skip_reason,
+            language=language,
+        )
+
+
 # --- State Fixture ---
 
 
