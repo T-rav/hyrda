@@ -261,9 +261,8 @@ describe('PipelineControlPanel', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
       render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
       // The card wrapping the worker should have overflow: hidden
+      // issueLabel (#42) is inside a <span> inside cardHeader, so .parentElement.parentElement is the card
       const issueLabel = screen.getByText('#42')
-      const card = issueLabel.closest('[style]')
-      // Walk up to find the card element (parent of cardHeader)
       const cardEl = issueLabel.parentElement.parentElement
       expect(cardEl.style.overflow).toBe('hidden')
       expect(cardEl.style.minWidth).toBe('0px')
