@@ -303,6 +303,18 @@ class HydraConfig(BaseModel):
         le=600,
         description="Seconds between centralized GitHub issue store polls",
     )
+    pr_unstick_interval: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="Seconds between PR unsticker polls",
+    )
+    pr_unstick_batch_size: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Max HITL items to process per unsticker cycle",
+    )
 
     # Acceptance criteria generation
     ac_model: str = Field(
@@ -499,6 +511,20 @@ class HydraConfig(BaseModel):
             if env_data_poll is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "data_poll_interval", int(env_data_poll))
+
+        # PR unstick interval override
+        if self.pr_unstick_interval == 3600:  # still at default
+            env_unstick = os.environ.get("HYDRA_PR_UNSTICK_INTERVAL")
+            if env_unstick is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_interval", int(env_unstick))
+
+        # PR unstick batch size override
+        if self.pr_unstick_batch_size == 10:  # still at default
+            env_batch = os.environ.get("HYDRA_PR_UNSTICK_BATCH_SIZE")
+            if env_batch is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "pr_unstick_batch_size", int(env_batch))
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

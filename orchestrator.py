@@ -26,6 +26,7 @@ from models import (
 )
 from planner import PlannerRunner
 from pr_manager import PRManager
+from pr_unsticker import PRUnsticker
 from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
@@ -113,6 +114,15 @@ class HydraOrchestrator:
 
         self._metrics_manager = MetricsManager(
             config, self._state, self._prs, self._bus
+        )
+        self._pr_unsticker = PRUnsticker(
+            config,
+            self._state,
+            self._bus,
+            self._prs,
+            self._agents,
+            self._worktrees,
+            self._fetcher,
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
@@ -347,6 +357,7 @@ class HydraOrchestrator:
             ("hitl", self._hitl_loop),
             ("memory_sync", self._memory_sync_loop),
             ("metrics", self._metrics_sync_loop),
+            ("pr_unsticker", self._pr_unsticker_loop),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
         for name, factory in loop_factories:
@@ -631,6 +642,34 @@ class HydraOrchestrator:
                     )
                 )
             await self._sleep_or_stop(self._config.metrics_sync_interval)
+
+    async def _pr_unsticker_loop(self) -> None:
+        """Continuously poll HITL items and resolve merge-conflict PRs."""
+        while not self._stop_event.is_set():
+            if not self.is_bg_worker_enabled("pr_unsticker"):
+                await self._sleep_or_stop(self._config.pr_unstick_interval)
+                continue
+            try:
+                hitl_items = await self._prs.list_hitl_items(self._config.hitl_label)
+                stats = await self._pr_unsticker.unstick(hitl_items)
+                self.update_bg_worker_status("pr_unsticker", "ok", details=stats)
+            except (AuthenticationError, CreditExhaustedError):
+                raise
+            except Exception:
+                logger.exception(
+                    "PR unsticker loop iteration failed — will retry next cycle"
+                )
+                self.update_bg_worker_status("pr_unsticker", "error")
+                await self._bus.publish(
+                    HydraEvent(
+                        type=EventType.ERROR,
+                        data={
+                            "message": "PR unsticker loop error",
+                            "source": "pr_unsticker",
+                        },
+                    )
+                )
+            await self._sleep_or_stop(self._config.pr_unstick_interval)
 
     async def _file_memory_suggestion(
         self, transcript: str, source: str, reference: str

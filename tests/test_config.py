@@ -1788,6 +1788,44 @@ class TestHydraConfigImproveLabelAndMemoryLabel:
         )
         assert cfg.metrics_sync_interval == 120
 
+    def test_pr_unstick_interval_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_interval == 3600
+
+    def test_pr_unstick_batch_size_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_batch_size == 10
+
+    def test_pr_unstick_interval_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_PR_UNSTICK_INTERVAL", "1800")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_interval == 1800
+
+    def test_pr_unstick_batch_size_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_PR_UNSTICK_BATCH_SIZE", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_batch_size == 5
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers

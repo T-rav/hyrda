@@ -187,7 +187,7 @@ class TestSystemWorkersEndpoint:
 
         response = await endpoint()
         data = json.loads(response.body)
-        assert len(data["workers"]) == 8
+        assert len(data["workers"]) == 9
         names = [w["name"] for w in data["workers"]]
         assert names == [
             "triage",
@@ -198,6 +198,7 @@ class TestSystemWorkersEndpoint:
             "retrospective",
             "metrics",
             "review_insights",
+            "pr_unsticker",
         ]
 
     @pytest.mark.asyncio
