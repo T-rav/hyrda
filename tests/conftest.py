@@ -388,6 +388,33 @@ def event_bus():
     return EventBus()
 
 
+# --- Scaffold Result Factory ---
+
+
+class ScaffoldResultFactory:
+    """Factory for ScaffoldResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        created: bool = True,
+        targets_added: list[str] | None = None,
+        warnings: list[str] | None = None,
+        skipped: list[str] | None = None,
+        language: str = "python",
+    ):
+        from makefile_scaffold import ScaffoldResult as SR
+
+        return SR(
+            created=created,
+            targets_added=targets_added
+            or ["lint", "lint-check", "typecheck", "test", "quality"],
+            warnings=warnings or [],
+            skipped=skipped or [],
+            language=language,
+        )
+
+
 # --- HITL Runner Fixture ---
 
 
