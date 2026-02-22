@@ -344,6 +344,29 @@ describe('toStreamIssue output shape', () => {
     const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
     expect(result.pr).toBeNull()
   })
+
+  it('passes through issueUrl from pipeIssue url field', () => {
+    const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
+    expect(result.issueUrl).toBe('https://github.com/test/42')
+  })
+
+  it('returns null issueUrl when url is empty', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', url: '', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
+
+  it('returns null issueUrl when url is missing', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
 })
 
 describe('Stage header failed/hitl counts', () => {

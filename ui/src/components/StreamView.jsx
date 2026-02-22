@@ -130,6 +130,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   return {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    issueUrl: pipeIssue.url || null,
     currentStage: stageKey,
     overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
       : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
