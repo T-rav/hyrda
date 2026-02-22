@@ -31,6 +31,7 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
     ("test_command", "HYDRA_TEST_COMMAND", "make test"),
+    ("execution_mode", "HYDRA_EXECUTION_MODE", "host"),
 ]
 
 
@@ -382,6 +383,10 @@ class HydraConfig(BaseModel):
     )
 
     # Execution mode
+    execution_mode: str = Field(
+        default="host",
+        description="Execution mode: 'host' (symlinks) or 'docker' (copies for container compatibility)",
+    )
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
     )

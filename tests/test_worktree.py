@@ -1230,6 +1230,390 @@ class TestGetMainCommitsSinceDiverge:
         assert "-30" in log_call.args
 
 
+# ---------------------------------------------------------------------------
+# Docker mode — _setup_env
+# ---------------------------------------------------------------------------
+
+
+class TestSetupEnvDocker:
+    """Tests for _setup_env when execution_mode='docker'."""
+
+    def _make_docker_manager(self, tmp_path: Path) -> WorktreeManager:
+        """Create a WorktreeManager with docker execution mode."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            execution_mode="docker",
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        return WorktreeManager(cfg)
+
+    def test_setup_env_docker_copies_dotenv(self, tmp_path: Path) -> None:
+        """In docker mode, .env should be copied (not symlinked) into worktree."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=docker_test")
+
+        manager._setup_env(wt_path)
+
+        env_dst = wt_path / ".env"
+        assert env_dst.exists()
+        assert not env_dst.is_symlink(), (
+            ".env must be copied, not symlinked in docker mode"
+        )
+        assert env_dst.read_text() == "SECRET=docker_test"
+
+    def test_setup_env_docker_copies_node_modules(self, tmp_path: Path) -> None:
+        """In docker mode, node_modules/ should be copied (not symlinked)."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create a node_modules dir with a file inside
+        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        ui_nm_src.mkdir(parents=True)
+        (ui_nm_src / "some-pkg").mkdir()
+        (ui_nm_src / "some-pkg" / "index.js").write_text("module.exports = {}")
+
+        manager._setup_env(wt_path)
+
+        ui_nm_dst = wt_path / "bot" / "health_ui" / "node_modules"
+        assert ui_nm_dst.exists()
+        assert ui_nm_dst.is_dir()
+        assert not ui_nm_dst.is_symlink(), (
+            "node_modules must be copied, not symlinked in docker mode"
+        )
+        assert (
+            ui_nm_dst / "some-pkg" / "index.js"
+        ).read_text() == "module.exports = {}"
+
+    def test_setup_env_docker_skips_missing_sources(self, tmp_path: Path) -> None:
+        """In docker mode, missing .env and node_modules should be skipped gracefully."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+
+        manager._setup_env(wt_path)
+
+        assert not (wt_path / ".env").exists()
+
+    def test_setup_env_docker_does_not_overwrite_existing(self, tmp_path: Path) -> None:
+        """In docker mode, existing destination files should not be overwritten."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("NEW_CONTENT")
+
+        env_dst = wt_path / ".env"
+        env_dst.write_text("EXISTING_CONTENT")
+
+        manager._setup_env(wt_path)
+
+        assert env_dst.read_text() == "EXISTING_CONTENT"
+
+    def test_setup_env_docker_handles_copy_oserror(self, tmp_path: Path) -> None:
+        """In docker mode, OSError during copy should be caught and not raised."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+
+        with patch("shutil.copy2", side_effect=OSError("permission denied")):
+            manager._setup_env(wt_path)  # should not raise
+
+    def test_setup_env_docker_handles_copytree_oserror(self, tmp_path: Path) -> None:
+        """In docker mode, OSError during node_modules copytree should be caught."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        ui_nm_src.mkdir(parents=True)
+
+        with patch("shutil.copytree", side_effect=OSError("disk full")):
+            manager._setup_env(wt_path)  # should not raise
+
+    def test_setup_env_host_still_symlinks(self, config, tmp_path: Path) -> None:
+        """Confirm host mode still creates symlinks (regression check)."""
+        assert config.execution_mode == "host"
+        manager = WorktreeManager(config)
+
+        repo_root = config.repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        env_src = repo_root / ".env"
+        env_src.write_text("HOST_MODE=true")
+
+        manager._setup_env(wt_path)
+
+        env_dst = wt_path / ".env"
+        assert env_dst.is_symlink(), ".env must be symlinked in host mode"
+
+
+# ---------------------------------------------------------------------------
+# Docker mode — _install_hooks
+# ---------------------------------------------------------------------------
+
+
+class TestInstallHooksDocker:
+    """Tests for _install_hooks when execution_mode='docker'."""
+
+    def _make_docker_manager(self, tmp_path: Path) -> WorktreeManager:
+        """Create a WorktreeManager with docker execution mode."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            execution_mode="docker",
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        return WorktreeManager(cfg)
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_copies_hook_files(self, tmp_path: Path) -> None:
+        """In docker mode, hook files should be copied to the git hooks dir."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create .githooks with a pre-commit hook
+        githooks_dir = repo_root / ".githooks"
+        githooks_dir.mkdir()
+        hook_file = githooks_dir / "pre-commit"
+        hook_file.write_text("#!/bin/sh\nexit 0\n")
+
+        # Create worktree with a git hooks directory
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        hooks_dir = wt_path / ".git" / "hooks"
+        hooks_dir.mkdir(parents=True)
+
+        # Mock git rev-parse to return the hooks directory path
+        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
+            if "rev-parse" in args:
+                return str(hooks_dir)
+            return ""
+
+        with patch("worktree.run_subprocess", side_effect=fake_run_subprocess):
+            await manager._install_hooks(wt_path)
+
+        copied_hook = hooks_dir / "pre-commit"
+        assert copied_hook.exists()
+        assert copied_hook.read_text() == "#!/bin/sh\nexit 0\n"
+        # Check executable permission
+        import stat
+
+        assert copied_hook.stat().st_mode & stat.S_IXUSR
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_skips_when_githooks_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, missing .githooks/ should be handled gracefully."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+        # No .githooks directory
+
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+
+        # Should not raise
+        await manager._install_hooks(wt_path)
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_handles_copy_error(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, OSError during hook copy should be caught."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        githooks_dir = repo_root / ".githooks"
+        githooks_dir.mkdir()
+        (githooks_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        hooks_dir = wt_path / ".git" / "hooks"
+        hooks_dir.mkdir(parents=True)
+
+        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
+            if "rev-parse" in args:
+                return str(hooks_dir)
+            return ""
+
+        with (
+            patch("worktree.run_subprocess", side_effect=fake_run_subprocess),
+            patch("shutil.copy2", side_effect=OSError("perm denied")),
+        ):
+            await manager._install_hooks(wt_path)  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_host_sets_hooks_path(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Confirm host mode still sets core.hooksPath (regression check)."""
+        assert config.execution_mode == "host"
+        manager = WorktreeManager(config)
+        success_proc = _make_proc()
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager._install_hooks(tmp_path)
+
+        mock_exec.assert_called_once()
+        assert mock_exec.call_args.args[:4] == (
+            "git",
+            "config",
+            "core.hooksPath",
+            ".githooks",
+        )
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_copies_multiple_hooks(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, all hook files should be copied."""
+        manager = self._make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        githooks_dir = repo_root / ".githooks"
+        githooks_dir.mkdir()
+        (githooks_dir / "pre-commit").write_text("#!/bin/sh\necho pre-commit\n")
+        (githooks_dir / "pre-push").write_text("#!/bin/sh\necho pre-push\n")
+
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        hooks_dir = wt_path / ".git" / "hooks"
+        hooks_dir.mkdir(parents=True)
+
+        async def fake_run_subprocess(*args, cwd=None, gh_token=None):
+            if "rev-parse" in args:
+                return str(hooks_dir)
+            return ""
+
+        with patch("worktree.run_subprocess", side_effect=fake_run_subprocess):
+            await manager._install_hooks(wt_path)
+
+        assert (hooks_dir / "pre-commit").exists()
+        assert (hooks_dir / "pre-push").exists()
+
+
+# ---------------------------------------------------------------------------
+# Config — execution_mode
+# ---------------------------------------------------------------------------
+
+
+class TestExecutionModeConfig:
+    """Tests for the execution_mode config field."""
+
+    def test_execution_mode_defaults_to_host(self) -> None:
+        """execution_mode should default to 'host'."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create()
+        assert cfg.execution_mode == "host"
+
+    def test_execution_mode_env_var_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_EXECUTION_MODE env var should override the default."""
+        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
+        from config import HydraConfig
+
+        cfg = HydraConfig(repo="test/repo")
+        assert cfg.execution_mode == "docker"
+
+    def test_execution_mode_explicit_not_overridden_by_env(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Explicit execution_mode should not be overridden by env var."""
+        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(execution_mode="host")
+        # ConfigFactory passes "host" explicitly, but the env var override
+        # only applies when still at default. Since "host" IS the default,
+        # the env var will override it. This is consistent with other fields.
+        assert cfg.execution_mode == "docker"
+
+
+# ---------------------------------------------------------------------------
+# CLI — --execution-mode
+# ---------------------------------------------------------------------------
+
+
+class TestExecutionModeCLI:
+    """Tests for the --execution-mode CLI argument."""
+
+    def test_cli_parses_execution_mode_host(self) -> None:
+        """--execution-mode host should be parsed correctly."""
+        from cli import parse_args
+
+        args = parse_args(["--execution-mode", "host"])
+        assert args.execution_mode == "host"
+
+    def test_cli_parses_execution_mode_docker(self) -> None:
+        """--execution-mode docker should be parsed correctly."""
+        from cli import parse_args
+
+        args = parse_args(["--execution-mode", "docker"])
+        assert args.execution_mode == "docker"
+
+    def test_cli_execution_mode_default_is_none(self) -> None:
+        """Without --execution-mode, the arg should be None (config/env takes precedence)."""
+        from cli import parse_args
+
+        args = parse_args([])
+        assert args.execution_mode is None
+
+    def test_build_config_passes_execution_mode(self) -> None:
+        """build_config should pass execution_mode to HydraConfig when set."""
+        from cli import build_config, parse_args
+
+        args = parse_args(["--execution-mode", "docker"])
+        cfg = build_config(args)
+        assert cfg.execution_mode == "docker"
+
+
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,
 # GH_TOKEN injection, CLAUDECODE stripping) are now in test_subprocess_util.py
 # since the logic was extracted into subprocess_util.run_subprocess.

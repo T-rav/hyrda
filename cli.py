@@ -231,6 +231,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Disable the live web dashboard",
     )
     parser.add_argument(
+        "--execution-mode",
+        choices=["host", "docker"],
+        default=None,
+        help="Execution mode: 'host' (symlinks) or 'docker' (copies for container compatibility)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Log actions without executing (no agents, no git, no PRs)",
@@ -335,6 +341,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "git_user_email",
         "memory_sync_interval",
         "metrics_sync_interval",
+        "execution_mode",
     ):
         val = getattr(args, field)
         if val is not None:

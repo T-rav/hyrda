@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import shutil
+import stat
 from pathlib import Path
 
 from config import HydraConfig
@@ -348,16 +350,30 @@ class WorktreeManager:
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
-        """Symlink .env and node_modules into the worktree."""
-        # Symlink .env
+        """Set up .env and node_modules in the worktree.
+
+        In host mode, files are symlinked for performance.
+        In docker mode, files are copied so the worktree is self-contained
+        for Docker volume mounting.
+        """
+        docker = self._config.execution_mode == "docker"
+
+        # .env
         env_src = self._repo_root / ".env"
         env_dst = wt_path / ".env"
         if env_src.exists() and not env_dst.exists():
             try:
-                env_dst.symlink_to(env_src)
+                if docker:
+                    shutil.copy2(env_src, env_dst)
+                else:
+                    env_dst.symlink_to(env_src)
             except OSError:
                 logger.debug(
-                    "Could not symlink %s → %s", env_dst, env_src, exc_info=True
+                    "Could not %s %s → %s",
+                    "copy" if docker else "symlink",
+                    env_dst,
+                    env_src,
+                    exc_info=True,
                 )
 
         # Copy .claude/settings.local.json (not symlink - agents may modify)
@@ -374,17 +390,21 @@ class WorktreeManager:
                     exc_info=True,
                 )
 
-        # Symlink node_modules for each UI directory
+        # node_modules for each UI directory
         for ui_dir in self._UI_DIRS:
             nm_src = self._repo_root / ui_dir / "node_modules"
             nm_dst = wt_path / ui_dir / "node_modules"
             if nm_src.exists() and not nm_dst.exists():
                 try:
                     nm_dst.parent.mkdir(parents=True, exist_ok=True)
-                    nm_dst.symlink_to(nm_src)
+                    if docker:
+                        shutil.copytree(nm_src, nm_dst, symlinks=True)
+                    else:
+                        nm_dst.symlink_to(nm_src)
                 except OSError:
                     logger.debug(
-                        "Could not symlink %s → %s",
+                        "Could not %s %s → %s",
+                        "copy" if docker else "symlink",
                         nm_dst,
                         nm_src,
                         exc_info=True,
@@ -421,15 +441,62 @@ class WorktreeManager:
             logger.warning("uv sync failed in %s: %s", wt_path, exc)
 
     async def _install_hooks(self, wt_path: Path) -> None:
-        """Point the worktree at the shared .githooks directory."""
+        """Install git hooks in the worktree.
+
+        In host mode, sets ``core.hooksPath`` to the shared ``.githooks`` dir.
+        In docker mode, copies individual hook files into the worktree's git
+        hooks directory so the worktree is self-contained.
+        """
+        if self._config.execution_mode == "docker":
+            await self._install_hooks_docker(wt_path)
+        else:
+            try:
+                await run_subprocess(
+                    "git",
+                    "config",
+                    "core.hooksPath",
+                    ".githooks",
+                    cwd=wt_path,
+                    gh_token=self._config.gh_token,
+                )
+            except RuntimeError as exc:
+                logger.warning("git hooks setup failed: %s", exc)
+
+    async def _install_hooks_docker(self, wt_path: Path) -> None:
+        """Copy hook files from .githooks/ into the worktree's git hooks dir."""
+        githooks_src = self._repo_root / ".githooks"
+        if not githooks_src.is_dir():
+            logger.debug("No .githooks directory found at %s — skipping", githooks_src)
+            return
+
+        # Resolve the actual git hooks directory (worktree .git is a file)
         try:
-            await run_subprocess(
+            hooks_dir_str = await run_subprocess(
                 "git",
-                "config",
-                "core.hooksPath",
-                ".githooks",
+                "rev-parse",
+                "--git-path",
+                "hooks",
                 cwd=wt_path,
                 gh_token=self._config.gh_token,
             )
+            hooks_dir = Path(hooks_dir_str.strip())
+            if not hooks_dir.is_absolute():
+                hooks_dir = wt_path / hooks_dir
         except RuntimeError as exc:
-            logger.warning("git hooks setup failed: %s", exc)
+            logger.warning("Could not resolve git hooks path: %s", exc)
+            return
+
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        for hook_file in githooks_src.iterdir():
+            if hook_file.is_file():
+                dst = hooks_dir / hook_file.name
+                try:
+                    shutil.copy2(hook_file, dst)
+                    dst.chmod(
+                        dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                    )
+                except OSError:
+                    logger.debug(
+                        "Could not copy hook %s → %s", hook_file, dst, exc_info=True
+                    )
