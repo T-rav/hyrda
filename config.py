@@ -7,7 +7,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -383,7 +383,7 @@ class HydraConfig(BaseModel):
     )
 
     # Execution mode
-    execution_mode: str = Field(
+    execution_mode: Literal["host", "docker"] = Field(
         default="host",
         description="Execution mode: 'host' (symlinks) or 'docker' (copies for container compatibility)",
     )

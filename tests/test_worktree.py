@@ -1562,17 +1562,20 @@ class TestExecutionModeConfig:
         cfg = HydraConfig(repo="test/repo")
         assert cfg.execution_mode == "docker"
 
-    def test_execution_mode_explicit_not_overridden_by_env(
+    def test_execution_mode_default_value_overridden_by_env(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Explicit execution_mode should not be overridden by env var."""
+        """When execution_mode equals the default ('host'), env var overrides it.
+
+        This is consistent with the env-override pattern for all fields: the
+        override only applies when the value is still at the default. Because
+        'host' IS the default, ConfigFactory.create(execution_mode='host') is
+        indistinguishable from using the default, so the env var wins.
+        """
         monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
         from tests.helpers import ConfigFactory
 
         cfg = ConfigFactory.create(execution_mode="host")
-        # ConfigFactory passes "host" explicitly, but the env var override
-        # only applies when still at default. Since "host" IS the default,
-        # the env var will override it. This is consistent with other fields.
         assert cfg.execution_mode == "docker"
 
 

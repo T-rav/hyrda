@@ -20,12 +20,12 @@ class WorktreeManager:
     Each worktree gets:
     - A fresh branch from ``main``
     - An independent venv via ``uv sync``
-    - Symlinked ``.env`` and ``node_modules/`` dirs
+    - ``.env`` and ``node_modules/`` dirs (symlinked in host mode, copied in docker mode)
     - Copied ``.claude/settings.local.json``
-    - Pre-commit hooks installed
+    - Pre-commit hooks installed (symlinked path in host mode, copied files in docker mode)
     """
 
-    # Node UI directories that need symlinked node_modules
+    # Node UI directories that need symlinked or copied node_modules
     _UI_DIRS = [
         "bot/health_ui",
         "tasks/ui",
