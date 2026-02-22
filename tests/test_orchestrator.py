@@ -1085,7 +1085,6 @@ class TestHITLCorrection:
             ("hydra-plan", "from plan"),
             ("hydra-ready", "from implement"),
             ("hydra-review", "from review"),
-            ("hydra-improve", "approval"),
         ],
     )
     def test_get_hitl_status_returns_human_readable_origin(
@@ -1094,6 +1093,14 @@ class TestHITLCorrection:
         orch = HydraOrchestrator(config)
         orch._state.set_hitl_origin(42, label)
         assert orch.get_hitl_status(42) == expected
+
+    def test_get_hitl_status_returns_approval_for_improve_origin(
+        self, config: HydraConfig
+    ) -> None:
+        """Memory suggestions use config.improve_label, not a hardcoded string."""
+        orch = HydraOrchestrator(config)
+        orch._state.set_hitl_origin(42, config.improve_label[0])
+        assert orch.get_hitl_status(42) == "approval"
 
     def test_get_hitl_status_falls_back_to_pending_for_unknown_label(
         self, config: HydraConfig
