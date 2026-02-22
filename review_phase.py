@@ -378,7 +378,14 @@ class ReviewPhase:
 
         judge_result = self._get_judge_result(issue, pr, verdict)
         if judge_result is not None:
-            await self._create_verification_issue(issue, pr, judge_result)
+            try:
+                await self._create_verification_issue(issue, pr, judge_result)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Verification issue creation failed for issue #%d",
+                    pr.issue_number,
+                    exc_info=True,
+                )
 
         # Check if any parent epics can be closed
         if self._epic_checker:

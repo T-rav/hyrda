@@ -4181,6 +4181,27 @@ class TestRunPostMergeHooks:
 
         phase._prs.create_issue.assert_not_awaited()
 
+    @pytest.mark.asyncio
+    async def test_verification_issue_creation_failure_does_not_block_epic_checker(
+        self, config: HydraConfig
+    ) -> None:
+        """When _create_verification_issue raises, epic checker still runs."""
+        mock_judge = AsyncMock()
+        verdict = JudgeVerdict(issue_number=42)
+        mock_judge.judge = AsyncMock(return_value=verdict)
+        mock_epic = AsyncMock()
+        phase = make_review_phase(config)
+        phase._verification_judge = mock_judge
+        phase._prs.create_issue = AsyncMock(side_effect=RuntimeError("API failure"))
+        phase._epic_checker = mock_epic
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+        result = ReviewResultFactory.create()
+
+        await phase._run_post_merge_hooks(pr, issue, result, "diff")
+
+        mock_epic.check_and_close_epics.assert_awaited_once()
+
 
 class TestReviewOneInner:
     """Unit tests for the _review_one_inner coordinator method."""
