@@ -23,7 +23,6 @@ _HITL_ORIGIN_DISPLAY: dict[str, str] = {
     "hydra-plan": "from plan",
     "hydra-ready": "from implement",
     "hydra-review": "from review",
-    "hydra-improve": "approval",
 }
 
 
@@ -79,10 +78,10 @@ class HITLPhase:
     def get_status(self, issue_number: int) -> str:
         """Return the HITL status for an issue.
 
-        Returns ``"processing"`` for actively-running issues, or a
-        human-readable origin label (e.g. ``"from review"``) for items
-        waiting on human action.  Falls back to ``"pending"`` when no
-        origin data is available.
+        Returns ``"processing"`` for actively-running issues, ``"approval"``
+        for memory suggestions awaiting human review, a human-readable origin
+        label (e.g. ``"from review"``) for escalated items, or ``"pending"``
+        when no origin data is available.
         """
         if (
             self._store.is_active(issue_number)
@@ -91,6 +90,8 @@ class HITLPhase:
             return "processing"
         origin = self._state.get_hitl_origin(issue_number)
         if origin:
+            if origin in self._config.improve_label:
+                return "approval"
             return _HITL_ORIGIN_DISPLAY.get(origin, "pending")
         return "pending"
 
