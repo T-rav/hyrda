@@ -1523,7 +1523,7 @@ class TestResolveMergeConflicts:
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
 
         with patch(
-            "review_phase.file_memory_suggestion", new_callable=AsyncMock
+            "merge_conflict_resolver.file_memory_suggestion", new_callable=AsyncMock
         ) as mock_fms:
             await phase._resolve_merge_conflicts(
                 pr, issue, config.worktree_base / "issue-42", worker_id=0
@@ -1553,7 +1553,7 @@ class TestResolveMergeConflicts:
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
 
         with patch(
-            "review_phase.file_memory_suggestion",
+            "merge_conflict_resolver.file_memory_suggestion",
             new_callable=AsyncMock,
             side_effect=RuntimeError("network error"),
         ):
@@ -2201,6 +2201,7 @@ class TestRetrospectiveIntegration:
         mock_retro = AsyncMock()
         phase = make_review_phase(config)
         phase._retrospective = mock_retro
+        phase._post_merge._retrospective = mock_retro
 
         issue = IssueFactory.create()
         pr = PRInfoFactory.create()
@@ -2231,6 +2232,7 @@ class TestRetrospectiveIntegration:
         mock_retro = AsyncMock()
         phase = make_review_phase(config)
         phase._retrospective = mock_retro
+        phase._post_merge._retrospective = mock_retro
 
         issue = IssueFactory.create()
         pr = PRInfoFactory.create()
@@ -2262,6 +2264,7 @@ class TestRetrospectiveIntegration:
         mock_retro.record = AsyncMock(side_effect=RuntimeError("retro boom"))
         phase = make_review_phase(config)
         phase._retrospective = mock_retro
+        phase._post_merge._retrospective = mock_retro
 
         issue = IssueFactory.create()
         pr = PRInfoFactory.create()
@@ -4357,6 +4360,7 @@ class TestRunPostMergeHooks:
         mock_retro = AsyncMock()
         phase = make_review_phase(config)
         phase._retrospective = mock_retro
+        phase._post_merge._retrospective = mock_retro
         pr = PRInfoFactory.create()
         issue = IssueFactory.create()
         result = ReviewResultFactory.create()
@@ -4375,6 +4379,7 @@ class TestRunPostMergeHooks:
         mock_retro = AsyncMock()
         phase = make_review_phase(config, ac_generator=mock_ac)
         phase._retrospective = mock_retro
+        phase._post_merge._retrospective = mock_retro
         pr = PRInfoFactory.create()
         issue = IssueFactory.create()
         result = ReviewResultFactory.create()
@@ -4421,6 +4426,7 @@ class TestRunPostMergeHooks:
         mock_judge.judge = AsyncMock(return_value=verdict)
         phase = make_review_phase(config)
         phase._verification_judge = mock_judge
+        phase._post_merge._verification_judge = mock_judge
         phase._prs.create_issue = AsyncMock(return_value=500)
         pr = PRInfoFactory.create()
         result = ReviewResultFactory.create()
@@ -4442,6 +4448,7 @@ class TestRunPostMergeHooks:
         mock_judge.judge = AsyncMock(return_value=None)
         phase = make_review_phase(config)
         phase._verification_judge = mock_judge
+        phase._post_merge._verification_judge = mock_judge
         phase._prs.create_issue = AsyncMock(return_value=0)
         pr = PRInfoFactory.create()
         issue = IssueFactory.create()
@@ -4461,6 +4468,7 @@ class TestRunPostMergeHooks:
         mock_judge.judge = AsyncMock(side_effect=RuntimeError("judge failed"))
         phase = make_review_phase(config)
         phase._verification_judge = mock_judge
+        phase._post_merge._verification_judge = mock_judge
         phase._prs.create_issue = AsyncMock(return_value=0)
         pr = PRInfoFactory.create()
         issue = IssueFactory.create()
@@ -4481,8 +4489,10 @@ class TestRunPostMergeHooks:
         mock_epic = AsyncMock()
         phase = make_review_phase(config)
         phase._verification_judge = mock_judge
+        phase._post_merge._verification_judge = mock_judge
         phase._prs.create_issue = AsyncMock(side_effect=RuntimeError("API failure"))
         phase._epic_checker = mock_epic
+        phase._post_merge._epic_checker = mock_epic
         pr = PRInfoFactory.create()
         issue = IssueFactory.create()
         result = ReviewResultFactory.create()
