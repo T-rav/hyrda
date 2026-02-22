@@ -218,6 +218,105 @@ class TestCreate:
         mock_exec.assert_not_called()
         assert result == dry_config.worktree_base / "issue-7"
 
+    @pytest.mark.asyncio
+    async def test_create_raises_when_fetch_origin_main_fails(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should propagate RuntimeError when 'git fetch origin main' fails."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
+            pytest.raises(RuntimeError, match="network error"),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+    @pytest.mark.asyncio
+    async def test_create_raises_when_worktree_add_fails_after_branch_created(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should propagate RuntimeError when 'git worktree add' fails after branch creation."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc(returncode=0)
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: worktree add failed")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # Calls 1-2: fetch + branch -f succeed; call 3: worktree add fails
+            if call_count <= 2:
+                return success_proc
+            return fail_proc
+
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
+            pytest.raises(RuntimeError, match="worktree add failed"),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+    @pytest.mark.asyncio
+    async def test_create_propagates_setup_env_error(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should propagate OSError from _setup_env (not wrapped in try/except)."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc(returncode=0)
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=success_proc),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
+            patch.object(
+                manager, "_setup_env", side_effect=OSError("Permission denied")
+            ),
+            pytest.raises(OSError, match="Permission denied"),
+        ):
+            await manager.create(issue_number=7, branch="agent/issue-7")
+
+    @pytest.mark.asyncio
+    async def test_create_venv_failure_does_not_block_create(
+        self, config, tmp_path: Path
+    ) -> None:
+        """create should return a valid path even when uv sync fails inside _create_venv."""
+        manager = WorktreeManager(config)
+        config.worktree_base.mkdir(parents=True, exist_ok=True)
+
+        success_proc = _make_proc(returncode=0)
+        fail_proc = _make_proc(returncode=1, stderr=b"uv sync failed")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            # uv sync is the 4th subprocess call (fetch, branch, worktree add, uv sync)
+            if args[0:2] == ("uv", "sync"):
+                return fail_proc
+            return success_proc
+
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=fake_exec),
+            patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
+            patch.object(manager, "_remote_branch_exists", return_value=False),
+            patch.object(manager, "_setup_env"),
+        ):
+            result = await manager.create(issue_number=7, branch="agent/issue-7")
+
+        # _create_venv catches RuntimeError internally, so create completes
+        assert result == config.worktree_base / "issue-7"
+
 
 # ---------------------------------------------------------------------------
 # WorktreeManager.destroy
@@ -295,6 +394,24 @@ class TestDestroy:
 
         with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
             # Should NOT raise
+            await manager.destroy(issue_number=7)
+
+    @pytest.mark.asyncio
+    async def test_destroy_raises_when_worktree_remove_force_fails(
+        self, config, tmp_path: Path
+    ) -> None:
+        """destroy should propagate RuntimeError when 'git worktree remove --force' fails."""
+        manager = WorktreeManager(config)
+
+        wt_path = config.worktree_base / "issue-7"
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: dirty worktree")
+
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=fail_proc),
+            pytest.raises(RuntimeError, match="dirty worktree"),
+        ):
             await manager.destroy(issue_number=7)
 
     @pytest.mark.asyncio
@@ -657,6 +774,42 @@ class TestSetupEnv:
         manager._setup_env(wt_path)
         assert env_dst.is_symlink()
 
+    def test_setup_env_handles_symlink_oserror(self, config, tmp_path: Path) -> None:
+        """_setup_env should handle OSError on symlink and continue."""
+        manager = WorktreeManager(config)
+        repo_root = config.repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create .env source so the symlink path is entered
+        env_src = repo_root / ".env"
+        env_src.write_text("SECRET=val")
+
+        # Also create node_modules source under a real _UI_DIRS entry
+        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        ui_nm_src.mkdir(parents=True)
+
+        with patch.object(Path, "symlink_to", side_effect=OSError("perm denied")):
+            manager._setup_env(wt_path)  # should not raise
+
+    def test_setup_env_handles_copy_oserror(self, config, tmp_path: Path) -> None:
+        """_setup_env should handle OSError when copying settings and continue."""
+        manager = WorktreeManager(config)
+        repo_root = config.repo_root
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        # Create settings source
+        claude_dir = repo_root / ".claude"
+        claude_dir.mkdir()
+        settings_src = claude_dir / "settings.local.json"
+        settings_src.write_text('{"allowed": []}')
+
+        with patch.object(Path, "write_text", side_effect=OSError("read-only")):
+            manager._setup_env(wt_path)  # should not raise
+
 
 # ---------------------------------------------------------------------------
 # WorktreeManager._configure_git_identity
@@ -835,6 +988,19 @@ class TestCreateVenv:
             # Should not raise
             await manager._create_venv(tmp_path)
 
+    @pytest.mark.asyncio
+    async def test_create_venv_swallows_file_not_found_error(
+        self, config, tmp_path: Path
+    ) -> None:
+        """_create_venv should handle missing uv binary (FileNotFoundError)."""
+        manager = WorktreeManager(config)
+
+        with patch(
+            "asyncio.create_subprocess_exec",
+            side_effect=FileNotFoundError("uv"),
+        ):
+            await manager._create_venv(tmp_path)  # should not raise
+
 
 # ---------------------------------------------------------------------------
 # WorktreeManager._install_hooks
@@ -872,6 +1038,114 @@ class TestInstallHooks:
         with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
             # Should not raise
             await manager._install_hooks(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager.start_merge_main
+# ---------------------------------------------------------------------------
+
+
+class TestStartMergeMain:
+    """Tests for WorktreeManager.start_merge_main."""
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_clean_merge_returns_true(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return True when all commands succeed."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc()
+
+        with patch("asyncio.create_subprocess_exec", return_value=success_proc):
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_conflict_returns_false_without_abort(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return False on conflict and NOT call --abort."""
+        manager = WorktreeManager(config)
+
+        success_proc = _make_proc(returncode=0)
+        merge_fail_proc = _make_proc(
+            returncode=1, stderr=b"CONFLICT (content): Merge conflict"
+        )
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 2:
+                return success_proc  # git fetch + ff-only merge succeed
+            return merge_fail_proc  # git merge origin/main fails
+
+        with patch(
+            "asyncio.create_subprocess_exec", side_effect=fake_exec
+        ) as mock_exec:
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is False
+        # Critical: start_merge_main must NOT call git merge --abort
+        for call in mock_exec.call_args_list:
+            assert "--abort" not in call.args, (
+                "start_merge_main must NOT abort on conflict — "
+                "caller resolves conflicts"
+            )
+
+    @pytest.mark.asyncio
+    async def test_start_merge_main_fetch_failure_returns_false(
+        self, config, tmp_path: Path
+    ) -> None:
+        """start_merge_main should return False if fetch fails."""
+        manager = WorktreeManager(config)
+
+        fetch_fail_proc = _make_proc(returncode=1, stderr=b"fatal: network error")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fetch_fail_proc):
+            result = await manager.start_merge_main(tmp_path, "agent/issue-7")
+
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager.abort_merge
+# ---------------------------------------------------------------------------
+
+
+class TestAbortMerge:
+    """Tests for WorktreeManager.abort_merge."""
+
+    @pytest.mark.asyncio
+    async def test_abort_merge_calls_git_merge_abort(
+        self, config, tmp_path: Path
+    ) -> None:
+        """abort_merge should call 'git merge --abort' with correct cwd."""
+        manager = WorktreeManager(config)
+        success_proc = _make_proc(returncode=0)
+
+        with patch(
+            "asyncio.create_subprocess_exec", return_value=success_proc
+        ) as mock_exec:
+            await manager.abort_merge(tmp_path)
+
+        mock_exec.assert_called_once()
+        args = mock_exec.call_args.args
+        assert args[:3] == ("git", "merge", "--abort")
+
+    @pytest.mark.asyncio
+    async def test_abort_merge_swallows_runtime_error(
+        self, config, tmp_path: Path
+    ) -> None:
+        """abort_merge should suppress RuntimeError via contextlib.suppress."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: no merge in progress")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            # Should not raise
+            await manager.abort_merge(tmp_path)
 
 
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,

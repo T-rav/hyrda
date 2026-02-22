@@ -895,17 +895,35 @@ SUMMARY: <brief one-line description of the plan>
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
         """Write the planning transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"plan-issue-{issue_number}.txt"
-        path.write_text(transcript)
-        logger.info("Plan transcript saved to %s", path, extra={"issue": issue_number})
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"plan-issue-{issue_number}.txt"
+            path.write_text(transcript)
+            logger.info(
+                "Plan transcript saved to %s", path, extra={"issue": issue_number}
+            )
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )
 
     def _save_plan(self, issue_number: int, plan: str, summary: str) -> None:
         """Write the extracted plan to .hydra/plans/ for the implementation worker."""
         plan_dir = self._config.repo_root / ".hydra" / "plans"
-        plan_dir.mkdir(parents=True, exist_ok=True)
-        path = plan_dir / f"issue-{issue_number}.md"
-        path.write_text(
-            f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
-        )
-        logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        try:
+            plan_dir.mkdir(parents=True, exist_ok=True)
+            path = plan_dir / f"issue-{issue_number}.md"
+            path.write_text(
+                f"# Plan for Issue #{issue_number}\n\n{plan}\n\n---\n**Summary:** {summary}\n"
+            )
+            logger.info("Plan saved to %s", path, extra={"issue": issue_number})
+        except OSError:
+            logger.warning(
+                "Could not save plan to %s",
+                plan_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )

@@ -231,6 +231,25 @@ describe('toStreamIssue', () => {
       []
     )
     expect(result.overallStatus).toBe('hitl')
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('done')
+    expect(result.stages.implement.status).toBe('done')
+    expect(result.stages.review.status).toBe('hitl')
+    expect(result.stages.merged.status).toBe('pending')
+  })
+
+  it('sets overallStatus to failed for failed items', () => {
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Test', status: 'failed' },
+      'implement',
+      []
+    )
+    expect(result.overallStatus).toBe('failed')
+    expect(result.stages.triage.status).toBe('done')
+    expect(result.stages.plan.status).toBe('done')
+    expect(result.stages.implement.status).toBe('failed')
+    expect(result.stages.review.status).toBe('pending')
+    expect(result.stages.merged.status).toBe('pending')
   })
 
   it('matches PR from prs array', () => {
@@ -249,6 +268,98 @@ describe('toStreamIssue', () => {
       [{ pr: 42, issue: 99, url: 'https://github.com/test/pr/42' }]
     )
     expect(result.pr).toBeNull()
+  })
+})
+
+describe('Stage header failed/hitl counts', () => {
+  it('shows failed count when stage has failed issues', () => {
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      pipelineIssues: {
+        ...defaultHydra.pipelineIssues,
+        implement: [
+          { issue_number: 1, title: 'Active issue', status: 'active' },
+          { issue_number: 2, title: 'Failed issue', status: 'failed' },
+        ],
+      },
+    })
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-implement')
+    expect(section.textContent).toContain('1 failed')
+  })
+
+  it('shows hitl count when stage has hitl issues', () => {
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      pipelineIssues: {
+        ...defaultHydra.pipelineIssues,
+        review: [
+          { issue_number: 1, title: 'Active issue', status: 'active' },
+          { issue_number: 2, title: 'HITL issue', status: 'hitl' },
+        ],
+      },
+    })
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-review')
+    expect(section.textContent).toContain('1 hitl')
+  })
+
+  it('hides failed and hitl counts when zero', () => {
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      pipelineIssues: {
+        ...defaultHydra.pipelineIssues,
+        plan: [
+          { issue_number: 1, title: 'Active issue', status: 'active' },
+          { issue_number: 2, title: 'Queued issue', status: 'queued' },
+        ],
+      },
+    })
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-plan')
+    expect(section.textContent).not.toContain('failed')
+    expect(section.textContent).not.toContain('hitl')
+  })
+
+  it('excludes failed and hitl from queued count', () => {
+    // Note: server-side 'queued' status maps to overallStatus 'active' via toStreamIssue,
+    // so queuedCount captures only items that are not active/failed/hitl (normally 0).
+    // This test verifies failed and hitl are separated from queuedCount.
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      pipelineIssues: {
+        ...defaultHydra.pipelineIssues,
+        implement: [
+          { issue_number: 1, title: 'Active', status: 'active' },
+          { issue_number: 2, title: 'Failed', status: 'failed' },
+          { issue_number: 3, title: 'HITL', status: 'hitl' },
+        ],
+      },
+    })
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-implement')
+    expect(section.textContent).toContain('1 active')
+    expect(section.textContent).toContain('0 queued')
+    expect(section.textContent).toContain('1 failed')
+    expect(section.textContent).toContain('1 hitl')
+  })
+
+  it('shows correct counts with only failed issues (no active/queued)', () => {
+    mockUseHydra.mockReturnValue({
+      ...defaultHydra,
+      pipelineIssues: {
+        ...defaultHydra.pipelineIssues,
+        implement: [
+          { issue_number: 1, title: 'Failed 1', status: 'failed' },
+          { issue_number: 2, title: 'Failed 2', status: 'failed' },
+        ],
+      },
+    })
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-implement')
+    expect(section.textContent).toContain('0 active')
+    expect(section.textContent).toContain('0 queued')
+    expect(section.textContent).toContain('2 failed')
   })
 })
 

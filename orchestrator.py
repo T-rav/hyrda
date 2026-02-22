@@ -163,7 +163,7 @@ class HydraOrchestrator:
             ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
         )
-        self._memory_sync_loop = MemorySyncLoop(
+        self._memory_sync_bg = MemorySyncLoop(
             config,
             self._fetcher,
             self._memory_sync,
@@ -173,7 +173,7 @@ class HydraOrchestrator:
             enabled_cb=self.is_bg_worker_enabled,
             sleep_fn=self._sleep_or_stop,
         )
-        self._metrics_sync_loop = MetricsSyncLoop(
+        self._metrics_sync_bg = MetricsSyncLoop(
             config,
             self._store,
             self._metrics_manager,
@@ -412,8 +412,8 @@ class HydraOrchestrator:
             ("implement", self._implement_loop),
             ("review", self._review_loop),
             ("hitl", self._hitl_loop),
-            ("memory_sync", self._memory_sync_loop.run),
-            ("metrics", self._metrics_sync_loop.run),
+            ("memory_sync", self._memory_sync_loop),
+            ("metrics", self._metrics_sync_loop),
             ("pr_unsticker", self._pr_unsticker_loop.run),
         ]
         tasks: dict[str, asyncio.Task[None]] = {}
@@ -479,163 +479,153 @@ class HydraOrchestrator:
                 task.cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)
 
-    async def _triage_loop(self) -> None:
-        """Continuously poll for find-labeled issues and triage them."""
+    async def _polling_loop(
+        self,
+        name: str,
+        work_fn: Callable[[], Coroutine[Any, Any, Any]],
+        interval: int,
+        enabled_name: str | None = None,
+    ) -> None:
+        """Generic polling loop: check enabled -> try work -> except -> sleep."""
         while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("triage"):
-                await self._sleep_or_stop(self._config.poll_interval)
+            if enabled_name is not None and not self.is_bg_worker_enabled(enabled_name):
+                await self._sleep_or_stop(interval)
                 continue
             try:
-                await self._triager.triage_issues()
+                await work_fn()
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
-                logger.exception("Triage loop iteration failed — will retry next cycle")
+                display = name.replace("_", " ").capitalize()
+                logger.exception(
+                    "%s loop iteration failed — will retry next cycle",
+                    display,
+                )
                 await self._bus.publish(
                     HydraEvent(
                         type=EventType.ERROR,
-                        data={"message": "Triage loop error", "source": "triage"},
+                        data={
+                            "message": f"{display} loop error",
+                            "source": name,
+                        },
                     )
                 )
-            await self._sleep_or_stop(self._config.poll_interval)
+            await self._sleep_or_stop(interval)
+
+    async def _triage_loop(self) -> None:
+        """Continuously poll for find-labeled issues and triage them."""
+        await self._polling_loop(
+            "triage",
+            self._triager.triage_issues,
+            self._config.poll_interval,
+            enabled_name="triage",
+        )
 
     async def _plan_loop(self) -> None:
         """Continuously poll for planner-labeled issues."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("plan"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            try:
-                await self._planner_phase.plan_issues()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("Plan loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Plan loop error", "source": "plan"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "plan",
+            self._planner_phase.plan_issues,
+            self._config.poll_interval,
+            enabled_name="plan",
+        )
 
     async def _implement_loop(self) -> None:
         """Continuously poll for ``hydra-ready`` issues and implement them."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("implement"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            # After one poll cycle, release crash-recovered issues
-            if self._recovered_issues:
-                self._active_impl_issues -= self._recovered_issues
-                self._recovered_issues.clear()
-                self._state.set_active_issue_numbers(
-                    list(
-                        self._active_impl_issues
-                        | self._active_review_issues
-                        | self._active_hitl_issues
-                    )
-                )
-            try:
-                results, _issues = await self._implementer.run_batch()
-                for result in results:
-                    if result.transcript:
-                        try:
-                            await file_memory_suggestion(
-                                result.transcript,
-                                "implementer",
-                                f"issue #{result.issue_number}",
-                                self._config,
-                                self._prs,
-                                self._state,
-                            )
-                        except Exception:
-                            logger.exception(
-                                "Failed to file memory suggestion for issue #%d",
-                                result.issue_number,
-                            )
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception(
-                    "Implement loop iteration failed — will retry next cycle"
-                )
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Implement loop error", "source": "implement"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "implement",
+            self._do_implement_work,
+            self._config.poll_interval,
+            enabled_name="implement",
+        )
 
     async def _review_loop(self) -> None:
         """Continuously consume reviewable issues from the store and review their PRs."""
-        while not self._stop_event.is_set():
-            if not self.is_bg_worker_enabled("review"):
-                await self._sleep_or_stop(self._config.poll_interval)
-                continue
-            try:
-                review_issues = self._store.get_reviewable(
-                    self._config.batch_size,
-                )
-                if review_issues:
-                    # Resolve PRs for the issues obtained from the store.
-                    # We still need per-issue gh pr list calls for PR metadata,
-                    # but issue discovery is centralized via the store.
-                    active_in_store = set(self._store.get_active_issues().keys())
-                    prs, issues = await self._fetcher.fetch_reviewable_prs(
-                        active_in_store, prefetched_issues=review_issues
-                    )
-                    if prs:
-                        review_results = await self._reviewer.review_prs(prs, issues)
-                        for result in review_results:
-                            if result.transcript:
-                                try:
-                                    await file_memory_suggestion(
-                                        result.transcript,
-                                        "reviewer",
-                                        f"PR #{result.pr_number}",
-                                        self._config,
-                                        self._prs,
-                                        self._state,
-                                    )
-                                except Exception:
-                                    logger.exception(
-                                        "Failed to file memory suggestion for PR #%d",
-                                        result.pr_number,
-                                    )
-                        any_merged = any(r.merged for r in review_results)
-                        if any_merged:
-                            await asyncio.sleep(5)
-                            await self._prs.pull_main()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("Review loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "Review loop error", "source": "review"},
-                    )
-                )
-            await self._sleep_or_stop(self._config.poll_interval)
+        await self._polling_loop(
+            "review",
+            self._do_review_work,
+            self._config.poll_interval,
+            enabled_name="review",
+        )
 
     async def _hitl_loop(self) -> None:
         """Continuously process HITL corrections submitted via the dashboard."""
-        while not self._stop_event.is_set():
-            try:
-                await self._hitl_phase.process_corrections()
-            except (AuthenticationError, CreditExhaustedError):
-                raise
-            except Exception:
-                logger.exception("HITL loop iteration failed — will retry next cycle")
-                await self._bus.publish(
-                    HydraEvent(
-                        type=EventType.ERROR,
-                        data={"message": "HITL loop error", "source": "hitl"},
-                    )
+        await self._polling_loop(
+            "hitl",
+            self._hitl_phase.process_corrections,
+            self._config.poll_interval,
+        )
+
+    async def _memory_sync_loop(self) -> None:
+        """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
+        await self._memory_sync_bg.run()
+
+    async def _metrics_sync_loop(self) -> None:
+        """Continuously aggregate and persist metrics snapshots."""
+        await self._metrics_sync_bg.run()
+
+    async def _do_implement_work(self) -> None:
+        """Work function for the implement loop."""
+        # After one poll cycle, release crash-recovered issues
+        if self._recovered_issues:
+            self._active_impl_issues -= self._recovered_issues
+            self._recovered_issues.clear()
+            self._state.set_active_issue_numbers(
+                list(
+                    self._active_impl_issues
+                    | self._active_review_issues
+                    | self._active_hitl_issues
                 )
-            await self._sleep_or_stop(self._config.poll_interval)
+            )
+        results, _issues = await self._implementer.run_batch()
+        for result in results:
+            if result.transcript:
+                try:
+                    await file_memory_suggestion(
+                        result.transcript,
+                        "implementer",
+                        f"issue #{result.issue_number}",
+                        self._config,
+                        self._prs,
+                        self._state,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for issue #%d",
+                        result.issue_number,
+                    )
+
+    async def _do_review_work(self) -> None:
+        """Work function for the review loop."""
+        review_issues = self._store.get_reviewable(self._config.batch_size)
+        if not review_issues:
+            return
+        active_in_store = set(self._store.get_active_issues().keys())
+        prs, issues = await self._fetcher.fetch_reviewable_prs(
+            active_in_store, prefetched_issues=review_issues
+        )
+        if not prs:
+            return
+        review_results = await self._reviewer.review_prs(prs, issues)
+        for result in review_results:
+            if result.transcript:
+                try:
+                    await file_memory_suggestion(
+                        result.transcript,
+                        "reviewer",
+                        f"PR #{result.pr_number}",
+                        self._config,
+                        self._prs,
+                        self._state,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for PR #%d",
+                        result.pr_number,
+                    )
+        if any(r.merged for r in review_results):
+            await asyncio.sleep(5)
+            await self._prs.pull_main()
 
     async def _sleep_or_stop(self, seconds: int | float) -> None:
         """Sleep for *seconds*, waking early if stop is requested."""
@@ -711,13 +701,18 @@ class HydraOrchestrator:
         await self._sleep_or_stop(pause_seconds)
 
         if self._stop_event.is_set():
-            # Stop was requested during the pause — clear the credit hold so that
-            # run_status correctly returns "idle" rather than "credits_paused" after
-            # the orchestrator has fully shut down.
             self._credits_paused_until = None
             return
 
-        # Resume: clear pause state and restart all loops
+        await self._resume_loops_after_credit_pause(tasks, loop_factories, source)
+
+    async def _resume_loops_after_credit_pause(
+        self,
+        tasks: dict[str, asyncio.Task[None]],
+        loop_factories: list[tuple[str, Callable[[], Coroutine[Any, Any, None]]]],
+        source: str,
+    ) -> None:
+        """Clear pause state and restart all loops after credit pause."""
         self._credits_paused_until = None
         logger.info("Credit pause ended — restarting all loops")
         await self._bus.publish(
@@ -729,7 +724,6 @@ class HydraOrchestrator:
                 },
             )
         )
-
         for loop_name, factory in loop_factories:
             tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
 

@@ -1553,7 +1553,7 @@ class TestHITLLoop:
         error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
         assert len(error_events) == 1
         assert error_events[0].data["source"] == "hitl"
-        assert "HITL loop error" in error_events[0].data["message"]
+        assert "Hitl loop error" in error_events[0].data["message"]
 
     @pytest.mark.asyncio
     async def test_stop_terminates_hitl_runner(self, config: HydraConfig) -> None:

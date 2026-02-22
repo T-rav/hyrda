@@ -12,11 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType
 from models import BackgroundWorkersResponse, BackgroundWorkerStatus, MetricsResponse
-from state import StateTracker
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
+from tests.conftest import make_state
 
 
 class TestEventTypes:
@@ -137,6 +133,47 @@ class TestOrchestratorBgWorkerTracking:
 
         orch = HydraOrchestrator(config, event_bus=event_bus)
         assert orch.get_bg_worker_states() == {}
+
+
+class TestBgWorkerEnabled:
+    """Tests for is_bg_worker_enabled / set_bg_worker_enabled."""
+
+    def test_is_bg_worker_enabled_defaults_to_true(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        assert orch.is_bg_worker_enabled("memory_sync") is True
+
+    def test_set_bg_worker_enabled_false(self, config, event_bus: EventBus) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("memory_sync", False)
+        assert orch.is_bg_worker_enabled("memory_sync") is False
+
+    def test_set_bg_worker_enabled_true_after_disable(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.set_bg_worker_enabled("metrics", False)
+        orch.set_bg_worker_enabled("metrics", True)
+        assert orch.is_bg_worker_enabled("metrics") is True
+
+    def test_get_bg_worker_states_includes_enabled_flag(
+        self, config, event_bus: EventBus
+    ) -> None:
+        from orchestrator import HydraOrchestrator
+
+        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch.update_bg_worker_status("memory_sync", "ok")
+        orch.set_bg_worker_enabled("memory_sync", False)
+
+        states = orch.get_bg_worker_states()
+        assert states["memory_sync"]["enabled"] is False
 
 
 class TestSystemWorkersEndpoint:
