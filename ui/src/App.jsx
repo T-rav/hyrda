@@ -34,11 +34,8 @@ function SystemAlertBanner({ alert }) {
 function AppContent() {
   const {
     connected, orchestratorStatus, workers, prs,
-    mergedCount, sessionTriaged, sessionPlanned,
-    sessionImplemented, sessionReviewed,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, metrics, systemAlert, intents,
-    lifetimeStats, githubMetrics, metricsHistory, toggleBgWorker,
+    backgroundWorkers, systemAlert, intents, toggleBgWorker,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -131,21 +128,7 @@ function AppContent() {
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
           {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
-          {activeTab === 'metrics' && (
-            <MetricsPanel
-              metrics={metrics}
-              lifetimeStats={lifetimeStats}
-              githubMetrics={githubMetrics}
-              metricsHistory={metricsHistory}
-              sessionCounts={{
-                triaged: sessionTriaged,
-                planned: sessionPlanned,
-                implemented: sessionImplemented,
-                reviewed: sessionReviewed,
-                merged: mergedCount,
-              }}
-            />
-          )}
+          {activeTab === 'metrics' && <MetricsPanel />}
         </div>
       </div>
 
