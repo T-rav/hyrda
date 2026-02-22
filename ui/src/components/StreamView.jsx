@@ -47,7 +47,7 @@ function PipelineFlow({ stageGroups }) {
   )
 }
 
-function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor, workers, prs }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const failedCount = issues.filter(i => i.overallStatus === 'failed').length
   const hitlCount = issues.filter(i => i.overallStatus === 'hitl').length
@@ -90,6 +90,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
           defaultExpanded={issue.overallStatus === 'active'}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
+          transcript={findWorkerTranscript(workers, prs, stage.key, issue.issueNumber)}
         />
       ))}
     </div>
@@ -145,8 +146,37 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   }
 }
 
+/**
+ * Find the transcript array for a given issue in a pipeline stage.
+ * Worker keys vary by stage: triage-{issue}, plan-{issue}, {issue} (implement), review-{pr}.
+ */
+export function findWorkerTranscript(workers, prs, stageKey, issueNumber) {
+  if (!workers) return []
+  let key
+  switch (stageKey) {
+    case 'triage':
+      key = `triage-${issueNumber}`
+      break
+    case 'plan':
+      key = `plan-${issueNumber}`
+      break
+    case 'implement':
+      key = String(issueNumber)
+      break
+    case 'review': {
+      const pr = (prs || []).find(p => p.issue === issueNumber)
+      if (!pr) return []
+      key = `review-${pr.pr}`
+      break
+    }
+    default:
+      return []
+  }
+  return workers[key]?.transcript || []
+}
+
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, prs, stageStatus } = useHydra()
+  const { pipelineIssues, prs, stageStatus, workers } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -240,6 +270,8 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
             onToggle={() => handleToggleStage(stage.key)}
             enabled={enabled}
             dotColor={dotColor}
+            workers={workers}
+            prs={prs}
           />
         )
       })}

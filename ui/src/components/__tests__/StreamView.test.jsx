@@ -10,7 +10,7 @@ vi.mock('../../context/HydraContext', () => ({
   useHydra: (...args) => mockUseHydra(...args),
 }))
 
-const { StreamView, toStreamIssue } = await import('../StreamView')
+const { StreamView, toStreamIssue, findWorkerTranscript } = await import('../StreamView')
 
 function defaultHydraContext(overrides = {}) {
   const defaultPipeline = { triage: [], plan: [], implement: [], review: [], merged: [] }
@@ -550,5 +550,93 @@ describe('PipelineFlow failed and hitl dots', () => {
     expect(screen.getByTestId('flow-dot-2')).toBeInTheDocument()
     expect(screen.getByTestId('flow-dot-1').style.animation).toBe('')
     expect(screen.getByTestId('flow-dot-2').style.animation).toBe('')
+  })
+})
+
+describe('findWorkerTranscript', () => {
+  const workers = {
+    'triage-42': { transcript: ['triaging issue 42'] },
+    'plan-42': { transcript: ['planning issue 42'] },
+    '42': { transcript: ['implementing issue 42'] },
+    'review-100': { transcript: ['reviewing PR 100'] },
+  }
+  const prs = [{ issue: 42, pr: 100, url: 'https://github.com/pr/100' }]
+
+  it('matches triage worker by triage-{issueNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'triage', 42)
+    expect(result).toEqual(['triaging issue 42'])
+  })
+
+  it('matches plan worker by plan-{issueNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'plan', 42)
+    expect(result).toEqual(['planning issue 42'])
+  })
+
+  it('matches implement worker by bare issue number key', () => {
+    const result = findWorkerTranscript(workers, prs, 'implement', 42)
+    expect(result).toEqual(['implementing issue 42'])
+  })
+
+  it('matches review worker via PR lookup to review-{prNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'review', 42)
+    expect(result).toEqual(['reviewing PR 100'])
+  })
+
+  it('returns empty array when no matching worker exists', () => {
+    const result = findWorkerTranscript(workers, prs, 'implement', 999)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array for merged stage', () => {
+    const result = findWorkerTranscript(workers, prs, 'merged', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when worker exists but has no transcript', () => {
+    const workersNoTranscript = { '42': { status: 'running' } }
+    const result = findWorkerTranscript(workersNoTranscript, [], 'implement', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when workers is null', () => {
+    const result = findWorkerTranscript(null, prs, 'triage', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array for review when no PR exists for issue', () => {
+    const result = findWorkerTranscript(workers, [], 'review', 42)
+    expect(result).toEqual([])
+  })
+})
+
+describe('StreamView transcript integration', () => {
+  it('passes transcript to StreamCard for active issue with matching worker', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [{ issue_number: 42, title: 'Test issue', status: 'active' }],
+      },
+      workers: {
+        '42': { status: 'running', worker: 1, role: 'implementer', title: 'Test issue', branch: '', transcript: ['line 1', 'line 2', 'line 3'], pr: null },
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    // Active card should be expanded by default and show transcript preview
+    expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+    expect(screen.getByText('line 1')).toBeInTheDocument()
+  })
+
+  it('does not show transcript for queued issues even with worker data', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [{ issue_number: 42, title: 'Test issue', status: 'queued' }],
+      },
+      workers: {
+        '42': { status: 'queued', worker: 1, role: 'implementer', title: 'Test issue', branch: '', transcript: ['line 1'], pr: null },
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
   })
 })

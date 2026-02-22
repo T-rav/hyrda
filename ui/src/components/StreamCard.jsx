@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
 import { formatDuration, STAGE_META, STAGE_KEYS } from '../hooks/useTimeline'
+import { TranscriptPreview } from './TranscriptPreview'
 
 export function StatusDot({ status }) {
   if (status === 'active') return <span style={dotStyles.active} />
@@ -61,7 +62,7 @@ function StageRow({ stageKey, stageData, isLast }) {
   )
 }
 
-export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges }) {
+export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges, transcript = [] }) {
   const [expanded, setExpanded] = useState(defaultExpanded || false)
   const toggle = useCallback(() => setExpanded(v => !v), [])
 
@@ -132,6 +133,9 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
               />
             ))}
           </div>
+          {isActive && transcript.length > 0 && (
+            <TranscriptPreview transcript={transcript} />
+          )}
           <div style={styles.actions}>
             {onViewTranscript && (
               <span

@@ -1,7 +1,27 @@
 import { describe, it, expect } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { StatusDot, dotStyles, badgeStyleMap } from '../StreamCard'
+import { StreamCard } from '../StreamCard'
+import { STAGE_KEYS } from '../../hooks/useTimeline'
 import { theme } from '../../theme'
+
+function makeIssue(overrides = {}) {
+  const stages = Object.fromEntries(
+    STAGE_KEYS.map(k => [k, { status: 'pending', startTime: null, endTime: null, transcript: [] }])
+  )
+  return {
+    issueNumber: 1,
+    title: 'Test issue',
+    currentStage: 'implement',
+    overallStatus: 'active',
+    startTime: null,
+    endTime: null,
+    pr: null,
+    branch: 'agent/issue-1',
+    stages: { ...stages, triage: { ...stages.triage, status: 'done' }, plan: { ...stages.plan, status: 'done' }, implement: { ...stages.implement, status: 'active' } },
+    ...overrides,
+  }
+}
 
 describe('StatusDot component', () => {
   it('renders a pulsing dot for active status', () => {
@@ -78,5 +98,52 @@ describe('badgeStyleMap', () => {
   it('queued badge uses yellow theme colors', () => {
     expect(badgeStyleMap.queued.background).toBe(theme.yellowSubtle)
     expect(badgeStyleMap.queued.color).toBe(theme.yellow)
+  })
+})
+
+describe('StreamCard transcript rendering', () => {
+  it('renders TranscriptPreview when active and transcript is non-empty', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1', 'line 2', 'line 3']} />)
+    expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+    expect(screen.getByText('line 1')).toBeInTheDocument()
+    expect(screen.getByText('line 2')).toBeInTheDocument()
+    expect(screen.getByText('line 3')).toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is queued', () => {
+    const issue = makeIssue({ overallStatus: 'queued' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is done', () => {
+    const issue = makeIssue({ overallStatus: 'done' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when status is failed', () => {
+    const issue = makeIssue({ overallStatus: 'failed' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when transcript is empty', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={[]} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('does not render TranscriptPreview when card is collapsed', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={false} transcript={['line 1']} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+  })
+
+  it('defaults transcript to empty array when not provided', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
   })
 })
