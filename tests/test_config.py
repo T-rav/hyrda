@@ -2136,3 +2136,117 @@ class TestMaxIssueAttempts:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_issue_attempts == 4
+
+
+# ---------------------------------------------------------------------------
+# Transcript summarization config
+# ---------------------------------------------------------------------------
+
+
+class TestTranscriptSummarizationConfig:
+    """Tests for transcript summarization configuration fields."""
+
+    def test_default_enabled(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.transcript_summarization_enabled is True
+
+    def test_default_model(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.transcript_summary_model == "haiku"
+
+    def test_default_max_chars(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_transcript_summary_chars == 50_000
+
+    def test_env_var_enabled_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TRANSCRIPT_SUMMARIZATION_ENABLED", "false")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.transcript_summarization_enabled is False
+
+    def test_env_var_enabled_zero(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TRANSCRIPT_SUMMARIZATION_ENABLED", "0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.transcript_summarization_enabled is False
+
+    def test_env_var_model_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TRANSCRIPT_SUMMARY_MODEL", "sonnet")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.transcript_summary_model == "sonnet"
+
+    def test_env_var_max_chars_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_MAX_TRANSCRIPT_SUMMARY_CHARS", "20000")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_transcript_summary_chars == 20_000
+
+    def test_max_chars_validation_min(self, tmp_path: Path) -> None:
+        """max_transcript_summary_chars must be >= 5000."""
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            HydraConfig(
+                max_transcript_summary_chars=1000,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_max_chars_validation_max(self, tmp_path: Path) -> None:
+        """max_transcript_summary_chars must be <= 500_000."""
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            HydraConfig(
+                max_transcript_summary_chars=1_000_000,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_explicit_value_overrides_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_TRANSCRIPT_SUMMARY_MODEL", "sonnet")
+        cfg = HydraConfig(
+            transcript_summary_model="opus",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        # Explicit "opus" != default "haiku", so env var should NOT override
+        assert cfg.transcript_summary_model == "opus"

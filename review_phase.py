@@ -33,6 +33,7 @@ from review_insights import (
 )
 from reviewer import ReviewRunner
 from state import StateTracker
+from transcript_summarizer import TranscriptSummarizer
 from verification import format_verification_issue_body
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
@@ -57,6 +58,7 @@ class ReviewPhase:
         retrospective: RetrospectiveCollector | None = None,
         ac_generator: AcceptanceCriteriaGenerator | None = None,
         verification_judge: VerificationJudge | None = None,
+        transcript_summarizer: TranscriptSummarizer | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -70,6 +72,7 @@ class ReviewPhase:
         self._retrospective = retrospective
         self._ac_generator = ac_generator
         self._verification_judge = verification_judge
+        self._summarizer = transcript_summarizer
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
         self._active_issues: set[int] = set()
 
@@ -788,6 +791,9 @@ class ReviewPhase:
                     wt_path, pr.branch
                 )
                 if success:
+                    await self._maybe_summarize_conflict(
+                        transcript, issue.number, pr.number
+                    )
                     return True
 
                 last_error = error_msg
@@ -798,6 +804,11 @@ class ReviewPhase:
                     pr.number,
                     error_msg[:200] if error_msg else "",
                 )
+                # Summarize final failed attempt
+                if attempt == max_attempts:
+                    await self._maybe_summarize_conflict(
+                        transcript, issue.number, pr.number
+                    )
             except Exception as exc:
                 logger.error(
                     "Conflict resolution agent failed for PR #%d (attempt %d/%d): %s",
@@ -811,6 +822,24 @@ class ReviewPhase:
         # All attempts exhausted — abort and let caller escalate
         await self._worktrees.abort_merge(wt_path)
         return False
+
+    async def _maybe_summarize_conflict(
+        self, transcript: str, issue_number: int, pr_number: int
+    ) -> None:
+        """Summarize a conflict resolution transcript if summarizer is available."""
+        if self._summarizer is None:
+            return
+        try:
+            await self._summarizer.summarize_and_publish(
+                transcript=transcript,
+                issue_number=issue_number,
+                phase="conflict_resolution",
+            )
+        except Exception:
+            logger.exception(
+                "Failed to file transcript summary for conflict resolution on PR #%d",
+                pr_number,
+            )
 
     def _build_conflict_prompt(
         self,

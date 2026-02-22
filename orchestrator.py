@@ -31,6 +31,7 @@ from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
 from subprocess_util import AuthenticationError, CreditExhaustedError
+from transcript_summarizer import TranscriptSummarizer
 from triage import TriageRunner
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
@@ -69,6 +70,9 @@ class HydraOrchestrator:
         self._reviewers = ReviewRunner(config, self._bus)
         self._hitl_runner = HITLRunner(config, self._bus)
         self._triage = TriageRunner(config, self._bus)
+        self._summarizer = TranscriptSummarizer(
+            config, self._prs, self._bus, self._state
+        )
         self._dashboard: object | None = None
         # Pending human-input requests: {issue_number: question}
         self._human_input_requests: dict[int, str] = {}
@@ -131,6 +135,7 @@ class HydraOrchestrator:
             retrospective=self._retrospective,
             ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
+            transcript_summarizer=self._summarizer,
         )
 
     @property
@@ -483,6 +488,17 @@ class HydraOrchestrator:
                                 "Failed to file memory suggestion for issue #%d",
                                 result.issue_number,
                             )
+                        try:
+                            await self._file_transcript_summary(
+                                result.transcript,
+                                result.issue_number,
+                                "implement",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to file transcript summary for issue #%d",
+                                result.issue_number,
+                            )
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
@@ -528,6 +544,17 @@ class HydraOrchestrator:
                                 except Exception:
                                     logger.exception(
                                         "Failed to file memory suggestion for PR #%d",
+                                        result.pr_number,
+                                    )
+                                try:
+                                    await self._file_transcript_summary(
+                                        result.transcript,
+                                        result.pr_number,
+                                        "review",
+                                    )
+                                except Exception:
+                                    logger.exception(
+                                        "Failed to file transcript summary for PR #%d",
                                         result.pr_number,
                                     )
                         any_merged = any(r.merged for r in review_results)
@@ -658,6 +685,23 @@ class HydraOrchestrator:
                 suggestion["title"],
             )
 
+    async def _file_transcript_summary(
+        self,
+        transcript: str,
+        issue_number: int,
+        phase: str,
+        issue_title: str = "",
+        duration_seconds: float = 0.0,
+    ) -> None:
+        """Summarize and publish a transcript as a GitHub issue."""
+        await self._summarizer.summarize_and_publish(
+            transcript=transcript,
+            issue_number=issue_number,
+            phase=phase,
+            issue_title=issue_title,
+            duration_seconds=duration_seconds,
+        )
+
     async def _process_hitl_corrections(self) -> None:
         """Process all pending HITL corrections."""
         if not self._hitl_corrections:
@@ -730,6 +774,19 @@ class HydraOrchestrator:
                 )
 
                 result = await self._hitl_runner.run(issue, correction, cause, wt_path)
+
+                if result.transcript:
+                    try:
+                        await self._file_transcript_summary(
+                            result.transcript,
+                            issue_number,
+                            "hitl",
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to file transcript summary for HITL issue #%d",
+                            issue_number,
+                        )
 
                 # Remove active label
                 for lbl in self._config.hitl_active_label:
@@ -1159,6 +1216,17 @@ class HydraOrchestrator:
                         except Exception:
                             logger.exception(
                                 "Failed to file memory suggestion for issue #%d",
+                                issue.number,
+                            )
+                        try:
+                            await self._file_transcript_summary(
+                                result.transcript,
+                                issue.number,
+                                "plan",
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Failed to file transcript summary for issue #%d",
                                 issue.number,
                             )
 

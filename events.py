@@ -45,6 +45,7 @@ class EventType(StrEnum):
     QUEUE_UPDATE = "queue_update"
     SYSTEM_ALERT = "system_alert"
     VERIFICATION_JUDGE = "verification_judge"
+    TRANSCRIPT_SUMMARY = "transcript_summary"
 
 
 class HydraEvent(BaseModel):
