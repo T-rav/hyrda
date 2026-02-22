@@ -386,6 +386,15 @@ describe('HITLTable component', () => {
     resolveSkip({ ok: true })
   })
 
+  it('renders approval status badge with purple styling', () => {
+    const items = [{ ...mockItems[0], status: 'approval' }]
+    render(<HITLTable items={items} onRefresh={() => {}} />)
+    const badge = screen.getByText('approval')
+    expect(badge).toBeInTheDocument()
+    expect(badge.style.background).toBe('var(--purple-subtle)')
+    expect(badge.style.color).toBe('var(--purple)')
+  })
+
   it('uses orange badge for non-memory cause', () => {
     const items = [{ ...mockItems[0], isMemorySuggestion: false }]
     render(<HITLTable items={items} onRefresh={() => {}} />)
