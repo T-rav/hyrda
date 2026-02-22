@@ -71,7 +71,7 @@ export function Header({
       <div style={styles.controls}>
         {onTogglePipelinePanel && (
           <button
-            style={pipelinePanelOpen ? styles.panelToggleActive : styles.panelToggle}
+            style={pipelinePanelOpen ? panelToggleActiveStyle : panelToggleStyle}
             onClick={onTogglePipelinePanel}
             data-testid="pipeline-panel-toggle"
           >
@@ -209,17 +209,6 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.15s',
   },
-  panelToggleActive: {
-    padding: '4px 10px',
-    borderRadius: 6,
-    border: `1px solid ${theme.accent}`,
-    background: theme.accentSubtle,
-    color: theme.accent,
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-  },
 }
 
 // Pre-computed connection dot variants
@@ -229,3 +218,7 @@ export const dotDisconnected = { ...styles.dot, background: theme.red }
 // Pre-computed start button variants
 export const startBtnEnabled = { ...styles.startBtn, opacity: 1, cursor: 'pointer' }
 export const startBtnDisabled = { ...styles.startBtn, opacity: 0.4, cursor: 'not-allowed' }
+
+// Pre-computed pipeline panel toggle button variants
+export const panelToggleStyle = styles.panelToggle
+export const panelToggleActiveStyle = { ...styles.panelToggle, border: `1px solid ${theme.accent}`, background: theme.accentSubtle, color: theme.accent }

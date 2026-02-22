@@ -10,7 +10,10 @@ function formatDuration(startTime) {
   if (seconds < 60) return `${seconds}s`
   const minutes = Math.floor(seconds / 60)
   const secs = seconds % 60
-  return `${minutes}m ${secs}s`
+  if (minutes < 60) return `${minutes}m ${secs}s`
+  const hours = Math.floor(minutes / 60)
+  const remainMinutes = minutes % 60
+  return remainMinutes > 0 ? `${hours}h ${remainMinutes}m` : `${hours}h`
 }
 
 function pipelineStatusColor(status) {
