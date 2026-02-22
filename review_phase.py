@@ -169,24 +169,32 @@ class ReviewPhase:
                 pr.number,
                 result.verdict.value,
             )
-            await self._publish_review_status(pr, idx, "re_reviewing")
-            updated_diff = await self._prs.get_pr_diff(pr.number)
-            re_result = await self._reviewers.review(
-                pr, issue, wt_path, updated_diff, worker_id=idx
-            )
-            if re_result.fixes_made:
-                await self._prs.push_branch(wt_path, pr.branch)
-            if re_result.verdict == ReviewVerdict.APPROVE:
-                logger.info(
-                    "PR #%d: self-fix re-review passed — upgrading verdict to APPROVE",
-                    pr.number,
+            try:
+                await self._publish_review_status(pr, idx, "re_reviewing")
+                updated_diff = await self._prs.get_pr_diff(pr.number)
+                diff = updated_diff  # Use updated diff for post-merge hooks
+                re_result = await self._reviewers.review(
+                    pr, issue, wt_path, updated_diff, worker_id=idx
                 )
-                result = re_result
-            else:
-                logger.info(
-                    "PR #%d: self-fix re-review still returned %s — proceeding with rejection",
+                if re_result.fixes_made:
+                    await self._prs.push_branch(wt_path, pr.branch)
+                if re_result.verdict == ReviewVerdict.APPROVE:
+                    logger.info(
+                        "PR #%d: self-fix re-review passed — upgrading verdict to APPROVE",
+                        pr.number,
+                    )
+                    result = re_result
+                else:
+                    logger.info(
+                        "PR #%d: self-fix re-review still returned %s — proceeding with rejection",
+                        pr.number,
+                        re_result.verdict.value,
+                    )
+            except Exception:
+                logger.warning(
+                    "PR #%d: self-fix re-review failed — falling back to original rejection",
                     pr.number,
-                    re_result.verdict.value,
+                    exc_info=True,
                 )
 
         self._state.mark_pr(pr.number, result.verdict.value)

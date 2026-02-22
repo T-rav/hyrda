@@ -3423,7 +3423,7 @@ class TestSelfFixReReview:
         assert results[0].verdict == ReviewVerdict.APPROVE
         # Label should NOT be swapped to ready
         for call_args in phase._prs.add_labels.call_args_list:
-            assert call_args[0][1] != ["test-label"]
+            assert call_args[0][1] != config.ready_label
 
     @pytest.mark.asyncio
     async def test_self_fix_with_re_review_reject_preserves_behavior(
