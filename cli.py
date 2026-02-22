@@ -172,6 +172,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for the metrics persistence issue, comma-separated (default: hydra-metrics)",
     )
     parser.add_argument(
+        "--epic-label",
+        default=None,
+        help="Labels for epic tracking issues, comma-separated (default: hydra-epic)",
+    )
+    parser.add_argument(
         "--metrics-sync-interval",
         type=int,
         default=None,
@@ -347,6 +352,7 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
         "improve_label",
         "memory_label",
         "metrics_label",
+        "epic_label",
         "lite_plan_labels",
     ):
         val = getattr(args, field)

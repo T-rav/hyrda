@@ -1,0 +1,261 @@
+"""HITL phase — process human-in-the-loop corrections."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+
+from config import HydraConfig
+from events import EventBus, EventType, HydraEvent
+from hitl_runner import HITLRunner
+from issue_fetcher import IssueFetcher
+from issue_store import IssueStore
+from pr_manager import PRManager
+from state import StateTracker
+from worktree import WorktreeManager
+
+logger = logging.getLogger("hydra.hitl_phase")
+
+_HITL_ORIGIN_DISPLAY: dict[str, str] = {
+    "hydra-find": "from triage",
+    "hydra-plan": "from plan",
+    "hydra-ready": "from implement",
+    "hydra-review": "from review",
+}
+
+
+class HITLPhase:
+    """Processes HITL corrections submitted via the dashboard."""
+
+    def __init__(
+        self,
+        config: HydraConfig,
+        state: StateTracker,
+        store: IssueStore,
+        fetcher: IssueFetcher,
+        worktrees: WorktreeManager,
+        hitl_runner: HITLRunner,
+        prs: PRManager,
+        bus: EventBus,
+        stop_event: asyncio.Event,
+        active_issues_cb: Any = None,
+    ) -> None:
+        self._config = config
+        self._state = state
+        self._store = store
+        self._fetcher = fetcher
+        self._worktrees = worktrees
+        self._hitl_runner = hitl_runner
+        self._prs = prs
+        self._bus = bus
+        self._stop_event = stop_event
+        self._active_issues_cb = active_issues_cb
+        # HITL corrections: {issue_number: correction_text}
+        self._hitl_corrections: dict[int, str] = {}
+        # In-memory tracking of active HITL issues
+        self._active_hitl_issues: set[int] = set()
+
+    @property
+    def active_hitl_issues(self) -> set[int]:
+        """Return the set of currently active HITL issues."""
+        return self._active_hitl_issues
+
+    @property
+    def hitl_corrections(self) -> dict[int, str]:
+        """Return the pending HITL corrections dict."""
+        return self._hitl_corrections
+
+    def submit_correction(self, issue_number: int, correction: str) -> None:
+        """Store a correction for a HITL issue to guide retry."""
+        self._hitl_corrections[issue_number] = correction
+
+    def skip_issue(self, issue_number: int) -> None:
+        """Remove an issue from HITL tracking."""
+        self._hitl_corrections.pop(issue_number, None)
+
+    def get_status(self, issue_number: int) -> str:
+        """Return the HITL status for an issue.
+
+        Returns ``"processing"`` for actively-running issues, or a
+        human-readable origin label (e.g. ``"from review"``) for items
+        waiting on human action.  Falls back to ``"pending"`` when no
+        origin data is available.
+        """
+        if (
+            self._store.is_active(issue_number)
+            or issue_number in self._active_hitl_issues
+        ):
+            return "processing"
+        origin = self._state.get_hitl_origin(issue_number)
+        if origin:
+            return _HITL_ORIGIN_DISPLAY.get(origin, "pending")
+        return "pending"
+
+    async def process_corrections(self) -> None:
+        """Process all pending HITL corrections."""
+        if not self._hitl_corrections:
+            return
+
+        semaphore = asyncio.Semaphore(self._config.max_hitl_workers)
+
+        # Snapshot and clear pending corrections to avoid re-processing
+        pending = dict(self._hitl_corrections)
+        for issue_number in pending:
+            self._hitl_corrections.pop(issue_number, None)
+
+        tasks = [
+            asyncio.create_task(
+                self._process_one_hitl(issue_number, correction, semaphore)
+            )
+            for issue_number, correction in pending.items()
+        ]
+
+        for task in asyncio.as_completed(tasks):
+            await task
+            if self._stop_event.is_set():
+                for t in tasks:
+                    t.cancel()
+                break
+
+    async def _process_one_hitl(
+        self,
+        issue_number: int,
+        correction: str,
+        semaphore: asyncio.Semaphore,
+    ) -> None:
+        """Process a single HITL correction for *issue_number*."""
+        async with semaphore:
+            if self._stop_event.is_set():
+                return
+
+            self._active_hitl_issues.add(issue_number)
+            self._notify_active_issues()
+            try:
+                issue = await self._fetcher.fetch_issue_by_number(issue_number)
+                if not issue:
+                    logger.warning(
+                        "Could not fetch issue #%d for HITL correction",
+                        issue_number,
+                    )
+                    return
+
+                cause = self._state.get_hitl_cause(issue_number) or "Unknown escalation"
+                origin = self._state.get_hitl_origin(issue_number)
+
+                # Get or create worktree
+                branch = self._config.branch_for_issue(issue_number)
+                wt_path = self._config.worktree_path_for_issue(issue_number)
+                if not wt_path.is_dir():
+                    wt_path = await self._worktrees.create(issue_number, branch)
+                self._state.set_worktree(issue_number, str(wt_path))
+
+                # Swap to active label
+                for lbl in self._config.hitl_label:
+                    await self._prs.remove_label(issue_number, lbl)
+                await self._prs.add_labels(
+                    issue_number, [self._config.hitl_active_label[0]]
+                )
+
+                result = await self._hitl_runner.run(issue, correction, cause, wt_path)
+
+                # Remove active label
+                for lbl in self._config.hitl_active_label:
+                    await self._prs.remove_label(issue_number, lbl)
+
+                if result.success:
+                    await self._prs.push_branch(wt_path, branch)
+
+                    if origin and origin in self._config.improve_label:
+                        # Improve issues go to triage for implementation
+                        for lbl in self._config.improve_label:
+                            await self._prs.remove_label(issue_number, lbl)
+                        if self._config.find_label:
+                            await self._prs.add_labels(
+                                issue_number,
+                                [self._config.find_label[0]],
+                            )
+                        target_stage = (
+                            self._config.find_label[0]
+                            if self._config.find_label
+                            else "pipeline"
+                        )
+                    elif origin:
+                        await self._prs.add_labels(issue_number, [origin])
+                        target_stage = origin
+                    else:
+                        target_stage = "pipeline"
+
+                    self._state.remove_hitl_origin(issue_number)
+                    self._state.remove_hitl_cause(issue_number)
+                    self._state.reset_issue_attempts(issue_number)
+
+                    await self._prs.post_comment(
+                        issue_number,
+                        f"**HITL correction applied successfully.**\n\n"
+                        f"Returning issue to `{target_stage}` stage."
+                        f"\n\n---\n*Applied by Hydra HITL*",
+                    )
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.HITL_UPDATE,
+                            data={
+                                "issue": issue_number,
+                                "action": "resolved",
+                                "status": "resolved",
+                            },
+                        )
+                    )
+                    logger.info(
+                        "HITL correction succeeded for issue #%d — returning to %s",
+                        issue_number,
+                        origin,
+                    )
+                else:
+                    await self._prs.add_labels(
+                        issue_number, [self._config.hitl_label[0]]
+                    )
+                    await self._prs.post_comment(
+                        issue_number,
+                        f"**HITL correction failed.**\n\n"
+                        f"Error: {result.error or 'No details available'}"
+                        f"\n\nPlease retry with different guidance."
+                        f"\n\n---\n*Applied by Hydra HITL*",
+                    )
+                    await self._bus.publish(
+                        HydraEvent(
+                            type=EventType.HITL_UPDATE,
+                            data={
+                                "issue": issue_number,
+                                "action": "failed",
+                                "status": "pending",
+                            },
+                        )
+                    )
+                    logger.warning(
+                        "HITL correction failed for issue #%d: %s",
+                        issue_number,
+                        result.error,
+                    )
+
+                # Clean up worktree on success; keep on failure for retry
+                if result.success:
+                    try:
+                        await self._worktrees.destroy(issue_number)
+                        self._state.remove_worktree(issue_number)
+                    except RuntimeError as exc:
+                        logger.warning(
+                            "Could not destroy worktree for issue #%d: %s",
+                            issue_number,
+                            exc,
+                        )
+            except Exception:
+                logger.exception("HITL processing failed for issue #%d", issue_number)
+            finally:
+                self._active_hitl_issues.discard(issue_number)
+                self._notify_active_issues()
+
+    def _notify_active_issues(self) -> None:
+        """Call the active issues callback if registered."""
+        if self._active_issues_cb is not None:
+            self._active_issues_cb()

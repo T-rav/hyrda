@@ -4,5 +4,5 @@
  *
  * All state management has moved to HydraContext.
  */
-export { reducer } from '../context/HydraContext'
+export { reducer, initialState } from '../context/HydraContext'
 export { useHydra as useHydraSocket } from '../context/HydraContext'

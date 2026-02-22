@@ -27,6 +27,7 @@ from models import (
     WorkerResult,
     WorkerStatus,
 )
+from tests.conftest import ReviewResultFactory
 
 # ---------------------------------------------------------------------------
 # GitHubIssue
@@ -844,7 +845,9 @@ class TestBatchResult:
             PRInfo(number=100, issue_number=1, branch="agent/issue-1"),
         ]
         review_results = [
-            ReviewResult(pr_number=100, issue_number=1, verdict=ReviewVerdict.APPROVE),
+            ReviewResultFactory.create(
+                pr_number=100, issue_number=1, verdict=ReviewVerdict.APPROVE
+            ),
         ]
         merged_prs = [100]
 

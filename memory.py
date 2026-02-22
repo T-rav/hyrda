@@ -5,16 +5,18 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-import os
 import re
-import tempfile
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from file_util import atomic_write
 from state import StateTracker
 from subprocess_util import make_clean_env
+
+if TYPE_CHECKING:
+    from pr_manager import PRManager
 
 logger = logging.getLogger("hydra.memory")
 
@@ -80,6 +82,38 @@ def load_memory_digest(config: HydraConfig) -> str:
     if len(content) > max_chars:
         content = content[:max_chars] + "\n\n…(truncated)"
     return content
+
+
+async def file_memory_suggestion(
+    transcript: str,
+    source: str,
+    reference: str,
+    config: HydraConfig,
+    prs: PRManager,
+    state: StateTracker,
+) -> None:
+    """Parse and file a memory suggestion from an agent transcript."""
+    suggestion = parse_memory_suggestion(transcript)
+    if not suggestion:
+        return
+
+    body = build_memory_issue_body(
+        learning=suggestion["learning"],
+        context=suggestion["context"],
+        source=source,
+        reference=reference,
+    )
+    title = f"[Memory] {suggestion['title']}"
+    labels = list(config.improve_label) + list(config.hitl_label)
+    issue_num = await prs.create_issue(title, body, labels)
+    if issue_num:
+        state.set_hitl_origin(issue_num, config.improve_label[0])
+        state.set_hitl_cause(issue_num, "Memory suggestion")
+        logger.info(
+            "Filed memory suggestion as issue #%d: %s",
+            issue_num,
+            suggestion["title"],
+        )
 
 
 class MemorySyncWorker:
@@ -310,27 +344,8 @@ class MemorySyncWorker:
 
     def _write_digest(self, content: str) -> None:
         """Write digest to disk atomically."""
-        digest_dir = self._config.repo_root / ".hydra" / "memory"
-        digest_dir.mkdir(parents=True, exist_ok=True)
-        digest_path = digest_dir / "digest.md"
-
-        fd, tmp = tempfile.mkstemp(
-            dir=digest_dir,
-            prefix=".digest-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, digest_path)
-        except BaseException:
-            import contextlib
-
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
+        atomic_write(digest_path, content)
 
     async def publish_sync_event(self, stats: dict[str, Any]) -> None:
         """Publish a MEMORY_SYNC event with *stats*."""
