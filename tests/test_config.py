@@ -628,7 +628,7 @@ class TestHydraConfigPathResolution:
     def test_default_worktree_base_derived_from_repo_root(self, tmp_path: Path) -> None:
         """When worktree_base is left as Path('.'), it should be derived as repo_root.parent / 'hydra-worktrees'."""
         # Arrange
-        git_root = tmp_path / "hyrda"
+        git_root = tmp_path / "hydra"
         git_root.mkdir()
         (git_root / ".git").mkdir()
 
@@ -641,7 +641,7 @@ class TestHydraConfigPathResolution:
     def test_default_state_file_derived_from_repo_root(self, tmp_path: Path) -> None:
         """When state_file is left as Path('.'), it should resolve to repo_root / '.hydra/state.json'."""
         # Arrange
-        git_root = tmp_path / "hyrda"
+        git_root = tmp_path / "hydra"
         git_root.mkdir()
         (git_root / ".git").mkdir()
 
