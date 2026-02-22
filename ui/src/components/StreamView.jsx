@@ -408,13 +408,9 @@ const styles = {
     marginBottom: 8,
   },
   pendingDot: {
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
+    ...dotBase,
     background: theme.accent,
     animation: 'stream-pulse 1.5s ease-in-out infinite',
-    flexShrink: 0,
   },
   pendingText: {
     flex: 1,

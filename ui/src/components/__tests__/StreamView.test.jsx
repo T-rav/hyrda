@@ -514,4 +514,34 @@ describe('Merged stage rendering', () => {
     expect(screen.getByText('#10')).toBeInTheDocument()
     expect(screen.getByText('Fix bug')).toBeInTheDocument()
   })
+
+  it('renders merged PR issue as a dot in PipelineFlow', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('pipeline-flow')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-10')).toBeInTheDocument()
+  })
+})
+
+describe('PipelineFlow failed and hitl dots', () => {
+  it('renders failed and hitl issue dots as non-pulsing', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed issue', status: 'failed' },
+          { issue_number: 2, title: 'HITL issue', status: 'hitl' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('flow-dot-1')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-2')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-1').style.animation).toBe('')
+    expect(screen.getByTestId('flow-dot-2').style.animation).toBe('')
+  })
 })
