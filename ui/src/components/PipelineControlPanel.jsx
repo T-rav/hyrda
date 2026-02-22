@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { theme } from '../theme'
 import { PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
 import { useHydraFlow } from '../context/HydraFlowContext'
@@ -31,23 +31,38 @@ function pipelineWorkerDot(status) {
 
 function TranscriptPreview({ lines }) {
   const [expanded, setExpanded] = useState(false)
+  const scrollRef = useRef(null)
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [lines, expanded])
+
   if (!lines || lines.length === 0) return null
 
-  const shown = expanded ? lines : lines.slice(-3)
+  const INLINE_LINES = 10
+  const shown = expanded ? lines : lines.slice(-INLINE_LINES)
+  const hasMore = lines.length > INLINE_LINES
 
   return (
     <div style={styles.transcriptSection}>
       <div
-        style={styles.transcriptToggle}
-        onClick={() => setExpanded(!expanded)}
+        ref={scrollRef}
+        style={expanded ? styles.transcriptLinesExpanded : undefined}
       >
-        {expanded ? 'Hide' : 'Show'} transcript ({lines.length} lines)
-      </div>
-      <div style={expanded ? styles.transcriptLinesExpanded : undefined}>
         {shown.map((line, i) => (
           <div key={i} style={styles.transcriptLine}>{line}</div>
         ))}
       </div>
+      {hasMore && (
+        <div
+          style={styles.transcriptToggle}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? 'Collapse' : `Show all (${lines.length})`}
+        </div>
+      )}
     </div>
   )
 }
