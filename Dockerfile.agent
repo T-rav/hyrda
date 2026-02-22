@@ -76,7 +76,7 @@ RUN groupadd --gid 1000 hydra \
     && chown hydra:hydra /workspace
 
 # Configure PATH
-ENV PATH="/opt/hydra-venv/bin:/usr/lib/node_modules/.bin:${PATH}"
+ENV PATH="/opt/hydra-venv/bin:${PATH}"
 ENV VIRTUAL_ENV=/opt/hydra-venv
 
 # Configure git safe directory for mounted worktrees

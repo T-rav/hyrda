@@ -390,7 +390,11 @@ class HydraConfig(BaseModel):
     # Docker isolation
     docker_image: str = Field(
         default="ghcr.io/travisf/hydra-agent:latest",
-        description="Docker image for isolated agent execution",
+        description=(
+            "Docker image for isolated agent execution. "
+            "Override via HYDRA_DOCKER_IMAGE env var or set explicitly for your deployment "
+            "(e.g. ghcr.io/<your-org>/hydra-agent:latest)."
+        ),
     )
 
     # GitHub authentication
