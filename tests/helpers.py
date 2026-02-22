@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 from unittest.mock import AsyncMock, MagicMock
+
+if TYPE_CHECKING:
+    from worktree import WorktreeManager
 
 
 class AsyncLineIter:
@@ -206,6 +209,25 @@ class ConfigFactory:
             docker_read_only_root=docker_read_only_root,
             docker_no_new_privileges=docker_no_new_privileges,
         )
+
+
+def make_docker_manager(tmp_path: Path) -> WorktreeManager:
+    """Create a WorktreeManager with docker execution mode.
+
+    Promoted from test_worktree._make_docker_manager() for reuse across test files.
+    """
+    from unittest.mock import patch
+
+    from worktree import WorktreeManager
+
+    with patch("shutil.which", return_value="/usr/bin/docker"):
+        cfg = ConfigFactory.create(
+            execution_mode="docker",
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+    return WorktreeManager(cfg)
 
 
 class AuditCheckFactory:

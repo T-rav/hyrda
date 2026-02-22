@@ -3347,3 +3347,24 @@ class TestDockerConfigEnvVarOverrides:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
+
+    def test_execution_mode_default_value_overridden_by_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When execution_mode equals the default ('host'), env var overrides it.
+
+        The override only applies when the value is still at the default. Because
+        'host' IS the default, explicitly passing execution_mode='host' is
+        indistinguishable from using the default, so the env var wins.
+        """
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
+        cfg = HydraConfig(
+            execution_mode="host",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"

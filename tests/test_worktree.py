@@ -1238,16 +1238,9 @@ class TestGetMainCommitsSinceDiverge:
 
 def _make_docker_manager(tmp_path: Path) -> WorktreeManager:
     """Create a WorktreeManager with docker execution mode."""
-    from tests.helpers import ConfigFactory
+    from tests.helpers import make_docker_manager
 
-    with patch("shutil.which", return_value="/usr/bin/docker"):
-        cfg = ConfigFactory.create(
-            execution_mode="docker",
-            repo_root=tmp_path / "repo",
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-    return WorktreeManager(cfg)
+    return make_docker_manager(tmp_path)
 
 
 def _make_hooks_subprocess_mock(hooks_dir: Path):
@@ -1656,53 +1649,6 @@ class TestInstallHooksDocker:
         # No hooks should have been copied since git rev-parse failed
         assert not (wt_path / ".git" / "hooks" / "pre-commit").exists()
 
-
-# ---------------------------------------------------------------------------
-# Config — execution_mode
-# ---------------------------------------------------------------------------
-
-
-class TestExecutionModeConfig:
-    """Tests for the execution_mode config field."""
-
-    def test_execution_mode_defaults_to_host(self) -> None:
-        """execution_mode should default to 'host'."""
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create()
-        assert cfg.execution_mode == "host"
-
-    def test_execution_mode_env_var_override(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """HYDRA_EXECUTION_MODE env var should override the default."""
-        import shutil as _shutil
-
-        monkeypatch.setattr(_shutil, "which", lambda _: "/usr/bin/docker")
-        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
-        from config import HydraConfig
-
-        cfg = HydraConfig(repo="test/repo")
-        assert cfg.execution_mode == "docker"
-
-    def test_execution_mode_default_value_overridden_by_env(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """When execution_mode equals the default ('host'), env var overrides it.
-
-        This is consistent with the env-override pattern for all fields: the
-        override only applies when the value is still at the default. Because
-        'host' IS the default, ConfigFactory.create(execution_mode='host') is
-        indistinguishable from using the default, so the env var wins.
-        """
-        import shutil as _shutil
-
-        monkeypatch.setattr(_shutil, "which", lambda _: "/usr/bin/docker")
-        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
-        from tests.helpers import ConfigFactory
-
-        cfg = ConfigFactory.create(execution_mode="host")
-        assert cfg.execution_mode == "docker"
 
 
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,
