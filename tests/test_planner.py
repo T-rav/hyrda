@@ -913,6 +913,16 @@ def test_save_transcript_creates_log_directory(event_bus, tmp_path):
     assert log_dir.is_dir()
 
 
+def test_save_transcript_handles_oserror(event_bus, tmp_path, caplog):
+    cfg = ConfigFactory.create(repo_root=tmp_path)
+    runner = PlannerRunner(config=cfg, event_bus=event_bus)
+
+    with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+        runner._save_transcript(42, "transcript")  # should not raise
+
+    assert "Could not save transcript" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # _save_plan
 # ---------------------------------------------------------------------------
@@ -941,6 +951,16 @@ def test_save_plan_creates_plans_directory(event_bus, tmp_path):
 
     assert plan_dir.exists()
     assert plan_dir.is_dir()
+
+
+def test_save_plan_handles_oserror(event_bus, tmp_path, caplog):
+    cfg = ConfigFactory.create(repo_root=tmp_path)
+    runner = PlannerRunner(config=cfg, event_bus=event_bus)
+
+    with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+        runner._save_plan(42, "Some plan", "Summary")  # should not raise
+
+    assert "Could not save plan" in caplog.text
 
 
 # ---------------------------------------------------------------------------
