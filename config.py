@@ -27,6 +27,7 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 7200),
     ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
     ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
+    ("max_sessions_per_repo", "HYDRA_MAX_SESSIONS_PER_REPO", 10),
 ]
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
@@ -354,6 +355,14 @@ class HydraConfig(BaseModel):
         ge=1,
         le=50,
         description="Max HITL items to process per unsticker cycle",
+    )
+
+    # Session retention
+    max_sessions_per_repo: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="Max session logs to retain per repo",
     )
 
     # Acceptance criteria generation

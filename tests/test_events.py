@@ -44,6 +44,8 @@ class TestEventTypeEnum:
             "SYSTEM_ALERT",
             "VERIFICATION_JUDGE",
             "TRANSCRIPT_SUMMARY",
+            "SESSION_START",
+            "SESSION_END",
         }
         actual = {member.name for member in EventType}
         assert expected == actual

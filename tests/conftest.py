@@ -412,6 +412,7 @@ def make_orchestrator_mock(
     orch.provide_human_input = MagicMock()
     orch.running = running
     orch.run_status = run_status
+    orch.current_session_id = None
     orch.stop = AsyncMock()
     orch.request_stop = AsyncMock()
     return orch

@@ -22,6 +22,16 @@
  * @typedef {{ text: string, issueNumber: number|null, timestamp: string, status: 'pending'|'created'|'failed' }} IntentData
  *
  * @typedef {{ issueNumber: number, title: string, currentStage: string, overallStatus: string, stages: Object, pr: Object|null, branch: string, startTime: string|null, endTime: string|null }} StreamCardData
+ *
+ * @typedef {Object} SessionData
+ * @property {string} id
+ * @property {string} repo
+ * @property {string} started_at
+ * @property {string|null} ended_at
+ * @property {number[]} issues_processed
+ * @property {number} issues_succeeded
+ * @property {number} issues_failed
+ * @property {string} status - 'active' | 'completed'
  */
 
 export {}

@@ -7,6 +7,7 @@ import { HITLTable } from './components/HITLTable'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
+import { SessionSidebar } from './components/SessionSidebar'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
@@ -92,7 +93,10 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
+        style={styles.headerSpan}
       />
+
+      <SessionSidebar />
 
       <div style={styles.main}>
         <SystemAlertBanner alert={systemAlert} />
@@ -147,9 +151,12 @@ const styles = {
   layout: {
     display: 'grid',
     gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '1fr',
+    gridTemplateColumns: '280px 1fr',
     height: '100vh',
-    minWidth: '800px',
+    minWidth: '1080px',
+  },
+  headerSpan: {
+    gridColumn: '1 / -1',
   },
   main: {
     display: 'flex',

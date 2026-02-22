@@ -4,7 +4,7 @@ import { useHydra } from '../context/HydraContext'
 
 export function Header({
   connected, orchestratorStatus,
-  onStart, onStop,
+  onStart, onStop, style,
 }) {
   const { stageStatus } = useHydra()
   const workload = stageStatus.workload
@@ -43,7 +43,7 @@ export function Header({
   const isCreditsPaused = orchestratorStatus === 'credits_paused'
 
   return (
-    <header style={styles.header}>
+    <header style={style ? { ...styles.header, ...style } : styles.header}>
       <div style={styles.left}>
         <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
         <div style={styles.logoGroup}>

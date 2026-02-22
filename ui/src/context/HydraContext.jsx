@@ -41,6 +41,9 @@ export const initialState = {
   metricsHistory: null,
   pipelineIssues: { ...emptyPipeline },
   pipelinePollerLastRun: null,
+  sessions: [],
+  currentSessionId: null,
+  selectedSessionId: null,
 }
 
 function isDuplicate(state, action) {
@@ -506,6 +509,43 @@ export function reducer(state, action) {
         ),
       }
 
+    case 'session_start': {
+      const newSession = {
+        id: action.data.session_id,
+        repo: action.data.repo,
+        started_at: action.timestamp || new Date().toISOString(),
+        ended_at: null,
+        issues_processed: [],
+        issues_succeeded: 0,
+        issues_failed: 0,
+        status: 'active',
+      }
+      return {
+        ...addEvent(state, action),
+        sessions: [newSession, ...state.sessions],
+        currentSessionId: action.data.session_id,
+      }
+    }
+
+    case 'session_end': {
+      const endedId = action.data.session_id
+      return {
+        ...addEvent(state, action),
+        sessions: state.sessions.map(s =>
+          s.id === endedId
+            ? { ...s, ended_at: action.timestamp || new Date().toISOString(), status: 'completed' }
+            : s
+        ),
+        currentSessionId: null,
+      }
+    }
+
+    case 'SESSIONS':
+      return { ...state, sessions: action.data || [] }
+
+    case 'SELECT_SESSION':
+      return { ...state, selectedSessionId: action.data.sessionId }
+
     default:
       return addEvent(state, action)
   }
@@ -555,6 +595,17 @@ export function HydraProvider({ children }) {
       .then(r => r.json())
       .then(data => dispatch({ type: 'METRICS_HISTORY', data }))
       .catch(() => {})
+  }, [])
+
+  const fetchSessions = useCallback(() => {
+    fetch('/api/sessions')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'SESSIONS', data }))
+      .catch(() => {})
+  }, [])
+
+  const selectSession = useCallback((sessionId) => {
+    dispatch({ type: 'SELECT_SESSION', data: { sessionId } })
   }, [])
 
   const submitIntent = useCallback(async (text) => {
@@ -669,6 +720,7 @@ export function HydraProvider({ children }) {
       fetchGithubMetrics()
       fetchMetricsHistory()
       fetchPipeline()
+      fetchSessions()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
           .then(r => r.json())
@@ -725,7 +777,7 @@ export function HydraProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions])
 
   useEffect(() => {
     const poll = () => {
@@ -778,6 +830,7 @@ export function HydraProvider({ children }) {
     toggleBgWorker,
     updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,
+    selectSession,
   }
 
   return (

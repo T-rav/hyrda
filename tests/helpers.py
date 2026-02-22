@@ -109,6 +109,7 @@ class ConfigFactory:
         max_transcript_summary_chars: int = 50_000,
         pr_unstick_interval: int = 3600,
         pr_unstick_batch_size: int = 10,
+        max_sessions_per_repo: int = 10,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -184,6 +185,7 @@ class ConfigFactory:
             max_transcript_summary_chars=max_transcript_summary_chars,
             pr_unstick_interval=pr_unstick_interval,
             pr_unstick_batch_size=pr_unstick_batch_size,
+            max_sessions_per_repo=max_sessions_per_repo,
         )
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from file_util import atomic_write
-from models import LifetimeStats, StateData, ThresholdProposal
+from models import LifetimeStats, SessionLog, StateData, ThresholdProposal
 
 logger = logging.getLogger("hydra.state")
 
@@ -367,6 +367,106 @@ class StateTracker:
         if name in self._data.lifetime_stats.fired_thresholds:
             self._data.lifetime_stats.fired_thresholds.remove(name)
             self.save()
+
+    # --- session persistence ---
+
+    @property
+    def _sessions_path(self) -> Path:
+        return self._path.parent / "sessions.jsonl"
+
+    def save_session(self, session: SessionLog) -> None:
+        """Append a session log entry to sessions.jsonl."""
+        self._sessions_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self._sessions_path, "a") as f:
+            f.write(session.model_dump_json() + "\n")
+            f.flush()
+
+    def load_sessions(
+        self, repo: str | None = None, limit: int = 50
+    ) -> list[SessionLog]:
+        """Read sessions from JSONL, optionally filtered by repo.
+
+        Returns up to *limit* entries sorted newest-first.
+        """
+        if not self._sessions_path.exists():
+            return []
+
+        sessions: list[SessionLog] = []
+        with open(self._sessions_path) as f:
+            for line_num, raw_line in enumerate(f, 1):
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    session = SessionLog.model_validate_json(stripped)
+                except Exception:
+                    logger.warning(
+                        "Skipping corrupt session line %d in %s",
+                        line_num,
+                        self._sessions_path,
+                    )
+                    continue
+                if repo is not None and session.repo != repo:
+                    continue
+                sessions.append(session)
+
+        # Sort newest first and apply limit
+        sessions.sort(key=lambda s: s.started_at, reverse=True)
+        return sessions[:limit]
+
+    def get_session(self, session_id: str) -> SessionLog | None:
+        """Return a single session by ID, or None."""
+        if not self._sessions_path.exists():
+            return None
+
+        with open(self._sessions_path) as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    session = SessionLog.model_validate_json(stripped)
+                except Exception:
+                    continue
+                if session.id == session_id:
+                    return session
+        return None
+
+    def prune_sessions(self, repo: str, max_keep: int) -> None:
+        """Remove oldest sessions for *repo* beyond *max_keep*.
+
+        Sessions from other repos are preserved. Uses atomic rewrite.
+        """
+        if not self._sessions_path.exists():
+            return
+
+        all_sessions: list[SessionLog] = []
+        with open(self._sessions_path) as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    all_sessions.append(SessionLog.model_validate_json(stripped))
+                except Exception:
+                    continue
+
+        # Partition by repo
+        repo_sessions = [s for s in all_sessions if s.repo == repo]
+        other_sessions = [s for s in all_sessions if s.repo != repo]
+
+        # Keep only newest max_keep for target repo
+        repo_sessions.sort(key=lambda s: s.started_at, reverse=True)
+        kept = repo_sessions[:max_keep]
+
+        # Rebuild file with other + kept (preserve order by started_at)
+        result = other_sessions + kept
+        result.sort(key=lambda s: s.started_at)
+
+        content = "\n".join(s.model_dump_json() for s in result)
+        if content:
+            content += "\n"
+        atomic_write(self._sessions_path, content)
 
     def check_thresholds(
         self,

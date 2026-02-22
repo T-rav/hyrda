@@ -49,6 +49,8 @@ class EventType(StrEnum):
     SYSTEM_ALERT = "system_alert"
     VERIFICATION_JUDGE = "verification_judge"
     TRANSCRIPT_SUMMARY = "transcript_summary"
+    SESSION_START = "session_start"
+    SESSION_END = "session_end"
 
 
 class HydraEvent(BaseModel):
@@ -58,6 +60,7 @@ class HydraEvent(BaseModel):
     type: EventType
     timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     data: dict[str, Any] = Field(default_factory=dict)
+    session_id: str | None = None
 
 
 class EventLog:

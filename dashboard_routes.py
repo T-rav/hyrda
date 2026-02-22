@@ -333,8 +333,10 @@ def create_router(
     async def get_control_status() -> JSONResponse:
         orch = get_orchestrator()
         status = "idle"
+        current_session = None
         if orch:
             status = orch.run_status
+            current_session = orch.current_session_id
         response = ControlStatusResponse(
             status=status,
             config=ControlStatusConfig(
@@ -356,7 +358,9 @@ def create_router(
                 model=config.model,
             ),
         )
-        return JSONResponse(response.model_dump())
+        data = response.model_dump()
+        data["current_session_id"] = current_session
+        return JSONResponse(data)
 
     # Mutable fields that can be changed at runtime via PATCH
     _MUTABLE_FIELDS = {
@@ -643,6 +647,20 @@ def create_router(
         url = f"https://github.com/{config.repo}/issues/{issue_number}"
         response = IntentResponse(issue_number=issue_number, title=title, url=url)
         return JSONResponse(response.model_dump())
+
+    @router.get("/api/sessions")
+    async def get_sessions(repo: str | None = None) -> JSONResponse:
+        """Return session logs, optionally filtered by repo."""
+        sessions = state.load_sessions(repo=repo)
+        return JSONResponse([s.model_dump() for s in sessions])
+
+    @router.get("/api/sessions/{session_id}")
+    async def get_session_detail(session_id: str) -> JSONResponse:
+        """Return a single session by ID."""
+        session = state.get_session(session_id)
+        if session is None:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        return JSONResponse(session.model_dump())
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:

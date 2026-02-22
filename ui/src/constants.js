@@ -58,6 +58,11 @@ export const EDITABLE_INTERVAL_WORKERS = new Set(['memory_sync', 'metrics'])
  * Background worker definitions — maintenance and system loops that can be toggled on/off.
  * Workers with `system: true` are internal services shown with a "system" badge.
  */
+/**
+ * Valid session statuses for the session sidebar.
+ */
+export const SESSION_STATUSES = ['active', 'completed']
+
 export const BACKGROUND_WORKERS = [
   { key: 'retrospective',   label: 'Retrospective',   color: theme.purple },
   { key: 'review_insights', label: 'Review Insights',  color: theme.orange },
