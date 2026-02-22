@@ -210,6 +210,35 @@ class TestEventBusPublishSubscribe:
         await bus.publish(event)  # should not raise
 
     @pytest.mark.asyncio
+    async def test_set_session_id_auto_injects(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        event = HydraEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        await bus.publish(event)
+        assert event.session_id == "sess-42"
+
+    @pytest.mark.asyncio
+    async def test_set_session_id_does_not_override_explicit(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        event = HydraEvent(
+            type=EventType.SESSION_START,
+            session_id="explicit-id",
+            data={},
+        )
+        await bus.publish(event)
+        assert event.session_id == "explicit-id"
+
+    @pytest.mark.asyncio
+    async def test_set_session_id_none_disables_injection(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        bus.set_session_id(None)
+        event = HydraEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        await bus.publish(event)
+        assert event.session_id is None
+
+    @pytest.mark.asyncio
     async def test_subscribe_with_custom_max_queue(self) -> None:
         bus = EventBus()
         queue = bus.subscribe(max_queue=10)

@@ -125,6 +125,7 @@ class TestGetSessionDetail:
         data = json.loads(response.body)
         assert data["id"] == "target-id"
         assert data["repo"] == "test-org/test-repo"
+        assert "events" in data
 
     @pytest.mark.asyncio
     async def test_returns_404_for_unknown_session(
@@ -138,6 +139,38 @@ class TestGetSessionDetail:
         assert response.status_code == 404
         data = json.loads(response.body)
         assert "error" in data
+
+    @pytest.mark.asyncio
+    async def test_returns_events_for_session(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        from events import EventType, HydraEvent
+
+        session = _make_session(id="sess-1")
+        state.save_session(session)
+
+        # Publish events: one tagged with the session, one without
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.WORKER_UPDATE,
+                session_id="sess-1",
+                data={"issue": 1},
+            )
+        )
+        await event_bus.publish(
+            HydraEvent(
+                type=EventType.WORKER_UPDATE,
+                session_id="other-session",
+                data={"issue": 2},
+            )
+        )
+
+        router = _make_router(config, event_bus, state, tmp_path)
+        endpoint = _find_endpoint(router, "/api/sessions/{session_id}")
+        response = await endpoint(session_id="sess-1")
+        data = json.loads(response.body)
+        assert len(data["events"]) == 1
+        assert data["events"][0]["data"]["issue"] == 1
 
 
 class TestControlStatusIncludesSessionId:

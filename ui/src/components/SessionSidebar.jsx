@@ -28,7 +28,7 @@ export function SessionSidebar() {
   }, [sessions])
 
   const toggleRepo = (repo) => {
-    setExpandedRepos(prev => ({ ...prev, [repo]: !prev[repo] }))
+    setExpandedRepos(prev => ({ ...prev, [repo]: prev[repo] === false }))
   }
 
   const repos = Object.keys(repoGroups)
@@ -72,9 +72,9 @@ export function SessionSidebar() {
                 const issueCount = session.issues_processed?.length ?? 0
 
                 let rowStyle = styles.sessionRow
-                if (isCurrent && isSelected) rowStyle = styles.sessionRowCurrentSelected
-                else if (isCurrent) rowStyle = styles.sessionRowCurrent
-                else if (isSelected) rowStyle = styles.sessionRowSelected
+                if (isCurrent && isSelected) rowStyle = sessionRowCurrentSelected
+                else if (isCurrent) rowStyle = sessionRowCurrent
+                else if (isSelected) rowStyle = sessionRowSelected
 
                 return (
                   <div
@@ -209,35 +209,6 @@ const styles = {
     transition: 'background 0.15s',
     borderLeft: '3px solid transparent',
   },
-  sessionRowSelected: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 12px 6px 28px',
-    cursor: 'pointer',
-    transition: 'background 0.15s',
-    borderLeft: '3px solid transparent',
-    background: theme.accentSubtle,
-  },
-  sessionRowCurrent: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 12px 6px 28px',
-    cursor: 'pointer',
-    transition: 'background 0.15s',
-    borderLeft: `3px solid ${theme.accent}`,
-  },
-  sessionRowCurrentSelected: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 12px 6px 28px',
-    cursor: 'pointer',
-    transition: 'background 0.15s',
-    borderLeft: `3px solid ${theme.accent}`,
-    background: theme.accentSubtle,
-  },
   dotActive: {
     width: 8,
     height: 8,
@@ -293,3 +264,8 @@ const styles = {
     textAlign: 'center',
   },
 }
+
+// Pre-computed row style variants (avoids object spread in .map())
+const sessionRowSelected = { ...styles.sessionRow, background: theme.accentSubtle }
+const sessionRowCurrent = { ...styles.sessionRow, borderLeft: `3px solid ${theme.accent}` }
+const sessionRowCurrentSelected = { ...sessionRowCurrent, background: theme.accentSubtle }

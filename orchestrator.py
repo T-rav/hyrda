@@ -460,6 +460,7 @@ class HydraOrchestrator:
         )
         self._session_issue_results = {}
         self._state.save_session(self._current_session)
+        self._bus.set_session_id(session_id)
         await self._bus.publish(
             HydraEvent(
                 type=EventType.SESSION_START,
@@ -502,6 +503,7 @@ class HydraOrchestrator:
                     )
                 )
                 self._current_session = None
+                self._bus.set_session_id(None)
 
             self._planners.terminate()
             self._agents.terminate()

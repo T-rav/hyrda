@@ -195,9 +195,16 @@ class EventBus:
         self._history: list[HydraEvent] = []
         self._max_history = max_history
         self._event_log = event_log
+        self._active_session_id: str | None = None
+
+    def set_session_id(self, session_id: str | None) -> None:
+        """Set the active session ID to auto-inject into published events."""
+        self._active_session_id = session_id
 
     async def publish(self, event: HydraEvent) -> None:
         """Publish *event* to all subscribers and append to history."""
+        if event.session_id is None and getattr(self, "_active_session_id", None):
+            event.session_id = self._active_session_id
         self._history.append(event)
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history :]

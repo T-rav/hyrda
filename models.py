@@ -365,21 +365,6 @@ class SessionLog(BaseModel):
     issues_processed: list[int] = Field(default_factory=list)
     issues_succeeded: int = 0
     issues_failed: int = 0
-    phases_completed: dict[str, int] = Field(default_factory=dict)
-    event_count: int = 0
-    status: str = "active"
-
-
-class SessionSummary(BaseModel):
-    """Lightweight session info for list endpoints."""
-
-    id: str
-    repo: str
-    started_at: str
-    ended_at: str | None = None
-    issue_count: int = 0
-    issues_succeeded: int = 0
-    issues_failed: int = 0
     status: str = "active"
 
 

@@ -543,6 +543,8 @@ describe('SELECT_SESSION reducer', () => {
     })
     expect(result.sessions).toHaveLength(1)
     expect(result.currentSessionId).toBe('s1')
+  })
+})
 
 describe('hitl_escalation reducer', () => {
   it('marks review worker as escalated when pr is present (automated escalation)', () => {

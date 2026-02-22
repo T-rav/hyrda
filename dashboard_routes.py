@@ -709,11 +709,18 @@ def create_router(
 
     @router.get("/api/sessions/{session_id}")
     async def get_session_detail(session_id: str) -> JSONResponse:
-        """Return a single session by ID."""
+        """Return a single session by ID with associated events."""
         session = state.get_session(session_id)
         if session is None:
             return JSONResponse({"error": "Session not found"}, status_code=404)
-        return JSONResponse(session.model_dump())
+        # Include events tagged with this session_id
+        all_events = event_bus.get_history()
+        session_events = [
+            e.model_dump() for e in all_events if e.session_id == session_id
+        ]
+        data = session.model_dump()
+        data["events"] = session_events
+        return JSONResponse(data)
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:

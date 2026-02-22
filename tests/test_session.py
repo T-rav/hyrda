@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from models import SessionLog, SessionSummary
+from models import SessionLog
 from state import StateTracker
 
 # ---------------------------------------------------------------------------
@@ -58,8 +58,6 @@ class TestSessionLogModel:
             issues_processed=[1, 2, 3],
             issues_succeeded=2,
             issues_failed=1,
-            phases_completed={"plan": 3, "implement": 2, "review": 1},
-            event_count=42,
             status="completed",
         )
         assert session.id == "test-repo-20240315T142530"
@@ -67,8 +65,6 @@ class TestSessionLogModel:
         assert session.issues_processed == [1, 2, 3]
         assert session.issues_succeeded == 2
         assert session.issues_failed == 1
-        assert session.phases_completed == {"plan": 3, "implement": 2, "review": 1}
-        assert session.event_count == 42
         assert session.status == "completed"
 
     def test_default_values(self) -> None:
@@ -81,8 +77,6 @@ class TestSessionLogModel:
         assert session.issues_processed == []
         assert session.issues_succeeded == 0
         assert session.issues_failed == 0
-        assert session.phases_completed == {}
-        assert session.event_count == 0
         assert session.status == "active"
 
     def test_serialization_roundtrip(self) -> None:
@@ -112,33 +106,6 @@ class TestSessionLogModel:
     def test_requires_id_and_repo(self) -> None:
         with pytest.raises(ValidationError):
             SessionLog(started_at="2024-01-01T00:00:00")  # type: ignore[call-arg]
-
-
-class TestSessionSummaryModel:
-    def test_creation(self) -> None:
-        summary = SessionSummary(
-            id="s1",
-            repo="owner/repo",
-            started_at="2024-01-01T00:00:00",
-            issue_count=5,
-            issues_succeeded=3,
-            issues_failed=2,
-            status="completed",
-        )
-        assert summary.issue_count == 5
-        assert summary.status == "completed"
-
-    def test_defaults(self) -> None:
-        summary = SessionSummary(
-            id="s1",
-            repo="owner/repo",
-            started_at="2024-01-01T00:00:00",
-        )
-        assert summary.ended_at is None
-        assert summary.issue_count == 0
-        assert summary.issues_succeeded == 0
-        assert summary.issues_failed == 0
-        assert summary.status == "active"
 
 
 # ---------------------------------------------------------------------------
