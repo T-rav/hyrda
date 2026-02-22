@@ -201,14 +201,22 @@ setup:
 
 REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.com[:/]||;s|\.git$$||')
 
+# NOTE: This target is maintained for backward compatibility. It will be
+# superseded by `hydra --prep` (see issue #569).
 ensure-labels:
 	@echo "$(BLUE)Ensuring Hydra labels exist in $(REPO_SLUG)...$(RESET)"
+	@gh label create "hydra-find" --repo "$(REPO_SLUG)" --color e4e669 --description "New issue for Hydra to discover and triage" --force 2>/dev/null || true
 	@gh label create "$(PLANNER_LABEL)" --repo "$(REPO_SLUG)" --color c5def5 --description "Issue needs planning before implementation" --force 2>/dev/null || true
 	@gh label create "$(READY_LABEL)" --repo "$(REPO_SLUG)" --color 0e8a16 --description "Issue ready for implementation" --force 2>/dev/null || true
 	@gh label create "hydra-review" --repo "$(REPO_SLUG)" --color fbca04 --description "Issue/PR under review" --force 2>/dev/null || true
 	@gh label create "hydra-hitl" --repo "$(REPO_SLUG)" --color d93f0b --description "Escalated to human-in-the-loop" --force 2>/dev/null || true
 	@gh label create "hydra-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
 	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
+	@gh label create "hydra-improve" --repo "$(REPO_SLUG)" --color 7057ff --description "Review insight improvement proposal" --force 2>/dev/null || true
+	@gh label create "hydra-memory" --repo "$(REPO_SLUG)" --color 1d76db --description "Approved memory suggestion for sync" --force 2>/dev/null || true
+	@gh label create "hydra-metrics" --repo "$(REPO_SLUG)" --color 006b75 --description "Metrics persistence issue" --force 2>/dev/null || true
+	@gh label create "hydra-dup" --repo "$(REPO_SLUG)" --color cfd3d7 --description "Issue already satisfied — no changes needed" --force 2>/dev/null || true
+	@gh label create "hydra-epic" --repo "$(REPO_SLUG)" --color 5319e7 --description "Epic tracking issue with linked sub-issues" --force 2>/dev/null || true
 	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
 
 hot:
