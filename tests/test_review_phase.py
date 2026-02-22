@@ -3363,6 +3363,203 @@ class TestCountReviewFindings:
 
 
 # ---------------------------------------------------------------------------
+# Self-fix re-review
+# ---------------------------------------------------------------------------
+
+
+class TestSelfFixReReview:
+    """Tests for the self-fix re-review logic.
+
+    When the reviewer fixes its own findings (fixes_made=True) but still
+    returns REQUEST_CHANGES or COMMENT, the phase should re-review the
+    updated code and upgrade the verdict to APPROVE if the re-review passes.
+    """
+
+    def _setup_phase(
+        self, config: HydraConfig
+    ) -> tuple[ReviewPhase, PRInfo, GitHubIssue]:
+        """Helper to set up a ReviewPhase ready for self-fix re-review tests."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.remove_pr_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+        phase._prs.add_pr_labels = AsyncMock()
+        phase._prs.post_comment = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.submit_review = AsyncMock()
+
+        wt = config.worktree_base / "issue-42"
+        wt.mkdir(parents=True, exist_ok=True)
+
+        return phase, pr, issue
+
+    @pytest.mark.asyncio
+    async def test_self_fix_with_re_review_approve_upgrades_verdict(
+        self, config: HydraConfig
+    ) -> None:
+        """fixes_made=True + REQUEST_CHANGES → re-review APPROVE → merge."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        second_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert phase._reviewers.review.await_count == 2
+        phase._prs.merge_pr.assert_awaited_once()
+        assert results[0].verdict == ReviewVerdict.APPROVE
+        # Label should NOT be swapped to ready
+        for call_args in phase._prs.add_labels.call_args_list:
+            assert call_args[0][1] != config.ready_label
+
+    @pytest.mark.asyncio
+    async def test_self_fix_with_re_review_reject_preserves_behavior(
+        self, config: HydraConfig
+    ) -> None:
+        """fixes_made=True + REQUEST_CHANGES → re-review REQUEST_CHANGES → re-queue."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        second_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._reviewers.review.await_count == 2
+        phase._prs.merge_pr.assert_not_awaited()
+        # Should swap labels to ready (re-queue)
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
+        assert phase._state.get_review_attempts(42) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_fixes_no_re_review(self, config: HydraConfig) -> None:
+        """fixes_made=False + REQUEST_CHANGES → no re-review, just re-queue."""
+        phase, pr, issue = self._setup_phase(config)
+
+        result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(return_value=result)
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._reviewers.review.await_count == 1
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
+
+    @pytest.mark.asyncio
+    async def test_self_fix_comment_verdict_triggers_re_review(
+        self, config: HydraConfig
+    ) -> None:
+        """fixes_made=True + COMMENT → re-review APPROVE → merge."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.COMMENT,
+            fixes_made=True,
+        )
+        second_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+
+        results = await phase.review_prs([pr], [issue])
+
+        assert phase._reviewers.review.await_count == 2
+        phase._prs.merge_pr.assert_awaited_once()
+        assert results[0].verdict == ReviewVerdict.APPROVE
+
+    @pytest.mark.asyncio
+    async def test_self_fix_re_review_pushes_additional_fixes(
+        self, config: HydraConfig
+    ) -> None:
+        """Re-review with fixes_made=True should push additional fixes."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        second_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=True,
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+
+        await phase.review_prs([pr], [issue])
+
+        # push_branch called for: merge-main, initial fixes (in _run_and_post_review),
+        # and re-review fixes
+        assert phase._prs.push_branch.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_self_fix_re_review_approve_does_not_increment_attempts(
+        self, config: HydraConfig
+    ) -> None:
+        """Self-fix + re-review APPROVE should NOT increment review attempts."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        second_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.APPROVE,
+            fixes_made=False,
+        )
+        phase._reviewers.review = AsyncMock(side_effect=[first_result, second_result])
+
+        await phase.review_prs([pr], [issue])
+
+        assert phase._state.get_review_attempts(42) == 0
+
+    @pytest.mark.asyncio
+    async def test_re_review_exception_falls_back_to_rejection(
+        self, config: HydraConfig
+    ) -> None:
+        """Re-review exception falls back gracefully to original rejection (re-queue)."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        phase._reviewers.review = AsyncMock(
+            side_effect=[first_result, RuntimeError("transient re-review failure")]
+        )
+
+        await phase.review_prs([pr], [issue])
+
+        # Both calls attempted
+        assert phase._reviewers.review.await_count == 2
+        # Exception falls back to original rejection — no merge
+        phase._prs.merge_pr.assert_not_awaited()
+        # Label swapped to ready (re-queue as original REQUEST_CHANGES)
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
+        assert phase._state.get_review_attempts(pr.issue_number) == 1
+
+
+# ---------------------------------------------------------------------------
 # Verification Issue Creation
 # ---------------------------------------------------------------------------
 
