@@ -21,6 +21,8 @@ function PendingIntentCard({ intent }) {
 function PipelineFlow({ stageGroups }) {
   return (
     <div style={styles.flowContainer} data-testid="pipeline-flow">
+      <span style={styles.flowTitle}>Pipeline Flow</span>
+      <div style={styles.flowConnector} />
       {stageGroups.map((group, idx) => (
         <React.Fragment key={group.stage.key}>
           <div style={styles.flowStage}>
@@ -357,6 +359,15 @@ const styles = {
     height: 1,
     background: theme.border,
     flexShrink: 0,
+  },
+  flowTitle: {
+    fontSize: 9,
+    fontWeight: 600,
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   empty: {
     display: 'flex',
