@@ -616,6 +616,40 @@ describe('Merged stage count display', () => {
     expect(section.textContent).toContain('queued')
     expect(section.textContent).toContain('workers')
   })
+
+  it('counts items from pipelineIssues.merged', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [], plan: [], implement: [], review: [],
+        merged: [
+          { issue_number: 5, title: 'Pipeline merged issue', status: 'done' },
+          { issue_number: 6, title: 'Another merged issue', status: 'done' },
+        ],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('2 merged')
+  })
+
+  it('deduplicates items present in both pipelineIssues.merged and prs', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [], plan: [], implement: [], review: [],
+        merged: [
+          { issue_number: 10, title: 'Shared issue', status: 'done' },
+        ],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Shared issue', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'PR-only issue', merged: true, url: 'https://github.com/test/pr/43' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    // issue 10 appears in both sources — should count once; issue 11 from prs only
+    expect(section.textContent).toContain('2 merged')
+  })
 })
 
 describe('PipelineFlow failed and hitl dots', () => {
