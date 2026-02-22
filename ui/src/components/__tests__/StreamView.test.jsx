@@ -343,48 +343,45 @@ describe('toStreamIssue output shape', () => {
 
 describe('Stage header failed/hitl counts', () => {
   it('shows failed count when stage has failed issues', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Failed issue', status: 'failed' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('1 failed')
   })
 
   it('shows hitl count when stage has hitl issues', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        triage: [], plan: [], implement: [],
         review: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-review')
     expect(section.textContent).toContain('1 hitl')
   })
 
   it('hides failed and hitl counts when zero', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        triage: [], implement: [], review: [],
         plan: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Queued issue', status: 'queued' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-plan')
     expect(section.textContent).not.toContain('failed')
@@ -392,17 +389,16 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('excludes failed and hitl from queued count', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active', status: 'active' },
           { issue_number: 2, title: 'Failed', status: 'failed' },
           { issue_number: 3, title: 'HITL', status: 'hitl' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('1 active')
@@ -412,16 +408,15 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows correct counts with only failed issues (no active/queued)', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Failed 1', status: 'failed' },
           { issue_number: 2, title: 'Failed 2', status: 'failed' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('0 active')
@@ -512,10 +507,9 @@ describe('PipelineFlow visualization', () => {
 
 describe('Merged stage rendering', () => {
   it('renders merged PR issues in the merged stage section', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydra.mockReturnValue(defaultHydraContext({
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     expect(screen.getByText('#10')).toBeInTheDocument()
     expect(screen.getByText('Fix bug')).toBeInTheDocument()

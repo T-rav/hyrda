@@ -301,22 +301,17 @@ const sectionCountStyles = Object.fromEntries(
   }])
 )
 
-const flowLabelBase = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-  flexShrink: 0,
-}
+const flowLabelBase = { ...sectionLabelBase, flexShrink: 0 }
 
-const flowDotBase = {
+const dotBase = {
   display: 'inline-block',
   width: 8,
   height: 8,
   borderRadius: '50%',
   flexShrink: 0,
-  transition: 'all 0.3s ease',
 }
+
+const flowDotBase = { ...dotBase, transition: 'all 0.3s ease' }
 
 const flowLabelStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, { ...flowLabelBase, color: s.color }])
@@ -391,13 +386,7 @@ const styles = {
     fontWeight: 700,
     color: theme.yellow,
   },
-  statusDot: {
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
+  statusDot: dotBase,
   disabledBadge: {
     fontSize: 9,
     fontWeight: 600,
