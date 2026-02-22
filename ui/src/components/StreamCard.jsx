@@ -83,7 +83,19 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
       <style>{pulseKeyframes}</style>
       <div style={styles.header} onClick={toggle}>
         <div style={styles.headerLeft}>
-          <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          {issue.issueUrl ? (
+            <a
+              style={styles.issueLink}
+              href={issue.issueUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{issue.issueNumber}
+            </a>
+          ) : (
+            <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          )}
           <span style={styles.title}>{intent?.text || issue.title}</span>
         </div>
         <div style={styles.headerRight}>
@@ -253,6 +265,7 @@ const styles = {
     fontWeight: 700,
     color: theme.textBright,
     flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   title: {
     fontSize: 12,
@@ -285,6 +298,14 @@ const styles = {
     fontSize: 10,
     color: theme.accent,
     textDecoration: 'none',
+    whiteSpace: 'nowrap',
+  },
+  issueLink: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: theme.accent,
+    textDecoration: 'none',
+    flexShrink: 0,
     whiteSpace: 'nowrap',
   },
   arrow: {
