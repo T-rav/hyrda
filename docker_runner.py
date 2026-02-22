@@ -48,8 +48,8 @@ class DockerRunner:
             kwargs["security_opt"] = security_opt
         kwargs["cap_drop"] = ["ALL"]
 
-        # Writable tmpfs for /tmp
-        kwargs["tmpfs"] = {"/tmp": f"size={cfg.docker_tmp_size}"}
+        # Writable tmpfs for /tmp (container-internal mount, not a host path)
+        kwargs["tmpfs"] = {"/tmp": f"size={cfg.docker_tmp_size}"}  # nosec B108
 
         logger.info(
             "Container constraints: cpu=%.1f mem=%s pids=%d net=%s readonly=%s",
