@@ -8,7 +8,7 @@ import pytest
 
 from config import HydraConfig
 
-DEFAULT_DOCKER_IMAGE = "ghcr.io/travisf/hydra-agent:latest"
+DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydra-agent:latest"
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # docker-smoke-test.sh — Verify all required tools are present in the agent image.
 #
-# Usage: docker run --rm ghcr.io/travisf/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
+# Usage: docker run --rm ghcr.io/t-rav/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
 
 set -euo pipefail
 

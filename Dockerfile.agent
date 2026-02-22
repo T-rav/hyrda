@@ -3,8 +3,8 @@
 # Pre-loaded with Claude CLI, git, gh CLI, Python 3.11, Node.js 20,
 # and quality tooling (ruff, pyright, pytest).
 #
-# Build:  docker build -f Dockerfile.agent -t ghcr.io/travisf/hydra-agent:latest .
-# Test:   docker run --rm ghcr.io/travisf/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
+# Build:  docker build -f Dockerfile.agent -t ghcr.io/t-rav/hydra-agent:latest .
+# Test:   docker run --rm ghcr.io/t-rav/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
 
 # ---------------------------------------------------------------------------
 # Stage 1: base — system packages + Node.js + gh CLI + uv

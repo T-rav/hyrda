@@ -33,9 +33,9 @@ BLUE := \033[0;34m
 RESET := \033[0m
 
 # Docker agent image
-DOCKER_IMAGE ?= ghcr.io/travisf/hydra-agent:latest
+DOCKER_IMAGE ?= ghcr.io/t-rav/hydra-agent:latest
 
-.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels hot docker-build docker-test
+.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test
 
 help:
 	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
@@ -206,15 +206,12 @@ setup:
 
 REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.com[:/]||;s|\.git$$||')
 
-ensure-labels:
-	@echo "$(BLUE)Ensuring Hydra labels exist in $(REPO_SLUG)...$(RESET)"
-	@gh label create "$(PLANNER_LABEL)" --repo "$(REPO_SLUG)" --color c5def5 --description "Issue needs planning before implementation" --force 2>/dev/null || true
-	@gh label create "$(READY_LABEL)" --repo "$(REPO_SLUG)" --color 0e8a16 --description "Issue ready for implementation" --force 2>/dev/null || true
-	@gh label create "hydra-review" --repo "$(REPO_SLUG)" --color fbca04 --description "Issue/PR under review" --force 2>/dev/null || true
-	@gh label create "hydra-hitl" --repo "$(REPO_SLUG)" --color d93f0b --description "Escalated to human-in-the-loop" --force 2>/dev/null || true
-	@gh label create "hydra-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
-	@gh label create "hydra-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
-	@echo "$(GREEN)All Hydra labels ensured$(RESET)"
+prep:
+	@echo "$(BLUE)Creating Hydra lifecycle labels...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) python cli.py --prep
+	@echo "$(GREEN)Prep complete$(RESET)"
+
+ensure-labels: prep
 
 hot:
 	@echo "$(BLUE)Sending config update to running Hydra instance on :$(PORT)...$(RESET)"
