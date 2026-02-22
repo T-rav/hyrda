@@ -455,7 +455,7 @@ describe('Stage header failed/hitl counts', () => {
 
 describe('PipelineFlow visualization', () => {
   it('renders "Pipeline Flow" label in the flow indicator', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [{ issue_number: 1, title: 'Test', status: 'queued' }],
         plan: [], implement: [], review: [],

@@ -270,7 +270,7 @@ describe('SystemPanel', () => {
     })
 
     it('shows pipeline stage counts as details when orchestrator running', () => {
-      mockUseHydra.mockReturnValue(defaultMockContext({
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({
         pipelinePollerLastRun: '2026-02-20T10:00:00Z',
         orchestratorStatus: 'running',
         pipelineIssues: {
