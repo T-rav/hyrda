@@ -19,6 +19,14 @@ function PendingIntentCard({ intent }) {
 }
 
 function PipelineFlow({ stageGroups }) {
+  const { mergedCount, failedCount } = useMemo(() => {
+    const merged = stageGroups.find(g => g.stage.key === 'merged')?.issues.length || 0
+    const failed = stageGroups.reduce(
+      (sum, g) => sum + g.issues.filter(i => i.overallStatus === 'failed').length, 0
+    )
+    return { mergedCount: merged, failedCount: failed }
+  }, [stageGroups])
+
   return (
     <div style={styles.flowContainer} data-testid="pipeline-flow">
       {stageGroups.map((group, idx) => (
@@ -30,9 +38,12 @@ function PipelineFlow({ stageGroups }) {
                 {group.issues.map(issue => (
                   <span
                     key={issue.issueNumber}
-                    style={issue.overallStatus === 'active'
-                      ? flowDotActiveStyles[group.stage.key]
-                      : flowDotStyles[group.stage.key]}
+                    style={
+                      issue.overallStatus === 'active' ? flowDotActiveStyles[group.stage.key]
+                      : issue.overallStatus === 'failed' ? flowDotFailedStyles[group.stage.key]
+                      : issue.overallStatus === 'hitl' ? flowDotHitlStyles[group.stage.key]
+                      : flowDotStyles[group.stage.key]
+                    }
                     title={`#${issue.issueNumber}`}
                     data-testid={`flow-dot-${issue.issueNumber}`}
                   />
@@ -43,6 +54,13 @@ function PipelineFlow({ stageGroups }) {
           {idx < stageGroups.length - 1 && <div style={styles.flowConnector} />}
         </React.Fragment>
       ))}
+      {(mergedCount > 0 || failedCount > 0) && (
+        <span style={styles.flowSummary} data-testid="flow-summary">
+          {mergedCount > 0 && <span style={flowSummaryMergedStyle}>{mergedCount} merged</span>}
+          {mergedCount > 0 && failedCount > 0 && <span style={flowSummaryDividerStyle}> · </span>}
+          {failedCount > 0 && <span style={flowSummaryFailedStyle}>{failedCount} failed</span>}
+        </span>
+      )}
     </div>
   )
 }
@@ -323,6 +341,18 @@ const flowDotActiveStyles = Object.fromEntries(
   }])
 )
 
+const flowDotFailedStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: theme.red }])
+)
+
+const flowDotHitlStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: theme.yellow }])
+)
+
+const flowSummaryMergedStyle = { color: theme.green }
+const flowSummaryDividerStyle = { color: theme.textMuted }
+const flowSummaryFailedStyle = { color: theme.red }
+
 const styles = {
   container: {
     flex: 1,
@@ -357,6 +387,14 @@ const styles = {
     height: 1,
     background: theme.border,
     flexShrink: 0,
+  },
+  flowSummary: {
+    fontSize: 10,
+    color: theme.textMuted,
+    flexShrink: 0,
+    marginLeft: 4,
+    display: 'flex',
+    alignItems: 'center',
   },
   empty: {
     display: 'flex',
