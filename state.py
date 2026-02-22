@@ -387,11 +387,13 @@ class StateTracker:
         """Read sessions from JSONL, optionally filtered by repo.
 
         Returns up to *limit* entries sorted newest-first.
+        Deduplicates by session ID, keeping the last-written (most complete) entry.
         """
         if not self._sessions_path.exists():
             return []
 
-        sessions: list[SessionLog] = []
+        # last-write-wins deduplication: iterate in order so later saves overwrite earlier
+        seen: dict[str, SessionLog] = {}
         with open(self._sessions_path) as f:
             for line_num, raw_line in enumerate(f, 1):
                 stripped = raw_line.strip()
@@ -406,19 +408,25 @@ class StateTracker:
                         self._sessions_path,
                     )
                     continue
-                if repo is not None and session.repo != repo:
-                    continue
-                sessions.append(session)
+                seen[session.id] = session
+
+        sessions = [s for s in seen.values() if repo is None or s.repo == repo]
 
         # Sort newest first and apply limit
         sessions.sort(key=lambda s: s.started_at, reverse=True)
         return sessions[:limit]
 
     def get_session(self, session_id: str) -> SessionLog | None:
-        """Return a single session by ID, or None."""
+        """Return a single session by ID, or None.
+
+        Scans the full file and returns the last-written entry for the given ID
+        so that a session updated on close (status=completed) takes precedence
+        over the initial entry written at session start (status=active).
+        """
         if not self._sessions_path.exists():
             return None
 
+        found: SessionLog | None = None
         with open(self._sessions_path) as f:
             for raw_line in f:
                 stripped = raw_line.strip()
@@ -429,8 +437,8 @@ class StateTracker:
                 except Exception:
                     continue
                 if session.id == session_id:
-                    return session
-        return None
+                    found = session  # keep scanning; later entry is more up-to-date
+        return found
 
     def prune_sessions(self, repo: str, max_keep: int) -> None:
         """Remove oldest sessions for *repo* beyond *max_keep*.
@@ -440,16 +448,19 @@ class StateTracker:
         if not self._sessions_path.exists():
             return
 
-        all_sessions: list[SessionLog] = []
+        # last-write-wins deduplication before partitioning
+        seen: dict[str, SessionLog] = {}
         with open(self._sessions_path) as f:
             for raw_line in f:
                 stripped = raw_line.strip()
                 if not stripped:
                     continue
                 try:
-                    all_sessions.append(SessionLog.model_validate_json(stripped))
+                    s = SessionLog.model_validate_json(stripped)
+                    seen[s.id] = s
                 except Exception:
                     continue
+        all_sessions = list(seen.values())
 
         # Partition by repo
         repo_sessions = [s for s in all_sessions if s.repo == repo]

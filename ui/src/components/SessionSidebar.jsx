@@ -72,8 +72,9 @@ export function SessionSidebar() {
                 const issueCount = session.issues_processed?.length ?? 0
 
                 let rowStyle = styles.sessionRow
-                if (isCurrent) rowStyle = styles.sessionRowCurrent
-                if (isSelected) rowStyle = { ...rowStyle, background: theme.accentSubtle }
+                if (isCurrent && isSelected) rowStyle = styles.sessionRowCurrentSelected
+                else if (isCurrent) rowStyle = styles.sessionRowCurrent
+                else if (isSelected) rowStyle = styles.sessionRowSelected
 
                 return (
                   <div
@@ -208,6 +209,16 @@ const styles = {
     transition: 'background 0.15s',
     borderLeft: '3px solid transparent',
   },
+  sessionRowSelected: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px 6px 28px',
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    borderLeft: '3px solid transparent',
+    background: theme.accentSubtle,
+  },
   sessionRowCurrent: {
     display: 'flex',
     alignItems: 'center',
@@ -216,6 +227,16 @@ const styles = {
     cursor: 'pointer',
     transition: 'background 0.15s',
     borderLeft: `3px solid ${theme.accent}`,
+  },
+  sessionRowCurrentSelected: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '6px 12px 6px 28px',
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    borderLeft: `3px solid ${theme.accent}`,
+    background: theme.accentSubtle,
   },
   dotActive: {
     width: 8,

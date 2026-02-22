@@ -219,6 +219,37 @@ class TestSessionPersistence:
         result = tracker.get_session("anything")
         assert result is None
 
+    def test_load_sessions_deduplicates_by_id(self, tmp_path: Path) -> None:
+        """Saving a session twice (start then end) must not produce duplicate entries."""
+        tracker = make_tracker(tmp_path)
+        # Simulate orchestrator: save at start (active), then again at end (completed)
+        session = make_session(id="s1", status="active")
+        tracker.save_session(session)
+        session.status = "completed"
+        session.ended_at = "2024-03-15T15:00:00+00:00"
+        tracker.save_session(session)
+
+        result = tracker.load_sessions()
+        assert len(result) == 1, (
+            "Duplicate JSONL entries for same ID must be deduplicated"
+        )
+        assert result[0].status == "completed"
+        assert result[0].ended_at == "2024-03-15T15:00:00+00:00"
+
+    def test_get_session_returns_last_written_state(self, tmp_path: Path) -> None:
+        """get_session must return the most-recently-written entry, not the first."""
+        tracker = make_tracker(tmp_path)
+        session = make_session(id="s1", status="active")
+        tracker.save_session(session)
+        session.status = "completed"
+        session.ended_at = "2024-03-15T15:00:00+00:00"
+        tracker.save_session(session)
+
+        result = tracker.get_session("s1")
+        assert result is not None
+        assert result.status == "completed"
+        assert result.ended_at == "2024-03-15T15:00:00+00:00"
+
     def test_corrupt_lines_are_skipped(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
         sessions_file = tmp_path / "sessions.jsonl"
@@ -287,6 +318,29 @@ class TestSessionPruning:
         tracker = make_tracker(tmp_path)
         # Should not raise
         tracker.prune_sessions("test-org/test-repo", max_keep=5)
+
+    def test_prune_deduplicates_before_counting(self, tmp_path: Path) -> None:
+        """Prune must count unique sessions, not raw JSONL lines.
+
+        If each session is saved twice (start + end), max_keep=2 should keep
+        2 unique sessions, not 1 session with 2 lines.
+        """
+        tracker = make_tracker(tmp_path)
+        for i in range(3):
+            session = make_session(
+                id=f"s{i}",
+                started_at=f"2024-01-0{i + 1}T00:00:00",
+                status="active",
+            )
+            tracker.save_session(session)
+            session.status = "completed"
+            tracker.save_session(session)
+
+        tracker.prune_sessions("test-org/test-repo", max_keep=2)
+        result = tracker.load_sessions()
+        assert len(result) == 2
+        assert result[0].id == "s2"
+        assert result[1].id == "s1"
 
     def test_prune_handles_empty_file(self, tmp_path: Path) -> None:
         tracker = make_tracker(tmp_path)
