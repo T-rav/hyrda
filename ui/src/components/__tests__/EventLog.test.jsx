@@ -121,7 +121,7 @@ describe('eventSummary', () => {
   })
 
   it('formats hitl_escalation without PR number (manual escalation)', () => {
-    expect(eventSummary('hitl_escalation', { issue: 99, cause: 'needs rework', origin: 'hydra-review' })).toBe('Issue #99 escalated to HITL')
+    expect(eventSummary('hitl_escalation', { issue: 99, cause: 'needs rework', origin: 'hydraflow-review' })).toBe('Issue #99 escalated to HITL')
   })
 
   it('formats hitl_update with action', () => {

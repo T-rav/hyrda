@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/pr_manager.py."""
+"""Tests for dx/hydraflow/pr_manager.py."""
 
 from __future__ import annotations
 
@@ -109,9 +109,9 @@ def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = "
 @pytest.mark.asyncio
 async def test_post_comment_calls_gh_issue_comment(config, event_bus, tmp_path):
     """post_comment should call gh issue comment with --body-file."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -151,9 +151,9 @@ async def test_post_comment_dry_run(dry_config, event_bus):
 @pytest.mark.asyncio
 async def test_post_comment_handles_error(config, event_bus, tmp_path):
     """post_comment should log warning on failure without raising."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -176,9 +176,9 @@ async def test_post_comment_handles_error(config, event_bus, tmp_path):
 @pytest.mark.asyncio
 async def test_post_pr_comment_calls_gh_pr_comment(config, event_bus, tmp_path):
     """post_pr_comment should call gh pr comment with --body-file."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -217,9 +217,9 @@ async def test_post_pr_comment_dry_run(dry_config, event_bus):
 @pytest.mark.asyncio
 async def test_post_pr_comment_handles_error(config, event_bus, tmp_path):
     """post_pr_comment should log warning on failure without raising."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -242,9 +242,9 @@ async def test_post_pr_comment_handles_error(config, event_bus, tmp_path):
 @pytest.mark.asyncio
 async def test_submit_review_approve_calls_correct_flag(config, event_bus, tmp_path):
     """submit_review with 'approve' should pass --approve flag and --body-file."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -277,9 +277,9 @@ async def test_submit_review_request_changes_calls_correct_flag(
     config, event_bus, tmp_path
 ):
     """submit_review with 'request-changes' should pass --request-changes."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -306,9 +306,9 @@ async def test_submit_review_request_changes_calls_correct_flag(
 @pytest.mark.asyncio
 async def test_submit_review_comment_calls_correct_flag(config, event_bus, tmp_path):
     """submit_review with 'comment' should pass --comment."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -346,9 +346,9 @@ async def test_submit_review_dry_run(dry_config, event_bus):
 @pytest.mark.asyncio
 async def test_submit_review_failure_returns_false(config, event_bus, tmp_path):
     """submit_review should return False on subprocess failure."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -374,10 +374,10 @@ async def test_submit_review_raises_self_review_error_on_request_changes_own_pr(
     config, event_bus, tmp_path
 ):
     """submit_review should raise SelfReviewError when request-changes hits own PR."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
     from pr_manager import SelfReviewError
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -402,10 +402,10 @@ async def test_submit_review_raises_self_review_error_on_approve_own_pr(
     config, event_bus, tmp_path
 ):
     """submit_review should raise SelfReviewError when approve hits own PR."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
     from pr_manager import SelfReviewError
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -430,9 +430,9 @@ async def test_submit_review_returns_false_on_generic_error(
     config, event_bus, tmp_path
 ):
     """submit_review should return False on a generic (non-self-review) error."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -459,9 +459,9 @@ async def test_submit_review_returns_false_on_generic_error(
 
 @pytest.mark.asyncio
 async def test_create_issue_calls_gh_issue_create(config, event_bus, tmp_path):
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -488,9 +488,9 @@ async def test_create_issue_calls_gh_issue_create(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_create_issue_publishes_event(config, event_bus, tmp_path):
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -527,9 +527,9 @@ async def test_create_issue_dry_run(dry_config, event_bus):
 
 @pytest.mark.asyncio
 async def test_create_issue_failure_returns_zero(config, event_bus, tmp_path):
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -547,9 +547,9 @@ async def test_create_issue_failure_returns_zero(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_create_issue_no_labels(config, event_bus, tmp_path):
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -953,13 +953,13 @@ async def test_remove_pr_label_calls_gh_pr_edit(config, event_bus):
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        await manager.remove_pr_label(101, "hydra-review")
+        await manager.remove_pr_label(101, "hydraflow-review")
 
     args = mock_create.call_args[0]
     assert "pr" in args
     assert "edit" in args
     assert "--remove-label" in args
-    assert "hydra-review" in args
+    assert "hydraflow-review" in args
 
 
 @pytest.mark.asyncio
@@ -968,7 +968,7 @@ async def test_remove_pr_label_dry_run_skips_command(dry_config, event_bus):
     mock_create = _make_subprocess_mock(returncode=0)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        await manager.remove_pr_label(101, "hydra-review")
+        await manager.remove_pr_label(101, "hydraflow-review")
 
     mock_create.assert_not_called()
 
@@ -980,7 +980,7 @@ async def test_remove_pr_label_subprocess_error_does_not_raise(config, event_bus
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         # Should not raise
-        await manager.remove_pr_label(101, "hydra-review")
+        await manager.remove_pr_label(101, "hydraflow-review")
 
 
 # ---------------------------------------------------------------------------
@@ -1104,9 +1104,9 @@ async def test_pull_main_dry_run_skips_command(dry_config, event_bus):
 @pytest.mark.asyncio
 async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
     """get_pr_checks should return parsed check results."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1127,9 +1127,9 @@ async def test_get_pr_checks_returns_parsed_json(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_get_pr_checks_returns_empty_on_failure(config, event_bus, tmp_path):
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1167,9 +1167,9 @@ async def test_wait_for_ci_passes_when_all_succeed(config, event_bus, tmp_path):
     """wait_for_ci should return (True, ...) when all checks pass."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1198,9 +1198,9 @@ async def test_wait_for_ci_fails_on_failure(config, event_bus, tmp_path):
     """wait_for_ci should return (False, ...) when checks fail."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1229,9 +1229,9 @@ async def test_wait_for_ci_passes_when_no_checks(config, event_bus, tmp_path):
     """wait_for_ci should return (True, ...) when no CI checks exist."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1256,9 +1256,9 @@ async def test_wait_for_ci_respects_stop_event(config, event_bus, tmp_path):
     """wait_for_ci should return (False, 'Stopped') when stop_event is set."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1300,9 +1300,9 @@ async def test_wait_for_ci_already_complete_returns_immediately(
     """When checks are already complete, should return without sleeping."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1326,9 +1326,9 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
     """wait_for_ci should publish CI_CHECK events."""
     import asyncio
 
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1356,13 +1356,13 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
 
 
 @pytest.mark.asyncio
-async def test_ensure_labels_exist_creates_all_hydra_labels(
+async def test_ensure_labels_exist_creates_all_hydraflow_labels(
     config, event_bus, tmp_path
 ):
     """ensure_labels_exist should call gh label create --force for each label."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1387,11 +1387,11 @@ async def test_ensure_labels_exist_creates_all_hydra_labels(
         await mgr.ensure_labels_exist()
 
     # 1 list call + 1 create per label
-    assert mock_create.call_count == 1 + len(PRManager._HYDRA_LABELS)
+    assert mock_create.call_count == 1 + len(PRManager._HYDRAFLOW_LABELS)
 
     # Verify create calls use gh label create --force
     create_calls = [c for c in mock_create.call_args_list if "create" in c[0]]
-    assert len(create_calls) == len(PRManager._HYDRA_LABELS)
+    assert len(create_calls) == len(PRManager._HYDRAFLOW_LABELS)
     for call in create_calls:
         args = call[0]
         assert args[0] == "gh"
@@ -1403,9 +1403,9 @@ async def test_ensure_labels_exist_creates_all_hydra_labels(
 @pytest.mark.asyncio
 async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tmp_path):
     """ensure_labels_exist should use label names from config (not hardcoded defaults)."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         find_label=["custom-find"],
         ready_label=["custom-ready"],
         planner_label=["custom-plan"],
@@ -1483,9 +1483,9 @@ async def test_ensure_labels_exist_handles_individual_failures(
     config, event_bus, tmp_path
 ):
     """If one label creation fails, others should still be attempted."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1520,24 +1520,27 @@ async def test_ensure_labels_exist_handles_individual_failures(
         await mgr.ensure_labels_exist()
 
     # All labels should be attempted even though first one failed
-    assert create_count == len(PRManager._HYDRA_LABELS)
+    assert create_count == len(PRManager._HYDRAFLOW_LABELS)
 
 
 def test_makefile_ensure_labels_delegates_to_prep() -> None:
     """Makefile ensure-labels target must delegate to the prep target.
 
-    Regression guard: ensures ensure-labels stays in sync via prep,
-    which uses the authoritative HYDRA_LABELS table from prep.py.
+    This test reads the Makefile to verify that ``ensure-labels``
+    depends on ``prep`` (which calls ``cli.py --prep``), rather than
+    duplicating label-creation logic directly in the Makefile target.
     """
-    import re
+    from pathlib import Path
 
-    makefile = Path(__file__).parent.parent / "Makefile"
+    makefile = Path(__file__).resolve().parent.parent / "Makefile"
     content = makefile.read_text()
 
-    # The ensure-labels target should declare prep as a dependency
-    assert re.search(r"^ensure-labels\s*:.*\bprep\b", content, re.MULTILINE), (
-        "Makefile ensure-labels target should delegate to prep target"
-    )
+    # Find the ensure-labels target and assert it depends on prep
+    import re
+
+    match = re.search(r"^ensure-labels:\s*(.+)$", content, re.MULTILINE)
+    assert match is not None, "ensure-labels target not found in Makefile"
+    assert "prep" in match.group(1), "ensure-labels must depend on 'prep' target"
 
 
 # ---------------------------------------------------------------------------
@@ -1548,9 +1551,9 @@ def test_makefile_ensure_labels_delegates_to_prep() -> None:
 @pytest.mark.asyncio
 async def test_run_with_body_file_writes_temp_file(config, event_bus, tmp_path):
     """_run_with_body_file should write body to a temp .md file and pass --body-file."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1583,9 +1586,9 @@ async def test_run_with_body_file_writes_temp_file(config, event_bus, tmp_path):
 @pytest.mark.asyncio
 async def test_run_with_body_file_cleans_up_temp_file(config, event_bus, tmp_path):
     """_run_with_body_file should delete the temp file after completion."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1619,9 +1622,9 @@ async def test_run_with_body_file_cleans_up_temp_file(config, event_bus, tmp_pat
 @pytest.mark.asyncio
 async def test_run_with_body_file_cleans_up_on_error(config, event_bus, tmp_path):
     """_run_with_body_file should delete the temp file even on failure."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1663,9 +1666,9 @@ async def test_run_with_body_file_cleans_up_on_error(config, event_bus, tmp_path
 @pytest.mark.asyncio
 async def test_post_comment_chunks_large_body(config, event_bus, tmp_path):
     """post_comment should split oversized bodies into multiple comments."""
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-    cfg = HydraConfig(
+    cfg = HydraFlowConfig(
         ready_label=config.ready_label,
         repo=config.repo,
         repo_root=tmp_path,
@@ -1703,9 +1706,9 @@ class TestListOpenPrs:
     async def test_parses_pr_data_correctly(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1742,9 +1745,9 @@ class TestListOpenPrs:
     async def test_deduplicates_by_pr_number(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1777,9 +1780,9 @@ class TestListOpenPrs:
     async def test_extracts_issue_number_from_branch(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1812,9 +1815,9 @@ class TestListOpenPrs:
     ):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1846,9 +1849,9 @@ class TestListOpenPrs:
     async def test_returns_empty_on_subprocess_failure(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1885,9 +1888,9 @@ class TestListHitlItems:
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_issues(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1898,7 +1901,7 @@ class TestListHitlItems:
         mock_create = _make_subprocess_mock(returncode=0, stdout="[]")
 
         with patch("asyncio.create_subprocess_exec", mock_create):
-            result = await mgr.list_hitl_items(["hydra-hitl"])
+            result = await mgr.list_hitl_items(["hydraflow-hitl"])
 
         assert result == []
 
@@ -1906,9 +1909,9 @@ class TestListHitlItems:
     async def test_returns_issue_with_pr_info(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1948,7 +1951,7 @@ class TestListHitlItems:
             return mock_proc
 
         with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
-            result = await mgr.list_hitl_items(["hydra-hitl"])
+            result = await mgr.list_hitl_items(["hydraflow-hitl"])
 
         assert len(result) == 1
         assert result[0].issue == 42
@@ -1961,9 +1964,9 @@ class TestListHitlItems:
     async def test_returns_zero_pr_when_no_pr_found(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -1992,7 +1995,7 @@ class TestListHitlItems:
             return mock_proc
 
         with patch("asyncio.create_subprocess_exec", side_effect=side_effect):
-            result = await mgr.list_hitl_items(["hydra-hitl"])
+            result = await mgr.list_hitl_items(["hydraflow-hitl"])
 
         assert len(result) == 1
         assert result[0].pr == 0
@@ -2002,9 +2005,9 @@ class TestListHitlItems:
     async def test_deduplicates_issues(self, config, event_bus, tmp_path):
         import json
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2033,9 +2036,9 @@ class TestListHitlItems:
     async def test_returns_empty_on_subprocess_failure(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2046,7 +2049,7 @@ class TestListHitlItems:
         mock_create = _make_subprocess_mock(returncode=1, stderr="error")
 
         with patch("asyncio.create_subprocess_exec", mock_create):
-            result = await mgr.list_hitl_items(["hydra-hitl"])
+            result = await mgr.list_hitl_items(["hydraflow-hitl"])
 
         assert result == []
 
@@ -2056,7 +2059,7 @@ class TestListHitlItems:
         mock_create = _make_subprocess_mock(returncode=0)
 
         with patch("asyncio.create_subprocess_exec", mock_create):
-            result = await mgr.list_hitl_items(["hydra-hitl"])
+            result = await mgr.list_hitl_items(["hydraflow-hitl"])
 
         mock_create.assert_not_called()
         assert result == []
@@ -2141,9 +2144,9 @@ class TestRetryWrapperUsage:
     @pytest.mark.asyncio
     async def test_ensure_labels_uses_retry(self, config, event_bus, tmp_path):
         """ensure_labels_exist should use run_subprocess_with_retry via prep."""
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=["test-label"],
             repo=config.repo,
             repo_root=tmp_path,
@@ -2158,7 +2161,7 @@ class TestRetryWrapperUsage:
             await mgr.ensure_labels_exist()
 
         # 1 list call + 12 create calls = 13
-        assert mock_retry.await_count == 1 + len(PRManager._HYDRA_LABELS)
+        assert mock_retry.await_count == 1 + len(PRManager._HYDRAFLOW_LABELS)
 
     @pytest.mark.asyncio
     async def test_pull_main_uses_retry(self, config, event_bus):
@@ -2175,9 +2178,9 @@ class TestRetryWrapperUsage:
     @pytest.mark.asyncio
     async def test_max_retries_from_config(self, event_bus, tmp_path):
         """PRManager should pass gh_max_retries from config to retry wrapper."""
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=["test-label"],
             repo="test-org/test-repo",
             gh_max_retries=5,
@@ -2206,9 +2209,9 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_returns_label_counts(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2246,9 +2249,9 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_caches_results_for_30_seconds(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2278,9 +2281,9 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_handles_errors_gracefully(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2300,7 +2303,7 @@ class TestGetLabelCounts:
         result = await mgr.get_label_counts(cfg)
 
         # Should return zeros, not raise
-        assert result["open_by_label"]["hydra-plan"] == 0
+        assert result["open_by_label"]["hydraflow-plan"] == 0
         assert result["total_closed"] == 0
         assert result["total_merged"] == 0
 
@@ -2432,9 +2435,9 @@ class TestCommentHelper:
 
     @pytest.mark.asyncio
     async def test_comment_issue_target(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2454,9 +2457,9 @@ class TestCommentHelper:
 
     @pytest.mark.asyncio
     async def test_comment_pr_target(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2487,9 +2490,9 @@ class TestCommentHelper:
     @pytest.mark.asyncio
     async def test_comment_error_does_not_raise(self, config, event_bus, tmp_path):
         """_comment should log a warning on failure without propagating the error."""
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2597,13 +2600,13 @@ class TestRemoveLabelHelper:
         mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
         with patch("asyncio.create_subprocess_exec", mock_create):
-            await mgr._remove_label("pr", 101, "hydra-review")
+            await mgr._remove_label("pr", 101, "hydraflow-review")
 
         cmd = mock_create.call_args[0]
         assert "pr" in cmd
         assert "edit" in cmd
         assert "--remove-label" in cmd
-        assert "hydra-review" in cmd
+        assert "hydraflow-review" in cmd
 
     @pytest.mark.asyncio
     async def test_remove_label_dry_run(self, dry_config, event_bus):
@@ -2636,9 +2639,9 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2652,17 +2655,20 @@ class TestCountHelpers:
 
         mgr._run_gh = mock_run_gh
         result = await mgr._count_open_issues_by_label(
-            {"hydra-plan": ["hydra-plan"], "hydra-ready": ["hydra-ready"]}
+            {
+                "hydraflow-plan": ["hydraflow-plan"],
+                "hydraflow-ready": ["hydraflow-ready"],
+            }
         )
-        assert result == {"hydra-plan": 5, "hydra-ready": 5}
+        assert result == {"hydraflow-plan": 5, "hydraflow-ready": 5}
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label_handles_errors(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2675,14 +2681,16 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_open_issues_by_label({"hydra-plan": ["hydra-plan"]})
-        assert result == {"hydra-plan": 0}
+        result = await mgr._count_open_issues_by_label(
+            {"hydraflow-plan": ["hydraflow-plan"]}
+        )
+        assert result == {"hydraflow-plan": 0}
 
     @pytest.mark.asyncio
     async def test_count_closed_issues(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2695,16 +2703,16 @@ class TestCountHelpers:
             return "7\n"
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_closed_issues(["hydra-fixed"])
+        result = await mgr._count_closed_issues(["hydraflow-fixed"])
         assert result == 7
 
     @pytest.mark.asyncio
     async def test_count_closed_issues_handles_errors(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2717,14 +2725,14 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_closed_issues(["hydra-fixed"])
+        result = await mgr._count_closed_issues(["hydraflow-fixed"])
         assert result == 0
 
     @pytest.mark.asyncio
     async def test_count_merged_prs(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2737,14 +2745,14 @@ class TestCountHelpers:
             return "12\n"
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_merged_prs("hydra-fixed")
+        result = await mgr._count_merged_prs("hydraflow-fixed")
         assert result == 12
 
     @pytest.mark.asyncio
     async def test_count_merged_prs_handles_errors(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2757,16 +2765,16 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_merged_prs("hydra-fixed")
+        result = await mgr._count_merged_prs("hydraflow-fixed")
         assert result == 0
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label_uses_search_api(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2782,8 +2790,10 @@ class TestCountHelpers:
             return "5\n"
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_open_issues_by_label({"hydra-plan": ["hydra-plan"]})
-        assert result == {"hydra-plan": 5}
+        result = await mgr._count_open_issues_by_label(
+            {"hydraflow-plan": ["hydraflow-plan"]}
+        )
+        assert result == {"hydraflow-plan": 5}
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
         assert "api" in cmd
@@ -2795,15 +2805,15 @@ class TestCountHelpers:
         assert "repo:test-org/test-repo" in query_arg
         assert "is:issue" in query_arg
         assert "is:open" in query_arg
-        assert 'label:"hydra-plan"' in query_arg
+        assert 'label:"hydraflow-plan"' in query_arg
 
     @pytest.mark.asyncio
     async def test_count_closed_issues_uses_search_api(
         self, config, event_bus, tmp_path
     ):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2819,7 +2829,7 @@ class TestCountHelpers:
             return "7\n"
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_closed_issues(["hydra-fixed"])
+        result = await mgr._count_closed_issues(["hydraflow-fixed"])
         assert result == 7
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
@@ -2832,13 +2842,13 @@ class TestCountHelpers:
         assert "repo:test-org/test-repo" in query_arg
         assert "is:issue" in query_arg
         assert "is:closed" in query_arg
-        assert 'label:"hydra-fixed"' in query_arg
+        assert 'label:"hydraflow-fixed"' in query_arg
 
     @pytest.mark.asyncio
     async def test_count_merged_prs_uses_search_api(self, config, event_bus, tmp_path):
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             ready_label=config.ready_label,
             repo=config.repo,
             repo_root=tmp_path,
@@ -2854,7 +2864,7 @@ class TestCountHelpers:
             return "12\n"
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_merged_prs("hydra-fixed")
+        result = await mgr._count_merged_prs("hydraflow-fixed")
         assert result == 12
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
@@ -2867,7 +2877,7 @@ class TestCountHelpers:
         assert "repo:test-org/test-repo" in query_arg
         assert "is:pr" in query_arg
         assert "is:merged" in query_arg
-        assert 'label:"hydra-fixed"' in query_arg
+        assert 'label:"hydraflow-fixed"' in query_arg
 
 
 # ---------------------------------------------------------------------------

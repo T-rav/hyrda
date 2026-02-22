@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/worktree.py — WorktreeManager."""
+"""Tests for dx/hydraflow/worktree.py — WorktreeManager."""
 
 from __future__ import annotations
 
@@ -825,8 +825,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should not run any git config commands when identity is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 
@@ -847,8 +847,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should only set user.name when email is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 
@@ -876,8 +876,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should only set user.email when name is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 

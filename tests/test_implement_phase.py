@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
 from implement_phase import ImplementPhase
 from models import (
@@ -35,7 +35,7 @@ from tests.conftest import (
 
 
 def _make_phase(
-    config: HydraConfig,
+    config: HydraFlowConfig,
     issues: list[GitHubIssue],
     *,
     agent_run: Any | None = None,
@@ -121,7 +121,7 @@ class TestImplementBatch:
 
     @pytest.mark.asyncio
     async def test_returns_worker_results_for_each_issue(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         issues = [IssueFactory.create(number=1), IssueFactory.create(number=2)]
 
@@ -154,7 +154,7 @@ class TestImplementBatch:
         assert fetched == issues
 
     @pytest.mark.asyncio
-    async def test_semaphore_limits_concurrency(self, config: HydraConfig) -> None:
+    async def test_semaphore_limits_concurrency(self, config: HydraFlowConfig) -> None:
         """max_workers=2 means at most 2 agents run concurrently."""
         concurrency_counter = {"current": 0, "peak": 0}
 
@@ -185,7 +185,9 @@ class TestImplementBatch:
         assert concurrency_counter["peak"] <= config.max_workers
 
     @pytest.mark.asyncio
-    async def test_marks_issue_in_progress_then_done(self, config: HydraConfig) -> None:
+    async def test_marks_issue_in_progress_then_done(
+        self, config: HydraFlowConfig
+    ) -> None:
         issue = IssueFactory.create(number=55)
 
         phase, _, _ = _make_phase(config, [issue])
@@ -197,7 +199,7 @@ class TestImplementBatch:
 
     @pytest.mark.asyncio
     async def test_marks_issue_failed_when_agent_fails(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         issue = IssueFactory.create(number=66)
 
@@ -209,7 +211,7 @@ class TestImplementBatch:
         assert status == "failed"
 
     @pytest.mark.asyncio
-    async def test_returns_empty_when_no_issues(self, config: HydraConfig) -> None:
+    async def test_returns_empty_when_no_issues(self, config: HydraFlowConfig) -> None:
         """When fetch_ready_issues returns empty, return ([], [])."""
         phase, _, _ = _make_phase(config, [])
 
@@ -219,7 +221,7 @@ class TestImplementBatch:
         assert issues == []
 
     @pytest.mark.asyncio
-    async def test_resumes_existing_worktree(self, config: HydraConfig) -> None:
+    async def test_resumes_existing_worktree(self, config: HydraFlowConfig) -> None:
         """If worktree dir already exists, skip create and reuse it."""
         issue = IssueFactory.create(number=77)
 
@@ -246,7 +248,9 @@ class TestImplementIncludesPush:
     """Tests that run_batch pushes and creates PRs per worker."""
 
     @pytest.mark.asyncio
-    async def test_worker_result_contains_pr_info(self, config: HydraConfig) -> None:
+    async def test_worker_result_contains_pr_info(
+        self, config: HydraFlowConfig
+    ) -> None:
         """After implementation, worker result should contain pr_info."""
         issue = IssueFactory.create()
 
@@ -262,7 +266,7 @@ class TestImplementIncludesPush:
 
     @pytest.mark.asyncio
     async def test_worker_creates_draft_pr_on_failure(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When agent fails, PR should be created as draft and label kept."""
         issue = IssueFactory.create()
@@ -279,13 +283,13 @@ class TestImplementIncludesPush:
         call_kwargs = mock_prs.create_pr.call_args
         assert call_kwargs.kwargs.get("draft") is True
 
-        # On failure: should NOT remove hydra-ready or add hydra-review
+        # On failure: should NOT remove hydraflow-ready or add hydraflow-review
         mock_prs.remove_label.assert_not_awaited()
         add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
-        assert (42, ["hydra-review"]) not in add_calls
+        assert (42, ["hydraflow-review"]) not in add_calls
 
     @pytest.mark.asyncio
-    async def test_worker_no_pr_when_push_fails(self, config: HydraConfig) -> None:
+    async def test_worker_no_pr_when_push_fails(self, config: HydraFlowConfig) -> None:
         """When push fails, pr_info should remain None."""
         issue = IssueFactory.create()
 
@@ -298,7 +302,7 @@ class TestImplementIncludesPush:
 
     @pytest.mark.asyncio
     async def test_branch_pushed_and_commented_before_agent_runs(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Branch should be pushed and a comment posted before the agent starts."""
         issue = IssueFactory.create()
@@ -342,7 +346,9 @@ class TestImplementIncludesPush:
         assert call_order.index("comment") < call_order.index("agent")
 
     @pytest.mark.asyncio
-    async def test_releases_active_issues_for_review(self, config: HydraConfig) -> None:
+    async def test_releases_active_issues_for_review(
+        self, config: HydraFlowConfig
+    ) -> None:
         """After implementation, mark_complete should be called on the store."""
         issue = IssueFactory.create()
         completed: list[int] = []
@@ -367,7 +373,7 @@ class TestWorkerExceptionIsolation:
 
     @pytest.mark.asyncio
     async def test_worker_exception_returns_failed_result(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When agent.run raises, worker should return a WorkerResult with error."""
         issue = IssueFactory.create()
@@ -392,7 +398,7 @@ class TestWorkerExceptionIsolation:
 
     @pytest.mark.asyncio
     async def test_worker_exception_marks_issue_failed(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When worker crashes, issue should be marked as 'failed' in state."""
         issue = IssueFactory.create()
@@ -414,7 +420,7 @@ class TestWorkerExceptionIsolation:
 
     @pytest.mark.asyncio
     async def test_worker_exception_releases_active_issues(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When worker crashes, mark_complete should be called on the store."""
         issue = IssueFactory.create()
@@ -438,7 +444,7 @@ class TestWorkerExceptionIsolation:
 
     @pytest.mark.asyncio
     async def test_worker_exception_does_not_crash_batch(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """With 2 issues, first worker crashing should not prevent the second."""
         issues = [IssueFactory.create(number=1), IssueFactory.create(number=2)]
@@ -487,7 +493,7 @@ class TestWorktreeCreationFailure:
 
     @pytest.mark.asyncio
     async def test_worktree_creation_failure_returns_error_result(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When worktrees.create raises, worker should return a failed result."""
         issue = IssueFactory.create(number=42)
@@ -504,7 +510,7 @@ class TestWorktreeCreationFailure:
 
     @pytest.mark.asyncio
     async def test_worktree_creation_failure_does_not_crash_other_workers(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """First worktree.create failure should not prevent second worker from completing."""
         issues = [IssueFactory.create(number=1), IssueFactory.create(number=2)]
@@ -527,7 +533,7 @@ class TestWorktreeCreationFailure:
 
     @pytest.mark.asyncio
     async def test_stop_event_cancels_remaining_workers(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Setting stop_event should cause workers to return early with error."""
         issues = [
@@ -573,7 +579,9 @@ class TestImplementLifecycleMetrics:
     """Tests that run_batch records new lifecycle metrics in state."""
 
     @pytest.mark.asyncio
-    async def test_records_implementation_duration(self, config: HydraConfig) -> None:
+    async def test_records_implementation_duration(
+        self, config: HydraFlowConfig
+    ) -> None:
         """Successful implementation should record duration in state."""
         issue = IssueFactory.create()
 
@@ -599,7 +607,7 @@ class TestImplementLifecycleMetrics:
         assert stats.total_implementation_seconds == pytest.approx(60.5)
 
     @pytest.mark.asyncio
-    async def test_does_not_record_zero_duration(self, config: HydraConfig) -> None:
+    async def test_does_not_record_zero_duration(self, config: HydraFlowConfig) -> None:
         """Zero duration should not be recorded."""
         issue = IssueFactory.create()
 
@@ -625,7 +633,7 @@ class TestImplementLifecycleMetrics:
         assert stats.total_implementation_seconds == pytest.approx(0.0)
 
     @pytest.mark.asyncio
-    async def test_records_quality_fix_rounds(self, config: HydraConfig) -> None:
+    async def test_records_quality_fix_rounds(self, config: HydraFlowConfig) -> None:
         """Quality fix attempts should be recorded in state."""
         issue = IssueFactory.create()
 
@@ -652,7 +660,7 @@ class TestImplementLifecycleMetrics:
 
     @pytest.mark.asyncio
     async def test_does_not_record_zero_quality_fix_rounds(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Zero quality fix attempts should not be recorded."""
         issue = IssueFactory.create()
@@ -665,7 +673,7 @@ class TestImplementLifecycleMetrics:
 
     @pytest.mark.asyncio
     async def test_accumulates_across_multiple_issues(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Metrics should accumulate across multiple issues in a batch."""
         issues = [IssueFactory.create(number=1), IssueFactory.create(number=2)]
@@ -703,7 +711,9 @@ class TestReviewFeedbackPassing:
     """Tests that review feedback is fetched, passed to agent, and cleared."""
 
     @pytest.mark.asyncio
-    async def test_passes_review_feedback_to_agent(self, config: HydraConfig) -> None:
+    async def test_passes_review_feedback_to_agent(
+        self, config: HydraFlowConfig
+    ) -> None:
         """When review feedback exists in state, it should be passed to agent.run."""
         issue = IssueFactory.create()
         captured_feedback: list[str] = []
@@ -738,7 +748,7 @@ class TestReviewFeedbackPassing:
 
     @pytest.mark.asyncio
     async def test_clears_review_feedback_after_implementation(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Review feedback should be cleared from state after agent run."""
         issue = IssueFactory.create()
@@ -770,7 +780,9 @@ class TestReviewFeedbackPassing:
         assert phase._state.get_review_feedback(42) is None
 
     @pytest.mark.asyncio
-    async def test_no_feedback_passes_empty_string(self, config: HydraConfig) -> None:
+    async def test_no_feedback_passes_empty_string(
+        self, config: HydraFlowConfig
+    ) -> None:
         """When no review feedback exists, agent should receive empty string."""
         issue = IssueFactory.create()
         captured_feedback: list[str] = []
@@ -803,7 +815,7 @@ class TestReviewFeedbackPassing:
         assert captured_feedback[0] == ""
 
     @pytest.mark.asyncio
-    async def test_skips_pr_creation_on_retry(self, config: HydraConfig) -> None:
+    async def test_skips_pr_creation_on_retry(self, config: HydraFlowConfig) -> None:
         """When review_feedback is present (retry), PR creation should be skipped."""
         issue = IssueFactory.create()
 
@@ -839,7 +851,7 @@ class TestReviewFeedbackPassing:
         assert results[0].pr_info is None
 
     @pytest.mark.asyncio
-    async def test_creates_pr_on_first_run(self, config: HydraConfig) -> None:
+    async def test_creates_pr_on_first_run(self, config: HydraFlowConfig) -> None:
         """Without review feedback (first run), PR should be created normally."""
         issue = IssueFactory.create()
 
@@ -882,7 +894,7 @@ class TestWorkerResultMetaPersistence:
 
     @pytest.mark.asyncio
     async def test_worker_result_meta_persisted_after_run(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Worker result metadata should be saved to state after agent run."""
         issue = IssueFactory.create()
@@ -914,7 +926,9 @@ class TestWorkerResultMetaPersistence:
         assert meta["error"] is None
 
     @pytest.mark.asyncio
-    async def test_worker_result_meta_includes_error(self, config: HydraConfig) -> None:
+    async def test_worker_result_meta_includes_error(
+        self, config: HydraFlowConfig
+    ) -> None:
         """When agent fails, error should be captured in metadata."""
         issue = IssueFactory.create()
 
@@ -953,7 +967,7 @@ class TestAlreadySatisfiedZeroCommit:
 
     @pytest.mark.asyncio
     async def test_zero_commit_closes_issue_with_dup_label(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When agent returns zero commits, issue should be closed with dup label."""
         issue = IssueFactory.create()
@@ -992,7 +1006,7 @@ class TestAlreadySatisfiedZeroCommit:
 
     @pytest.mark.asyncio
     async def test_zero_commit_marks_issue_already_satisfied(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When zero-commit detected, issue state should be 'already_satisfied'."""
         issue = IssueFactory.create()
@@ -1021,7 +1035,9 @@ class TestAlreadySatisfiedZeroCommit:
         assert phase._state.get_issue_status(42) == "already_satisfied"
 
     @pytest.mark.asyncio
-    async def test_zero_commit_removes_ready_labels(self, config: HydraConfig) -> None:
+    async def test_zero_commit_removes_ready_labels(
+        self, config: HydraFlowConfig
+    ) -> None:
         """When zero-commit detected, ready labels should be removed."""
         issue = IssueFactory.create()
 
@@ -1052,7 +1068,7 @@ class TestAlreadySatisfiedZeroCommit:
 
     @pytest.mark.asyncio
     async def test_nonzero_commits_not_treated_as_already_satisfied(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """A failed result with commits > 0 should NOT be treated as already satisfied."""
         issue = IssueFactory.create()
@@ -1160,7 +1176,7 @@ class TestRetryCapEscalation:
         assert not agent_called
 
         # Labels should be swapped to HITL
-        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydra-hitl")
+        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl")
 
         # Comment should mention attempt cap
         comment_calls = [c.args for c in mock_prs.post_comment.call_args_list]
@@ -1204,7 +1220,7 @@ class TestCommitsPersistedInMeta:
     """Tests that commits field is included in worker_result_meta."""
 
     @pytest.mark.asyncio
-    async def test_commits_in_worker_result_meta(self, config: HydraConfig) -> None:
+    async def test_commits_in_worker_result_meta(self, config: HydraFlowConfig) -> None:
         """After agent run, worker_result_meta should contain 'commits' key."""
         issue = IssueFactory.create()
 
@@ -1245,7 +1261,7 @@ class TestActiveIssuePersistence:
 
     @pytest.mark.asyncio
     async def test_active_issue_persisted_and_removed(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """After run_batch, active_issue_numbers should be cleared."""
         issue = IssueFactory.create()
@@ -1371,14 +1387,14 @@ class TestCheckAttemptCap:
 
         await phase._check_attempt_cap(issue, "agent/issue-42")
 
-        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydra-hitl")
+        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl")
 
 
 class TestRunImplementation:
     """Unit tests for the _run_implementation helper."""
 
     @pytest.mark.asyncio
-    async def test_creates_worktree_when_missing(self, config: HydraConfig) -> None:
+    async def test_creates_worktree_when_missing(self, config: HydraFlowConfig) -> None:
         """When worktree dir doesn't exist, should create one."""
         issue = IssueFactory.create()
         phase, mock_wt, _ = _make_phase(config, [issue])
@@ -1388,7 +1404,7 @@ class TestRunImplementation:
         mock_wt.create.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_reuses_existing_worktree(self, config: HydraConfig) -> None:
+    async def test_reuses_existing_worktree(self, config: HydraFlowConfig) -> None:
         """When worktree dir exists, should reuse it."""
         issue = IssueFactory.create()
 
@@ -1402,7 +1418,9 @@ class TestRunImplementation:
         mock_wt.create.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_passes_review_feedback_to_agent(self, config: HydraConfig) -> None:
+    async def test_passes_review_feedback_to_agent(
+        self, config: HydraFlowConfig
+    ) -> None:
         """Review feedback should be passed to the agent."""
         issue = IssueFactory.create()
         captured_feedback: list[str] = []
@@ -1431,7 +1449,9 @@ class TestRunImplementation:
         assert captured_feedback[0] == "Fix error handling"
 
     @pytest.mark.asyncio
-    async def test_clears_review_feedback_after_run(self, config: HydraConfig) -> None:
+    async def test_clears_review_feedback_after_run(
+        self, config: HydraFlowConfig
+    ) -> None:
         """Review feedback should be cleared from state after agent run."""
         issue = IssueFactory.create()
         phase, _, _ = _make_phase(config, [issue])
@@ -1442,7 +1462,7 @@ class TestRunImplementation:
         assert phase._state.get_review_feedback(42) is None
 
     @pytest.mark.asyncio
-    async def test_records_metrics(self, config: HydraConfig) -> None:
+    async def test_records_metrics(self, config: HydraFlowConfig) -> None:
         """Duration and quality fix rounds should be recorded."""
         issue = IssueFactory.create()
 
@@ -1475,7 +1495,7 @@ class TestHandleImplementationResult:
     """Unit tests for the _handle_implementation_result helper."""
 
     @pytest.mark.asyncio
-    async def test_zero_commit_closes_issue(self, config: HydraConfig) -> None:
+    async def test_zero_commit_closes_issue(self, config: HydraFlowConfig) -> None:
         """Zero-commit failure should close issue as already satisfied."""
         issue = IssueFactory.create()
         result = WorkerResult(
@@ -1498,7 +1518,7 @@ class TestHandleImplementationResult:
 
     @pytest.mark.asyncio
     async def test_success_creates_pr_and_swaps_labels(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Successful result should create a PR and swap labels."""
         issue = IssueFactory.create()
@@ -1523,7 +1543,7 @@ class TestHandleImplementationResult:
         )
 
     @pytest.mark.asyncio
-    async def test_retry_skips_pr_creation(self, config: HydraConfig) -> None:
+    async def test_retry_skips_pr_creation(self, config: HydraFlowConfig) -> None:
         """On retry (is_retry=True), PR creation should be skipped."""
         issue = IssueFactory.create()
         result = WorkerResultFactory.create(
@@ -1540,7 +1560,7 @@ class TestHandleImplementationResult:
         assert returned.pr_info is None
 
     @pytest.mark.asyncio
-    async def test_failure_marks_issue_failed(self, config: HydraConfig) -> None:
+    async def test_failure_marks_issue_failed(self, config: HydraFlowConfig) -> None:
         """Failed result should mark issue as failed."""
         issue = IssueFactory.create()
         result = WorkerResultFactory.create(issue_number=42, success=False)
@@ -1553,7 +1573,7 @@ class TestHandleImplementationResult:
 
     @pytest.mark.asyncio
     async def test_empty_worktree_path_skips_push_and_pr(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When result.worktree_path is empty, push and PR creation should be skipped."""
         issue = IssueFactory.create()
@@ -1617,7 +1637,7 @@ class TestWorkerInner:
 
     @pytest.mark.asyncio
     async def test_normal_flow_runs_agent_and_handles_result(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Normal flow should run agent and handle result."""
         issue = IssueFactory.create()

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from events import EventBus, EventLog, EventType, HydraEvent
+from events import EventBus, EventLog, EventType, HydraFlowEvent
 from tests.conftest import EventFactory
 
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ def _make_event(
     event_type: EventType = EventType.BATCH_START,
     timestamp: str | None = None,
     data: dict | None = None,
-) -> HydraEvent:
+) -> HydraFlowEvent:
     return EventFactory.create(
         type=event_type,
         timestamp=timestamp or datetime.now(UTC).isoformat(),
@@ -29,7 +29,7 @@ def _make_event(
     )
 
 
-def _make_event_at(days_ago: int, **kwargs) -> HydraEvent:  # type: ignore[no-untyped-def]
+def _make_event_at(days_ago: int, **kwargs) -> HydraFlowEvent:  # type: ignore[no-untyped-def]
     ts = (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
     return _make_event(timestamp=ts, **kwargs)
 
@@ -417,47 +417,47 @@ class TestEventBusWithPersistence:
 
 class TestEventLogConfig:
     def test_default_event_log_path(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.event_log_path.name == "events.jsonl"
-        assert config.event_log_path.parent.name == ".hydra"
+        assert config.event_log_path.parent.name == ".hydraflow"
 
     def test_default_max_size_mb(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.event_log_max_size_mb == 10
 
     def test_default_retention_days(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.event_log_retention_days == 7
 
     def test_custom_event_log_path(self, tmp_path: Path) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
         custom_path = tmp_path / "custom.jsonl"
-        config = HydraConfig(repo="test/repo", event_log_path=custom_path)
+        config = HydraFlowConfig(repo="test/repo", event_log_path=custom_path)
         assert config.event_log_path == custom_path
 
     def test_max_size_mb_validation(self) -> None:
         from pydantic import ValidationError
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
         with pytest.raises(ValidationError):
-            HydraConfig(repo="test/repo", event_log_max_size_mb=0)
+            HydraFlowConfig(repo="test/repo", event_log_max_size_mb=0)
         with pytest.raises(ValidationError):
-            HydraConfig(repo="test/repo", event_log_max_size_mb=101)
+            HydraFlowConfig(repo="test/repo", event_log_max_size_mb=101)
 
     def test_retention_days_validation(self) -> None:
         from pydantic import ValidationError
 
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
         with pytest.raises(ValidationError):
-            HydraConfig(repo="test/repo", event_log_retention_days=0)
+            HydraFlowConfig(repo="test/repo", event_log_retention_days=0)
         with pytest.raises(ValidationError):
-            HydraConfig(repo="test/repo", event_log_retention_days=91)
+            HydraFlowConfig(repo="test/repo", event_log_retention_days=91)

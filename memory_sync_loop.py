@@ -7,22 +7,22 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from issue_fetcher import IssueFetcher
 from memory import MemorySyncWorker
 from models import MemoryIssueData
 from subprocess_util import AuthenticationError, CreditExhaustedError
 
-logger = logging.getLogger("hydra.memory_sync_loop")
+logger = logging.getLogger("hydraflow.memory_sync_loop")
 
 
 class MemorySyncLoop:
-    """Polls ``hydra-memory`` issues and rebuilds the digest."""
+    """Polls ``hydraflow-memory`` issues and rebuilds the digest."""
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         fetcher: IssueFetcher,
         memory_sync: MemorySyncWorker,
         bus: EventBus,
@@ -49,7 +49,7 @@ class MemorySyncLoop:
         return self._config.memory_sync_interval
 
     async def run(self) -> None:
-        """Continuously poll ``hydra-memory`` issues and rebuild the digest."""
+        """Continuously poll ``hydraflow-memory`` issues and rebuild the digest."""
         while not self._stop_event.is_set():
             interval = self._get_interval()
             if not self._enabled_cb("memory_sync"):
@@ -80,7 +80,7 @@ class MemorySyncLoop:
                 )
                 self._status_cb("memory_sync", "error", None)
                 await self._bus.publish(
-                    HydraEvent(
+                    HydraFlowEvent(
                         type=EventType.ERROR,
                         data={
                             "message": "Memory sync loop error",

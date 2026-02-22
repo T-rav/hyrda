@@ -1,4 +1,4 @@
-"""Repository preparation — create Hydra lifecycle labels and audit repo."""
+"""Repository preparation — create HydraFlow lifecycle labels and audit repo."""
 
 from __future__ import annotations
 
@@ -8,15 +8,15 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from models import AuditCheck, AuditCheckStatus, AuditResult
 from subprocess_util import run_subprocess, run_subprocess_with_retry
 
-logger = logging.getLogger("hydra.prep")
+logger = logging.getLogger("hydraflow.prep")
 
-# Authoritative Hydra lifecycle label table: (config_field, color, description)
-HYDRA_LABELS: tuple[tuple[str, str, str], ...] = (
-    ("find_label", "e4e669", "New issue for Hydra to discover and triage"),
+# Authoritative HydraFlow lifecycle label table: (config_field, color, description)
+HYDRAFLOW_LABELS: tuple[tuple[str, str, str], ...] = (
+    ("find_label", "e4e669", "New issue for HydraFlow to discover and triage"),
     ("planner_label", "c5def5", "Issue needs planning before implementation"),
     ("ready_label", "0e8a16", "Issue ready for implementation"),
     ("review_label", "fbca04", "Issue/PR under review"),
@@ -50,7 +50,7 @@ class PrepResult:
         return "".join(parts)
 
 
-async def _list_existing_labels(config: HydraConfig) -> set[str]:
+async def _list_existing_labels(config: HydraFlowConfig) -> set[str]:
     """Query the repo for existing label names."""
     try:
         raw = await run_subprocess_with_retry(
@@ -62,7 +62,7 @@ async def _list_existing_labels(config: HydraConfig) -> set[str]:
             "--json",
             "name",
             "--limit",
-            "1000",  # well above any realistic Hydra-managed label count
+            "1000",  # well above any realistic HydraFlow-managed label count
             cwd=config.repo_root,
             gh_token=config.gh_token,
             max_retries=config.gh_max_retries,
@@ -73,8 +73,8 @@ async def _list_existing_labels(config: HydraConfig) -> set[str]:
         return set()
 
 
-async def ensure_labels(config: HydraConfig) -> PrepResult:
-    """Create all Hydra lifecycle labels on the target repo.
+async def ensure_labels(config: HydraFlowConfig) -> PrepResult:
+    """Create all HydraFlow lifecycle labels on the target repo.
 
     Uses ``gh label create --force`` which creates or updates each label.
     Returns a :class:`PrepResult` with created/existed/failed lists.
@@ -82,7 +82,7 @@ async def ensure_labels(config: HydraConfig) -> PrepResult:
     result = PrepResult()
 
     if config.dry_run:
-        for cfg_field, _color, _desc in HYDRA_LABELS:
+        for cfg_field, _color, _desc in HYDRAFLOW_LABELS:
             for name in getattr(config, cfg_field):
                 result.created.append(name)
         logger.info("[dry-run] Would create labels: %s", result.created)
@@ -90,7 +90,7 @@ async def ensure_labels(config: HydraConfig) -> PrepResult:
 
     existing = await _list_existing_labels(config)
 
-    for cfg_field, color, description in HYDRA_LABELS:
+    for cfg_field, color, description in HYDRAFLOW_LABELS:
         label_names: list[str] = getattr(config, cfg_field)
         for label_name in label_names:
             try:
@@ -127,7 +127,7 @@ async def ensure_labels(config: HydraConfig) -> PrepResult:
 # Repo audit logic
 # ---------------------------------------------------------------------------
 
-# Makefile targets Hydra requires
+# Makefile targets HydraFlow requires
 _REQUIRED_MAKE_TARGETS = ("quality", "lint", "test")
 
 # Lock files mapped to package manager names
@@ -139,7 +139,7 @@ _LOCK_FILES: tuple[tuple[str, str], ...] = (
     ("poetry.lock", "poetry"),
 )
 
-# Config label fields on HydraConfig that map to Hydra lifecycle labels
+# Config label fields on HydraFlowConfig that map to HydraFlow lifecycle labels
 _LABEL_FIELDS: tuple[str, ...] = (
     "find_label",
     "planner_label",
@@ -157,9 +157,9 @@ _LABEL_FIELDS: tuple[str, ...] = (
 
 
 class RepoAuditor:
-    """Scans a repository for infrastructure Hydra depends on."""
+    """Scans a repository for infrastructure HydraFlow depends on."""
 
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
         self._root = config.repo_root
 
@@ -539,7 +539,7 @@ class RepoAuditor:
             )
 
     async def _check_labels(self) -> AuditCheck:
-        """Check for Hydra lifecycle labels on the GitHub repo."""
+        """Check for HydraFlow lifecycle labels on the GitHub repo."""
         expected = set(self._get_hydra_labels())
 
         try:
@@ -573,7 +573,7 @@ class RepoAuditor:
             return AuditCheck(
                 name="Labels",
                 status=AuditCheckStatus.MISSING,
-                detail=f"missing all {len(expected)} Hydra labels",
+                detail=f"missing all {len(expected)} HydraFlow labels",
             )
         return AuditCheck(
             name="Labels",
@@ -582,7 +582,7 @@ class RepoAuditor:
         )
 
     def _get_hydra_labels(self) -> list[str]:
-        """Return the full list of Hydra lifecycle label names from config."""
+        """Return the full list of HydraFlow lifecycle label names from config."""
         labels: list[str] = []
         for label_field in _LABEL_FIELDS:
             labels.extend(getattr(self._config, label_field))

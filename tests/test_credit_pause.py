@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventType
 from models import PlanResult
-from orchestrator import HydraOrchestrator
+from orchestrator import HydraFlowOrchestrator
 from subprocess_util import (
     CreditExhaustedError,
     is_credit_exhaustion,
@@ -26,7 +26,7 @@ from subprocess_util import (
 from tests.helpers import ConfigFactory, make_streaming_proc
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
 from runner_utils import stream_claude_process
 
@@ -50,7 +50,7 @@ def _default_stream_kwargs(event_bus, **overrides):
     return defaults
 
 
-def _mock_fetcher_noop(orch: HydraOrchestrator) -> None:
+def _mock_fetcher_noop(orch: HydraFlowOrchestrator) -> None:
     """Mock store and fetcher methods so no real gh CLI calls are made."""
     orch._store.get_triageable = lambda _max_count: []  # type: ignore[method-assign]
     orch._store.get_plannable = lambda _max_count: []  # type: ignore[method-assign]
@@ -297,33 +297,33 @@ class TestStreamClaudeProcessCreditDetection:
 class TestRunStatusCreditsPaused:
     """Tests for run_status returning 'credits_paused'."""
 
-    def test_run_status_returns_credits_paused(self, config: HydraConfig) -> None:
+    def test_run_status_returns_credits_paused(self, config: HydraFlowConfig) -> None:
         """run_status returns 'credits_paused' when _credits_paused_until is in the future."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._credits_paused_until = datetime.now(UTC) + timedelta(hours=1)
         assert orch.run_status == "credits_paused"
 
     def test_run_status_returns_running_after_credits_pause_expires(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """run_status does NOT return 'credits_paused' when the pause is in the past."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._credits_paused_until = datetime.now(UTC) - timedelta(hours=1)
         orch._running = True
         assert orch.run_status == "running"
 
     def test_run_status_auth_failed_takes_precedence_over_credits_paused(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """auth_failed should take precedence over credits_paused."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._auth_failed = True
         orch._credits_paused_until = datetime.now(UTC) + timedelta(hours=1)
         assert orch.run_status == "auth_failed"
 
-    def test_reset_clears_credits_paused(self, config: HydraConfig) -> None:
+    def test_reset_clears_credits_paused(self, config: HydraFlowConfig) -> None:
         """reset() should clear _credits_paused_until."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._credits_paused_until = datetime.now(UTC) + timedelta(hours=1)
         orch._stop_event.set()
         orch.reset()
@@ -340,10 +340,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_publishes_system_alert(
-        self, config: HydraConfig, event_bus
+        self, config: HydraFlowConfig, event_bus
     ) -> None:
         """Credit exhaustion in a loop should publish a SYSTEM_ALERT event."""
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -388,10 +388,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_pauses_and_resumes(
-        self, config: HydraConfig, event_bus
+        self, config: HydraFlowConfig, event_bus
     ) -> None:
         """Credit exhaustion should pause all loops and resume after the wait."""
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -429,10 +429,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_default_pause_when_no_time(
-        self, config: HydraConfig, event_bus
+        self, config: HydraFlowConfig, event_bus
     ) -> None:
         """When no resume time is parseable, a default pause duration is used."""
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -472,10 +472,10 @@ class TestCreditExhaustionPauseResume:
 
     @pytest.mark.asyncio
     async def test_credit_exhaustion_terminates_active_processes(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Credit exhaustion should terminate all active subprocesses."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 
@@ -533,9 +533,11 @@ class TestCreditExhaustionPauseResume:
         assert terminate_calls["hitl"] >= 1
 
     @pytest.mark.asyncio
-    async def test_credit_pause_interrupted_by_stop(self, config: HydraConfig) -> None:
+    async def test_credit_pause_interrupted_by_stop(
+        self, config: HydraFlowConfig
+    ) -> None:
         """Calling stop() during a credit pause should interrupt the wait."""
-        orch = HydraOrchestrator(config)
+        orch = HydraFlowOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         _mock_fetcher_noop(orch)
 

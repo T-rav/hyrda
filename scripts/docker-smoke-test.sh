@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # docker-smoke-test.sh — Verify all required tools are present in the agent image.
 #
-# Usage: docker run --rm ghcr.io/t-rav/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
+# Usage: docker run --rm ghcr.io/t-rav/hydraflow-agent:latest bash /opt/hydraflow/docker-smoke-test.sh
 
 set -euo pipefail
 
@@ -53,11 +53,11 @@ echo "  pytest:  $(pytest --version 2>/dev/null || echo 'N/A')"
 echo ""
 echo "--- User & Permissions ---"
 CURRENT_USER=$(whoami)
-if [ "$CURRENT_USER" = "hydra" ]; then
-    echo "  [PASS] Running as user: hydra"
+if [ "$CURRENT_USER" = "hydraflow" ]; then
+    echo "  [PASS] Running as user: hydraflow"
     PASS=$((PASS + 1))
 else
-    echo "  [FAIL] Expected user 'hydra', got '$CURRENT_USER'"
+    echo "  [FAIL] Expected user 'hydraflow', got '$CURRENT_USER'"
     FAIL=$((FAIL + 1))
 fi
 

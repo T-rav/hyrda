@@ -7,13 +7,13 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from pr_manager import PRManager
 from pr_unsticker import PRUnsticker
 from subprocess_util import AuthenticationError, CreditExhaustedError
 
-logger = logging.getLogger("hydra.pr_unsticker_loop")
+logger = logging.getLogger("hydraflow.pr_unsticker_loop")
 
 
 class PRUnstickerLoop:
@@ -21,7 +21,7 @@ class PRUnstickerLoop:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         pr_unsticker: PRUnsticker,
         prs: PRManager,
         bus: EventBus,
@@ -57,7 +57,7 @@ class PRUnstickerLoop:
                 )
                 self._status_cb("pr_unsticker", "error", None)
                 await self._bus.publish(
-                    HydraEvent(
+                    HydraFlowEvent(
                         type=EventType.ERROR,
                         data={
                             "message": "PR unsticker loop error",

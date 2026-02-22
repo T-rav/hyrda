@@ -1,4 +1,4 @@
-"""Shared conflict resolution prompt builder for Hydra.
+"""Shared conflict resolution prompt builder for HydraFlow.
 
 Used by both :mod:`pr_unsticker` and :mod:`review_phase` to produce
 enriched prompts that give the conflict-resolution agent full context
