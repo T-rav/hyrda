@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 
-const mockUseHydra = vi.fn()
+const mockUseHydraFlow = vi.fn()
 
-vi.mock('../../context/HydraContext', () => ({
-  useHydra: (...args) => mockUseHydra(...args),
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
 const { SessionSidebar } = await import('../SessionSidebar')
@@ -20,7 +20,7 @@ function defaultContext(overrides = {}) {
 }
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue(defaultContext())
+  mockUseHydraFlow.mockReturnValue(defaultContext())
 })
 
 const SESSION_A = {
@@ -89,7 +89,7 @@ describe('SessionSidebar with no sessions', () => {
 
 describe('SessionSidebar with sessions', () => {
   beforeEach(() => {
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({ sessions: [SESSION_A, SESSION_B] })
     )
   })
@@ -130,7 +130,7 @@ describe('SessionSidebar with sessions', () => {
 
 describe('SessionSidebar with multiple repos', () => {
   beforeEach(() => {
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({ sessions: [SESSION_A, SESSION_OTHER] })
     )
   })
@@ -149,7 +149,7 @@ describe('SessionSidebar with multiple repos', () => {
 describe('SessionSidebar selection', () => {
   it('calls selectSession(null) when clicking All button', () => {
     const selectSession = vi.fn()
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({ sessions: [SESSION_A], selectSession })
     )
     render(<SessionSidebar />)
@@ -159,7 +159,7 @@ describe('SessionSidebar selection', () => {
 
   it('calls selectSession with session id when clicking a session row', () => {
     const selectSession = vi.fn()
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({ sessions: [SESSION_A], selectSession })
     )
     render(<SessionSidebar />)
@@ -179,7 +179,7 @@ describe('SessionSidebar selection', () => {
 
 describe('SessionSidebar collapsible repo sections', () => {
   beforeEach(() => {
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({ sessions: [SESSION_A] })
     )
   })
@@ -214,7 +214,7 @@ describe('SessionSidebar collapsible repo sections', () => {
 
 describe('SessionSidebar active session state', () => {
   it('currentSessionId is reflected (session with active status rendered)', () => {
-    mockUseHydra.mockReturnValue(
+    mockUseHydraFlow.mockReturnValue(
       defaultContext({
         sessions: [SESSION_B],
         currentSessionId: SESSION_B.id,

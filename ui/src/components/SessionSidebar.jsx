@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 import { theme } from '../theme'
 
 function relativeTime(isoString) {
@@ -16,7 +16,7 @@ function relativeTime(isoString) {
 }
 
 export function SessionSidebar() {
-  const { sessions, currentSessionId, selectedSessionId, selectSession } = useHydra()
+  const { sessions, currentSessionId, selectedSessionId, selectSession } = useHydraFlow()
   const [expandedRepos, setExpandedRepos] = useState({})
 
   const repoGroups = useMemo(() => {
