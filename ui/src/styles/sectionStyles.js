@@ -29,7 +29,7 @@ export const sectionHeaderStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, {
     ...sectionHeaderBase,
     background: s.subtleColor,
-    border: `1px solid ${s.subtleColor}`,
+    border: `1px solid ${s.color}33`,
     borderLeft: `3px solid ${s.color}`,
   }])
 )
