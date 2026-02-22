@@ -94,21 +94,10 @@ def _make_mock_container(
     """Build a mock Docker container object."""
     container = MagicMock()
     container.wait.return_value = {"StatusCode": exit_code}
-    container.logs.return_value = stdout  # default
+    container.logs.return_value = stdout
     container.kill.return_value = None
     container.start.return_value = None
     container.remove.return_value = None
-
-    def logs_side_effect(stdout=True, stderr=False):
-        if stdout and not stderr:
-            return stdout
-        if stderr and not stdout:
-            return stderr
-        return stdout + stderr
-
-    # Override for specific calls by checking keyword args
-    container.logs.side_effect = None
-    container.logs.return_value = stdout
     return container
 
 
