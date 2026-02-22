@@ -17,14 +17,16 @@ export function TranscriptPreview({ transcript, maxCollapsedLines = 3, maxHeight
     ? transcript
     : transcript.slice(-maxCollapsedLines)
 
+  const linesStyle = expanded ? { ...styles.lines, maxHeight, overflowY: 'auto' } : styles.lines
+
   return (
     <div style={styles.container} data-testid="transcript-preview">
       <div
         ref={scrollRef}
-        style={expanded ? { ...styles.lines, maxHeight, overflowY: 'auto' } : styles.lines}
+        style={linesStyle}
       >
         {visibleLines.map((line, i) => (
-          <div key={expanded ? i : transcript.length - maxCollapsedLines + i} style={styles.line}>
+          <div key={transcript.length - visibleLines.length + i} style={styles.line}>
             {line}
           </div>
         ))}
