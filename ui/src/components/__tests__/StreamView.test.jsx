@@ -532,6 +532,57 @@ describe('Merged stage rendering', () => {
   })
 })
 
+describe('Merged stage count display', () => {
+  it('shows merged item count instead of worker metrics', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('1 merged')
+    expect(section.textContent).not.toContain('active')
+    expect(section.textContent).not.toContain('queued')
+    expect(section.textContent).not.toContain('workers')
+  })
+
+  it('shows correct count with multiple merged items', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'Add feature', merged: true, url: 'https://github.com/test/pr/43' },
+        { pr: 44, issue: 12, title: 'Refactor', merged: true, url: 'https://github.com/test/pr/44' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('3 merged')
+  })
+
+  it('shows "0 merged" when no merged items exist', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext())
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('0 merged')
+  })
+
+  it('does not affect worker metrics display on non-merged stages', () => {
+    mockUseHydra.mockReturnValue(defaultHydraContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [
+          { issue_number: 1, title: 'Active issue', status: 'active' },
+          { issue_number: 2, title: 'Queued issue', status: 'queued' },
+        ],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-implement')
+    expect(section.textContent).toContain('active')
+    expect(section.textContent).toContain('queued')
+    expect(section.textContent).toContain('workers')
+  })
+})
+
 describe('PipelineFlow failed and hitl dots', () => {
   it('renders failed and hitl issue dots as non-pulsing', () => {
     mockUseHydra.mockReturnValue(defaultHydraContext({
