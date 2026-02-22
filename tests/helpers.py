@@ -52,7 +52,7 @@ class ConfigFactory:
         max_reviewers: int = 1,
         max_budget_usd: float = 1.0,
         model: str = "sonnet",
-        review_model: str = "opus",
+        review_model: str = "sonnet",
         review_budget_usd: float = 1.0,
         ci_check_timeout: int = 600,
         ci_poll_interval: int = 30,
@@ -101,6 +101,9 @@ class ConfigFactory:
         max_memory_chars: int = 4000,
         max_memory_prompt_chars: int = 4000,
         memory_sync_interval: int = 120,
+        credit_pause_buffer_minutes: int = 1,
+        pr_unstick_interval: int = 3600,
+        pr_unstick_batch_size: int = 10,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -169,4 +172,7 @@ class ConfigFactory:
             max_memory_chars=max_memory_chars,
             max_memory_prompt_chars=max_memory_prompt_chars,
             memory_sync_interval=memory_sync_interval,
+            credit_pause_buffer_minutes=credit_pause_buffer_minutes,
+            pr_unstick_interval=pr_unstick_interval,
+            pr_unstick_batch_size=pr_unstick_batch_size,
         )

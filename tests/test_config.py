@@ -8,7 +8,13 @@ from pathlib import Path
 import pytest
 
 # conftest.py already inserts the hydra package directory into sys.path
-from config import HydraConfig, _detect_repo_slug, _find_repo_root
+from config import (
+    _ENV_INT_OVERRIDES,
+    _ENV_STR_OVERRIDES,
+    HydraConfig,
+    _detect_repo_slug,
+    _find_repo_root,
+)
 
 # ---------------------------------------------------------------------------
 # _find_repo_root
@@ -376,7 +382,7 @@ class TestHydraConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.review_model == "opus"
+        assert cfg.review_model == "sonnet"
 
     def test_review_budget_usd_default(self, tmp_path: Path) -> None:
         cfg = HydraConfig(
@@ -1788,6 +1794,44 @@ class TestHydraConfigImproveLabelAndMemoryLabel:
         )
         assert cfg.metrics_sync_interval == 120
 
+    def test_pr_unstick_interval_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_interval == 3600
+
+    def test_pr_unstick_batch_size_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_batch_size == 10
+
+    def test_pr_unstick_interval_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_PR_UNSTICK_INTERVAL", "1800")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_interval == 1800
+
+    def test_pr_unstick_batch_size_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_PR_UNSTICK_BATCH_SIZE", "5")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.pr_unstick_batch_size == 5
+
 
 # ---------------------------------------------------------------------------
 # HydraConfig – branch_for_issue / worktree_path_for_issue helpers
@@ -2103,6 +2147,48 @@ class TestHydraConfigMaxReviewDiffChars:
 # ---------------------------------------------------------------------------
 
 
+class TestResolveDefaults:
+    """Tests for the resolve_defaults model validator."""
+
+    def test_resolve_defaults_sets_event_log_path(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(repo_root=tmp_path)
+        assert cfg.event_log_path == tmp_path / ".hydra" / "events.jsonl"
+
+    def test_resolve_defaults_repo_from_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GITHUB_REPO", "env-org/env-repo")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.repo == "env-org/env-repo"
+
+    def test_resolve_defaults_repo_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_GITHUB_REPO", "env-org/env-repo")
+        cfg = HydraConfig(
+            repo="explicit-org/explicit-repo",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.repo == "explicit-org/explicit-repo"
+
+    def test_resolve_defaults_data_poll_interval_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DATA_POLL_INTERVAL", "120")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.data_poll_interval == 120
+
+
 class TestMaxIssueAttempts:
     """Tests for max_issue_attempts config field."""
 
@@ -2136,3 +2222,161 @@ class TestMaxIssueAttempts:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_issue_attempts == 4
+
+
+# ---------------------------------------------------------------------------
+# Data-driven env-var override table validation
+# ---------------------------------------------------------------------------
+
+
+class TestEnvVarOverrideTable:
+    """Tests for the _ENV_INT_OVERRIDES and _ENV_STR_OVERRIDES tables."""
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Each int override should apply when the field is at its default."""
+        override_value = default + 1
+        monkeypatch.setenv(env_key, str(override_value))
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == override_value
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Explicit values should take precedence over env var overrides."""
+        # Use default + 1 to stay within Pydantic field constraints
+        explicit = default + 1
+        monkeypatch.setenv(env_key, str(default + 2))
+        cfg = HydraConfig(
+            **{field: explicit},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == explicit
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_INT_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_INT_OVERRIDES],
+    )
+    def test_env_int_override_invalid_value_ignored(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: int,
+    ) -> None:
+        """Non-numeric env var values should be silently ignored."""
+        monkeypatch.setenv(env_key, "not-a-number")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == default
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_STR_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_STR_OVERRIDES],
+    )
+    def test_env_str_override_applies_when_at_default(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: str,
+    ) -> None:
+        """Each str override should apply when the field is at its default."""
+        monkeypatch.setenv(env_key, "custom-value")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == "custom-value"
+
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_STR_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_STR_OVERRIDES],
+    )
+    def test_env_str_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: str,
+    ) -> None:
+        """Explicit values should take precedence over str env var overrides."""
+        monkeypatch.setenv(env_key, "env-value")
+        cfg = HydraConfig(
+            **{field: "explicit-value"},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) == "explicit-value"
+
+    def test_override_table_field_names_are_valid(self) -> None:
+        """Every field in the override tables should be a real HydraConfig attribute."""
+        all_fields = {f for f, _, _ in _ENV_INT_OVERRIDES} | {
+            f for f, _, _ in _ENV_STR_OVERRIDES
+        }
+        config_fields = set(HydraConfig.model_fields.keys())
+        invalid = all_fields - config_fields
+        assert not invalid, f"Invalid field names in override tables: {invalid}"
+
+    def test_override_table_defaults_match_field_defaults(self) -> None:
+        """Default values in the override tables must match HydraConfig field defaults.
+
+        This prevents silent drift when a field default is changed without updating
+        the corresponding entry in _ENV_INT_OVERRIDES or _ENV_STR_OVERRIDES.
+        """
+        # Arrange
+        model_fields = HydraConfig.model_fields
+
+        # Act / Assert — int overrides
+        for field, _env_key, table_default in _ENV_INT_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_INT_OVERRIDES entry for '{field}' has default={table_default}, "
+                f"but HydraConfig.{field} default is {pydantic_default}"
+            )
+
+        # Act / Assert — str overrides
+        for field, _env_key, table_default in _ENV_STR_OVERRIDES:
+            pydantic_default = model_fields[field].default
+            assert pydantic_default == table_default, (
+                f"_ENV_STR_OVERRIDES entry for '{field}' has default={table_default!r}, "
+                f"but HydraConfig.{field} default is {pydantic_default!r}"
+            )

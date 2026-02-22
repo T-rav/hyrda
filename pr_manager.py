@@ -9,7 +9,7 @@ import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
@@ -115,22 +115,6 @@ class PRManager:
             logger.error("Push failed for %s: %s", branch, exc)
             return False
 
-    async def remote_branch_exists(self, branch: str) -> bool:
-        """Check whether *branch* exists on the remote."""
-        if self._config.dry_run:
-            return False
-        try:
-            output = await self._run_gh(
-                "git",
-                "ls-remote",
-                "--heads",
-                "origin",
-                branch,
-            )
-            return bool(output.strip())
-        except RuntimeError:
-            return False
-
     async def create_pr(
         self,
         issue: GitHubIssue,
@@ -221,7 +205,7 @@ class PRManager:
 
             return pr_info
 
-        except RuntimeError as exc:
+        except (RuntimeError, ValueError) as exc:
             logger.error("PR creation failed for issue #%d: %s", issue.number, exc)
             return PRInfo(
                 number=0,
@@ -264,10 +248,12 @@ class PRManager:
             logger.error("Merge failed for PR #%d: %s", pr_number, exc)
             return False
 
-    async def post_comment(self, issue_number: int, body: str) -> None:
-        """Post a comment on a GitHub issue."""
+    async def _comment(
+        self, target: Literal["issue", "pr"], number: int, body: str
+    ) -> None:
+        """Post a comment on a GitHub issue or PR."""
         if self._config.dry_run:
-            logger.info("[dry-run] Would post comment on issue #%d", issue_number)
+            logger.info("[dry-run] Would post comment on %s #%d", target, number)
             return
         chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
         chunks = self._chunk_body(body, chunk_limit)
@@ -279,9 +265,9 @@ class PRManager:
             try:
                 await self._run_with_body_file(
                     "gh",
-                    "issue",
+                    target,
                     "comment",
-                    str(issue_number),
+                    str(number),
                     "--repo",
                     self._repo,
                     body=part,
@@ -289,40 +275,19 @@ class PRManager:
                 )
             except RuntimeError as exc:
                 logger.warning(
-                    "Could not post comment on issue #%d: %s",
-                    issue_number,
+                    "Could not post comment on %s #%d: %s",
+                    target,
+                    number,
                     exc,
                 )
 
+    async def post_comment(self, issue_number: int, body: str) -> None:
+        """Post a comment on a GitHub issue."""
+        await self._comment("issue", issue_number, body)
+
     async def post_pr_comment(self, pr_number: int, body: str) -> None:
         """Post a comment on a GitHub pull request."""
-        if self._config.dry_run:
-            logger.info("[dry-run] Would post comment on PR #%d", pr_number)
-            return
-        chunk_limit = self._GITHUB_COMMENT_LIMIT - self._HEADER_RESERVE
-        chunks = self._chunk_body(body, chunk_limit)
-        for idx, chunk in enumerate(chunks):
-            part = chunk
-            if len(chunks) > 1:
-                part = f"*Part {idx + 1}/{len(chunks)}*\n\n{chunk}"
-            part = self._cap_body(part, self._GITHUB_COMMENT_LIMIT)
-            try:
-                await self._run_with_body_file(
-                    "gh",
-                    "pr",
-                    "comment",
-                    str(pr_number),
-                    "--repo",
-                    self._repo,
-                    body=part,
-                    cwd=self._config.repo_root,
-                )
-            except RuntimeError as exc:
-                logger.warning(
-                    "Could not post comment on PR #%d: %s",
-                    pr_number,
-                    exc,
-                )
+        await self._comment("pr", pr_number, body)
 
     async def submit_review(
         self, pr_number: int, verdict: ReviewVerdict, body: str
@@ -382,17 +347,19 @@ class PRManager:
             )
             return False
 
-    async def add_labels(self, issue_number: int, labels: list[str]) -> None:
-        """Add *labels* to a GitHub issue."""
+    async def _add_labels(
+        self, target: Literal["issue", "pr"], number: int, labels: list[str]
+    ) -> None:
+        """Add *labels* to a GitHub issue or PR."""
         if self._config.dry_run or not labels:
             return
         for label in labels:
             try:
                 await self._run_gh(
                     "gh",
-                    "issue",
+                    target,
                     "edit",
-                    str(issue_number),
+                    str(number),
                     "--repo",
                     self._repo,
                     "--add-label",
@@ -400,22 +367,29 @@ class PRManager:
                 )
             except RuntimeError as exc:
                 logger.warning(
-                    "Could not add label %r to issue #%d: %s",
+                    "Could not add label %r to %s #%d: %s",
                     label,
-                    issue_number,
+                    target,
+                    number,
                     exc,
                 )
 
-    async def remove_label(self, issue_number: int, label: str) -> None:
-        """Remove *label* from a GitHub issue."""
+    async def add_labels(self, issue_number: int, labels: list[str]) -> None:
+        """Add *labels* to a GitHub issue."""
+        await self._add_labels("issue", issue_number, labels)
+
+    async def _remove_label(
+        self, target: Literal["issue", "pr"], number: int, label: str
+    ) -> None:
+        """Remove *label* from a GitHub issue or PR."""
         if self._config.dry_run:
             return
         try:
             await self._run_gh(
                 "gh",
-                "issue",
+                target,
                 "edit",
-                str(issue_number),
+                str(number),
                 "--repo",
                 self._repo,
                 "--remove-label",
@@ -423,11 +397,16 @@ class PRManager:
             )
         except RuntimeError as exc:
             logger.warning(
-                "Could not remove label %r from issue #%d: %s",
+                "Could not remove label %r from %s #%d: %s",
                 label,
-                issue_number,
+                target,
+                number,
                 exc,
             )
+
+    async def remove_label(self, issue_number: int, label: str) -> None:
+        """Remove *label* from a GitHub issue."""
+        await self._remove_label("issue", issue_number, label)
 
     async def close_issue(self, issue_number: int) -> None:
         """Close a GitHub issue."""
@@ -451,50 +430,11 @@ class PRManager:
 
     async def remove_pr_label(self, pr_number: int, label: str) -> None:
         """Remove *label* from a GitHub pull request."""
-        if self._config.dry_run:
-            return
-        try:
-            await self._run_gh(
-                "gh",
-                "pr",
-                "edit",
-                str(pr_number),
-                "--repo",
-                self._repo,
-                "--remove-label",
-                label,
-            )
-        except RuntimeError as exc:
-            logger.warning(
-                "Could not remove label %r from PR #%d: %s",
-                label,
-                pr_number,
-                exc,
-            )
+        await self._remove_label("pr", pr_number, label)
 
     async def add_pr_labels(self, pr_number: int, labels: list[str]) -> None:
         """Add *labels* to a GitHub pull request."""
-        if self._config.dry_run or not labels:
-            return
-        for label in labels:
-            try:
-                await self._run_gh(
-                    "gh",
-                    "pr",
-                    "edit",
-                    str(pr_number),
-                    "--repo",
-                    self._repo,
-                    "--add-label",
-                    label,
-                )
-            except RuntimeError as exc:
-                logger.warning(
-                    "Could not add label %r to PR #%d: %s",
-                    label,
-                    pr_number,
-                    exc,
-                )
+        await self._add_labels("pr", pr_number, labels)
 
     async def create_issue(
         self,
@@ -853,28 +793,12 @@ class PRManager:
     _label_counts_cache: dict[str, object] = {}
     _label_counts_ts: float = 0.0
 
-    async def get_label_counts(self, config: HydraConfig) -> dict[str, object]:
-        """Query GitHub for issue/PR counts by Hydra label.
-
-        Returns a dict with ``open_by_label``, ``total_closed``, and
-        ``total_merged`` keys.  Results are cached for 30 seconds.
-        """
-        import time
-
-        now = time.monotonic()
-        if self._label_counts_cache and now - self._label_counts_ts < 30:
-            return self._label_counts_cache
-
-        labels_to_check = {
-            "hydra-plan": config.planner_label,
-            "hydra-ready": config.ready_label,
-            "hydra-review": config.review_label,
-            "hydra-hitl": config.hitl_label,
-            "hydra-fixed": config.fixed_label,
-        }
-
+    async def _count_open_issues_by_label(
+        self, label_map: dict[str, list[str]]
+    ) -> dict[str, int]:
+        """Count open issues for each display key in *label_map*."""
         open_by_label: dict[str, int] = {}
-        for display_key, label_names in labels_to_check.items():
+        for display_key, label_names in label_map.items():
             count = 0
             for label in label_names:
                 try:
@@ -897,10 +821,12 @@ class PRManager:
                 except (RuntimeError, ValueError):
                     pass
             open_by_label[display_key] = count
+        return open_by_label
 
-        # Closed issues with hydra-fixed label
-        total_closed = 0
-        for label in config.fixed_label:
+    async def _count_closed_issues(self, labels: list[str]) -> int:
+        """Count closed issues with any of the given *labels*."""
+        total = 0
+        for label in labels:
             try:
                 raw = await self._run_gh(
                     "gh",
@@ -917,12 +843,13 @@ class PRManager:
                     "--jq",
                     "length",
                 )
-                total_closed += int(raw.strip() or "0")
+                total += int(raw.strip() or "0")
             except (RuntimeError, ValueError):
                 pass
+        return total
 
-        # Merged PRs
-        total_merged = 0
+    async def _count_merged_prs(self, label: str) -> int:
+        """Count merged PRs with the given *label*."""
         try:
             raw = await self._run_gh(
                 "gh",
@@ -933,15 +860,40 @@ class PRManager:
                 "--state",
                 "merged",
                 "--label",
-                config.fixed_label[0] if config.fixed_label else "hydra-fixed",
+                label,
                 "--json",
                 "number",
                 "--jq",
                 "length",
             )
-            total_merged = int(raw.strip() or "0")
+            return int(raw.strip() or "0")
         except (RuntimeError, ValueError):
-            pass
+            return 0
+
+    async def get_label_counts(self, config: HydraConfig) -> dict[str, object]:
+        """Query GitHub for issue/PR counts by Hydra label.
+
+        Returns a dict with ``open_by_label``, ``total_closed``, and
+        ``total_merged`` keys.  Results are cached for 30 seconds.
+        """
+        import time
+
+        now = time.monotonic()
+        if self._label_counts_cache and now - self._label_counts_ts < 30:
+            return self._label_counts_cache
+
+        label_map = {
+            "hydra-plan": config.planner_label,
+            "hydra-ready": config.ready_label,
+            "hydra-review": config.review_label,
+            "hydra-hitl": config.hitl_label,
+            "hydra-fixed": config.fixed_label,
+        }
+
+        open_by_label = await self._count_open_issues_by_label(label_map)
+        total_closed = await self._count_closed_issues(config.fixed_label)
+        fixed_label = config.fixed_label[0] if config.fixed_label else "hydra-fixed"
+        total_merged = await self._count_merged_prs(fixed_label)
 
         result: dict[str, object] = {
             "open_by_label": open_by_label,

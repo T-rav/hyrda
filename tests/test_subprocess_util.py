@@ -9,6 +9,7 @@ import pytest
 
 from subprocess_util import (
     AuthenticationError,
+    CreditExhaustedError,
     _is_auth_error,
     _is_retryable_error,
     make_clean_env,
@@ -365,6 +366,18 @@ class TestRunSubprocessWithRetry:
             mock_run.side_effect = RuntimeError("Command failed (rc=1): 503")
             with pytest.raises(RuntimeError, match="503"):
                 await run_subprocess_with_retry("gh", "pr", "list", max_retries=0)
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_credit_exhausted_error(self) -> None:
+        """CreditExhaustedError should propagate immediately without any retry."""
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.side_effect = CreditExhaustedError("API credit limit reached")
+            with pytest.raises(CreditExhaustedError, match="credit limit"):
+                await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
+        # Should not retry — only one call
         mock_run.assert_awaited_once()
 
     @pytest.mark.asyncio

@@ -11,6 +11,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, HITLResult
 from runner_utils import stream_claude_process, terminate_processes
+from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydra.hitl_runner")
 
@@ -124,6 +125,8 @@ class HITLRunner:
 
             self._save_transcript(issue.number, transcript)
 
+        except CreditExhaustedError:
+            raise
         except Exception as exc:
             result.success = False
             result.error = str(exc)
@@ -243,7 +246,17 @@ class HITLRunner:
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
         """Write the HITL transcript to .hydra/logs/ for post-mortem review."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"hitl-issue-{issue_number}.txt"
-        path.write_text(transcript)
-        logger.info("HITL transcript saved to %s", path, extra={"issue": issue_number})
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"hitl-issue-{issue_number}.txt"
+            path.write_text(transcript)
+            logger.info(
+                "HITL transcript saved to %s", path, extra={"issue": issue_number}
+            )
+        except OSError:
+            logger.warning(
+                "Could not save transcript to %s",
+                log_dir,
+                exc_info=True,
+                extra={"issue": issue_number},
+            )
