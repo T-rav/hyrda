@@ -123,4 +123,18 @@ def build_conflict_prompt(
             f"to the above errors."
         )
 
+    # --- Optional memory suggestion ---
+    sections.append(
+        "## Optional: Memory Suggestion\n\n"
+        "If you discover a reusable pattern or insight during this "
+        "conflict resolution that would help future agent runs, "
+        "you may output ONE suggestion:\n\n"
+        "MEMORY_SUGGESTION_START\n"
+        "title: Short descriptive title\n"
+        "learning: What was learned and why it matters\n"
+        "context: How it was discovered (reference issue/PR numbers)\n"
+        "MEMORY_SUGGESTION_END\n\n"
+        "Only suggest genuinely valuable learnings — not trivial observations."
+    )
+
     return "\n\n".join(sections)
