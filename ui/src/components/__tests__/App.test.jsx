@@ -34,6 +34,11 @@ const { mockState } = vi.hoisted(() => {
       submitIntent: () => {},
       toggleBgWorker: () => {},
       systemAlert: null,
+      sessions: [],
+      currentSessionId: null,
+      selectedSessionId: null,
+      selectedSession: null,
+      selectSession: () => {},
       pipelineIssues: {
         triage: [],
         plan: [],
@@ -104,7 +109,7 @@ describe('Layout min-width', () => {
     const { default: App } = await import('../../App')
     const { container } = render(<App />)
     const layout = container.firstChild
-    expect(layout.style.minWidth).toBe('800px')
+    expect(layout.style.minWidth).toBe('1080px')
   })
 })
 

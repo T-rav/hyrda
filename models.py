@@ -355,6 +355,19 @@ class QueueStats(BaseModel):
     last_poll_timestamp: str | None = None
 
 
+class SessionLog(BaseModel):
+    """A single orchestrator session — one per run() invocation."""
+
+    id: str
+    repo: str
+    started_at: str
+    ended_at: str | None = None
+    issues_processed: list[int] = Field(default_factory=list)
+    issues_succeeded: int = 0
+    issues_failed: int = 0
+    status: str = "active"
+
+
 class LifetimeStats(BaseModel):
     """All-time counters preserved across resets."""
 
