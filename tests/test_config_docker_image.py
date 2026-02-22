@@ -1,4 +1,9 @@
-"""Tests for docker_image config field in HydraConfig."""
+"""Tests for docker_image config field in HydraConfig — unique cases only.
+
+Default, custom value, and basic env-var-override cases are already covered
+in tests/test_config.py (TestDockerConfigDefaults / TestDockerConfigEnvOverrides).
+Only the cases unique to this behaviour are kept here.
+"""
 
 from __future__ import annotations
 
@@ -12,43 +17,12 @@ DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydra-agent:latest"
 
 
 # ---------------------------------------------------------------------------
-# HydraConfig – docker_image field
+# HydraConfig – docker_image field (unique edge cases)
 # ---------------------------------------------------------------------------
 
 
 class TestDockerImageConfig:
-    """Tests for the docker_image config field and env var override."""
-
-    def test_docker_image_default_value(self, tmp_path: Path) -> None:
-        """Default docker_image should be the GHCR image tag."""
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.docker_image == DEFAULT_DOCKER_IMAGE
-
-    def test_docker_image_explicit_value_preserved(self, tmp_path: Path) -> None:
-        """Explicit docker_image value should be preserved as-is."""
-        cfg = HydraConfig(
-            docker_image="my-registry/custom-image:v2",
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.docker_image == "my-registry/custom-image:v2"
-
-    def test_docker_image_env_var_override(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """HYDRA_DOCKER_IMAGE env var should override the default."""
-        monkeypatch.setenv("HYDRA_DOCKER_IMAGE", "custom/agent:dev")
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.docker_image == "custom/agent:dev"
+    """Unique edge cases for the docker_image env-var override logic."""
 
     def test_docker_image_explicit_not_overridden_by_env(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
