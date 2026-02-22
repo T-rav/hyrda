@@ -110,7 +110,7 @@ def create_router(
         feedback = (body.get("feedback") or "").strip()
         stage: str = body.get("stage") or ""
 
-        if not issue_number or not feedback:
+        if issue_number is None or not feedback:
             return JSONResponse(
                 {"status": "error", "detail": "issue_number and feedback are required"},
                 status_code=400,

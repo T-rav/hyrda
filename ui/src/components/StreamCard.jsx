@@ -74,7 +74,7 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
     setSubmitting(true)
     const ok = await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
     setSubmitting(false)
-    if (ok !== false) {
+    if (ok) {
       setShowFeedback(false)
       setFeedbackText('')
     }

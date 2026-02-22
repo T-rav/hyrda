@@ -1086,7 +1086,7 @@ class TestRequestChangesEndpoint:
 
         # Verify review label removed
         remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
-        assert (42, "hydra-review") in remove_calls
+        assert (42, config.review_label[0]) in remove_calls
 
         # Verify HITL label added
         add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
@@ -1111,7 +1111,7 @@ class TestRequestChangesEndpoint:
         assert event.type == "hitl_escalation"
         assert event.data["issue"] == 42
         assert event.data["cause"] == "Fix the tests"
-        assert event.data["origin"] == "test-label"
+        assert event.data["origin"] == config.ready_label[0]
 
     @pytest.mark.asyncio
     async def test_request_changes_rejects_empty_feedback(
@@ -1169,3 +1169,47 @@ class TestRequestChangesEndpoint:
         router, _ = self._make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
         assert "/api/request-changes" in paths
+
+    @pytest.mark.asyncio
+    async def test_request_changes_triage_stage(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Triage stage removes find_label and records origin from find_label."""
+        import json
+
+        router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 10, "feedback": "Not the right issue", "stage": "triage"}
+        )
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+
+        assert state.get_hitl_cause(10) == "Not the right issue"
+        assert state.get_hitl_origin(10) == config.find_label[0]
+
+        remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
+        assert (10, config.find_label[0]) in remove_calls
+
+    @pytest.mark.asyncio
+    async def test_request_changes_empty_stage_labels_falls_back_to_stage_name(
+        self, event_bus, state, tmp_path
+    ) -> None:
+        """When a stage label list is empty, origin falls back to the stage key."""
+        import json
+
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(review_label=[])
+        router, _ = self._make_router(cfg, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 99, "feedback": "Empty label config", "stage": "review"}
+        )
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        assert state.get_hitl_origin(99) == "review"
