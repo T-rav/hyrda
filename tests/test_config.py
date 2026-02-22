@@ -626,7 +626,7 @@ class TestHydraConfigPathResolution:
         assert cfg.state_file == explicit_state
 
     def test_default_worktree_base_derived_from_repo_root(self, tmp_path: Path) -> None:
-        """When worktree_base is left as Path('.'), it should be derived as repo_root.parent / 'hyrda-worktrees'."""
+        """When worktree_base is left as Path('.'), it should be derived as repo_root.parent / 'hydra-worktrees'."""
         # Arrange
         git_root = tmp_path / "hyrda"
         git_root.mkdir()
@@ -636,7 +636,7 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig(repo_root=git_root)
 
         # Assert
-        assert cfg.worktree_base == git_root.parent / "hyrda-worktrees"
+        assert cfg.worktree_base == git_root.parent / "hydra-worktrees"
 
     def test_default_state_file_derived_from_repo_root(self, tmp_path: Path) -> None:
         """When state_file is left as Path('.'), it should resolve to repo_root / '.hydra/state.json'."""
@@ -667,10 +667,10 @@ class TestHydraConfigPathResolution:
         # Assert
         assert cfg.repo_root.is_absolute()
 
-    def test_auto_detected_worktree_base_uses_hyrda_worktrees_name(
+    def test_auto_detected_worktree_base_uses_hydra_worktrees_name(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Auto-derived worktree_base should be named 'hyrda-worktrees'."""
+        """Auto-derived worktree_base should be named 'hydra-worktrees'."""
         # Arrange
         git_root = tmp_path / "repo"
         git_root.mkdir()
@@ -681,7 +681,7 @@ class TestHydraConfigPathResolution:
         cfg = HydraConfig()
 
         # Assert
-        assert cfg.worktree_base.name == "hyrda-worktrees"
+        assert cfg.worktree_base.name == "hydra-worktrees"
 
     def test_auto_detected_state_file_named_hydra_state_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
