@@ -615,15 +615,41 @@ class TestDockerRunnerCreateStreamingProcess:
         assert create_call.kwargs.get("working_dir") == "/workspace"
 
     @pytest.mark.asyncio
-    async def test_uses_custom_env_when_provided(self, tmp_path: Path) -> None:
-        runner, client = _make_runner(log_dir=tmp_path / "logs")
+    async def test_env_param_is_ignored_for_isolation(self, tmp_path: Path) -> None:
+        """DockerRunner must ignore caller-supplied env and always use _build_env().
+
+        Production callers (stream_claude_process) pass env=make_clean_env() which
+        contains the full host environment.  Accepting it would leak PATH, PYTHONPATH,
+        and other host vars into the container, defeating the security boundary.
+        """
+        runner, client = _make_runner(
+            log_dir=tmp_path / "logs",
+            gh_token="ghp_secret",
+        )
         (tmp_path / "logs").mkdir(parents=True, exist_ok=True)
 
-        custom_env = {"CUSTOM_VAR": "value"}
-        await runner.create_streaming_process(["echo", "hi"], env=custom_env)
+        # Simulate what runner_utils.stream_claude_process does: pass the full host env
+        full_host_env = {
+            "PATH": "/usr/local/bin:/usr/bin",
+            "PYTHONPATH": "/home/user/lib",
+            "SHELL": "/bin/zsh",
+            "HOME": "/home/user",
+            "GH_TOKEN": "ghp_secret",
+        }
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True):
+            await runner.create_streaming_process(["claude", "-p"], env=full_host_env)
 
         create_call = client.containers.create.call_args
-        assert create_call.kwargs.get("environment") == custom_env
+        env = create_call.kwargs.get("environment", {})
+
+        # Host-specific vars must be stripped
+        assert "PATH" not in env
+        assert "PYTHONPATH" not in env
+        assert "SHELL" not in env
+        # Approved vars must be present
+        assert env.get("GH_TOKEN") == "ghp_secret"
+        assert env.get("ANTHROPIC_API_KEY") == "sk-test"
+        assert env.get("HOME") == "/root"
 
     @pytest.mark.asyncio
     async def test_cleanup_on_start_failure(self, tmp_path: Path) -> None:

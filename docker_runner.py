@@ -260,7 +260,7 @@ class DockerRunner:
         cmd: list[str],
         *,
         cwd: str | None = None,
-        env: dict[str, str] | None = None,
+        env: dict[str, str] | None = None,  # noqa: ARG002
         stdin: int | None = None,  # noqa: ARG002
         stdout: int | None = None,  # noqa: ARG002
         stderr: int | None = None,  # noqa: ARG002
@@ -272,12 +272,20 @@ class DockerRunner:
         Mounts the worktree directory (``cwd``) as ``/workspace`` inside
         the container and returns a :class:`DockerProcess` wrapper that
         provides the same interface as ``asyncio.subprocess.Process``.
+
+        .. note::
+            The ``env`` parameter is intentionally ignored.  DockerRunner
+            always builds its own minimal environment via :meth:`_build_env`
+            to enforce container isolation.  Passing a full host environment
+            (e.g. from :func:`subprocess_util.make_clean_env`) would leak
+            ``PATH``, ``PYTHONPATH``, and other host-specific variables into
+            the container, defeating the security boundary.
         """
         await self._enforce_spawn_delay()
 
         loop = asyncio.get_running_loop()
         mounts = self._build_mounts(cwd)
-        container_env = env if env is not None else self._build_env()
+        container_env = self._build_env()
         working_dir = "/workspace" if cwd else None
 
         container_kwargs: dict[str, Any] = {
@@ -319,15 +327,20 @@ class DockerRunner:
         cmd: list[str],
         *,
         cwd: str | None = None,
-        env: dict[str, str] | None = None,
+        env: dict[str, str] | None = None,  # noqa: ARG002
         timeout: float = 120.0,
     ) -> SimpleResult:
-        """Run a command in a Docker container and return the result."""
+        """Run a command in a Docker container and return the result.
+
+        .. note::
+            The ``env`` parameter is intentionally ignored — see
+            :meth:`create_streaming_process` for the rationale.
+        """
         await self._enforce_spawn_delay()
 
         loop = asyncio.get_running_loop()
         mounts = self._build_mounts(cwd)
-        container_env = env if env is not None else self._build_env()
+        container_env = self._build_env()
         working_dir = "/workspace" if cwd else None
 
         container_kwargs: dict[str, Any] = {
