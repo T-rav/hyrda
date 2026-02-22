@@ -16,7 +16,27 @@ from pydantic import BaseModel, Field
 
 from file_util import atomic_write
 
-_event_counter = itertools.count()
+
+class _Counter:
+    """Monotonic event ID generator that can be advanced forward.
+
+    After loading persisted history, :meth:`advance` ensures new IDs
+    always exceed historical IDs so the frontend's deduplication logic
+    never silently drops live events.
+    """
+
+    def __init__(self) -> None:
+        self._it = itertools.count()
+
+    def __next__(self) -> int:
+        return next(self._it)
+
+    def advance(self, minimum: int) -> None:
+        """Advance so the next ID is >= *minimum*."""
+        self._it = itertools.count(minimum)
+
+
+_event_counter = _Counter()
 
 logger = logging.getLogger("hydraflow.events")
 
@@ -219,11 +239,19 @@ class EventBus:
             logger.warning("Failed to persist event to disk", exc_info=True)
 
     async def load_history_from_disk(self) -> None:
-        """Populate in-memory history from the on-disk event log."""
+        """Populate in-memory history from the on-disk event log.
+
+        After loading, advances the global event counter past the highest
+        historical ID so that new events are never mistaken for duplicates
+        by the frontend's deduplication logic.
+        """
         if self._event_log is None:
             return
         events = await self._event_log.load(max_events=self._max_history)
         self._history = events
+        if events:
+            max_id = max(e.id for e in events)
+            _event_counter.advance(max_id + 1)
 
     async def load_events_since(self, since: datetime) -> list[HydraFlowEvent] | None:
         """Load persisted events from disk since *since*.

@@ -619,7 +619,7 @@ def create_router(
 
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:
-        """Return lifetime stats and derived rates."""
+        """Return lifetime stats, derived rates, time-to-merge, and thresholds."""
         lifetime = state.get_lifetime_stats()
         rates: dict[str, float] = {}
         total_reviews = (
@@ -641,8 +641,22 @@ def create_router(
                 lifetime.total_review_approvals / total_reviews
             )
             rates["reviewer_fix_rate"] = lifetime.total_reviewer_fixes / total_reviews
+        time_to_merge = state.get_merge_duration_stats()
+        thresholds = state.check_thresholds(
+            config.quality_fix_rate_threshold,
+            config.approval_rate_threshold,
+            config.hitl_rate_threshold,
+        )
+        retries = state.get_retries_summary()
+        if retries:
+            rates["retries_per_stage"] = sum(retries.values())
         return JSONResponse(
-            MetricsResponse(lifetime=lifetime, rates=rates).model_dump()
+            MetricsResponse(
+                lifetime=lifetime,
+                rates=rates,
+                time_to_merge=time_to_merge,
+                thresholds=thresholds,
+            ).model_dump()
         )
 
     @router.get("/api/metrics/github")
@@ -666,6 +680,36 @@ def create_router(
                 current=current,
             ).model_dump()
         )
+
+    @router.get("/api/runs")
+    async def list_run_issues() -> JSONResponse:
+        """Return issue numbers that have recorded runs."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse([])
+        return JSONResponse(orch.run_recorder.list_issues())
+
+    @router.get("/api/runs/{issue_number}")
+    async def get_runs(issue_number: int) -> JSONResponse:
+        """Return all recorded runs for an issue."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse([])
+        runs = orch.run_recorder.list_runs(issue_number)
+        return JSONResponse([r.model_dump() for r in runs])
+
+    @router.get("/api/runs/{issue_number}/{timestamp}/{filename}")
+    async def get_run_artifact(
+        issue_number: int, timestamp: str, filename: str
+    ) -> Response:
+        """Return a specific artifact file from a recorded run."""
+        orch = get_orchestrator()
+        if not orch:
+            return JSONResponse({"error": "no orchestrator"}, status_code=400)
+        content = orch.run_recorder.get_run_artifact(issue_number, timestamp, filename)
+        if content is None:
+            return JSONResponse({"error": "artifact not found"}, status_code=404)
+        return Response(content=content, media_type="text/plain")
 
     @router.get("/api/timeline")
     async def get_timeline() -> JSONResponse:

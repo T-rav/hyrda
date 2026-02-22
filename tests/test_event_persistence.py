@@ -312,6 +312,30 @@ class TestEventBusWithPersistence:
         assert history[0].data == {"i": 0}
 
     @pytest.mark.asyncio
+    async def test_load_history_advances_event_counter(self, tmp_path: Path) -> None:
+        """After loading history, new events must have IDs higher than all
+        historical events so the frontend dedup logic doesn't drop them."""
+        log = EventLog(tmp_path / "events.jsonl")
+        # Write events that will have auto-assigned IDs
+        for _ in range(3):
+            await log.append(_make_event(data={"old": True}))
+
+        # Note the max ID from the persisted events
+        loaded = await log.load()
+        max_historical_id = max(e.id for e in loaded)
+
+        bus = EventBus(event_log=log)
+        await bus.load_history_from_disk()
+
+        # Publish a new event — its ID must exceed the historical max
+        new_event = _make_event(data={"new": True})
+        await bus.publish(new_event)
+        history = bus.get_history()
+        new_ids = [e.id for e in history if e.data.get("new")]
+        assert len(new_ids) == 1
+        assert new_ids[0] > max_historical_id
+
+    @pytest.mark.asyncio
     async def test_publish_without_event_log_works(self, event_bus) -> None:
         event = _make_event(data={"no_log": True})
         await event_bus.publish(event)

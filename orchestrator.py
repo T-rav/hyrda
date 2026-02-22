@@ -32,6 +32,7 @@ from pr_unsticker_loop import PRUnstickerLoop
 from retrospective import RetrospectiveCollector
 from review_phase import ReviewPhase
 from reviewer import ReviewRunner
+from run_recorder import RunRecorder
 from state import StateTracker
 from subprocess_util import AuthenticationError, CreditExhaustedError
 from transcript_summarizer import TranscriptSummarizer
@@ -140,6 +141,7 @@ class HydraFlowOrchestrator:
             self._stop_event,
             active_issues_cb=self._sync_active_issue_numbers,
         )
+        self._run_recorder = RunRecorder(config)
         self._implementer = ImplementPhase(
             config,
             self._state,
@@ -148,6 +150,7 @@ class HydraFlowOrchestrator:
             self._prs,
             self._store,
             self._stop_event,
+            run_recorder=self._run_recorder,
         )
         from metrics_manager import MetricsManager
 
@@ -235,6 +238,11 @@ class HydraFlowOrchestrator:
     def state(self) -> StateTracker:
         """Expose state for dashboard integration."""
         return self._state
+
+    @property
+    def run_recorder(self) -> RunRecorder:
+        """Expose run recorder for dashboard API."""
+        return self._run_recorder
 
     @property
     def metrics_manager(self) -> MetricsManager:

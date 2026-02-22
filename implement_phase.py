@@ -11,6 +11,7 @@ from config import HydraFlowConfig
 from issue_store import IssueStore
 from models import GitHubIssue, WorkerResult
 from pr_manager import PRManager
+from run_recorder import RunRecorder
 from state import StateTracker
 from worktree import WorktreeManager
 
@@ -29,6 +30,7 @@ class ImplementPhase:
         prs: PRManager,
         store: IssueStore,
         stop_event: asyncio.Event,
+        run_recorder: RunRecorder | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -37,6 +39,7 @@ class ImplementPhase:
         self._prs = prs
         self._store = store
         self._stop_event = stop_event
+        self._run_recorder = run_recorder
         self._active_issues: set[int] = set()
 
     async def _close_as_already_satisfied(self, issue: GitHubIssue) -> None:
@@ -136,11 +139,45 @@ class ImplementPhase:
         if cap_result is not None:
             return cap_result
 
+        # Start recording if a run recorder is available
+        ctx = None
+        if self._run_recorder is not None:
+            try:
+                ctx = self._run_recorder.start(issue.number)
+                plan_text = self._read_plan_for_recording(issue.number)
+                if plan_text:
+                    ctx.save_plan(plan_text)
+                ctx.save_config(self._config.model_dump(mode="json"))
+            except Exception:
+                logger.debug("Run recording setup failed", exc_info=True)
+                ctx = None
+
         review_feedback = self._state.get_review_feedback(issue.number) or ""
         result = await self._run_implementation(issue, branch, idx, review_feedback)
 
+        # Finalize the recording
+        if ctx is not None:
+            try:
+                if result.transcript:
+                    for line in result.transcript.splitlines():
+                        ctx.append_transcript(line)
+                outcome = "success" if result.success else "failed"
+                ctx.finalize(outcome, error=result.error)
+            except Exception:
+                logger.debug("Run recording finalize failed", exc_info=True)
+
         is_retry = bool(review_feedback)
         return await self._handle_implementation_result(issue, result, is_retry)
+
+    def _read_plan_for_recording(self, issue_number: int) -> str:
+        """Read the plan file for *issue_number*, returning empty string on failure."""
+        plan_path = (
+            self._config.repo_root / ".hydra" / "plans" / f"issue-{issue_number}.md"
+        )
+        try:
+            return plan_path.read_text()
+        except OSError:
+            return ""
 
     async def _check_attempt_cap(
         self, issue: GitHubIssue, branch: str
@@ -215,6 +252,8 @@ class ImplementPhase:
             self._state.record_implementation_duration(result.duration_seconds)
         if result.quality_fix_attempts > 0:
             self._state.record_quality_fix_rounds(result.quality_fix_attempts)
+            for _ in range(result.quality_fix_attempts):
+                self._state.record_stage_retry(issue.number, "quality_fix")
 
         self._state.set_worker_result_meta(
             issue.number,

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
+from typing_extensions import TypedDict
 
 # --- GitHub ---
 
@@ -96,6 +97,40 @@ class PlanResult(BaseModel):
     validation_errors: list[str] = Field(default_factory=list)
     retry_attempted: bool = False
     already_satisfied: bool = False
+
+
+# --- Delta Verification ---
+
+
+class DeltaReport(BaseModel):
+    """Report comparing planned file changes against actual git diff."""
+
+    planned: list[str] = Field(default_factory=list)
+    actual: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    unexpected: list[str] = Field(default_factory=list)
+
+    @property
+    def has_drift(self) -> bool:
+        """Return True if there is any drift between planned and actual."""
+        return bool(self.missing or self.unexpected)
+
+    def format_summary(self) -> str:
+        """Format a concise summary of the delta comparison."""
+        lines = [
+            f"**Planned:** {len(self.planned)} files | **Actual:** {len(self.actual)} files"
+        ]
+        if self.missing:
+            lines.append(
+                f"**Missing** (planned but not changed): {', '.join(self.missing)}"
+            )
+        if self.unexpected:
+            lines.append(
+                f"**Unexpected** (changed but not planned): {', '.join(self.unexpected)}"
+            )
+        if not self.has_drift:
+            lines.append("No drift detected.")
+        return "\n".join(lines)
 
 
 # --- Pre-Implementation Analysis ---
@@ -372,6 +407,10 @@ class LifetimeStats(BaseModel):
     # Timing
     total_implementation_seconds: float = 0.0
     total_review_seconds: float = 0.0
+    # Time-to-merge tracking (list of seconds from issue creation to PR merge)
+    merge_durations: list[float] = Field(default_factory=list)
+    # Retries per stage: {issue_number: {stage: count}}
+    retries_per_stage: dict[str, dict[str, int]] = Field(default_factory=dict)
     # Threshold proposals already filed (avoid re-filing)
     fired_thresholds: list[str] = Field(default_factory=list)
 
@@ -570,6 +609,8 @@ class MetricsResponse(BaseModel):
 
     lifetime: LifetimeStats = Field(default_factory=LifetimeStats)
     rates: dict[str, float] = Field(default_factory=dict)
+    time_to_merge: dict[str, float] = Field(default_factory=dict)
+    thresholds: list[ThresholdProposal] = Field(default_factory=list)
 
 
 class MetricsSnapshot(BaseModel):

@@ -322,6 +322,13 @@ class PlannerRunner:
                 "- `## Files to Modify` — list each existing file and what changes are needed "
                 "(must reference at least one file path)\n"
                 '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
+                "- `## File Delta` — structured list of all planned file changes using this exact format:\n"
+                "  ```\n"
+                "  MODIFIED: path/to/file.py\n"
+                "  ADDED: path/to/new_file.py\n"
+                "  REMOVED: path/to/old_file.py\n"
+                "  ```\n"
+                "  Each line must start with MODIFIED:, ADDED:, or REMOVED: followed by the file path.\n"
                 "- `## Implementation Steps` — ordered numbered list of steps "
                 "(must have at least 3 steps)\n"
                 "- `## Testing Strategy` — what tests to write and what to verify "
@@ -463,6 +470,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
     REQUIRED_SECTIONS: tuple[str, ...] = (
         "## Files to Modify",
         "## New Files",
+        "## File Delta",
         "## Implementation Steps",
         "## Testing Strategy",
         "## Acceptance Criteria",
@@ -827,6 +835,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
                 "- `## Files to Modify` — list each existing file and what changes are needed "
                 "(must reference at least one file path)\n"
                 '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
+                "- `## File Delta` — structured file change list (MODIFIED:/ADDED:/REMOVED: per line)\n"
                 "- `## Implementation Steps` — ordered numbered list of steps "
                 "(must have at least 3 steps)\n"
                 "- `## Testing Strategy` — what tests to write and what to verify "
