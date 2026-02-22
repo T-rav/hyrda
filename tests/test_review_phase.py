@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -1503,8 +1503,6 @@ class TestResolveMergeConflicts:
         self, config: HydraConfig
     ) -> None:
         """file_memory_suggestion should be called with the conflict transcript."""
-        from unittest.mock import patch
-
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript with suggestion")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
@@ -1535,8 +1533,6 @@ class TestResolveMergeConflicts:
         self, config: HydraConfig
     ) -> None:
         """Exceptions from file_memory_suggestion must not break conflict resolution."""
-        from unittest.mock import patch
-
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))

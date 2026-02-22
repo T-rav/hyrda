@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models import HITLItem
+from models import GitHubIssue, HITLItem
 from pr_unsticker import PRUnsticker
 from state import StateTracker
 from tests.helpers import ConfigFactory
@@ -363,10 +363,6 @@ class TestSaveTranscript:
 class TestMemorySuggestionExtraction:
     @pytest.mark.asyncio
     async def test_unsticker_calls_file_memory_suggestion(self, tmp_path: Path) -> None:
-        from unittest.mock import patch
-
-        from models import GitHubIssue
-
         issue = GitHubIssue(
             number=42,
             title="Test issue",
@@ -412,10 +408,6 @@ class TestMemorySuggestionExtraction:
     async def test_unsticker_memory_failure_does_not_propagate(
         self, tmp_path: Path
     ) -> None:
-        from unittest.mock import patch
-
-        from models import GitHubIssue
-
         issue = GitHubIssue(
             number=42,
             title="Test issue",

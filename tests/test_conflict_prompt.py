@@ -159,6 +159,7 @@ class TestBuildConflictPrompt:
         assert "## Instructions" in prompt
         assert "## Rules" in prompt
         assert "## Previous Attempt Failed" in prompt
+        assert "## Optional: Memory Suggestion" in prompt
 
     def test_body_truncated_at_3000_chars(self) -> None:
         issue = _make_issue(body="a" * 5000)
