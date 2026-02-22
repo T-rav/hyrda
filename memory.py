@@ -143,24 +143,35 @@ async def file_memory_suggestion(
     )
     title = f"[Memory] {suggestion['title']}"
 
-    # Actionable types get HITL routing for human approval
-    if MemoryType.is_actionable(memory_type):
-        labels = list(config.improve_label) + list(config.hitl_label)
-        hitl_cause = f"Actionable memory suggestion ({memory_type.value})"
+    if config.memory_auto_approve:
+        # Skip HITL — label directly for memory sync pickup
+        labels = list(config.memory_label)
+        issue_num = await prs.create_issue(title, body, labels)
+        if issue_num:
+            logger.info(
+                "Auto-approved memory suggestion as issue #%d: %s",
+                issue_num,
+                suggestion["title"],
+            )
     else:
-        labels = list(config.improve_label) + list(config.hitl_label)
-        hitl_cause = "Memory suggestion"
+        # Actionable types get HITL routing for human approval
+        if MemoryType.is_actionable(memory_type):
+            labels = list(config.improve_label) + list(config.hitl_label)
+            hitl_cause = f"Actionable memory suggestion ({memory_type.value})"
+        else:
+            labels = list(config.improve_label) + list(config.hitl_label)
+            hitl_cause = "Memory suggestion"
 
-    issue_num = await prs.create_issue(title, body, labels)
-    if issue_num:
-        state.set_hitl_origin(issue_num, config.improve_label[0])
-        state.set_hitl_cause(issue_num, hitl_cause)
-        logger.info(
-            "Filed %s memory suggestion as issue #%d: %s",
-            memory_type.value,
-            issue_num,
-            suggestion["title"],
-        )
+        issue_num = await prs.create_issue(title, body, labels)
+        if issue_num:
+            state.set_hitl_origin(issue_num, config.improve_label[0])
+            state.set_hitl_cause(issue_num, hitl_cause)
+            logger.info(
+                "Filed %s memory suggestion as issue #%d: %s",
+                memory_type.value,
+                issue_num,
+                suggestion["title"],
+            )
 
 
 class MemorySyncWorker:
