@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from subprocess_util import (
     AuthenticationError,
     CreditExhaustedError,
+    SubprocessTimeoutError,
     _is_auth_error,
     _is_retryable_error,
     make_clean_env,
@@ -400,6 +402,7 @@ class TestRunSubprocessWithRetry:
             "list",
             cwd=Path("/tmp/test"),
             gh_token="ghp_test",
+            timeout=120.0,
         )
 
 
@@ -458,3 +461,101 @@ class TestAuthenticationError:
                 await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
         # Should not retry — only one call
         mock_run.assert_awaited_once()
+
+
+# --- SubprocessTimeoutError ---
+
+
+class TestSubprocessTimeoutError:
+    """Tests for SubprocessTimeoutError."""
+
+    def test_inherits_runtime_error(self) -> None:
+        err = SubprocessTimeoutError("timed out")
+        assert isinstance(err, RuntimeError)
+
+    def test_message_preserved(self) -> None:
+        err = SubprocessTimeoutError("Command timed out after 120s")
+        assert "timed out after 120s" in str(err)
+
+
+# --- Timeout behavior ---
+
+
+class TestRunSubprocessTimeout:
+    """Tests for run_subprocess timeout behavior."""
+
+    @pytest.mark.asyncio
+    async def test_timeout_kills_process_and_raises(self) -> None:
+        """When proc.communicate exceeds timeout, process is killed and error raised."""
+        proc = AsyncMock()
+        proc.returncode = None
+        proc.communicate = AsyncMock(side_effect=TimeoutError)
+        proc.kill = MagicMock()
+        proc.wait = AsyncMock()
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=proc),
+            patch("asyncio.wait_for", side_effect=TimeoutError),
+            pytest.raises(SubprocessTimeoutError, match="timed out"),
+        ):
+            await run_subprocess("sleep", "999", timeout=1.0)
+        proc.kill.assert_called_once()
+        proc.wait.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_default_timeout_is_120(self) -> None:
+        """Default timeout should be 120 seconds."""
+        import inspect
+
+        sig = inspect.signature(run_subprocess)
+        assert sig.parameters["timeout"].default == 120.0
+
+    @pytest.mark.asyncio
+    async def test_custom_timeout_value(self) -> None:
+        """Custom timeout should be passed to wait_for."""
+        proc = _make_proc(stdout=b"ok")
+        with (
+            patch("asyncio.create_subprocess_exec", return_value=proc),
+            patch("asyncio.wait_for", wraps=asyncio.wait_for) as mock_wait_for,
+        ):
+            await run_subprocess("echo", "hi", timeout=60.0)
+        mock_wait_for.assert_awaited_once()
+        # The timeout kwarg should be 60.0
+        assert mock_wait_for.call_args.kwargs.get("timeout") == 60.0
+
+
+class TestRetryWithTimeout:
+    """Tests for run_subprocess_with_retry timeout interactions."""
+
+    @pytest.mark.asyncio
+    async def test_retry_retries_on_timeout(self) -> None:
+        """SubprocessTimeoutError should be retried (matches 'timed out' pattern)."""
+        with (
+            patch("subprocess_util.run_subprocess", new_callable=AsyncMock) as mock_run,
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_run.side_effect = [
+                SubprocessTimeoutError("Command ('gh',) timed out after 120s"),
+                "ok",
+            ]
+            result = await run_subprocess_with_retry("gh", "pr", "list", max_retries=3)
+        assert result == "ok"
+        assert mock_run.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_passes_timeout_to_run_subprocess(self) -> None:
+        """run_subprocess_with_retry should forward timeout kwarg."""
+        with patch(
+            "subprocess_util.run_subprocess", new_callable=AsyncMock
+        ) as mock_run:
+            mock_run.return_value = "ok"
+            await run_subprocess_with_retry(
+                "gh", "pr", "list", timeout=60.0, max_retries=1
+            )
+        mock_run.assert_awaited_once_with(
+            "gh",
+            "pr",
+            "list",
+            cwd=None,
+            gh_token="",
+            timeout=60.0,
+        )
