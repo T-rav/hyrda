@@ -2743,6 +2743,12 @@ class TestCountHelpers:
         assert "search/issues" in cmd
         assert ".total_count" in cmd
         assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:open" in query_arg
+        assert 'label:"hydra-plan"' in query_arg
 
     @pytest.mark.asyncio
     async def test_count_closed_issues_uses_search_api(
@@ -2774,6 +2780,12 @@ class TestCountHelpers:
         assert "search/issues" in cmd
         assert ".total_count" in cmd
         assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:closed" in query_arg
+        assert 'label:"hydra-fixed"' in query_arg
 
     @pytest.mark.asyncio
     async def test_count_merged_prs_uses_search_api(self, config, event_bus, tmp_path):
@@ -2803,6 +2815,12 @@ class TestCountHelpers:
         assert "search/issues" in cmd
         assert ".total_count" in cmd
         assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:pr" in query_arg
+        assert "is:merged" in query_arg
+        assert 'label:"hydra-fixed"' in query_arg
 
 
 # ---------------------------------------------------------------------------

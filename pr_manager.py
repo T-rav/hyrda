@@ -839,7 +839,7 @@ class PRManager:
                         "api",
                         "search/issues",
                         "-f",
-                        f"q=repo:{self._repo} is:issue is:open label:{label}",
+                        f'q=repo:{self._repo} is:issue is:open label:"{label}"',
                         "--jq",
                         ".total_count",
                     )
@@ -863,7 +863,7 @@ class PRManager:
                     "api",
                     "search/issues",
                     "-f",
-                    f"q=repo:{self._repo} is:issue is:closed label:{label}",
+                    f'q=repo:{self._repo} is:issue is:closed label:"{label}"',
                     "--jq",
                     ".total_count",
                 )
@@ -884,7 +884,7 @@ class PRManager:
                 "api",
                 "search/issues",
                 "-f",
-                f"q=repo:{self._repo} is:pr is:merged label:{label}",
+                f'q=repo:{self._repo} is:pr is:merged label:"{label}"',
                 "--jq",
                 ".total_count",
             )
