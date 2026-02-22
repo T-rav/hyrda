@@ -37,14 +37,14 @@ const mockPipelineWorkers = {
 describe('PipelineControlPanel', () => {
   describe('Pipeline Loop Toggles', () => {
     it('renders all 4 pipeline loop chips', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} onToggleBgWorker={() => {}} />)
+      render(<PipelineControlPanel onToggleBgWorker={() => {}} />)
       for (const loop of PIPELINE_LOOPS) {
         expect(screen.getByText(loop.label)).toBeInTheDocument()
       }
     })
 
     it('shows worker count of 0 when no active workers', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       for (const loop of PIPELINE_LOOPS) {
         const countEl = screen.getByTestId(`loop-count-${loop.key}`)
         expect(countEl).toHaveTextContent('0')
@@ -53,7 +53,7 @@ describe('PipelineControlPanel', () => {
 
     it('shows worker counts per stage', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('1')
       expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1')
       expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1')
@@ -65,12 +65,12 @@ describe('PipelineControlPanel', () => {
         10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
       }
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: singleWorker }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('worker')).toBeInTheDocument()
     })
 
     it('shows "workers" plural when count is not 1', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       const workerLabels = screen.getAllByText('workers')
       expect(workerLabels.length).toBe(PIPELINE_LOOPS.length)
     })
@@ -80,13 +80,13 @@ describe('PipelineControlPanel', () => {
         10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
       }
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: singleImplementer }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       const implementCount = screen.getByTestId('loop-count-implement')
       expect(implementCount.style.color).toBe('var(--accent)')
     })
 
     it('shows loop count in muted color when enabled but no active workers', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       const implementCount = screen.getByTestId('loop-count-implement')
       expect(implementCount.style.color).toBe('var(--text-muted)')
     })
@@ -99,14 +99,14 @@ describe('PipelineControlPanel', () => {
         { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
       ]
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: singleImplementer, backgroundWorkers: disabledBgWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       const implementCount = screen.getByTestId('loop-count-implement')
       expect(implementCount.style.color).toBe('var(--text-muted)')
     })
 
     it('calls onToggleBgWorker with pipeline loop key when toggled', () => {
       const onToggle = vi.fn()
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} onToggleBgWorker={onToggle} />)
+      render(<PipelineControlPanel onToggleBgWorker={onToggle} />)
       const allOnButtons = screen.getAllByText('On')
       fireEvent.click(allOnButtons[0]) // First pipeline loop = triage
       expect(onToggle).toHaveBeenCalledWith('triage', false)
@@ -117,7 +117,7 @@ describe('PipelineControlPanel', () => {
         { name: 'triage', status: 'ok', enabled: false, last_run: null, details: {} },
       ]
       mockUseHydra.mockReturnValue(defaultMockContext({ backgroundWorkers: disabledBgWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} onToggleBgWorker={() => {}} />)
+      render(<PipelineControlPanel onToggleBgWorker={() => {}} />)
       expect(screen.getByText('Off')).toBeInTheDocument()
       const onButtons = screen.getAllByText('On')
       expect(onButtons.length).toBe(3) // 3 enabled loops
@@ -128,9 +128,7 @@ describe('PipelineControlPanel', () => {
         { name: 'triage', status: 'ok', enabled: false, last_run: null, details: {} },
       ]
       mockUseHydra.mockReturnValue(defaultMockContext({ backgroundWorkers: disabledBgWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
-      // The triage loop dot should use dimColor (greenSubtle) instead of the active color
-      // We can't easily check dot color without testid, but the label should be dimmed
+      render(<PipelineControlPanel />)
       const triageLabel = screen.getByText('Triage')
       expect(triageLabel.style.color).toBe('var(--text-muted)')
     })
@@ -138,13 +136,13 @@ describe('PipelineControlPanel', () => {
 
   describe('Pipeline Worker Cards', () => {
     it('shows "No active pipeline workers" when no workers', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
     })
 
     it('renders active worker cards with issue #, role badge, status', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('#5')).toBeInTheDocument()
       expect(screen.getByText('#7')).toBeInTheDocument()
       expect(screen.getByText('#10')).toBeInTheDocument()
@@ -160,7 +158,7 @@ describe('PipelineControlPanel', () => {
         99: { status: 'queued', worker: 1, role: 'implementer', title: 'Issue #99', branch: '', transcript: [], pr: null },
       }
       mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
     })
 
@@ -170,7 +168,7 @@ describe('PipelineControlPanel', () => {
         51: { status: 'failed', worker: 2, role: 'reviewer', title: 'Issue #51', branch: '', transcript: [], pr: null },
       }
       mockUseHydra.mockReturnValue(defaultMockContext({ workers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
       expect(screen.queryByText('#50')).not.toBeInTheDocument()
       expect(screen.queryByText('#51')).not.toBeInTheDocument()
@@ -178,20 +176,20 @@ describe('PipelineControlPanel', () => {
 
     it('shows worker title', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('Issue #10')).toBeInTheDocument()
       expect(screen.getByText('Triage Issue #5')).toBeInTheDocument()
     })
 
     it('shows transcript toggle when transcript has lines', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('Show transcript (3 lines)')).toBeInTheDocument()
     })
 
     it('expands transcript on click', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       const toggle = screen.getByText('Show transcript (3 lines)')
       fireEvent.click(toggle)
       expect(screen.getByText('Writing code...')).toBeInTheDocument()
@@ -201,7 +199,7 @@ describe('PipelineControlPanel', () => {
 
     it('does not show transcript toggle when transcript is empty', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.queryByText('Show transcript (0 lines)')).not.toBeInTheDocument()
     })
 
@@ -269,12 +267,12 @@ describe('PipelineControlPanel', () => {
   describe('Status Badges', () => {
     it('shows "N active" badge when workers present', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('4 active')).toBeInTheDocument()
     })
 
     it('does not show active badge when no active workers', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.queryByText(/\d+ active/)).not.toBeInTheDocument()
     })
 
@@ -286,7 +284,7 @@ describe('PipelineControlPanel', () => {
           { issue_number: 3, title: 'Issue 3' },
         ],
       }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('3 HITL issues')).toBeInTheDocument()
     })
 
@@ -294,12 +292,12 @@ describe('PipelineControlPanel', () => {
       mockUseHydra.mockReturnValue(defaultMockContext({
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }],
       }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('1 HITL issue')).toBeInTheDocument()
     })
 
     it('does not show HITL badge when hitlItems is empty', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.queryByText(/HITL/)).not.toBeInTheDocument()
     })
 
@@ -308,45 +306,20 @@ describe('PipelineControlPanel', () => {
         workers: mockPipelineWorkers,
         hitlItems: [{ issue_number: 1, title: 'Issue 1' }, { issue_number: 2, title: 'Issue 2' }],
       }))
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
+      render(<PipelineControlPanel />)
       expect(screen.getByText('4 active')).toBeInTheDocument()
       expect(screen.getByText('2 HITL issues')).toBeInTheDocument()
     })
   })
 
-  describe('Collapse Behavior', () => {
-    it('renders narrow panel with status dots when collapsed', () => {
-      render(<PipelineControlPanel collapsed={true} onToggleCollapse={() => {}} />)
-      // Should show collapsed dots for each loop
-      for (const loop of PIPELINE_LOOPS) {
-        expect(screen.getByTestId(`collapsed-dot-${loop.key}`)).toBeInTheDocument()
-      }
-      // Should not show full pipeline UI
-      expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
-      expect(screen.queryByText('No active pipeline workers')).not.toBeInTheDocument()
-    })
-
-    it('renders full panel with all controls when expanded', () => {
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={() => {}} />)
-      expect(screen.getByText('Pipeline')).toBeInTheDocument()
+  describe('Rendering', () => {
+    it('renders panel with all controls and heading', () => {
+      render(<PipelineControlPanel />)
+      expect(screen.getByText('Pipeline Controls')).toBeInTheDocument()
       expect(screen.getByText('No active pipeline workers')).toBeInTheDocument()
       for (const loop of PIPELINE_LOOPS) {
         expect(screen.getByText(loop.label)).toBeInTheDocument()
       }
-    })
-
-    it('calls onToggleCollapse when collapse button clicked (expanded)', () => {
-      const onToggle = vi.fn()
-      render(<PipelineControlPanel collapsed={false} onToggleCollapse={onToggle} />)
-      fireEvent.click(screen.getByTestId('pipeline-panel-collapse'))
-      expect(onToggle).toHaveBeenCalledTimes(1)
-    })
-
-    it('calls onToggleCollapse when expand button clicked (collapsed)', () => {
-      const onToggle = vi.fn()
-      render(<PipelineControlPanel collapsed={true} onToggleCollapse={onToggle} />)
-      fireEvent.click(screen.getByTestId('pipeline-panel-expand'))
-      expect(onToggle).toHaveBeenCalledTimes(1)
     })
   })
 })
