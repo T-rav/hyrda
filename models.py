@@ -665,3 +665,76 @@ class IssueTimeline(BaseModel):
     pr_number: int | None = None
     pr_url: str = ""
     branch: str = ""
+
+
+# --- Repo Audit ---
+
+
+class AuditCheckStatus(StrEnum):
+    """Status of a single audit check."""
+
+    PRESENT = "present"
+    MISSING = "missing"
+    PARTIAL = "partial"
+
+
+class AuditCheck(BaseModel):
+    """Result of a single audit detection check."""
+
+    name: str
+    status: AuditCheckStatus
+    detail: str = ""
+    critical: bool = False
+
+
+class AuditResult(BaseModel):
+    """Full result of a repo audit scan."""
+
+    repo: str
+    checks: list[AuditCheck] = Field(default_factory=list)
+
+    @property
+    def missing_checks(self) -> list[AuditCheck]:
+        """Return checks that are missing or partial."""
+        return [
+            c
+            for c in self.checks
+            if c.status in (AuditCheckStatus.MISSING, AuditCheckStatus.PARTIAL)
+        ]
+
+    @property
+    def has_critical_gaps(self) -> bool:
+        """Return True if any critical check is missing."""
+        return any(
+            c.critical and c.status == AuditCheckStatus.MISSING for c in self.checks
+        )
+
+    def format_report(self) -> str:
+        """Format the audit result as a human-readable report."""
+        lines = [
+            f"Hydra Repo Audit: {self.repo}",
+            "=" * 40,
+        ]
+
+        status_icons = {
+            AuditCheckStatus.PRESENT: "\u2713",
+            AuditCheckStatus.MISSING: "\u2717",
+            AuditCheckStatus.PARTIAL: "~",
+        }
+
+        for check in self.checks:
+            icon = status_icons[check.status]
+            detail = f" {check.detail}" if check.detail else ""
+            lines.append(f"  {check.name + ':':<16}{icon}{detail}")
+
+        missing = self.missing_checks
+        if missing:
+            names = ", ".join(c.name for c in missing)
+            lines.append("")
+            lines.append(f"Missing ({len(missing)}): {names}")
+            lines.append("Run `hydra prep` to scaffold missing pieces.")
+        else:
+            lines.append("")
+            lines.append("No gaps found. Repository is ready for Hydra.")
+
+        return "\n".join(lines)

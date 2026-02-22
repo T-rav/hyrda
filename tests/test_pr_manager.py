@@ -1370,20 +1370,31 @@ async def test_ensure_labels_exist_creates_all_hydra_labels(
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    async def side_effect(*args, **_kwargs):
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+        if args[1] == "label" and args[2] == "list":
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        else:
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    mock_create = AsyncMock(side_effect=side_effect)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         await mgr.ensure_labels_exist()
 
-    # Should be called once per label (5 lifecycle labels)
-    assert mock_create.call_count == len(PRManager._HYDRA_LABELS)
+    # 1 list call + 1 create per label
+    assert mock_create.call_count == 1 + len(PRManager._HYDRA_LABELS)
 
-    # Verify each call uses gh label create --force
-    for call in mock_create.call_args_list:
+    # Verify create calls use gh label create --force
+    create_calls = [c for c in mock_create.call_args_list if "create" in c[0]]
+    assert len(create_calls) == len(PRManager._HYDRA_LABELS)
+    for call in create_calls:
         args = call[0]
         assert args[0] == "gh"
-        assert "label" in args
-        assert "create" in args
         assert "--force" in args
         assert "--color" in args
         assert "--description" in args
@@ -1413,7 +1424,18 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    async def side_effect(*args, **_kwargs):
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+        if args[1] == "label" and args[2] == "list":
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        else:
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    mock_create = AsyncMock(side_effect=side_effect)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         await mgr.ensure_labels_exist()
@@ -1422,6 +1444,8 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
     created_labels = set()
     for call in mock_create.call_args_list:
         args = call[0]
+        if "create" not in args:
+            continue
         # Label name is the arg after "create"
         create_idx = list(args).index("create")
         created_labels.add(args[create_idx + 1])
@@ -1470,19 +1494,24 @@ async def test_ensure_labels_exist_handles_individual_failures(
     )
     mgr = _make_manager(cfg, event_bus)
 
-    # First call fails, rest succeed
-    call_count = 0
+    create_count = 0
 
-    async def side_effect(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
+    async def side_effect(*args, **_kwargs):
+        nonlocal create_count
         mock_proc = AsyncMock()
-        if call_count == 1:
-            mock_proc.returncode = 1
-            mock_proc.communicate = AsyncMock(return_value=(b"", b"permission denied"))
-        else:
+        if args[1] == "label" and args[2] == "list":
             mock_proc.returncode = 0
-            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        elif args[1] == "label" and args[2] == "create":
+            create_count += 1
+            if create_count == 1:
+                mock_proc.returncode = 1
+                mock_proc.communicate = AsyncMock(
+                    return_value=(b"", b"permission denied")
+                )
+            else:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(return_value=(b"", b""))
         mock_proc.wait = AsyncMock(return_value=mock_proc.returncode)
         return mock_proc
 
@@ -1491,7 +1520,24 @@ async def test_ensure_labels_exist_handles_individual_failures(
         await mgr.ensure_labels_exist()
 
     # All labels should be attempted even though first one failed
-    assert call_count == len(PRManager._HYDRA_LABELS)
+    assert create_count == len(PRManager._HYDRA_LABELS)
+
+
+def test_makefile_ensure_labels_delegates_to_prep() -> None:
+    """Makefile ensure-labels target must delegate to the prep target.
+
+    Regression guard: ensures ensure-labels stays in sync via prep,
+    which uses the authoritative HYDRA_LABELS table from prep.py.
+    """
+    import re
+
+    makefile = Path(__file__).parent.parent / "Makefile"
+    content = makefile.read_text()
+
+    # The ensure-labels target should declare prep as a dependency
+    assert re.search(r"^ensure-labels\s*:.*\bprep\b", content, re.MULTILINE), (
+        "Makefile ensure-labels target should delegate to prep target"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2094,7 +2140,7 @@ class TestRetryWrapperUsage:
 
     @pytest.mark.asyncio
     async def test_ensure_labels_uses_retry(self, config, event_bus, tmp_path):
-        """ensure_labels_exist should use run_subprocess_with_retry."""
+        """ensure_labels_exist should use run_subprocess_with_retry via prep."""
         from config import HydraConfig
 
         cfg = HydraConfig(
@@ -2106,12 +2152,13 @@ class TestRetryWrapperUsage:
         )
         mgr = _make_manager(cfg, event_bus)
         with patch(
-            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+            "prep.run_subprocess_with_retry", new_callable=AsyncMock
         ) as mock_retry:
-            mock_retry.return_value = ""
+            mock_retry.return_value = "[]"
             await mgr.ensure_labels_exist()
 
-        assert mock_retry.await_count == len(PRManager._HYDRA_LABELS)
+        # 1 list call + 12 create calls = 13
+        assert mock_retry.await_count == 1 + len(PRManager._HYDRA_LABELS)
 
     @pytest.mark.asyncio
     async def test_pull_main_uses_retry(self, config, event_bus):

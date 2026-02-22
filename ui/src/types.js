@@ -11,7 +11,7 @@
  *
  * @typedef {{ pr: number, verdict: string, summary: string, duration?: number }} ReviewData
  *
- * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string, status: string, isMemorySuggestion: boolean }} HITLItem
+ * @typedef {{ issue: number, title: string, issueUrl: string, pr: number, prUrl: string, branch: string, cause: string, status: 'pending'|'processing'|'resolved'|'approval'|string, isMemorySuggestion: boolean }} HITLItem
  *
  * @typedef {Record<string, string>} HumanInputRequests
  *
@@ -21,7 +21,7 @@
  *
  * @typedef {{ text: string, issueNumber: number|null, timestamp: string, status: 'pending'|'created'|'failed' }} IntentData
  *
- * @typedef {{ issueNumber: number, title: string, currentStage: string, overallStatus: string, stages: Object, pr: Object|null, branch: string, startTime: string|null, endTime: string|null }} StreamCardData
+ * @typedef {{ issueNumber: number, title: string, issueUrl: string|null, currentStage: string, overallStatus: string, stages: Object, pr: Object|null, branch: string, startTime: string|null, endTime: string|null }} StreamCardData
  *
  * @typedef {Object} SessionData
  * @property {string} id
