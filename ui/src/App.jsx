@@ -89,6 +89,7 @@ function AppContent() {
     if (ok) {
       setActiveTab('hitl')
     }
+    return ok
   }, [requestChanges])
 
   const handleTogglePipelinePanel = useCallback(() => {

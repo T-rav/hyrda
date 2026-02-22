@@ -71,10 +71,12 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
   const handleSubmitFeedback = useCallback(async () => {
     if (!feedbackText.trim() || submitting) return
     setSubmitting(true)
-    await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
+    const ok = await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
     setSubmitting(false)
-    setShowFeedback(false)
-    setFeedbackText('')
+    if (ok !== false) {
+      setShowFeedback(false)
+      setFeedbackText('')
+    }
   }, [feedbackText, submitting, onRequestChanges, issue.issueNumber, issue.currentStage])
 
   const meta = STAGE_META[issue.currentStage]
