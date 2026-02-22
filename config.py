@@ -6,10 +6,11 @@ import contextlib
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger("hydra.config")
 
@@ -27,6 +28,7 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 7200),
     ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
     ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
+    ("docker_pids_limit", "HYDRA_DOCKER_PIDS_LIMIT", 256),
 ]
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
@@ -392,6 +394,58 @@ class HydraConfig(BaseModel):
         description="GitHub token for gh CLI auth (overrides shell GH_TOKEN)",
     )
 
+    # Docker resource limits & security
+    docker_cpu_limit: float = Field(
+        default=2.0,
+        ge=0.5,
+        le=16.0,
+        description="CPU cores per Docker container",
+    )
+    docker_memory_limit: str = Field(
+        default="4g",
+        description="Memory limit per Docker container (e.g., '4g', '512m')",
+    )
+    docker_pids_limit: int = Field(
+        default=256,
+        ge=16,
+        le=4096,
+        description="Max PIDs per container (prevents fork bombs)",
+    )
+    docker_tmp_size: str = Field(
+        default="1g",
+        description="Tmpfs size for /tmp in containers",
+    )
+    docker_network_mode: str = Field(
+        default="bridge",
+        description="Docker network mode: 'bridge' or 'none'",
+    )
+    docker_read_only_root: bool = Field(
+        default=True,
+        description="Read-only root filesystem in containers",
+    )
+    docker_no_new_privileges: bool = Field(
+        default=True,
+        description="Prevent privilege escalation in containers",
+    )
+
+    @field_validator("docker_network_mode")
+    @classmethod
+    def validate_docker_network_mode(cls, v: str) -> str:
+        """Restrict network mode to 'bridge' or 'none'."""
+        if v not in ("bridge", "none"):
+            msg = f"docker_network_mode must be 'bridge' or 'none', got '{v}'"
+            raise ValueError(msg)
+        return v
+
+    @field_validator("docker_memory_limit", "docker_tmp_size")
+    @classmethod
+    def validate_docker_size_notation(cls, v: str) -> str:
+        """Validate Docker size notation (digits followed by b/k/m/g)."""
+        if not re.fullmatch(r"\d+[bkmg]", v, re.IGNORECASE):
+            msg = f"Invalid Docker size notation '{v}'; expected digits followed by b/k/m/g (e.g., '4g', '512m')"
+            raise ValueError(msg)
+        return v
+
     model_config = {"arbitrary_types_allowed": True}
 
     def branch_for_issue(self, issue_number: int) -> str:
@@ -597,6 +651,46 @@ class HydraConfig(BaseModel):
             if env_batch is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "pr_unstick_batch_size", int(env_batch))
+
+        # Docker resource limit overrides (validated fields handled manually)
+        if self.docker_cpu_limit == 2.0:  # still at default
+            env_cpu = os.environ.get("HYDRA_DOCKER_CPU_LIMIT")
+            if env_cpu is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(self, "docker_cpu_limit", float(env_cpu))
+
+        if self.docker_memory_limit == "4g":  # still at default
+            env_mem = os.environ.get("HYDRA_DOCKER_MEMORY_LIMIT")
+            if env_mem is not None:
+                object.__setattr__(self, "docker_memory_limit", env_mem)
+
+        if self.docker_tmp_size == "1g":  # still at default
+            env_tmp = os.environ.get("HYDRA_DOCKER_TMP_SIZE")
+            if env_tmp is not None:
+                object.__setattr__(self, "docker_tmp_size", env_tmp)
+
+        if self.docker_network_mode == "bridge":  # still at default
+            env_net = os.environ.get("HYDRA_DOCKER_NETWORK_MODE")
+            if env_net is not None:
+                object.__setattr__(self, "docker_network_mode", env_net)
+
+        # Docker read-only root override (bool)
+        env_readonly = os.environ.get("HYDRA_DOCKER_READ_ONLY_ROOT")
+        if env_readonly is not None and self.docker_read_only_root is True:
+            object.__setattr__(
+                self,
+                "docker_read_only_root",
+                env_readonly.lower() not in ("0", "false", "no"),
+            )
+
+        # Docker no-new-privileges override (bool)
+        env_no_priv = os.environ.get("HYDRA_DOCKER_NO_NEW_PRIVILEGES")
+        if env_no_priv is not None and self.docker_no_new_privileges is True:
+            object.__setattr__(
+                self,
+                "docker_no_new_privileges",
+                env_no_priv.lower() not in ("0", "false", "no"),
+            )
 
         # Label env var overrides (only apply when still at the default)
         _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {

@@ -2554,3 +2554,364 @@ class TestEnvVarOverrideTable:
                 f"_ENV_STR_OVERRIDES entry for '{field}' has default={table_default!r}, "
                 f"but HydraConfig.{field} default is {pydantic_default!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Docker resource limits & security config fields
+# ---------------------------------------------------------------------------
+
+
+class TestDockerResourceConfigDefaults:
+    """Tests that Docker resource/security fields have correct defaults."""
+
+    def test_docker_cpu_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)
+
+    def test_docker_memory_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4g"
+
+    def test_docker_pids_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 256
+
+    def test_docker_tmp_size_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "1g"
+
+    def test_docker_network_mode_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "bridge"
+
+    def test_docker_read_only_root_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is True
+
+    def test_docker_no_new_privileges_default(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is True
+
+
+class TestDockerNetworkModeValidator:
+    """Tests for the docker_network_mode field validator."""
+
+    def test_bridge_accepted(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_network_mode="bridge",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "bridge"
+
+    def test_none_accepted(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_network_mode="none",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_host_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="docker_network_mode must be"):
+            HydraConfig(
+                docker_network_mode="host",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_custom_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="docker_network_mode must be"):
+            HydraConfig(
+                docker_network_mode="custom",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+
+class TestDockerMemoryLimitValidator:
+    """Tests for the docker_memory_limit and docker_tmp_size validators."""
+
+    def test_valid_gigabytes(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_memory_limit="4g",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4g"
+
+    def test_valid_megabytes(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_memory_limit="512m",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "512m"
+
+    def test_valid_kilobytes(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_memory_limit="1024k",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "1024k"
+
+    def test_valid_bytes(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_memory_limit="1073741824b",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "1073741824b"
+
+    def test_invalid_suffix_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_memory_limit="4gb",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_text_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_memory_limit="lots",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_valid(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_tmp_size="2g",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "2g"
+
+    def test_tmp_size_invalid_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraConfig(
+                docker_tmp_size="big",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+
+class TestDockerResourceValidationBounds:
+    """Tests for Docker field validation bounds."""
+
+    def test_docker_cpu_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                docker_cpu_limit=0.4,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_at_minimum(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_cpu_limit=0.5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(0.5)
+
+    def test_docker_cpu_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                docker_cpu_limit=16.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_at_maximum(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_cpu_limit=16.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(16.0)
+
+    def test_docker_pids_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                docker_pids_limit=15,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_at_minimum(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_pids_limit=16,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 16
+
+    def test_docker_pids_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError):
+            HydraConfig(
+                docker_pids_limit=4097,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_at_maximum(self, tmp_path: Path) -> None:
+        cfg = HydraConfig(
+            docker_pids_limit=4096,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 4096
+
+
+class TestDockerResourceEnvOverrides:
+    """Tests for Docker resource environment variable overrides."""
+
+    def test_cpu_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "4.0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_memory_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_MEMORY_LIMIT", "8g")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "8g"
+
+    def test_pids_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_PIDS_LIMIT", "512")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 512
+
+    def test_tmp_size_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_TMP_SIZE", "2g")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "2g"
+
+    def test_network_mode_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK_MODE", "none")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_read_only_root_env_override_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_READ_ONLY_ROOT", "false")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_read_only_root_env_override_zero(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_READ_ONLY_ROOT", "0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_no_new_privileges_env_override_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NO_NEW_PRIVILEGES", "no")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is False
+
+    def test_cpu_limit_env_override_ignored_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "8.0")
+        cfg = HydraConfig(
+            docker_cpu_limit=4.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(4.0)

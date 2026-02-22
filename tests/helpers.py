@@ -109,6 +109,13 @@ class ConfigFactory:
         max_transcript_summary_chars: int = 50_000,
         pr_unstick_interval: int = 3600,
         pr_unstick_batch_size: int = 10,
+        docker_cpu_limit: float = 2.0,
+        docker_memory_limit: str = "4g",
+        docker_pids_limit: int = 256,
+        docker_tmp_size: str = "1g",
+        docker_network_mode: str = "bridge",
+        docker_read_only_root: bool = True,
+        docker_no_new_privileges: bool = True,
     ):
         """Create a HydraConfig with test-friendly defaults."""
         from config import HydraConfig
@@ -184,6 +191,13 @@ class ConfigFactory:
             max_transcript_summary_chars=max_transcript_summary_chars,
             pr_unstick_interval=pr_unstick_interval,
             pr_unstick_batch_size=pr_unstick_batch_size,
+            docker_cpu_limit=docker_cpu_limit,
+            docker_memory_limit=docker_memory_limit,
+            docker_pids_limit=docker_pids_limit,
+            docker_tmp_size=docker_tmp_size,
+            docker_network_mode=docker_network_mode,
+            docker_read_only_root=docker_read_only_root,
+            docker_no_new_privileges=docker_no_new_privileges,
         )
 
 
