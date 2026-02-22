@@ -481,6 +481,26 @@ export function reducer(state, action) {
       return { ...state, pipelineIssues: next }
     }
 
+    case 'SESSION_RESET': {
+      return {
+        ...state,
+        workers: {},
+        prs: [],
+        reviews: [],
+        mergedCount: 0,
+        sessionPrsCount: 0,
+        sessionTriaged: 0,
+        sessionPlanned: 0,
+        sessionImplemented: 0,
+        sessionReviewed: 0,
+        hitlItems: [],
+        hitlEscalation: null,
+        lastSeenId: -1,
+        pipelineIssues: { ...emptyPipeline },
+        intents: [],
+      }
+    }
+
     case 'INTENT_SUBMITTED':
       return {
         ...state,
@@ -582,6 +602,10 @@ export function HydraProvider({ children }) {
       dispatch({ type: 'INTENT_FAILED', data: { text } })
       return null
     }
+  }, [])
+
+  const resetSession = useCallback(() => {
+    dispatch({ type: 'SESSION_RESET' })
   }, [])
 
   const toggleBgWorker = useCallback(async (name, enabled) => {
@@ -795,6 +819,7 @@ export function HydraProvider({ children }) {
   const value = {
     ...state,
     stageStatus,
+    resetSession,
     submitIntent,
     submitHumanInput,
     requestChanges,

@@ -212,6 +212,22 @@ describe('Main tab bar', () => {
   })
 })
 
+describe('Start button dispatches session reset', () => {
+  it('calls resetSession when Start is clicked', async () => {
+    const resetMock = vi.fn()
+    mockState.resetSession = resetMock
+    mockState.orchestratorStatus = 'idle'
+    const { default: App } = await import('../../App')
+    render(<App />)
+
+    fireEvent.click(screen.getByText('Start'))
+    expect(resetMock).toHaveBeenCalledTimes(1)
+
+    // Restore
+    mockState.orchestratorStatus = 'running'
+  })
+})
+
 describe('Pipeline sub-tab under System', () => {
   it('Pipeline is accessible as a sub-tab under System', async () => {
     const { default: App } = await import('../../App')
