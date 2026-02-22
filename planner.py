@@ -74,7 +74,14 @@ class PlannerRunner:
                 result.success = True
                 result.summary = satisfied_explanation[:200]
                 result.duration_seconds = time.monotonic() - start
-                self._save_transcript(issue.number, result.transcript)
+                try:
+                    self._save_transcript(issue.number, result.transcript)
+                except OSError:
+                    logger.warning(
+                        "Failed to save transcript for issue #%d",
+                        issue.number,
+                        exc_info=True,
+                    )
                 await self._emit_status(issue.number, worker_id, PlannerStatus.DONE)
                 logger.info(
                     "Issue #%d already satisfied — no changes needed",

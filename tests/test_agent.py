@@ -1196,6 +1196,7 @@ class TestRunSaveTranscriptOSError:
         event_bus: EventBus,
         issue,
         tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """run() should return failure result even if _save_transcript raises after an agent error."""
         runner = AgentRunner(config, event_bus)
@@ -1217,6 +1218,7 @@ class TestRunSaveTranscriptOSError:
 
         assert result.success is False
         assert "agent crashed" in (result.error or "")
+        assert "Failed to save transcript" in caplog.text
 
 
 # ---------------------------------------------------------------------------
