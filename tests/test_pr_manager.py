@@ -1356,7 +1356,7 @@ async def test_wait_for_ci_publishes_ci_check_events(config, event_bus, tmp_path
 
 
 @pytest.mark.asyncio
-async def test_ensure_labels_exist_creates_all_hydra_labels(
+async def test_ensure_labels_exist_creates_all_hydraflow_labels(
     config, event_bus, tmp_path
 ):
     """ensure_labels_exist should call gh label create --force for each label."""

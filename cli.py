@@ -262,8 +262,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--log-file",
-        default=".hydraflow/logs/hydra.log",
-        help="Path to log file for structured JSON logging (default: .hydraflow/logs/hydra.log)",
+        default=".hydraflow/logs/hydraflow.log",
+        help="Path to log file for structured JSON logging (default: .hydraflow/logs/hydraflow.log)",
     )
     parser.add_argument(
         "--clean",

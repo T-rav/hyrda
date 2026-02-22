@@ -999,7 +999,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 
@@ -1027,7 +1027,7 @@ class TestJudgeIntegration:
         cfg = ConfigFactory.create(repo_root=tmp_path)
         judge = VerificationJudge(cfg, event_bus)
 
-        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir = tmp_path / ".hydraflow" / "verification"
         criteria_dir.mkdir(parents=True)
         (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
 

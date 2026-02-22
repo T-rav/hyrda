@@ -1060,7 +1060,7 @@ class TestQualityFixLoop:
 class TestSaveTranscript:
     """Tests for AgentRunner._save_transcript."""
 
-    def test_save_transcript_writes_to_hydra_logs(
+    def test_save_transcript_writes_to_hydraflow_logs(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
         """_save_transcript should write to <repo_root>/.hydraflow-logs/issue-N.txt."""

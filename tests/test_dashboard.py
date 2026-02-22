@@ -57,7 +57,7 @@ class TestCreateApp:
 
         assert dashboard._app is app
 
-    def test_create_app_title_is_hydra_dashboard(
+    def test_create_app_title_is_hydraflow_dashboard(
         self, config: HydraFlowConfig, event_bus: EventBus, state
     ) -> None:
         try:

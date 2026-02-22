@@ -800,7 +800,7 @@ class TestSummariseWithModel:
 class TestMemoryPRManager:
     """Tests for memory label in PR manager."""
 
-    def test_hydra_labels_includes_memory(self) -> None:
+    def test_hydraflow_labels_includes_memory(self) -> None:
         from pr_manager import PRManager
 
         label_fields = [entry[0] for entry in PRManager._HYDRAFLOW_LABELS]

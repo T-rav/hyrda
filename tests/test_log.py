@@ -113,7 +113,7 @@ class TestJSONFormatter:
 class TestSetupLogging:
     """Tests for setup_logging()."""
 
-    def test_returns_hydra_logger(self) -> None:
+    def test_returns_hydraflow_logger(self) -> None:
         logger = setup_logging()
         assert logger.name == "hydraflow"
 

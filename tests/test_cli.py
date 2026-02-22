@@ -83,9 +83,9 @@ class TestParseArgs:
         assert args.clean is False
 
     def test_log_file_default(self) -> None:
-        """--log-file should default to .hydraflow/logs/hydra.log."""
+        """--log-file should default to .hydraflow/logs/hydraflow.log."""
         args = parse_args([])
-        assert args.log_file == ".hydraflow/logs/hydra.log"
+        assert args.log_file == ".hydraflow/logs/hydraflow.log"
 
     def test_log_file_explicit_value(self) -> None:
         """An explicit --log-file value should be preserved."""
@@ -117,7 +117,7 @@ class TestParseArgs:
 class TestBuildConfig:
     """Tests for build_config() converting CLI args → HydraFlowConfig."""
 
-    def test_no_cli_args_uses_hydra_config_defaults(self) -> None:
+    def test_no_cli_args_uses_hydraflow_config_defaults(self) -> None:
         """With no CLI args, build_config should produce HydraFlowConfig defaults."""
         args = parse_args([])
         cfg = build_config(args)

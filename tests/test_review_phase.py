@@ -493,7 +493,7 @@ class TestReviewPRs:
         assert stats.issues_completed == 1
 
     @pytest.mark.asyncio
-    async def test_review_merge_labels_issue_hydra_fixed(
+    async def test_review_merge_labels_issue_hydraflow_fixed(
         self, config: HydraFlowConfig
     ) -> None:
         """Merging a PR should swap label from hydraflow-review to hydraflow-fixed."""

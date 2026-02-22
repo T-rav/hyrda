@@ -683,7 +683,7 @@ class TestHydraFlowConfigPathResolution:
         # Assert
         assert cfg.worktree_base.name == "hyrda-worktrees"
 
-    def test_auto_detected_state_file_named_hydra_state_json(
+    def test_auto_detected_state_file_named_hydraflow_state_json(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Auto-derived state_file should be inside .hydraflow/ and named 'state.json'."""
