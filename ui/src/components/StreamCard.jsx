@@ -305,7 +305,7 @@ const styles = {
     color: theme.accent,
     textDecoration: 'none',
     flexShrink: 0,
-    cursor: 'pointer',
+    whiteSpace: 'nowrap',
   },
   arrow: {
     fontSize: 10,

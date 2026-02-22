@@ -553,6 +553,16 @@ describe('Merged stage rendering', () => {
     expect(dot).toBeInTheDocument()
     expect(dot.style.animation).toBe('')
   })
+
+  it('does not set issueUrl from PR url for merged-from-PR cards', () => {
+    // PRData.url is a PR URL, not an issue URL — merged cards should have issueUrl null
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Fix bug', url: null, status: 'done' },
+      'merged',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
 })
 
 describe('PipelineFlow failed and hitl dots', () => {

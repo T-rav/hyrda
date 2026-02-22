@@ -172,7 +172,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     const mergedFromPrs = (prs || [])
       .filter(p => p.merged && p.issue)
       .map(p => toStreamIssue(
-        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: null, status: 'done' },
         'merged',
         prs,
       ))
