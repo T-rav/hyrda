@@ -1238,8 +1238,6 @@ class TestGetMainCommitsSinceDiverge:
 
 def _make_docker_manager(tmp_path: Path) -> WorktreeManager:
     """Create a WorktreeManager with docker execution mode."""
-    from unittest.mock import patch
-
     from tests.helpers import ConfigFactory
 
     with patch("shutil.which", return_value="/usr/bin/docker"):
@@ -1363,8 +1361,13 @@ class TestSetupEnvDocker:
         env_src = repo_root / ".env"
         env_src.write_text("SECRET=val")
 
-        with patch("shutil.copy2", side_effect=OSError("permission denied")):
+        with patch("worktree.shutil.copy2", side_effect=OSError("permission denied")):
             manager._setup_env(wt_path)  # should not raise
+
+        assert not (wt_path / ".env").exists()
+        assert not (wt_path / ".gitignore").exists(), (
+            ".gitignore must not be updated when .env copy fails"
+        )
 
     def test_setup_env_docker_handles_copytree_oserror(self, tmp_path: Path) -> None:
         """In docker mode, OSError during node_modules copytree should be caught."""
@@ -1378,7 +1381,7 @@ class TestSetupEnvDocker:
         ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
         ui_nm_src.mkdir(parents=True)
 
-        with patch("shutil.copytree", side_effect=OSError("disk full")):
+        with patch("worktree.shutil.copytree", side_effect=OSError("disk full")):
             manager._setup_env(wt_path)  # should not raise
 
     def test_setup_env_docker_adds_env_to_gitignore(self, tmp_path: Path) -> None:
@@ -1542,9 +1545,39 @@ class TestInstallHooksDocker:
                 "worktree.run_subprocess",
                 side_effect=_make_hooks_subprocess_mock(hooks_dir),
             ),
-            patch("shutil.copy2", side_effect=OSError("perm denied")),
+            patch("worktree.shutil.copy2", side_effect=OSError("perm denied")),
         ):
             await manager._install_hooks(wt_path)  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_install_hooks_docker_handles_mkdir_oserror(
+        self, tmp_path: Path
+    ) -> None:
+        """In docker mode, OSError creating git hooks dir should be caught."""
+        manager = _make_docker_manager(tmp_path)
+
+        repo_root = manager._repo_root
+        repo_root.mkdir(parents=True, exist_ok=True)
+
+        githooks_dir = repo_root / ".githooks"
+        githooks_dir.mkdir()
+        (githooks_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+        wt_path = tmp_path / "worktree"
+        wt_path.mkdir()
+        hooks_dir = wt_path / ".git" / "hooks"
+        hooks_dir.mkdir(parents=True)
+
+        with (
+            patch(
+                "worktree.run_subprocess",
+                side_effect=_make_hooks_subprocess_mock(hooks_dir),
+            ),
+            patch("pathlib.Path.mkdir", side_effect=OSError("read-only fs")),
+        ):
+            await manager._install_hooks(wt_path)  # should not raise
+
+        assert not (hooks_dir / "pre-commit").exists()
 
     @pytest.mark.asyncio
     async def test_install_hooks_host_sets_hooks_path(

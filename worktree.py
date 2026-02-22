@@ -507,7 +507,13 @@ class WorktreeManager:
             logger.warning("Could not resolve git hooks path: %s", exc)
             return
 
-        hooks_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            logger.warning(
+                "Could not create git hooks directory %s: %s", hooks_dir, exc
+            )
+            return
 
         for hook_file in githooks_src.iterdir():
             if hook_file.is_file():
