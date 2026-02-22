@@ -104,6 +104,9 @@ class ConfigFactory:
         max_memory_prompt_chars: int = 4000,
         memory_sync_interval: int = 120,
         credit_pause_buffer_minutes: int = 1,
+        transcript_summarization_enabled: bool = True,
+        transcript_summary_model: str = "haiku",
+        max_transcript_summary_chars: int = 50_000,
         pr_unstick_interval: int = 3600,
         pr_unstick_batch_size: int = 10,
     ):
@@ -176,6 +179,9 @@ class ConfigFactory:
             max_memory_prompt_chars=max_memory_prompt_chars,
             memory_sync_interval=memory_sync_interval,
             credit_pause_buffer_minutes=credit_pause_buffer_minutes,
+            transcript_summarization_enabled=transcript_summarization_enabled,
+            transcript_summary_model=transcript_summary_model,
+            max_transcript_summary_chars=max_transcript_summary_chars,
             pr_unstick_interval=pr_unstick_interval,
             pr_unstick_batch_size=pr_unstick_batch_size,
         )

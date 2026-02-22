@@ -255,6 +255,22 @@ class HydraConfig(BaseModel):
         description="Cheap model for summarising memory digest when over size limit",
     )
 
+    # Transcript summarization
+    transcript_summarization_enabled: bool = Field(
+        default=True,
+        description="Run automatic transcript summarization after each agent phase",
+    )
+    transcript_summary_model: str = Field(
+        default="haiku",
+        description="Cheap model for summarising agent transcripts into structured learnings",
+    )
+    max_transcript_summary_chars: int = Field(
+        default=50_000,
+        ge=5_000,
+        le=500_000,
+        description="Max transcript characters to send for summarization (truncated from end)",
+    )
+
     # Git configuration
     main_branch: str = Field(default="main", description="Base branch name")
     git_user_name: str = Field(
@@ -546,6 +562,27 @@ class HydraConfig(BaseModel):
             if env_data_poll is not None:
                 with contextlib.suppress(ValueError):
                     object.__setattr__(self, "data_poll_interval", int(env_data_poll))
+
+        # Transcript summarization overrides
+        env_ts_enabled = os.environ.get("HYDRA_TRANSCRIPT_SUMMARIZATION_ENABLED")
+        if env_ts_enabled is not None and self.transcript_summarization_enabled is True:
+            object.__setattr__(
+                self,
+                "transcript_summarization_enabled",
+                env_ts_enabled.lower() not in ("0", "false", "no"),
+            )
+
+        env_ts_model = os.environ.get("HYDRA_TRANSCRIPT_SUMMARY_MODEL")
+        if env_ts_model is not None and self.transcript_summary_model == "haiku":
+            object.__setattr__(self, "transcript_summary_model", env_ts_model)
+
+        if self.max_transcript_summary_chars == 50_000:  # still at default
+            env_ts_chars = os.environ.get("HYDRA_MAX_TRANSCRIPT_SUMMARY_CHARS")
+            if env_ts_chars is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "max_transcript_summary_chars", int(env_ts_chars)
+                    )
 
         # PR unstick interval override
         if self.pr_unstick_interval == 3600:  # still at default

@@ -33,6 +33,7 @@ from review_phase import ReviewPhase
 from reviewer import ReviewRunner
 from state import StateTracker
 from subprocess_util import AuthenticationError, CreditExhaustedError
+from transcript_summarizer import TranscriptSummarizer
 from triage import TriageRunner
 from triage_phase import TriagePhase
 from verification_judge import VerificationJudge
@@ -68,6 +69,9 @@ class HydraOrchestrator:
         self._reviewers = ReviewRunner(config, self._bus)
         self._hitl_runner = HITLRunner(config, self._bus)
         self._triage = TriageRunner(config, self._bus)
+        self._summarizer = TranscriptSummarizer(
+            config, self._prs, self._bus, self._state
+        )
         self._dashboard: object | None = None
         # Pending human-input requests: {issue_number: question}
         self._human_input_requests: dict[int, str] = {}
@@ -169,6 +173,7 @@ class HydraOrchestrator:
             retrospective=self._retrospective,
             ac_generator=self._ac_generator,
             verification_judge=self._verification_judge,
+            transcript_summarizer=self._summarizer,
             epic_checker=self._epic_checker,
         )
         self._memory_sync_bg = MemorySyncLoop(
@@ -631,6 +636,17 @@ class HydraOrchestrator:
                         "Failed to file memory suggestion for issue #%d",
                         result.issue_number,
                     )
+                try:
+                    await self._summarizer.summarize_and_publish(
+                        transcript=result.transcript,
+                        issue_number=result.issue_number,
+                        phase="implement",
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file transcript summary for issue #%d",
+                        result.issue_number,
+                    )
 
     async def _do_review_work(self) -> None:
         """Work function for the review loop."""
@@ -658,6 +674,17 @@ class HydraOrchestrator:
                 except Exception:
                     logger.exception(
                         "Failed to file memory suggestion for PR #%d",
+                        result.pr_number,
+                    )
+                try:
+                    await self._summarizer.summarize_and_publish(
+                        transcript=result.transcript,
+                        issue_number=result.pr_number,
+                        phase="review",
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file transcript summary for PR #%d",
                         result.pr_number,
                     )
         if any(r.merged for r in review_results):
