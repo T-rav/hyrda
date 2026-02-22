@@ -42,7 +42,7 @@ class TestPrepResultSummary:
             existed=["b"],
             failed=["c", "d"],
         )
-        assert result.summary() == "Created 1 labels, 1 already existed, 2 failed"
+        assert result.summary() == "Created 1 label, 1 already existed, 2 failed"
 
     def test_empty(self) -> None:
         result = PrepResult()

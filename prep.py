@@ -41,9 +41,10 @@ class PrepResult:
 
     def summary(self) -> str:
         """Human-readable summary line."""
-        parts = [
-            f"Created {len(self.created)} labels, {len(self.existed)} already existed"
-        ]
+        n_created = len(self.created)
+        n_existed = len(self.existed)
+        label_word = "label" if n_created == 1 else "labels"
+        parts = [f"Created {n_created} {label_word}, {n_existed} already existed"]
         if self.failed:
             parts.append(f", {len(self.failed)} failed")
         return "".join(parts)
@@ -61,7 +62,7 @@ async def _list_existing_labels(config: HydraConfig) -> set[str]:
             "--json",
             "name",
             "--limit",
-            "200",
+            "1000",  # well above any realistic Hydra-managed label count
             cwd=config.repo_root,
             gh_token=config.gh_token,
             max_retries=config.gh_max_retries,

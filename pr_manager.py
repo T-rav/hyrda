@@ -56,7 +56,8 @@ class PRManager:
         """
         from prep import ensure_labels  # noqa: PLC0415
 
-        await ensure_labels(self._config)
+        result = await ensure_labels(self._config)
+        logger.info(result.summary())
 
     async def push_branch(self, worktree_path: Path, branch: str) -> bool:
         """Push *branch* to origin from *worktree_path*.
