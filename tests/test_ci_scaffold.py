@@ -125,6 +125,23 @@ class TestHasQualityWorkflow:
         assert found is True
         assert name == "quality.yml"
 
+    def test_skips_unreadable_workflow_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        wf_dir = tmp_path / ".github" / "workflows"
+        wf_dir.mkdir(parents=True)
+        (wf_dir / "ci.yml").write_text("steps:\n  - run: make quality\n")
+
+        def raise_oserror(*_args: object, **_kwargs: object) -> str:
+            raise OSError("permission denied")
+
+        monkeypatch.setattr(Path, "read_text", raise_oserror)
+
+        found, name = has_quality_workflow(tmp_path)
+
+        assert found is False
+        assert name == ""
+
 
 # --- Workflow Generation ---
 
@@ -166,6 +183,12 @@ class TestGenerateWorkflow:
 
     def test_unknown_language_returns_minimal_workflow(self) -> None:
         wf = generate_workflow("unknown")
+        assert "make quality" in wf
+        assert "setup-python" not in wf
+        assert "setup-node" not in wf
+
+    def test_unrecognized_language_falls_back_to_unknown_workflow(self) -> None:
+        wf = generate_workflow("ruby")
         assert "make quality" in wf
         assert "setup-python" not in wf
         assert "setup-node" not in wf

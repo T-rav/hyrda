@@ -98,7 +98,9 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install ruff pyright pytest && ([ -f requirements.txt ] && pip install -r requirements.txt || true)
+        run: |
+          pip install ruff pyright pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Run quality checks
         run: make quality
 """
@@ -150,7 +152,9 @@ jobs:
         with:
           node-version: '20'
       - name: Install Python dependencies
-        run: pip install ruff pyright pytest && ([ -f requirements.txt ] && pip install -r requirements.txt || true)
+        run: |
+          pip install ruff pyright pytest
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
       - name: Install Node dependencies
         run: npm ci
       - name: Run quality checks
