@@ -1511,6 +1511,8 @@ class TestResolveMergeConflicts:
         issue = IssueFactory.create()
 
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.get_main_commits_since_diverge = AsyncMock(return_value="")
+        phase._prs.get_pr_diff_names = AsyncMock(return_value=[])
 
         with patch(
             "review_phase.file_memory_suggestion", new_callable=AsyncMock
@@ -1541,6 +1543,8 @@ class TestResolveMergeConflicts:
         issue = IssueFactory.create()
 
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+        phase._worktrees.get_main_commits_since_diverge = AsyncMock(return_value="")
+        phase._prs.get_pr_diff_names = AsyncMock(return_value=[])
 
         with patch(
             "review_phase.file_memory_suggestion",

@@ -360,34 +360,41 @@ class TestSaveTranscript:
         assert "Could not save unsticker transcript" in caplog.text
 
 
+def _setup_memory_test(tmp_path: Path, *, transcript: str = "transcript"):
+    """Set up shared fixtures for memory suggestion extraction tests."""
+    issue = GitHubIssue(
+        number=42,
+        title="Test issue",
+        body="body",
+        labels=["hydra-hitl"],
+    )
+    unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
+    state.set_hitl_cause(42, "Merge conflict")
+    state.set_hitl_origin(42, "hydra-review")
+
+    fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+    wt.start_merge_main = AsyncMock(return_value=False)
+    wt.create = AsyncMock(return_value=tmp_path / "worktrees" / "issue-42")
+    wt.get_main_commits_since_diverge = AsyncMock(return_value="")
+
+    agents._build_command = MagicMock(return_value=["claude", "-p"])
+    agents._execute = AsyncMock(return_value=transcript)
+    agents._verify_result = AsyncMock(return_value=(True, "OK"))
+
+    prs.get_pr_diff_names = AsyncMock(return_value=[])
+    prs.push_branch = AsyncMock(return_value=True)
+
+    (tmp_path / "worktrees" / "issue-42").mkdir(parents=True)
+
+    return unsticker, state, prs, agents, wt, fetcher, bus
+
+
 class TestMemorySuggestionExtraction:
     @pytest.mark.asyncio
     async def test_unsticker_calls_file_memory_suggestion(self, tmp_path: Path) -> None:
-        issue = GitHubIssue(
-            number=42,
-            title="Test issue",
-            body="body",
-            labels=["hydra-hitl"],
+        unsticker, *_ = _setup_memory_test(
+            tmp_path, transcript="transcript with suggestion"
         )
-        unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
-        state.set_hitl_cause(42, "Merge conflict")
-        state.set_hitl_origin(42, "hydra-review")
-
-        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        wt.start_merge_main = AsyncMock(return_value=False)
-        wt.create = AsyncMock(return_value=tmp_path / "worktrees" / "issue-42")
-        wt.get_main_commits_since_diverge = AsyncMock(return_value="")
-
-        agents._build_command = MagicMock(return_value=["claude", "-p"])
-        agents._execute = AsyncMock(return_value="transcript with suggestion")
-        agents._verify_result = AsyncMock(return_value=(True, "OK"))
-
-        prs.get_pr_diff_names = AsyncMock(return_value=[])
-        prs.push_branch = AsyncMock(return_value=True)
-
-        wt_dir = tmp_path / "worktrees" / "issue-42"
-        wt_dir.mkdir(parents=True)
-        (tmp_path / "repo" / ".hydra" / "logs").mkdir(parents=True)
 
         with patch(
             "pr_unsticker.file_memory_suggestion", new_callable=AsyncMock
@@ -408,31 +415,7 @@ class TestMemorySuggestionExtraction:
     async def test_unsticker_memory_failure_does_not_propagate(
         self, tmp_path: Path
     ) -> None:
-        issue = GitHubIssue(
-            number=42,
-            title="Test issue",
-            body="body",
-            labels=["hydra-hitl"],
-        )
-        unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
-        state.set_hitl_cause(42, "Merge conflict")
-        state.set_hitl_origin(42, "hydra-review")
-
-        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        wt.start_merge_main = AsyncMock(return_value=False)
-        wt.create = AsyncMock(return_value=tmp_path / "worktrees" / "issue-42")
-        wt.get_main_commits_since_diverge = AsyncMock(return_value="")
-
-        agents._build_command = MagicMock(return_value=["claude", "-p"])
-        agents._execute = AsyncMock(return_value="transcript")
-        agents._verify_result = AsyncMock(return_value=(True, "OK"))
-
-        prs.get_pr_diff_names = AsyncMock(return_value=[])
-        prs.push_branch = AsyncMock(return_value=True)
-
-        wt_dir = tmp_path / "worktrees" / "issue-42"
-        wt_dir.mkdir(parents=True)
-        (tmp_path / "repo" / ".hydra" / "logs").mkdir(parents=True)
+        unsticker, *_ = _setup_memory_test(tmp_path)
 
         with patch(
             "pr_unsticker.file_memory_suggestion",
