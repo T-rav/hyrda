@@ -256,6 +256,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
     )
     parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Scan the repo and report infrastructure gaps",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -368,6 +373,17 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     return HydraConfig(**kwargs)
 
 
+async def _run_audit(config: HydraConfig) -> None:
+    """Run a repo audit and print the report."""
+    from prep import RepoAuditor
+
+    auditor = RepoAuditor(config)
+    result = await auditor.run_audit()
+    print(result.format_report())  # noqa: T201
+    if result.has_critical_gaps:
+        sys.exit(1)
+
+
 async def _run_clean(config: HydraConfig) -> None:
     """Remove all worktrees and reset state."""
     from state import StateTracker
@@ -457,6 +473,10 @@ def main(argv: list[str] | None = None) -> None:
     setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
+
+    if args.audit:
+        asyncio.run(_run_audit(config))
+        sys.exit(0)
 
     if args.clean:
         asyncio.run(_run_clean(config))
