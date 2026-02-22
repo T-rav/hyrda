@@ -14,6 +14,7 @@ from events import EventBus, EventType
 from metrics_manager import MetricsManager
 from models import MetricsSnapshot, QueueStats
 from state import StateTracker
+from tests.conftest import make_state
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -29,11 +30,6 @@ def make_config(**overrides: Any) -> HydraConfig:
     }
     defaults.update(overrides)
     return HydraConfig(**defaults)
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    """Return a StateTracker backed by a temp file."""
-    return StateTracker(tmp_path / "state.json")
 
 
 def make_pr_manager() -> MagicMock:
