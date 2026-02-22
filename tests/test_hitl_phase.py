@@ -628,10 +628,12 @@ class TestHITLMemorySuggestionFiling:
             "hitl_phase.file_memory_suggestion",
             new_callable=AsyncMock,
             side_effect=RuntimeError("GitHub API error"),
-        ):
+        ) as mock_mem:
             semaphore = asyncio.Semaphore(1)
             await phase._process_one_hitl(42, "Fix the tests", semaphore)
 
+            # The suggestion call must have been attempted (exception was swallowed)
+            mock_mem.assert_awaited_once()
             # Processing should complete normally — comment posted, labels swapped
             prs.post_comment.assert_called_once()
             comment = prs.post_comment.call_args.args[1]
