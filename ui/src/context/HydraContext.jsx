@@ -100,6 +100,7 @@ export function reducer(state, action) {
     case 'orchestrator_status': {
       const newStatus = action.data.status
       const isStopped = newStatus === 'idle' || newStatus === 'done' || newStatus === 'stopping'
+      const isSessionStart = newStatus === 'running' && action.data.reset === true
       return {
         ...addEvent(state, action),
         orchestratorStatus: newStatus,
@@ -111,6 +112,23 @@ export function reducer(state, action) {
           sessionReviewed: 0,
           mergedCount: 0,
           sessionPrsCount: 0,
+        } : {}),
+        ...(isSessionStart ? {
+          workers: {},
+          prs: [],
+          reviews: [],
+          mergedCount: 0,
+          sessionPrsCount: 0,
+          sessionTriaged: 0,
+          sessionPlanned: 0,
+          sessionImplemented: 0,
+          sessionReviewed: 0,
+          hitlItems: [],
+          hitlEscalation: null,
+          lastSeenId: -1,
+          pipelineIssues: { ...emptyPipeline },
+          intents: [],
+          humanInputRequests: {},
         } : {}),
       }
     }
@@ -484,6 +502,27 @@ export function reducer(state, action) {
       return { ...state, pipelineIssues: next }
     }
 
+    case 'SESSION_RESET': {
+      return {
+        ...state,
+        workers: {},
+        prs: [],
+        reviews: [],
+        mergedCount: 0,
+        sessionPrsCount: 0,
+        sessionTriaged: 0,
+        sessionPlanned: 0,
+        sessionImplemented: 0,
+        sessionReviewed: 0,
+        hitlItems: [],
+        hitlEscalation: null,
+        humanInputRequests: {},
+        lastSeenId: -1,
+        pipelineIssues: { ...emptyPipeline },
+        intents: [],
+      }
+    }
+
     case 'INTENT_SUBMITTED':
       return {
         ...state,
@@ -640,6 +679,10 @@ export function HydraProvider({ children }) {
       dispatch({ type: 'INTENT_FAILED', data: { text } })
       return null
     }
+  }, [])
+
+  const resetSession = useCallback(() => {
+    dispatch({ type: 'SESSION_RESET' })
   }, [])
 
   const toggleBgWorker = useCallback(async (name, enabled) => {
@@ -868,6 +911,7 @@ export function HydraProvider({ children }) {
     events: filteredEvents,
     selectedSession,
     stageStatus,
+    resetSession,
     submitIntent,
     submitHumanInput,
     requestChanges,

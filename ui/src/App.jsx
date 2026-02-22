@@ -58,7 +58,7 @@ function AppContent() {
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
     selectedSession, selectSession,
-    requestChanges,
+    requestChanges, resetSession,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -77,10 +77,11 @@ function AppContent() {
   }, [workers, selectedWorker])
 
   const handleStart = useCallback(async () => {
+    resetSession()
     try {
       await fetch('/api/control/start', { method: 'POST' })
     } catch { /* ignore */ }
-  }, [])
+  }, [resetSession])
 
   const handleStop = useCallback(async () => {
     try {
