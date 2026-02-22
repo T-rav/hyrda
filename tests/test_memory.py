@@ -1155,7 +1155,7 @@ class TestFileSuggestionSetsOrigin:
     async def test_file_memory_suggestion_sets_hitl_origin(
         self, tmp_path: Path
     ) -> None:
-        """When a memory suggestion is filed, hitl_origin should be set."""
+        """When a knowledge memory suggestion is filed, no HITL state should be set."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1177,15 +1177,15 @@ class TestFileSuggestionSetsOrigin:
             transcript, "implementer", "issue #42", config, mock_prs, state
         )
 
-        # Verify issue was created with improve + hitl labels
+        # Knowledge type: improve label only, no HITL label
         mock_prs.create_issue.assert_awaited_once()
         call_labels = mock_prs.create_issue.call_args.args[2]
         assert config.improve_label[0] in call_labels
-        assert config.hitl_label[0] in call_labels
+        assert config.hitl_label[0] not in call_labels
 
-        # Verify hitl_origin was set
-        assert state.get_hitl_origin(99) == config.improve_label[0]
-        assert state.get_hitl_cause(99) == "Memory suggestion"
+        # No HITL state set for knowledge type
+        assert state.get_hitl_origin(99) is None
+        assert state.get_hitl_cause(99) is None
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion_no_origin_on_failure(
@@ -1221,10 +1221,10 @@ class TestFileMemorySuggestionRouting:
     """Tests for memory type routing in file_memory_suggestion."""
 
     @pytest.mark.asyncio
-    async def test_file_memory_suggestion__knowledge_type_cause(
+    async def test_file_memory_suggestion__knowledge_type_no_hitl(
         self, tmp_path: Path
     ) -> None:
-        """Knowledge type should use the standard 'Memory suggestion' cause."""
+        """Knowledge type should NOT set HITL state and should use improve label only."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1246,16 +1246,22 @@ class TestFileMemorySuggestionRouting:
             transcript, "reviewer", "PR #10", config, mock_prs, state
         )
 
-        assert state.get_hitl_cause(100) == "Memory suggestion"
+        # Knowledge type: no HITL state
+        assert state.get_hitl_cause(100) is None
+        assert state.get_hitl_origin(100) is None
         # Body should include type
         call_body = mock_prs.create_issue.call_args.args[1]
         assert "**Type:** knowledge" in call_body
+        # Labels should be improve only, no hitl
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] not in call_labels
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion__config_type_actionable_cause(
         self, tmp_path: Path
     ) -> None:
-        """Config type should use actionable cause and HITL routing."""
+        """Config type should use actionable cause, HITL routing, and both labels."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1278,14 +1284,19 @@ class TestFileMemorySuggestionRouting:
         )
 
         assert state.get_hitl_cause(101) == "Actionable memory suggestion (config)"
+        assert state.get_hitl_origin(101) == config.improve_label[0]
         call_body = mock_prs.create_issue.call_args.args[1]
         assert "**Type:** config" in call_body
+        # Actionable: both improve and hitl labels
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion__instruction_type_actionable_cause(
         self, tmp_path: Path
     ) -> None:
-        """Instruction type should use actionable cause."""
+        """Instruction type should use actionable cause and both labels."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1308,12 +1319,16 @@ class TestFileMemorySuggestionRouting:
         )
 
         assert state.get_hitl_cause(102) == "Actionable memory suggestion (instruction)"
+        assert state.get_hitl_origin(102) == config.improve_label[0]
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion__code_type_actionable_cause(
         self, tmp_path: Path
     ) -> None:
-        """Code type should use actionable cause."""
+        """Code type should use actionable cause and both labels."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1336,12 +1351,16 @@ class TestFileMemorySuggestionRouting:
         )
 
         assert state.get_hitl_cause(103) == "Actionable memory suggestion (code)"
+        assert state.get_hitl_origin(103) == config.improve_label[0]
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion__missing_type_defaults_to_knowledge(
         self, tmp_path: Path
     ) -> None:
-        """When type is missing, should default to knowledge cause."""
+        """When type is missing, should default to knowledge (no HITL)."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1362,7 +1381,173 @@ class TestFileMemorySuggestionRouting:
             transcript, "implementer", "issue #40", config, mock_prs, state
         )
 
-        assert state.get_hitl_cause(104) == "Memory suggestion"
+        # Defaults to knowledge: no HITL state, improve label only
+        assert state.get_hitl_cause(104) is None
+        assert state.get_hitl_origin(104) is None
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] not in call_labels
+
+
+class TestFileMemorySuggestionLabelRouting:
+    """Tests confirming knowledge types get different labels than actionable types."""
+
+    @staticmethod
+    def _make_transcript(memory_type: str) -> str:
+        return (
+            "MEMORY_SUGGESTION_START\n"
+            f"title: Test {memory_type}\n"
+            f"type: {memory_type}\n"
+            f"learning: A {memory_type} learning\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion__knowledge_gets_improve_label_only(
+        self, tmp_path: Path
+    ) -> None:
+        """Knowledge type issues receive improve label but NOT hitl label."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=200)
+
+        await file_memory_suggestion(
+            self._make_transcript("knowledge"),
+            "planner",
+            "issue #50",
+            config,
+            mock_prs,
+            state,
+        )
+
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert call_labels == list(config.improve_label)
+        assert config.hitl_label[0] not in call_labels
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion__actionable_gets_both_labels(
+        self, tmp_path: Path
+    ) -> None:
+        """Actionable type issues receive both improve and hitl labels."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=201)
+
+        await file_memory_suggestion(
+            self._make_transcript("config"),
+            "implementer",
+            "issue #51",
+            config,
+            mock_prs,
+            state,
+        )
+
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        expected = list(config.improve_label) + list(config.hitl_label)
+        assert call_labels == expected
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion__knowledge_vs_actionable_labels_differ(
+        self, tmp_path: Path
+    ) -> None:
+        """Knowledge and actionable types must produce different label sets."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+
+        # File a knowledge suggestion
+        state_k = StateTracker(tmp_path / "state_k.json")
+        mock_prs_k = AsyncMock()
+        mock_prs_k.create_issue = AsyncMock(return_value=300)
+        await file_memory_suggestion(
+            self._make_transcript("knowledge"),
+            "planner",
+            "issue #60",
+            config,
+            mock_prs_k,
+            state_k,
+        )
+        knowledge_labels = mock_prs_k.create_issue.call_args.args[2]
+
+        # File an actionable (instruction) suggestion
+        state_a = StateTracker(tmp_path / "state_a.json")
+        mock_prs_a = AsyncMock()
+        mock_prs_a.create_issue = AsyncMock(return_value=301)
+        await file_memory_suggestion(
+            self._make_transcript("instruction"),
+            "implementer",
+            "issue #61",
+            config,
+            mock_prs_a,
+            state_a,
+        )
+        actionable_labels = mock_prs_a.create_issue.call_args.args[2]
+
+        # Labels must differ
+        assert knowledge_labels != actionable_labels
+        # Knowledge: improve only; actionable: improve + hitl
+        assert len(knowledge_labels) < len(actionable_labels)
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion__knowledge_no_hitl_state_set(
+        self, tmp_path: Path
+    ) -> None:
+        """Knowledge type must not call set_hitl_origin or set_hitl_cause."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=400)
+
+        await file_memory_suggestion(
+            self._make_transcript("knowledge"),
+            "reviewer",
+            "PR #70",
+            config,
+            mock_prs,
+            state,
+        )
+
+        # No HITL state should exist for this issue
+        assert state.get_hitl_origin(400) is None
+        assert state.get_hitl_cause(400) is None
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion__actionable_sets_hitl_state(
+        self, tmp_path: Path
+    ) -> None:
+        """Actionable type must set both hitl_origin and hitl_cause."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=401)
+
+        await file_memory_suggestion(
+            self._make_transcript("code"),
+            "implementer",
+            "issue #71",
+            config,
+            mock_prs,
+            state,
+        )
+
+        assert state.get_hitl_origin(401) == config.improve_label[0]
+        assert state.get_hitl_cause(401) == "Actionable memory suggestion (code)"
 
 
 # --- Auto-approve tests ---
@@ -1434,10 +1619,10 @@ class TestFileMemorySuggestionAutoApprove:
         assert state.get_hitl_cause(77) is None
 
     @pytest.mark.asyncio
-    async def test_file_memory_suggestion__auto_approve_false__uses_hitl_labels(
+    async def test_file_memory_suggestion__auto_approve_false__knowledge_improve_only(
         self, tmp_path: Path
     ) -> None:
-        """When memory_auto_approve is False (default), HITL flow is used."""
+        """When auto_approve=False and type is knowledge (default), improve-only flow."""
         config = ConfigFactory.create(
             repo_root=tmp_path / "repo",
             state_file=tmp_path / "state.json",
@@ -1461,11 +1646,8 @@ class TestFileMemorySuggestionAutoApprove:
 
         call_labels = mock_prs.create_issue.call_args.args[2]
         assert config.improve_label[0] in call_labels
-        assert config.hitl_label[0] in call_labels
+        assert config.hitl_label[0] not in call_labels
         assert config.memory_label[0] not in call_labels
-
-        assert state.get_hitl_origin(88) == config.improve_label[0]
-        assert state.get_hitl_cause(88) == "Memory suggestion"
 
     @pytest.mark.asyncio
     async def test_file_memory_suggestion__auto_approve__no_suggestion_is_noop(

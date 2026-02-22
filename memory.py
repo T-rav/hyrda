@@ -143,35 +143,35 @@ async def file_memory_suggestion(
     )
     title = f"[Memory] {suggestion['title']}"
 
-    if config.memory_auto_approve:
-        # Skip HITL — label directly for memory sync pickup
+    # Routing matrix (auto_approve x is_actionable):
+    #   auto_approve=True  + knowledge   -> memory_label directly (auto-approved)
+    #   auto_approve=True  + actionable  -> HITL (actionable always needs human review)
+    #   auto_approve=False + knowledge   -> improve_label only (no HITL)
+    #   auto_approve=False + actionable  -> improve_label + hitl_label (HITL)
+    if MemoryType.is_actionable(memory_type):
+        # Actionable types ALWAYS go through HITL regardless of auto-approve
+        labels = list(config.improve_label) + list(config.hitl_label)
+        hitl_cause = f"Actionable memory suggestion ({memory_type.value})"
+    elif config.memory_auto_approve:
+        # Knowledge + auto-approve: skip HITL, label for memory sync pickup
         labels = list(config.memory_label)
-        issue_num = await prs.create_issue(title, body, labels)
-        if issue_num:
-            logger.info(
-                "Auto-approved memory suggestion as issue #%d: %s",
-                issue_num,
-                suggestion["title"],
-            )
+        hitl_cause = None
     else:
-        # Actionable types get HITL routing for human approval
-        if MemoryType.is_actionable(memory_type):
-            labels = list(config.improve_label) + list(config.hitl_label)
-            hitl_cause = f"Actionable memory suggestion ({memory_type.value})"
-        else:
-            labels = list(config.improve_label) + list(config.hitl_label)
-            hitl_cause = "Memory suggestion"
+        # Knowledge + no auto-approve: normal improve pipeline
+        labels = list(config.improve_label)
+        hitl_cause = None
 
-        issue_num = await prs.create_issue(title, body, labels)
-        if issue_num:
+    issue_num = await prs.create_issue(title, body, labels)
+    if issue_num:
+        if hitl_cause is not None:
             state.set_hitl_origin(issue_num, config.improve_label[0])
             state.set_hitl_cause(issue_num, hitl_cause)
-            logger.info(
-                "Filed %s memory suggestion as issue #%d: %s",
-                memory_type.value,
-                issue_num,
-                suggestion["title"],
-            )
+        logger.info(
+            "Filed %s memory suggestion as issue #%d: %s",
+            memory_type.value,
+            issue_num,
+            suggestion["title"],
+        )
 
 
 class MemorySyncWorker:
