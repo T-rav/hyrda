@@ -266,11 +266,18 @@ class PRUnsticker:
     ) -> None:
         """Save a conflict resolution transcript to ``.hydra/logs/``."""
         log_dir = self._config.repo_root / ".hydra" / "logs"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        path = log_dir / f"unsticker-issue-{issue_number}-attempt-{attempt}.txt"
-        path.write_text(transcript)
-        logger.info(
-            "Unsticker transcript saved to %s",
-            path,
-            extra={"issue": issue_number},
-        )
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            path = log_dir / f"unsticker-issue-{issue_number}-attempt-{attempt}.txt"
+            path.write_text(transcript)
+            logger.info(
+                "Unsticker transcript saved to %s",
+                path,
+                extra={"issue": issue_number},
+            )
+        except OSError:
+            logger.warning(
+                "Could not save unsticker transcript to %s",
+                log_dir,
+                exc_info=True,
+            )

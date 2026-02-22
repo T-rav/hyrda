@@ -16,6 +16,10 @@ from state import StateTracker
 from tests.helpers import ConfigFactory
 
 
+def _raise_oserror(*args, **kwargs):
+    raise OSError("No space left on device")
+
+
 def _make_config(tmp_path: Path, **overrides) -> MagicMock:
     return ConfigFactory.create(
         repo_root=tmp_path / "repo",
@@ -341,3 +345,18 @@ class TestSaveTranscript:
         )
         assert path.exists()
         assert path.read_text() == "transcript content here"
+
+    def test_save_transcript_handles_oserror(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        unsticker, *_ = _make_unsticker(tmp_path)
+
+        (tmp_path / "repo").mkdir(parents=True, exist_ok=True)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(Path, "write_text", _raise_oserror)
+            unsticker._save_transcript(42, 1, "transcript content here")
+
+        assert any(
+            "Could not save unsticker transcript" in msg for msg in caplog.messages
+        )
