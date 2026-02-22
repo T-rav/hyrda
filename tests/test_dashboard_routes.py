@@ -1069,7 +1069,7 @@ class TestRequestChangesEndpoint:
         assert data["status"] == "ok"
 
         assert state.get_hitl_cause(42) == "Fix the tests"
-        assert state.get_hitl_origin(42) == "hydra-review"
+        assert state.get_hitl_origin(42) == config.review_label[0]
 
     @pytest.mark.asyncio
     async def test_request_changes_swaps_labels(
@@ -1231,6 +1231,32 @@ class TestRequestChangesEndpoint:
 
         remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
         assert (10, config.find_label[0]) in remove_calls
+
+    @pytest.mark.asyncio
+    async def test_request_changes_plan_stage(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Plan stage removes planner_label and records origin from planner_label."""
+        import json
+
+        router, pr_mgr = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": 7, "feedback": "Plan is incomplete", "stage": "plan"}
+        )
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+
+        assert state.get_hitl_cause(7) == "Plan is incomplete"
+        assert state.get_hitl_origin(7) == config.planner_label[0]
+
+        remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
+        assert (7, config.planner_label[0]) in remove_calls
+
+        add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
+        assert (7, config.hitl_label) in add_calls
 
     @pytest.mark.asyncio
     async def test_request_changes_empty_stage_labels_falls_back_to_stage_name(

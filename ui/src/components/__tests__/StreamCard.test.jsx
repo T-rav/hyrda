@@ -304,6 +304,31 @@ describe('StreamCard request changes feedback flow', () => {
     expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
   })
 
+  it('does not close panel when Request Changes toggle is clicked during submission', async () => {
+    const issue = makeIssue()
+    let resolveRequest
+    const onRequestChanges = vi.fn(() => new Promise(r => { resolveRequest = r }))
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    // While in-flight, clicking the toggle must not close the panel
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-submit-42').disabled).toBe(true)
+    })
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+
+    resolveRequest(true)
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
   it('clears error message when panel is toggle-closed via Request Changes button', async () => {
     const issue = makeIssue()
     const onRequestChanges = vi.fn().mockResolvedValue(false)

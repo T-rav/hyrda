@@ -187,8 +187,9 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
             )}
             {onRequestChanges && (
               <span
-                style={styles.actionBtn}
+                style={submitting ? requestChangesBtnDisabled : styles.actionBtn}
                 onClick={() => {
+                  if (submitting) return
                   if (showFeedback) {
                     setFeedbackText('')
                     setSubmitError(null)
@@ -505,3 +506,4 @@ const styles = {
 // Pre-computed disabled variants — avoids object spread in render
 const feedbackSubmitBtnDisabled = { ...styles.feedbackSubmitBtn, cursor: 'not-allowed', opacity: 0.5 }
 const feedbackCancelBtnDisabled = { ...styles.feedbackCancelBtn, cursor: 'not-allowed', opacity: 0.5 }
+const requestChangesBtnDisabled = { ...styles.actionBtn, cursor: 'not-allowed', opacity: 0.5 }
