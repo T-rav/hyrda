@@ -841,6 +841,10 @@ class HydraFlowConfig(BaseModel):
         if env_docker_image is not None and not self.docker_image:
             object.__setattr__(self, "docker_image", env_docker_image)
 
+        env_docker_network = os.environ.get("HYDRA_DOCKER_NETWORK")
+        if env_docker_network is not None and not self.docker_network:
+            object.__setattr__(self, "docker_network", env_docker_network)
+
         if self.docker_spawn_delay == 2.0:  # still at default
             env_spawn_delay = os.environ.get("HYDRA_DOCKER_SPAWN_DELAY")
             if env_spawn_delay is not None:

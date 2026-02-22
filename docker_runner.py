@@ -189,11 +189,11 @@ class DockerRunner:
     async def _enforce_spawn_delay(self) -> None:
         """Ensure minimum delay between container starts."""
         async with self._spawn_lock:
-            now = asyncio.get_event_loop().time()
+            now = asyncio.get_running_loop().time()
             elapsed = now - self._last_spawn_time
             if elapsed < self._spawn_delay:
                 await asyncio.sleep(self._spawn_delay - elapsed)
-            self._last_spawn_time = asyncio.get_event_loop().time()
+            self._last_spawn_time = asyncio.get_running_loop().time()
 
     async def create_streaming_process(
         self,
@@ -215,7 +215,7 @@ class DockerRunner:
         """
         await self._enforce_spawn_delay()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         mounts = self._build_mounts(cwd)
         container_env = env if env is not None else self._build_env()
         working_dir = "/workspace" if cwd else None
@@ -265,7 +265,7 @@ class DockerRunner:
         """Run a command in a Docker container and return the result."""
         await self._enforce_spawn_delay()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         mounts = self._build_mounts(cwd)
         container_env = env if env is not None else self._build_env()
         working_dir = "/workspace" if cwd else None
@@ -325,7 +325,7 @@ class DockerRunner:
 
     async def cleanup(self) -> None:
         """Remove all tracked containers."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         for container in list(self._containers):
             with contextlib.suppress(Exception):
                 await loop.run_in_executor(

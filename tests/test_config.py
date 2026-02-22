@@ -3445,6 +3445,29 @@ class TestDockerConfig:
         )
         assert cfg.docker_spawn_delay == 2.0  # default preserved
 
+    def test_docker_network_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK", "hydra-net")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network == "hydra-net"
+
+    def test_docker_network_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK", "from-env")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            docker_network="explicit-net",
+        )
+        assert cfg.docker_network == "explicit-net"
+
     def test_docker_enabled_explicit_overrides_env(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
