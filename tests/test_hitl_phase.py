@@ -518,7 +518,7 @@ class TestHITLMemorySuggestionFiling:
 
     @pytest.mark.asyncio
     async def test_hitl_files_memory_suggestion_on_success(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On success with transcript, file_memory_suggestion should be called."""
         from models import HITLResult
@@ -527,7 +527,7 @@ class TestHITLMemorySuggestionFiling:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(
@@ -550,7 +550,7 @@ class TestHITLMemorySuggestionFiling:
 
     @pytest.mark.asyncio
     async def test_hitl_files_memory_suggestion_on_failure(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On failure with transcript, file_memory_suggestion should still be called."""
         from models import HITLResult
@@ -559,7 +559,7 @@ class TestHITLMemorySuggestionFiling:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(
@@ -585,7 +585,7 @@ class TestHITLMemorySuggestionFiling:
 
     @pytest.mark.asyncio
     async def test_hitl_skips_memory_suggestion_for_empty_transcript(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Empty transcript should not trigger file_memory_suggestion."""
         from models import HITLResult
@@ -594,7 +594,7 @@ class TestHITLMemorySuggestionFiling:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(
             return_value=HITLResult(issue_number=42, success=True, transcript="")
@@ -610,7 +610,7 @@ class TestHITLMemorySuggestionFiling:
 
     @pytest.mark.asyncio
     async def test_hitl_memory_suggestion_error_does_not_break_processing(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """file_memory_suggestion errors should be logged but not interrupt processing."""
         from models import HITLResult
@@ -619,7 +619,7 @@ class TestHITLMemorySuggestionFiling:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(

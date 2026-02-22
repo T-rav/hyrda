@@ -1511,7 +1511,7 @@ class TestResolveMergeConflicts:
 
     @pytest.mark.asyncio
     async def test_conflict_resolution_calls_file_memory_suggestion(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """file_memory_suggestion should be called with the conflict transcript."""
         mock_agents = AsyncMock()
@@ -1543,7 +1543,7 @@ class TestResolveMergeConflicts:
 
     @pytest.mark.asyncio
     async def test_conflict_resolution_memory_failure_does_not_propagate(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Exceptions from file_memory_suggestion must not break conflict resolution."""
         mock_agents = AsyncMock()
@@ -3557,7 +3557,7 @@ class TestCreateVerificationIssue:
 class TestGetJudgeResult:
     """Tests for ReviewPhase._get_judge_result verdict-to-result conversion."""
 
-    def test_returns_none_when_verdict_is_none(self, config: HydraConfig) -> None:
+    def test_returns_none_when_verdict_is_none(self, config: HydraFlowConfig) -> None:
         """When no verdict is produced, returns None."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -3567,7 +3567,7 @@ class TestGetJudgeResult:
 
         assert result is None
 
-    def test_maps_pass_criterion(self, config: HydraConfig) -> None:
+    def test_maps_pass_criterion(self, config: HydraFlowConfig) -> None:
         """PASS criterion is converted with passed=True."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -3591,7 +3591,7 @@ class TestGetJudgeResult:
         assert result.criteria[0].passed is True
         assert result.criteria[0].details == "Tests pass"
 
-    def test_maps_fail_criterion(self, config: HydraConfig) -> None:
+    def test_maps_fail_criterion(self, config: HydraFlowConfig) -> None:
         """FAIL criterion is converted with passed=False."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -3614,7 +3614,7 @@ class TestGetJudgeResult:
         assert result.criteria[0].passed is False
         assert result.criteria[0].details == "No test coverage"
 
-    def test_maps_mixed_criteria(self, config: HydraConfig) -> None:
+    def test_maps_mixed_criteria(self, config: HydraFlowConfig) -> None:
         """Multiple criteria with mixed verdicts are all converted."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -3649,7 +3649,7 @@ class TestGetJudgeResult:
         assert result.criteria[2].passed is True
 
     def test_passes_through_verification_instructions(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """verification_instructions from verdict flows to result."""
         phase = make_review_phase(config)
@@ -3665,7 +3665,7 @@ class TestGetJudgeResult:
         assert result is not None
         assert result.verification_instructions == "1. Run app\n2. Check output"
 
-    def test_passes_through_summary(self, config: HydraConfig) -> None:
+    def test_passes_through_summary(self, config: HydraFlowConfig) -> None:
         """summary from verdict flows to result."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -3680,7 +3680,7 @@ class TestGetJudgeResult:
         assert result is not None
         assert result.summary == "2/3 criteria passed, instructions: ready"
 
-    def test_uses_issue_and_pr_numbers(self, config: HydraConfig) -> None:
+    def test_uses_issue_and_pr_numbers(self, config: HydraFlowConfig) -> None:
         """issue_number and pr_number come from the issue/pr args, not verdict."""
         phase = make_review_phase(config)
         issue = IssueFactory.create(number=99)
@@ -3693,7 +3693,7 @@ class TestGetJudgeResult:
         assert result.issue_number == 99
         assert result.pr_number == 200
 
-    def test_empty_criteria(self, config: HydraConfig) -> None:
+    def test_empty_criteria(self, config: HydraFlowConfig) -> None:
         """Verdict with no criteria produces result with empty criteria list."""
         phase = make_review_phase(config)
         issue = IssueFactory.create()
@@ -4201,7 +4201,7 @@ class TestRunPostMergeHooks:
 
     @pytest.mark.asyncio
     async def test_judge_verdict_creates_verification_issue(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When judge returns a verdict, a verification issue should be created."""
         mock_judge = AsyncMock()
@@ -4235,7 +4235,7 @@ class TestRunPostMergeHooks:
 
     @pytest.mark.asyncio
     async def test_judge_returns_none_no_verification_issue(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When judge returns None (no criteria file), no verification issue is created."""
         mock_judge = AsyncMock()
@@ -4254,7 +4254,7 @@ class TestRunPostMergeHooks:
 
     @pytest.mark.asyncio
     async def test_judge_failure_does_not_create_verification_issue(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When judge raises, no verification issue is created."""
         mock_judge = AsyncMock()
@@ -4272,7 +4272,7 @@ class TestRunPostMergeHooks:
 
     @pytest.mark.asyncio
     async def test_verification_issue_creation_failure_does_not_block_epic_checker(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """When _create_verification_issue raises, epic checker still runs."""
         mock_judge = AsyncMock()

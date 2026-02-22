@@ -370,11 +370,11 @@ def _setup_memory_test(tmp_path: Path, *, transcript: str = "transcript"):
         number=42,
         title="Test issue",
         body="body",
-        labels=["hydra-hitl"],
+        labels=["hydraflow-hitl"],
     )
     unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
     state.set_hitl_cause(42, "Merge conflict")
-    state.set_hitl_origin(42, "hydra-review")
+    state.set_hitl_origin(42, "hydraflow-review")
 
     fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
     wt.start_merge_main = AsyncMock(return_value=False)
