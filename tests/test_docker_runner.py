@@ -116,7 +116,7 @@ class TestDockerStdoutReader:
     @pytest.mark.asyncio
     async def test_yields_lines_correctly(self) -> None:
         sock = _make_mock_socket(b"line1\nline2\n")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
 
         lines: list[bytes] = []
@@ -128,7 +128,7 @@ class TestDockerStdoutReader:
     @pytest.mark.asyncio
     async def test_handles_partial_lines(self) -> None:
         sock = _make_mock_socket(b"partial")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
 
         lines: list[bytes] = []
@@ -140,7 +140,7 @@ class TestDockerStdoutReader:
     @pytest.mark.asyncio
     async def test_empty_stream(self) -> None:
         sock = _make_mock_socket(b"")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
 
         lines: list[bytes] = []
@@ -152,7 +152,7 @@ class TestDockerStdoutReader:
     @pytest.mark.asyncio
     async def test_read_returns_all_remaining(self) -> None:
         sock = _make_mock_socket(b"all data here")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         reader = DockerStdoutReader(sock, loop)
 
         result = await reader.read()
@@ -170,7 +170,7 @@ class TestDockerProcess:
     def test_kill_calls_container_kill(self) -> None:
         container = _make_mock_container()
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = MagicMock()
         proc = DockerProcess(container, sock, loop)
 
         proc.kill()
@@ -180,7 +180,7 @@ class TestDockerProcess:
         container = _make_mock_container()
         container.kill.side_effect = RuntimeError("already dead")
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = MagicMock()
         proc = DockerProcess(container, sock, loop)
 
         proc.kill()  # Should not raise
@@ -189,7 +189,7 @@ class TestDockerProcess:
     async def test_wait_returns_exit_code(self) -> None:
         container = _make_mock_container(exit_code=0)
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         proc = DockerProcess(container, sock, loop)
 
         code = await proc.wait()
@@ -200,7 +200,7 @@ class TestDockerProcess:
     async def test_wait_returns_nonzero_exit_code(self) -> None:
         container = _make_mock_container(exit_code=42)
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         proc = DockerProcess(container, sock, loop)
 
         code = await proc.wait()
@@ -210,14 +210,14 @@ class TestDockerProcess:
     def test_pid_is_none(self) -> None:
         container = _make_mock_container()
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = MagicMock()
         proc = DockerProcess(container, sock, loop)
         assert proc.pid is None
 
     def test_has_stdin_stdout_stderr(self) -> None:
         container = _make_mock_container()
         sock = _make_mock_socket()
-        loop = asyncio.get_event_loop()
+        loop = MagicMock()
         proc = DockerProcess(container, sock, loop)
 
         assert isinstance(proc.stdin, DockerStdinWriter)
@@ -519,7 +519,7 @@ class TestStaggeredSpawning:
 
         async def tracking_enforce():
             await original_enforce()
-            times.append(asyncio.get_event_loop().time())
+            times.append(asyncio.get_running_loop().time())
 
         runner._enforce_spawn_delay = tracking_enforce
 
