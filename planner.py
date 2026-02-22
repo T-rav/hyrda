@@ -7,13 +7,18 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from execution import get_default_runner
 from memory import load_memory_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
+
+if TYPE_CHECKING:
+    from execution import SubprocessRunner
 
 logger = logging.getLogger("hydra.planner")
 
@@ -25,10 +30,16 @@ class PlannerRunner:
     It produces a structured plan that is posted as a comment on the issue.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        config: HydraConfig,
+        event_bus: EventBus,
+        runner: SubprocessRunner | None = None,
+    ) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
+        self._runner = runner or get_default_runner()
 
     async def plan(
         self,
@@ -895,6 +906,7 @@ SUMMARY: <brief one-line description of the plan>
             event_data={"issue": issue_number, "source": "planner"},
             logger=logger,
             on_output=_check_plan_complete,
+            runner=self._runner,
         )
 
     async def _emit_status(
