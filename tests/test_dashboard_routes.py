@@ -99,6 +99,81 @@ class TestCreateRouter:
         assert "/api/hitl/{issue_number}/approve-memory" in paths
 
 
+class TestStartOrchestratorBroadcast:
+    """Tests that /api/control/start broadcasts orchestrator_status running event."""
+
+    @pytest.mark.asyncio
+    async def test_start_publishes_orchestrator_status_running(
+        self, config, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        """POST /api/control/start should publish orchestrator_status with running."""
+        from unittest.mock import MagicMock as SyncMock
+
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+
+        def set_orch(o):
+            pass
+
+        def set_task(t):
+            t.cancel()  # Cancel the actual run task to avoid side effects
+
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=set_orch,
+            set_run_task=set_task,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        # Subscribe to the event bus before calling start
+        queue = event_bus.subscribe()
+
+        # Find and call the start endpoint
+        start_endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/control/start"
+                and hasattr(route, "endpoint")
+            ):
+                start_endpoint = route.endpoint
+                break
+
+        assert start_endpoint is not None
+
+        # Mock the orchestrator module to prevent actual orchestrator creation
+        mock_orch = SyncMock()
+        mock_orch.running = False
+        mock_orch.run = AsyncMock(return_value=None)
+
+        import orchestrator as orch_module
+
+        original_class = orch_module.HydraOrchestrator
+        orch_module.HydraOrchestrator = lambda *a, **kw: mock_orch  # type: ignore[assignment,misc]
+        try:
+            response = await start_endpoint()
+        finally:
+            orch_module.HydraOrchestrator = original_class  # type: ignore[assignment]
+
+        import json
+
+        data = json.loads(response.body)
+        assert data["status"] == "started"
+
+        # Verify that orchestrator_status event was published with reset flag
+        event = queue.get_nowait()
+        assert event.type == "orchestrator_status"
+        assert event.data["status"] == "running"
+        assert event.data["reset"] is True
+
+
 class TestControlStatusImproveLabel:
     """Tests that /api/control/status includes improve_label."""
 
