@@ -47,6 +47,7 @@ echo "  make:    $(make --version 2>/dev/null | head -1 || echo 'N/A')"
 echo "  uv:      $(uv --version 2>/dev/null || echo 'N/A')"
 echo "  ruff:    $(ruff --version 2>/dev/null || echo 'N/A')"
 echo "  pyright: $(pyright --version 2>/dev/null || echo 'N/A')"
+echo "  pytest:  $(pytest --version 2>/dev/null || echo 'N/A')"
 
 # Non-root user check
 echo ""
