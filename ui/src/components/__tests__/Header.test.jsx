@@ -4,7 +4,6 @@ import { deriveStageStatus } from '../../hooks/useStageStatus'
 import {
   dotConnected, dotDisconnected,
   startBtnEnabled, startBtnDisabled,
-  panelToggleStyle, panelToggleActiveStyle,
 } from '../Header'
 
 const mockUseHydra = vi.fn()
@@ -21,33 +20,6 @@ function mockStageStatus(workers = {}) {
 
 beforeEach(() => {
   mockUseHydra.mockReturnValue({ stageStatus: mockStageStatus() })
-})
-
-describe('Header pre-computed panel toggle styles', () => {
-  it('panelToggleStyle has muted border and text-muted color', () => {
-    expect(panelToggleStyle).toMatchObject({
-      fontSize: 11,
-      fontWeight: 600,
-      cursor: 'pointer',
-      color: 'var(--text-muted)',
-    })
-  })
-
-  it('panelToggleActiveStyle has accent border, accentSubtle background, and accent color', () => {
-    expect(panelToggleActiveStyle).toMatchObject({
-      fontSize: 11,
-      fontWeight: 600,
-      cursor: 'pointer',
-      color: 'var(--accent)',
-      background: 'var(--accent-subtle)',
-      border: '1px solid var(--accent)',
-    })
-  })
-
-  it('style objects are referentially stable', () => {
-    expect(panelToggleStyle).toBe(panelToggleStyle)
-    expect(panelToggleActiveStyle).toBe(panelToggleActiveStyle)
-  })
 })
 
 describe('Header pre-computed styles', () => {
@@ -242,40 +214,6 @@ describe('Header component', () => {
       expect(screen.getByText('Credits Paused')).toBeInTheDocument()
       expect(screen.getByText('Stop')).toBeInTheDocument()
       expect(screen.queryByText('Start')).toBeNull()
-    })
-  })
-
-  describe('pipeline panel toggle button', () => {
-    it('does not render toggle button when onTogglePipelinePanel is not provided', () => {
-      render(<Header {...defaultProps} />)
-      expect(screen.queryByTestId('pipeline-panel-toggle')).not.toBeInTheDocument()
-    })
-
-    it('renders Pipeline toggle button when onTogglePipelinePanel is provided', () => {
-      render(<Header {...defaultProps} onTogglePipelinePanel={() => {}} pipelinePanelOpen={true} />)
-      expect(screen.getByTestId('pipeline-panel-toggle')).toBeInTheDocument()
-      expect(screen.getByTestId('pipeline-panel-toggle')).toHaveTextContent('Pipeline')
-    })
-
-    it('calls onTogglePipelinePanel when button is clicked', () => {
-      const onToggle = vi.fn()
-      render(<Header {...defaultProps} onTogglePipelinePanel={onToggle} pipelinePanelOpen={true} />)
-      fireEvent.click(screen.getByTestId('pipeline-panel-toggle'))
-      expect(onToggle).toHaveBeenCalledTimes(1)
-    })
-
-    it('uses active style when pipelinePanelOpen is true', () => {
-      render(<Header {...defaultProps} onTogglePipelinePanel={() => {}} pipelinePanelOpen={true} />)
-      const btn = screen.getByTestId('pipeline-panel-toggle')
-      expect(btn.style.color).toBe('var(--accent)')
-      expect(btn.style.background).toBe('var(--accent-subtle)')
-    })
-
-    it('uses inactive style when pipelinePanelOpen is false', () => {
-      render(<Header {...defaultProps} onTogglePipelinePanel={() => {}} pipelinePanelOpen={false} />)
-      const btn = screen.getByTestId('pipeline-panel-toggle')
-      expect(btn.style.color).toBe('var(--text-muted)')
-      expect(btn.style.background).toBe('var(--surface)')
     })
   })
 

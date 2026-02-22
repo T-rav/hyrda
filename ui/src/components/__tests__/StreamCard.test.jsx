@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { StreamCard, StatusDot, dotStyles, badgeStyleMap } from '../StreamCard'
 import { theme } from '../../theme'
 import { STAGE_KEYS } from '../../hooks/useTimeline'
@@ -9,18 +9,18 @@ function makeIssue(overrides = {}) {
   for (const key of STAGE_KEYS) {
     stages[key] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
   }
-  stages.plan = { status: 'active', startTime: null, endTime: null, transcript: [] }
+  stages.review = { status: 'active', startTime: '2026-01-01T00:00:00Z', endTime: null, transcript: [] }
   return {
     issueNumber: 42,
-    title: 'Test issue',
+    title: 'Fix the frobnicator',
     issueUrl: null,
-    currentStage: 'plan',
+    currentStage: 'review',
     overallStatus: 'active',
-    stages,
+    startTime: '2026-01-01T00:00:00Z',
+    endTime: null,
     pr: null,
     branch: 'agent/issue-42',
-    startTime: null,
-    endTime: null,
+    stages,
     ...overrides,
   }
 }
@@ -100,6 +100,255 @@ describe('badgeStyleMap', () => {
   it('queued badge uses yellow theme colors', () => {
     expect(badgeStyleMap.queued.background).toBe(theme.yellowSubtle)
     expect(badgeStyleMap.queued.color).toBe(theme.yellow)
+  })
+})
+
+describe('StreamCard request changes feedback flow', () => {
+  it('shows feedback textarea on Request Changes click', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+  })
+
+  it('hides feedback textarea on Cancel click', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+
+    fireEvent.click(screen.getByTestId('request-changes-cancel-42'))
+    expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+  })
+
+  it('disables submit when feedback is empty', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    const submitBtn = screen.getByTestId('request-changes-submit-42')
+    expect(submitBtn.disabled).toBe(true)
+  })
+
+  it('calls onRequestChanges with correct arguments on submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn(() => Promise.resolve())
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    const textarea = screen.getByTestId('request-changes-textarea-42')
+    fireEvent.change(textarea, { target: { value: 'Fix the tests please' } })
+
+    const submitBtn = screen.getByTestId('request-changes-submit-42')
+    expect(submitBtn.disabled).toBe(false)
+    fireEvent.click(submitBtn)
+
+    await waitFor(() => {
+      expect(onRequestChanges).toHaveBeenCalledWith(42, 'Fix the tests please', 'review')
+    })
+  })
+
+  it('shows placeholder text on textarea', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    const textarea = screen.getByTestId('request-changes-textarea-42')
+    expect(textarea.placeholder).toBe('What needs to change?')
+  })
+
+  it('does not show Request Changes button when onRequestChanges is not provided', () => {
+    const issue = makeIssue()
+    render(<StreamCard issue={issue} defaultExpanded />)
+
+    expect(screen.queryByTestId('request-changes-btn-42')).toBeNull()
+  })
+
+  it('closes feedback panel after successful submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(true)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
+  it('keeps feedback panel open after failed submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(onRequestChanges).toHaveBeenCalled()
+    })
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+  })
+
+  it('shows error message after failed submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+    expect(screen.getByTestId('request-changes-error-42').textContent).toContain('Failed')
+  })
+
+  it('clears error message on Cancel', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByTestId('request-changes-cancel-42'))
+    expect(screen.queryByTestId('request-changes-error-42')).toBeNull()
+  })
+
+  it('disables submit button and shows Submitting text while in-flight', async () => {
+    const issue = makeIssue()
+    let resolveRequest
+    const onRequestChanges = vi.fn(() => new Promise(r => { resolveRequest = r }))
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    // During submission the button must be disabled and show "Submitting..."
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-submit-42').disabled).toBe(true)
+    })
+    expect(screen.getByTestId('request-changes-submit-42').textContent).toBe('Submitting...')
+
+    // Resolve and let the component settle
+    resolveRequest(true)
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
+  it('clears feedback text when panel is toggle-closed via Request Changes button', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    // Open panel and type text
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Some feedback' },
+    })
+
+    // Toggle-close via the button (not Cancel)
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+
+    // Re-open — panel must start empty
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
+  })
+
+  it('clears feedback text so re-opened panel starts empty after success', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(true)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+
+    // Re-open and verify text was reset
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
+  })
+
+  it('does not close panel when Request Changes toggle is clicked during submission', async () => {
+    const issue = makeIssue()
+    let resolveRequest
+    const onRequestChanges = vi.fn(() => new Promise(r => { resolveRequest = r }))
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    // While in-flight, clicking the toggle must not close the panel
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-submit-42').disabled).toBe(true)
+    })
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
+
+    resolveRequest(true)
+    await waitFor(() => {
+      expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+    })
+  })
+
+  it('clears error message when panel is toggle-closed via Request Changes button', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+
+    // Close via toggle button (not Cancel)
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    // Re-open — error must be gone
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.queryByTestId('request-changes-error-42')).toBeNull()
   })
 })
 

@@ -116,8 +116,12 @@ describe('eventSummary', () => {
     expect(eventSummary('orchestrator_status', { status: 'running' })).toBe('running')
   })
 
-  it('formats hitl_escalation', () => {
+  it('formats hitl_escalation with PR number', () => {
     expect(eventSummary('hitl_escalation', { pr: 42 })).toBe('PR #42 escalated to HITL')
+  })
+
+  it('formats hitl_escalation without PR number (manual escalation)', () => {
+    expect(eventSummary('hitl_escalation', { issue: 99, cause: 'needs rework', origin: 'hydra-review' })).toBe('Issue #99 escalated to HITL')
   })
 
   it('formats hitl_update with action', () => {

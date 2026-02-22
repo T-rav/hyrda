@@ -272,7 +272,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
             workerCount={workerCount}
             intentMap={intentMap}
             onViewTranscript={onViewTranscript}
-            onRequestChanges={onRequestChanges}
+            onRequestChanges={stage.role ? onRequestChanges : undefined}
             open={!!expandedStages[stage.key]}
             onToggle={() => handleToggleStage(stage.key)}
             enabled={enabled}
