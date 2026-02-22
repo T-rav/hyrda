@@ -2660,6 +2660,32 @@ class TestEnvVarOverrideTable:
             )
             assert getattr(cfg, field) is False, f"'{falsy}' should parse as False"
 
+    @pytest.mark.parametrize(
+        ("field", "env_key", "default"),
+        _ENV_BOOL_OVERRIDES,
+        ids=[entry[0] for entry in _ENV_BOOL_OVERRIDES],
+    )
+    def test_env_bool_override_ignored_when_explicit_value_set(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        field: str,
+        env_key: str,
+        default: bool,
+    ) -> None:
+        """Explicit values should take precedence over bool env var overrides."""
+        explicit = not default
+        monkeypatch.setenv(
+            env_key, str(default).lower()
+        )  # env tries to revert to default
+        cfg = HydraConfig(
+            **{field: explicit},  # type: ignore[arg-type]
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert getattr(cfg, field) is explicit
+
     def test_override_table_field_names_are_valid(self) -> None:
         """Every field in the override tables should be a real HydraConfig attribute."""
         all_fields = (
@@ -3124,3 +3150,42 @@ class TestDockerConfigEnvVarOverrides:
             state_file=tmp_path / "s.json",
         )
         assert cfg.docker_no_new_privileges is False
+
+    def test_execution_mode_docker_via_env_raises_when_docker_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_EXECUTION_MODE=docker should trigger docker availability check."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        monkeypatch.setenv("HYDRA_EXECUTION_MODE", "docker")
+        with pytest.raises(ValueError, match="docker.*not found on PATH"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_env_override_out_of_range_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_CPU_LIMIT outside ge/le bounds should be silently ignored."""
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "50.0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)  # unchanged default
+
+    def test_docker_spawn_delay_env_override_out_of_range_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_SPAWN_DELAY outside ge/le bounds should be silently ignored."""
+        monkeypatch.setenv("HYDRA_DOCKER_SPAWN_DELAY", "999.0")
+        cfg = HydraConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(2.0)  # unchanged default

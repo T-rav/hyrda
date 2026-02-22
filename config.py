@@ -527,7 +527,19 @@ class HydraConfig(BaseModel):
                 env_val = os.environ.get(env_key)
                 if env_val is not None:
                     with contextlib.suppress(ValueError):
-                        object.__setattr__(self, field, float(env_val))
+                        new_val = float(env_val)
+                        for constraint in HydraConfig.model_fields[field].metadata:
+                            ge = getattr(constraint, "ge", None)
+                            le = getattr(constraint, "le", None)
+                            if ge is not None and new_val < ge:
+                                raise ValueError(
+                                    f"{env_key}={new_val} is below minimum {ge}"
+                                )
+                            if le is not None and new_val > le:
+                                raise ValueError(
+                                    f"{env_key}={new_val} is above maximum {le}"
+                                )
+                        object.__setattr__(self, field, new_val)
 
         # Data-driven env var overrides (bool fields)
         for field, env_key, default in _ENV_BOOL_OVERRIDES:
