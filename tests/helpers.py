@@ -122,6 +122,9 @@ class ConfigFactory:
         docker_read_only_root: bool = True,
         docker_no_new_privileges: bool = True,
         ui_dirs: list[str] | None = None,
+        docker_enabled: bool = False,
+        docker_network: str = "",
+        docker_extra_mounts: list[str] | None = None,
     ):
         """Create a HydraFlowConfig with test-friendly defaults."""
         from config import HydraFlowConfig
@@ -213,6 +216,11 @@ class ConfigFactory:
             docker_read_only_root=docker_read_only_root,
             docker_no_new_privileges=docker_no_new_privileges,
             ui_dirs=ui_dirs if ui_dirs is not None else ["ui"],
+            docker_enabled=docker_enabled,
+            docker_network=docker_network,
+            docker_extra_mounts=docker_extra_mounts
+            if docker_extra_mounts is not None
+            else [],
         )
 
 
