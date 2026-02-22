@@ -201,7 +201,7 @@ setup:
 
 REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.com[:/]||;s|\.git$$||')
 
-# NOTE: This target is maintained for backward compatibility. It will be
+# NOTE: This target is a convenience setup shortcut. It will be
 # superseded by `hydra --prep` (see issue #569).
 ensure-labels:
 	@echo "$(BLUE)Ensuring Hydra labels exist in $(REPO_SLUG)...$(RESET)"
