@@ -11,6 +11,7 @@ from events import EventBus, EventType, HydraEvent
 from hitl_runner import HITLRunner
 from issue_fetcher import IssueFetcher
 from issue_store import IssueStore
+from memory import file_memory_suggestion
 from pr_manager import PRManager
 from state import StateTracker
 from worktree import WorktreeManager
@@ -158,6 +159,23 @@ class HITLPhase:
                 )
 
                 result = await self._hitl_runner.run(issue, correction, cause, wt_path)
+
+                # File memory suggestion if present in transcript
+                if result.transcript:
+                    try:
+                        await file_memory_suggestion(
+                            result.transcript,
+                            "hitl",
+                            f"issue #{issue_number}",
+                            self._config,
+                            self._prs,
+                            self._state,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to file memory suggestion for issue #%d",
+                            issue_number,
+                        )
 
                 # Remove active label
                 for lbl in self._config.hitl_active_label:
