@@ -80,7 +80,7 @@ Hydra's pipeline draws from three open-source spec-driven development frameworks
 
 ```bash
 cd your-project
-git submodule add https://github.com/T-rav/hyrda.git hydra
+git submodule add https://github.com/T-rav/hydra.git hydra
 git submodule update --init
 ```
 
@@ -360,8 +360,8 @@ ui/                    React dashboard frontend
 
 Hydra's development is tracked in two epics:
 
-- **[#207 — Spec-Driven Planning Pipeline](https://github.com/T-rav/hyrda/issues/207)** — structured plan schemas, delta semantics, progressive rigor, `[NEEDS CLARIFICATION]` markers, RFC 2119 keywords
-- **[#222 — Self-Improving Agent Pipeline](https://github.com/T-rav/hyrda/issues/222)** — memory digest, retrospectives, review insight aggregation, constitution amendments, performance tracking
+- **[#207 — Spec-Driven Planning Pipeline](https://github.com/T-rav/hydra/issues/207)** — structured plan schemas, delta semantics, progressive rigor, `[NEEDS CLARIFICATION]` markers, RFC 2119 keywords
+- **[#222 — Self-Improving Agent Pipeline](https://github.com/T-rav/hydra/issues/222)** — memory digest, retrospectives, review insight aggregation, constitution amendments, performance tracking
 
 Planned self-improvement capabilities:
 
