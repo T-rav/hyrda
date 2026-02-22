@@ -3,9 +3,11 @@ import { theme } from '../theme'
 import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
 import { useHydra } from '../context/HydraContext'
 import { Livestream } from './Livestream'
+import { PipelineControlPanel } from './PipelineControlPanel'
 
 const SUB_TABS = [
   { key: 'workers', label: 'Workers' },
+  { key: 'pipeline', label: 'Pipeline' },
   { key: 'livestream', label: 'Livestream' },
 ]
 
@@ -52,7 +54,7 @@ function statusColor(status) {
   return theme.textInactive
 }
 
-function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval }) {
+function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssues, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval }) {
   const [showIntervalEditor, setShowIntervalEditor] = useState(false)
   const isPipelinePoller = def.key === 'pipeline_poller'
   const isSystem = def.system === true
@@ -76,9 +78,16 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
       statusText = 'idle'
     }
   } else if (isPipelinePoller) {
-    // Pipeline poller is frontend-only
+    // Pipeline poller is frontend-only — derive details from pipeline snapshot
     lastRun = pipelinePollerLastRun || null
-    details = {}
+    const pi = pipelineIssues || {}
+    const triageCount = (pi.triage || []).length
+    const planCount = (pi.plan || []).length
+    const implementCount = (pi.implement || []).length
+    const reviewCount = (pi.review || []).length
+    const hitlCount = (pi.hitl || []).length
+    const total = triageCount + planCount + implementCount + reviewCount
+    details = { triage: triageCount, plan: planCount, implement: implementCount, review: reviewCount, hitl: hitlCount, total }
     dotColor = lastRun ? theme.green : theme.textInactive
     statusText = lastRun ? 'ok' : 'idle'
   } else if (isSystem) {
@@ -122,7 +131,6 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
           data-testid={`dot-${def.key}`}
         />
         <span style={styles.label}>{def.label}</span>
-        {isSystem && <span style={styles.systemBadge}>system</span>}
         {isSystem ? (
           <span
             style={statusText === 'ok'
@@ -210,8 +218,11 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
   )
 }
 
+const NON_SYSTEM_WORKERS = BACKGROUND_WORKERS.filter(w => !w.system)
+const SYSTEM_WORKERS = BACKGROUND_WORKERS.filter(w => w.system)
+
 export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
-  const { pipelinePollerLastRun, orchestratorStatus, events } = useHydra()
+  const { pipelinePollerLastRun, orchestratorStatus, events, pipelineIssues } = useHydra()
   const [activeSubTab, setActiveSubTab] = useState('workers')
 
   return (
@@ -232,7 +243,7 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, on
           <div style={styles.workersContent}>
             <h3 style={styles.heading}>Background Workers</h3>
             <div style={styles.grid}>
-              {BACKGROUND_WORKERS.map((def) => {
+              {NON_SYSTEM_WORKERS.map((def) => {
                 const state = backgroundWorkers.find(w => w.name === def.key)
                 return (
                   <BackgroundWorkerCard
@@ -248,7 +259,29 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, on
                 )
               })}
             </div>
+            <h3 style={styles.sectionHeading}>System</h3>
+            <div style={styles.grid}>
+              {SYSTEM_WORKERS.map((def) => {
+                const state = backgroundWorkers.find(w => w.name === def.key)
+                return (
+                  <BackgroundWorkerCard
+                    key={def.key}
+                    def={def}
+                    state={state}
+                    pipelinePollerLastRun={pipelinePollerLastRun}
+                    pipelineIssues={pipelineIssues}
+                    orchestratorStatus={orchestratorStatus}
+                    onToggleBgWorker={onToggleBgWorker}
+                    onViewLog={onViewLog}
+                    onUpdateInterval={onUpdateInterval}
+                  />
+                )
+              })}
+            </div>
           </div>
+        )}
+        {activeSubTab === 'pipeline' && (
+          <PipelineControlPanel onToggleBgWorker={onToggleBgWorker} />
         )}
         {activeSubTab === 'livestream' && <Livestream events={events} />}
       </div>
@@ -301,6 +334,17 @@ const styles = {
     color: theme.textBright,
     marginBottom: 16,
     marginTop: 0,
+  },
+  sectionHeading: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginTop: 24,
+    marginBottom: 12,
+    borderTop: `1px solid ${theme.border}`,
+    paddingTop: 16,
   },
   grid: {
     display: 'grid',
@@ -430,16 +474,6 @@ const styles = {
     borderRadius: 10,
     padding: '1px 8px',
     textTransform: 'uppercase',
-  },
-  systemBadge: {
-    fontSize: 10,
-    fontWeight: 600,
-    color: theme.textMuted,
-    border: `1px solid ${theme.border}`,
-    borderRadius: 10,
-    padding: '1px 8px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
   },
   cardActions: {
     display: 'flex',
