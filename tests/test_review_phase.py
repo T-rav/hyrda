@@ -3447,7 +3447,7 @@ class TestSelfFixReReview:
         assert phase._reviewers.review.await_count == 2
         phase._prs.merge_pr.assert_not_awaited()
         # Should swap labels to ready (re-queue)
-        phase._prs.add_labels.assert_any_await(42, ["test-label"])
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
         assert phase._state.get_review_attempts(42) == 1
 
     @pytest.mark.asyncio
@@ -3464,7 +3464,7 @@ class TestSelfFixReReview:
         await phase.review_prs([pr], [issue])
 
         assert phase._reviewers.review.await_count == 1
-        phase._prs.add_labels.assert_any_await(42, ["test-label"])
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
 
     @pytest.mark.asyncio
     async def test_self_fix_comment_verdict_triggers_re_review(
@@ -3532,6 +3532,31 @@ class TestSelfFixReReview:
         await phase.review_prs([pr], [issue])
 
         assert phase._state.get_review_attempts(42) == 0
+
+    @pytest.mark.asyncio
+    async def test_re_review_exception_falls_back_to_rejection(
+        self, config: HydraConfig
+    ) -> None:
+        """Re-review exception falls back gracefully to original rejection (re-queue)."""
+        phase, pr, issue = self._setup_phase(config)
+
+        first_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        phase._reviewers.review = AsyncMock(
+            side_effect=[first_result, RuntimeError("transient re-review failure")]
+        )
+
+        await phase.review_prs([pr], [issue])
+
+        # Both calls attempted
+        assert phase._reviewers.review.await_count == 2
+        # Exception falls back to original rejection — no merge
+        phase._prs.merge_pr.assert_not_awaited()
+        # Label swapped to ready (re-queue as original REQUEST_CHANGES)
+        phase._prs.add_labels.assert_any_await(pr.issue_number, config.ready_label)
+        assert phase._state.get_review_attempts(pr.issue_number) == 1
 
 
 # ---------------------------------------------------------------------------
