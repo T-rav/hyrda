@@ -2727,7 +2727,7 @@ class TestHITLLoop:
         error_events = [e for e in orch._bus.get_history() if e.type == EventType.ERROR]
         assert len(error_events) == 1
         assert error_events[0].data["source"] == "hitl"
-        assert "HITL loop error" in error_events[0].data["message"]
+        assert "Hitl loop error" in error_events[0].data["message"]
 
     @pytest.mark.asyncio
     async def test_stop_terminates_hitl_runner(self, config: HydraConfig) -> None:
@@ -3547,3 +3547,313 @@ class TestMemorySuggestionSetsOrigin:
 
         # No hitl_origin should be set when create_issue fails
         assert orch._state.get_hitl_origin(0) is None
+
+
+# ---------------------------------------------------------------------------
+# _polling_loop
+# ---------------------------------------------------------------------------
+
+
+class TestPollingLoop:
+    """Tests for the generic _polling_loop() method."""
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_calls_work_fn_each_cycle(
+        self, config: HydraConfig
+    ) -> None:
+        """Work function should be called on each loop iteration."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 2:
+                orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count >= 2
+
+
+# ---------------------------------------------------------------------------
+# _do_memory_sync_work
+# ---------------------------------------------------------------------------
+
+
+class TestDoMemorySyncWork:
+    """Tests for the _do_memory_sync_work() extracted work method."""
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_updates_bg_status_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """Successful sync should update bg worker status to 'ok'."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        stats = {"synced": 5}
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])  # type: ignore[method-assign]
+        orch._memory_sync.sync = AsyncMock(return_value=stats)  # type: ignore[method-assign]
+        orch._memory_sync.publish_sync_event = AsyncMock()  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_memory_sync_work()
+
+        # Assert
+        status = orch.get_bg_worker_states().get("memory_sync", {})
+        assert status.get("status") == "ok"
+        assert status.get("details") == stats
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_updates_bg_status_on_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed sync should update bg worker status to 'error' and re-raise."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("gh failed")
+        )
+
+        # Act / Assert
+        with pytest.raises(RuntimeError, match="gh failed"):
+            await orch._do_memory_sync_work()
+
+        status = orch.get_bg_worker_states().get("memory_sync", {})
+        assert status.get("status") == "error"
+
+    @pytest.mark.asyncio
+    async def test_memory_sync_work_calls_sync_with_formatted_issue_dicts(
+        self, config: HydraConfig
+    ) -> None:
+        """Should pass correctly formatted issue dicts to memory_sync.sync()."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        from models import GitHubIssue
+
+        mock_issue = GitHubIssue(
+            number=7,
+            title="Memory issue",
+            body="Some learning",
+            labels=["hydra-memory"],
+            comments=[],
+            url="https://github.com/test/repo/issues/7",
+            created_at="2024-01-01T00:00:00Z",
+        )
+        orch._fetcher.fetch_issues_by_labels = AsyncMock(return_value=[mock_issue])  # type: ignore[method-assign]
+        orch._memory_sync.sync = AsyncMock(return_value={})  # type: ignore[method-assign]
+        orch._memory_sync.publish_sync_event = AsyncMock()  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_memory_sync_work()
+
+        # Assert — sync was called with the formatted dict
+        call_args = orch._memory_sync.sync.call_args[0][0]
+        assert len(call_args) == 1
+        assert call_args[0]["number"] == 7
+        assert call_args[0]["title"] == "Memory issue"
+
+
+# ---------------------------------------------------------------------------
+# _do_metrics_sync_work
+# ---------------------------------------------------------------------------
+
+
+class TestDoMetricsSyncWork:
+    """Tests for the _do_metrics_sync_work() extracted work method."""
+
+    @pytest.mark.asyncio
+    async def test_metrics_sync_work_updates_bg_status_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """Successful metrics sync should update bg worker status to 'ok'."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        stats = {"snapshots": 3}
+        orch._store.get_queue_stats = lambda: {}  # type: ignore[method-assign]
+        orch._metrics_manager.sync = AsyncMock(return_value=stats)  # type: ignore[method-assign]
+
+        # Act
+        await orch._do_metrics_sync_work()
+
+        # Assert
+        status = orch.get_bg_worker_states().get("metrics", {})
+        assert status.get("status") == "ok"
+        assert status.get("details") == stats
+
+    @pytest.mark.asyncio
+    async def test_metrics_sync_work_updates_bg_status_on_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed metrics sync should update bg worker status to 'error' and re-raise."""
+        # Arrange
+        orch = HydraOrchestrator(config)
+        orch._store.get_queue_stats = lambda: {}  # type: ignore[method-assign]
+        orch._metrics_manager.sync = AsyncMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("metrics failed")
+        )
+
+        # Act / Assert
+        with pytest.raises(RuntimeError, match="metrics failed"):
+            await orch._do_metrics_sync_work()
+
+        status = orch.get_bg_worker_states().get("metrics", {})
+        assert status.get("status") == "error"
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_stops_on_stop_event(self, config: HydraConfig) -> None:
+        """Loop should exit when stop event is set."""
+        orch = HydraOrchestrator(config)
+        orch._stop_event.set()
+
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_runs_when_enabled_name_is_none(
+        self, config: HydraConfig
+    ) -> None:
+        """Work function always runs when enabled_name is None (no enable check)."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            orch._stop_event.set()
+
+        orch.set_bg_worker_enabled("some_worker", False)
+        await orch._polling_loop("test", work_fn, 0, enabled_name=None)
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_error_message_formats_underscores(
+        self, config: HydraConfig
+    ) -> None:
+        """Error event message should replace underscores with spaces in loop name."""
+        orch = HydraOrchestrator(config)
+        queue = orch._bus.subscribe()
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("boom")
+            orch._stop_event.set()
+
+        await orch._polling_loop("memory_sync", work_fn, 0)
+
+        error_events: list[HydraEvent] = []
+        while not queue.empty():
+            event = queue.get_nowait()
+            if event.type == EventType.ERROR:
+                error_events.append(event)
+
+        assert len(error_events) == 1
+        assert "Memory sync" in error_events[0].data["message"]
+        assert "memory_sync" not in error_events[0].data["message"]
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_skips_when_disabled(self, config: HydraConfig) -> None:
+        """Work function should not be called when worker is disabled."""
+        orch = HydraOrchestrator(config)
+        orch.set_bg_worker_enabled("test_worker", False)
+
+        call_count = 0
+        cycle_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+
+        original_sleep = orch._sleep_or_stop
+
+        async def counting_sleep(seconds: int | float) -> None:
+            nonlocal cycle_count
+            cycle_count += 1
+            if cycle_count >= 2:
+                orch._stop_event.set()
+            await original_sleep(0)
+
+        orch._sleep_or_stop = counting_sleep  # type: ignore[method-assign]
+
+        await orch._polling_loop("test", work_fn, 1, enabled_name="test_worker")
+        assert call_count == 0
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_reraises_auth_error(self, config: HydraConfig) -> None:
+        """AuthenticationError should propagate out of the loop."""
+        orch = HydraOrchestrator(config)
+
+        async def work_fn() -> None:
+            raise AuthenticationError("bad token")
+
+        with pytest.raises(AuthenticationError):
+            await orch._polling_loop("test", work_fn, 0)
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_reraises_credit_error(
+        self, config: HydraConfig
+    ) -> None:
+        """CreditExhaustedError should propagate out of the loop."""
+        from subprocess_util import CreditExhaustedError
+
+        orch = HydraOrchestrator(config)
+
+        async def work_fn() -> None:
+            raise CreditExhaustedError("out of credits")
+
+        with pytest.raises(CreditExhaustedError):
+            await orch._polling_loop("test", work_fn, 0)
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_publishes_error_on_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Non-fatal exceptions should be logged and published as error events."""
+        orch = HydraOrchestrator(config)
+        queue = orch._bus.subscribe()
+
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("oops")
+            orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+
+        error_events: list[HydraEvent] = []
+        while not queue.empty():
+            event = queue.get_nowait()
+            if event.type == EventType.ERROR:
+                error_events.append(event)
+
+        assert len(error_events) == 1
+        assert error_events[0].data["source"] == "test"
+
+    @pytest.mark.asyncio
+    async def test_polling_loop_continues_after_exception(
+        self, config: HydraConfig
+    ) -> None:
+        """Loop should continue running after a non-fatal exception."""
+        orch = HydraOrchestrator(config)
+        call_count = 0
+
+        async def work_fn() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("first call fails")
+            orch._stop_event.set()
+
+        await orch._polling_loop("test", work_fn, 0)
+        assert call_count >= 2
