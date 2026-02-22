@@ -31,6 +31,7 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
     ("test_command", "HYDRA_TEST_COMMAND", "make test"),
+    ("docker_image", "HYDRA_DOCKER_IMAGE", "ghcr.io/travisf/hydra-agent:latest"),
 ]
 
 
@@ -384,6 +385,12 @@ class HydraConfig(BaseModel):
     # Execution mode
     dry_run: bool = Field(
         default=False, description="Log actions without executing them"
+    )
+
+    # Docker isolation
+    docker_image: str = Field(
+        default="ghcr.io/travisf/hydra-agent:latest",
+        description="Docker image for isolated agent execution",
     )
 
     # GitHub authentication
