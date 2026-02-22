@@ -215,6 +215,18 @@ class TestMergeMakefile:
         assert "deploy" in phony_line
         assert "release" in phony_line
 
+    def test_warns_on_different_quality_prerequisites(self) -> None:
+        # quality: exists but chains different targets — should warn
+        existing = "quality: build deploy\n"
+        _, warnings = merge_makefile(existing, "python")
+        assert any("quality" in w for w in warnings)
+
+    def test_no_warning_when_quality_deps_match(self) -> None:
+        # quality: exists with correct chain — no warning
+        existing = "quality: lint-check typecheck test\n"
+        _, warnings = merge_makefile(existing, "python")
+        assert not any("quality" in w for w in warnings)
+
     def test_handles_makefile_without_phony(self) -> None:
         existing = "clean:\n\trm -rf dist\n"
         new_content, _ = merge_makefile(existing, "python")

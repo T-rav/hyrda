@@ -121,7 +121,7 @@ def generate_makefile(language: str) -> str:
         return ""
 
     lines: list[str] = []
-    lines.append(f".PHONY: {' '.join(_ALL_TARGET_NAMES)}\n")
+    lines.append(f".PHONY: {' '.join(_ALL_TARGET_NAMES)}")
     lines.append("")
 
     for name, recipe in targets.items():
@@ -166,6 +166,22 @@ def merge_makefile(existing_content: str, language: str) -> tuple[str, list[str]
                     )
         else:
             targets_to_add.append(name)
+
+    # Warn if existing quality: has different prerequisites (no recipe to compare)
+    if "quality" in existing_targets:
+        quality_match = re.search(
+            r"^quality\s*:(?![=:])\s*(.*)",
+            existing_content,
+            re.MULTILINE,
+        )
+        if quality_match:
+            existing_deps = quality_match.group(1).strip()
+            expected_deps = "lint-check typecheck test"
+            if existing_deps != expected_deps:
+                warnings.append(
+                    f"Target 'quality' exists with different prerequisites: "
+                    f"found '{existing_deps}', expected '{expected_deps}'"
+                )
 
     if not targets_to_add:
         return existing_content, warnings
