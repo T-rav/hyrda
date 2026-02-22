@@ -445,12 +445,17 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     return HydraConfig(**kwargs)
 
 
-async def _run_prep(config: HydraConfig) -> None:
-    """Create Hydra lifecycle labels on the target repo."""
+async def _run_prep(config: HydraConfig) -> bool:
+    """Create Hydra lifecycle labels on the target repo.
+
+    Returns ``True`` if all labels were created/updated successfully,
+    ``False`` if any labels failed.
+    """
     from prep import ensure_labels  # noqa: PLC0415
 
     result = await ensure_labels(config)
     print(result.summary())  # noqa: T201
+    return not result.failed
 
 
 async def _run_audit(config: HydraConfig) -> bool:
@@ -554,8 +559,8 @@ def main(argv: list[str] | None = None) -> None:
     config = build_config(args)
 
     if args.prep:
-        asyncio.run(_run_prep(config))
-        sys.exit(0)
+        success = asyncio.run(_run_prep(config))
+        sys.exit(0 if success else 1)
 
     if args.audit:
         has_gaps = asyncio.run(_run_audit(config))

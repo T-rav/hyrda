@@ -1093,6 +1093,59 @@ class TestRunAudit:
 # ---------------------------------------------------------------------------
 
 
+class TestCliPrep:
+    """Tests for the --prep CLI flag integration."""
+
+    def test_prep_flag_parsed(self) -> None:
+        """Should parse --prep flag."""
+        from cli import parse_args
+
+        args = parse_args(["--prep"])
+        assert args.prep is True
+
+    def test_prep_flag_default_false(self) -> None:
+        """Should default to False."""
+        from cli import parse_args
+
+        args = parse_args([])
+        assert args.prep is False
+
+    def test_main_prep_exits_zero_on_success(self) -> None:
+        """main() should exit 0 when all labels are created successfully."""
+        from unittest.mock import AsyncMock, patch
+
+        import pytest
+
+        from cli import main
+
+        with (
+            patch(
+                "cli._run_prep", new_callable=AsyncMock, return_value=True
+            ) as mock_run,
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main(["--prep"])
+
+        mock_run.assert_called_once()
+        assert exc_info.value.code == 0
+
+    def test_main_prep_exits_one_on_partial_failure(self) -> None:
+        """main() should exit 1 when any labels fail to create."""
+        from unittest.mock import AsyncMock, patch
+
+        import pytest
+
+        from cli import main
+
+        with (
+            patch("cli._run_prep", new_callable=AsyncMock, return_value=False),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main(["--prep"])
+
+        assert exc_info.value.code == 1
+
+
 class TestCliAudit:
     """Tests for the --audit CLI flag."""
 
