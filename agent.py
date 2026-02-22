@@ -407,7 +407,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
         except TimeoutError:
             return False, "make quality timed out after 3600s"
         if result.returncode != 0:
-            output = result.stdout + result.stderr
+            output = "\n".join(filter(None, [result.stdout, result.stderr]))
             return False, f"`make quality` failed:\n{output[-3000:]}"
 
         return True, "OK"

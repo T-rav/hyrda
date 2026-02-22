@@ -219,6 +219,16 @@ class TestHostRunnerRunSimple:
         assert result.stderr == "warn"
 
     @pytest.mark.asyncio
+    async def test_file_not_found_propagates(self) -> None:
+        """FileNotFoundError from create_subprocess_exec must propagate to the caller."""
+        runner = HostRunner()
+        with (
+            patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError),
+            pytest.raises(FileNotFoundError),
+        ):
+            await runner.run_simple(["nonexistent-binary"])
+
+    @pytest.mark.asyncio
     async def test_non_utf8_bytes_are_replaced_not_raised(self) -> None:
         """Non-UTF-8 bytes must be replaced, not raise UnicodeDecodeError."""
         mock_proc = AsyncMock()
