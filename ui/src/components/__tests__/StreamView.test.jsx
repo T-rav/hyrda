@@ -26,6 +26,8 @@ function defaultHydraContext(overrides = {}) {
   }
 }
 
+const defaultHydra = defaultHydraContext()
+
 beforeEach(() => {
   mockUseHydra.mockReturnValue(defaultHydraContext())
 })
