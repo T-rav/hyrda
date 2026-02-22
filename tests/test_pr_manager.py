@@ -1494,6 +1494,51 @@ async def test_ensure_labels_exist_handles_individual_failures(
     assert call_count == len(PRManager._HYDRA_LABELS)
 
 
+def test_makefile_ensure_labels_covers_all_hydra_labels() -> None:
+    """Makefile ensure-labels target must contain every default label name from HydraConfig.
+
+    Regression guard: prevents _HYDRA_LABELS growing while the Makefile target stays
+    stale (the exact problem described in issue #630).
+    """
+    import re
+
+    from config import HydraConfig
+
+    makefile = Path(__file__).parent.parent / "Makefile"
+    content = makefile.read_text()
+
+    # Expand the two Make variables used inside ensure-labels so we can search
+    # for the resolved default strings.
+    content = content.replace("$(PLANNER_LABEL)", "hydra-plan")
+    content = content.replace("$(READY_LABEL)", "hydra-ready")
+
+    # Extract the body of the ensure-labels target (tab-indented recipe lines).
+    lines = content.splitlines()
+    in_target = False
+    target_lines: list[str] = []
+    for line in lines:
+        if re.match(r"^ensure-labels\s*:", line):
+            in_target = True
+            continue
+        if in_target:
+            # A non-indented, non-blank, non-comment line ends the recipe.
+            if line and not line.startswith("\t") and not line.startswith("#"):
+                break
+            target_lines.append(line)
+
+    target_text = "\n".join(target_lines)
+    assert target_text, "Could not find ensure-labels recipe in Makefile"
+
+    cfg = HydraConfig(repo="owner/repo")
+    for field, *_ in PRManager._HYDRA_LABELS:
+        for label_name in getattr(cfg, field):
+            assert label_name in target_text, (
+                f"Label '{label_name}' (HydraConfig.{field}) is missing from the "
+                f"Makefile ensure-labels target — update it to stay in sync with "
+                f"PRManager._HYDRA_LABELS"
+            )
+
+
 # ---------------------------------------------------------------------------
 # _run_with_body_file
 # ---------------------------------------------------------------------------
