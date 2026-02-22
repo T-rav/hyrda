@@ -4143,6 +4143,7 @@ class TestRunPostMergeHooks:
         phase._prs.create_issue.assert_awaited_once()
         body = phase._prs.create_issue.call_args[0][1]
         assert "Check it" in body
+        assert phase._state.get_verification_issue(issue.number) == 500
 
     @pytest.mark.asyncio
     async def test_judge_returns_none_no_verification_issue(

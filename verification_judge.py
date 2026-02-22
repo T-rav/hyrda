@@ -450,6 +450,12 @@ REFINED_INSTRUCTIONS_END
             lines.append("\n*Instructions were refined during evaluation.*")
         lines.append("")
 
+        # Verification instructions
+        if verdict.verification_instructions:
+            lines.append("## Verification Instructions\n")
+            lines.append(verdict.verification_instructions)
+            lines.append("")
+
         # Overall summary
         if verdict.summary:
             lines.append(f"## Summary\n\n{verdict.summary}\n")

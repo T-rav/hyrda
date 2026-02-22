@@ -586,6 +586,25 @@ class TestFormatJudgeReport:
         report = judge._format_judge_report(verdict)
         assert "curl \\| jq" in report
 
+    def test_includes_verification_instructions(self):
+        """verification_instructions from verdict appear in the report."""
+        judge = _make_judge()
+        verdict = JudgeVerdict(
+            issue_number=1,
+            verification_instructions="1. Open app\n2. Click submit",
+        )
+        report = judge._format_judge_report(verdict)
+        assert "Verification Instructions" in report
+        assert "Open app" in report
+        assert "Click submit" in report
+
+    def test_omits_verification_instructions_when_empty(self):
+        """When verification_instructions is empty, the section is not rendered."""
+        judge = _make_judge()
+        verdict = JudgeVerdict(issue_number=1)
+        report = judge._format_judge_report(verdict)
+        assert "Verification Instructions" not in report
+
 
 # ---------------------------------------------------------------------------
 # _update_criteria_file
