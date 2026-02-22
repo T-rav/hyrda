@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
@@ -187,6 +188,15 @@ class TestScaffoldPreCommitHook:
         assert ".husky" in result.message
         assert str(tmp_path / ".githooks" / "pre-commit") in result.message
 
+    def test_empty_string_language_falls_back_to_unknown_hook(
+        self, tmp_path: Path
+    ) -> None:
+        result = scaffold_pre_commit_hook(tmp_path, language="")
+        assert result.created is True
+        assert result.language == ""
+        hook = tmp_path / ".githooks" / "pre-commit"
+        assert "Add your lint command here" in hook.read_text()
+
 
 # ---------------------------------------------------------------------------
 # TestConfigureHooksPath
@@ -208,8 +218,6 @@ class TestConfigureHooksPath:
     async def test_handles_failure_gracefully(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        import logging
-
         with (
             patch(
                 "prep_hooks.run_subprocess",

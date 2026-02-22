@@ -80,10 +80,10 @@ def _has_typescript_indicators(package_json: Path) -> bool:
     if "typescript" in dev_deps:
         return True
 
-    # Check main/types fields for .ts
+    # Check main/types fields for .ts/.tsx extension
     for field in ("main", "types"):
         value = data.get(field, "")
-        if isinstance(value, str) and ".ts" in value:
+        if isinstance(value, str) and value.endswith((".ts", ".tsx")):
             return True
 
     return False
