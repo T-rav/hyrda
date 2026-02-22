@@ -8,12 +8,8 @@ from pathlib import Path
 import pytest
 
 from events import EventBus
-from state import StateTracker
+from tests.conftest import make_state
 from tests.helpers import ConfigFactory
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
 
 
 def _make_router(config, event_bus, state, tmp_path):

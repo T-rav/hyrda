@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventLog, EventType, HydraEvent
+from tests.conftest import EventFactory
 
 # ---------------------------------------------------------------------------
 # EventType enum
@@ -77,7 +80,7 @@ class TestEventTypeEnum:
 
 class TestHydraEvent:
     def test_creation_with_explicit_values(self) -> None:
-        event = HydraEvent(
+        event = EventFactory.create(
             type=EventType.BATCH_START,
             timestamp="2024-01-01T00:00:00+00:00",
             data={"batch": 1},
@@ -97,20 +100,54 @@ class TestHydraEvent:
         assert "+" in event.timestamp or event.timestamp.endswith("Z")
 
     def test_data_defaults_to_empty_dict(self) -> None:
-        event = HydraEvent(type=EventType.PHASE_CHANGE)
+        event = EventFactory.create(type=EventType.PHASE_CHANGE)
         assert event.data == {}
 
     def test_data_accepts_arbitrary_keys(self) -> None:
         payload = {"issue": 42, "phase": "review", "nested": {"key": "value"}}
-        event = HydraEvent(type=EventType.PHASE_CHANGE, data=payload)
+        event = EventFactory.create(type=EventType.PHASE_CHANGE, data=payload)
         assert event.data["issue"] == 42
         assert event.data["nested"]["key"] == "value"
 
     def test_two_events_have_independent_data(self) -> None:
-        e1 = HydraEvent(type=EventType.WORKER_UPDATE, data={"id": 1})
-        e2 = HydraEvent(type=EventType.WORKER_UPDATE, data={"id": 2})
+        e1 = EventFactory.create(type=EventType.WORKER_UPDATE, data={"id": 1})
+        e2 = EventFactory.create(type=EventType.WORKER_UPDATE, data={"id": 2})
         assert e1.data["id"] == 1
         assert e2.data["id"] == 2
+
+
+# ---------------------------------------------------------------------------
+# HydraEvent ID
+# ---------------------------------------------------------------------------
+
+
+class TestHydraEventId:
+    def test_event_id_auto_generated(self) -> None:
+        event = HydraEvent(type=EventType.BATCH_START)
+        assert isinstance(event.id, int)
+
+    def test_event_ids_are_unique(self) -> None:
+        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(10)]
+        ids = [e.id for e in events]
+        assert len(set(ids)) == 10
+
+    def test_event_ids_are_monotonically_increasing(self) -> None:
+        events = [HydraEvent(type=EventType.BATCH_START) for _ in range(5)]
+        for i in range(1, len(events)):
+            assert events[i].id > events[i - 1].id
+
+    def test_event_id_included_in_serialization(self) -> None:
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        dumped = event.model_dump()
+        assert "id" in dumped
+        assert isinstance(dumped["id"], int)
+
+        json_str = event.model_dump_json()
+        assert '"id"' in json_str
+
+    def test_explicit_event_id_preserved(self) -> None:
+        event = HydraEvent(id=999, type=EventType.BATCH_START)
+        assert event.id == 999
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +161,7 @@ class TestEventBusPublishSubscribe:
         bus = EventBus()
         queue = bus.subscribe()
 
-        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        event = EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
         await bus.publish(event)
 
         received = queue.get_nowait()
@@ -137,7 +174,7 @@ class TestEventBusPublishSubscribe:
         q2 = bus.subscribe()
         q3 = bus.subscribe()
 
-        event = HydraEvent(type=EventType.PR_CREATED, data={"pr": 42})
+        event = EventFactory.create(type=EventType.PR_CREATED, data={"pr": 42})
         await bus.publish(event)
 
         assert q1.get_nowait() is event
@@ -149,8 +186,8 @@ class TestEventBusPublishSubscribe:
         bus = EventBus()
         queue = bus.subscribe()
 
-        e1 = HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "start"})
-        e2 = HydraEvent(type=EventType.PHASE_CHANGE, data={"phase": "end"})
+        e1 = EventFactory.create(type=EventType.PHASE_CHANGE, data={"phase": "start"})
+        e2 = EventFactory.create(type=EventType.PHASE_CHANGE, data={"phase": "end"})
         await bus.publish(e1)
         await bus.publish(e2)
 
@@ -166,7 +203,7 @@ class TestEventBusPublishSubscribe:
     @pytest.mark.asyncio
     async def test_no_subscribers_publish_does_not_raise(self) -> None:
         bus = EventBus()
-        event = HydraEvent(type=EventType.BATCH_COMPLETE)
+        event = EventFactory.create(type=EventType.BATCH_COMPLETE)
         await bus.publish(event)  # should not raise
 
     @pytest.mark.asyncio
@@ -188,7 +225,7 @@ class TestEventBusUnsubscribe:
         queue = bus.subscribe()
         bus.unsubscribe(queue)
 
-        await bus.publish(HydraEvent(type=EventType.ERROR))
+        await bus.publish(EventFactory.create(type=EventType.ERROR))
 
         assert queue.empty()
 
@@ -199,7 +236,7 @@ class TestEventBusUnsubscribe:
         q2 = bus.subscribe()
         bus.unsubscribe(q1)
 
-        event = HydraEvent(type=EventType.MERGE_UPDATE)
+        event = EventFactory.create(type=EventType.MERGE_UPDATE)
         await bus.publish(event)
 
         assert q1.empty()
@@ -229,8 +266,8 @@ class TestEventBusHistory:
     @pytest.mark.asyncio
     async def test_get_history_returns_published_events(self) -> None:
         bus = EventBus()
-        e1 = HydraEvent(type=EventType.BATCH_START)
-        e2 = HydraEvent(type=EventType.BATCH_COMPLETE)
+        e1 = EventFactory.create(type=EventType.BATCH_START)
+        e2 = EventFactory.create(type=EventType.BATCH_COMPLETE)
         await bus.publish(e1)
         await bus.publish(e2)
 
@@ -242,7 +279,8 @@ class TestEventBusHistory:
     async def test_get_history_preserves_order(self) -> None:
         bus = EventBus()
         events = [
-            HydraEvent(type=EventType.WORKER_UPDATE, data={"n": i}) for i in range(5)
+            EventFactory.create(type=EventType.WORKER_UPDATE, data={"n": i})
+            for i in range(5)
         ]
         for event in events:
             await bus.publish(event)
@@ -254,7 +292,7 @@ class TestEventBusHistory:
     async def test_get_history_returns_copy(self) -> None:
         """Mutating the returned list must not affect internal history."""
         bus = EventBus()
-        await bus.publish(HydraEvent(type=EventType.PHASE_CHANGE))
+        await bus.publish(EventFactory.create(type=EventType.PHASE_CHANGE))
 
         history = bus.get_history()
         history.clear()
@@ -265,7 +303,9 @@ class TestEventBusHistory:
     async def test_history_accumulates_across_publishes(self) -> None:
         bus = EventBus()
         for i in range(10):
-            await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE, data={"i": i}))
+            await bus.publish(
+                EventFactory.create(type=EventType.TRANSCRIPT_LINE, data={"i": i})
+            )
         assert len(bus.get_history()) == 10
 
     @pytest.mark.asyncio
@@ -284,7 +324,9 @@ class TestEventBusHistoryCap:
     async def test_history_capped_at_max_history(self) -> None:
         bus = EventBus(max_history=5)
         for i in range(10):
-            await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE, data={"i": i}))
+            await bus.publish(
+                EventFactory.create(type=EventType.TRANSCRIPT_LINE, data={"i": i})
+            )
 
         history = bus.get_history()
         assert len(history) == 5
@@ -293,7 +335,8 @@ class TestEventBusHistoryCap:
     async def test_history_retains_most_recent_events_when_capped(self) -> None:
         bus = EventBus(max_history=3)
         events = [
-            HydraEvent(type=EventType.WORKER_UPDATE, data={"n": i}) for i in range(6)
+            EventFactory.create(type=EventType.WORKER_UPDATE, data={"n": i})
+            for i in range(6)
         ]
         for event in events:
             await bus.publish(event)
@@ -305,8 +348,8 @@ class TestEventBusHistoryCap:
     @pytest.mark.asyncio
     async def test_max_history_one_keeps_latest(self) -> None:
         bus = EventBus(max_history=1)
-        e1 = HydraEvent(type=EventType.BATCH_START)
-        e2 = HydraEvent(type=EventType.BATCH_COMPLETE)
+        e1 = EventFactory.create(type=EventType.BATCH_START)
+        e2 = EventFactory.create(type=EventType.BATCH_COMPLETE)
         await bus.publish(e1)
         await bus.publish(e2)
 
@@ -319,7 +362,7 @@ class TestEventBusHistoryCap:
         limit = 100
         bus = EventBus(max_history=limit)
         for _ in range(limit + 1):
-            await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE))
+            await bus.publish(EventFactory.create(type=EventType.TRANSCRIPT_LINE))
         assert len(bus.get_history()) == limit
 
 
@@ -332,7 +375,7 @@ class TestEventBusClear:
     @pytest.mark.asyncio
     async def test_clear_removes_history(self) -> None:
         bus = EventBus()
-        await bus.publish(HydraEvent(type=EventType.BATCH_START))
+        await bus.publish(EventFactory.create(type=EventType.BATCH_START))
         bus.clear()
         assert bus.get_history() == []
 
@@ -343,7 +386,7 @@ class TestEventBusClear:
         bus.clear()
 
         # After clearing, publishing should not deliver to the old queue
-        await bus.publish(HydraEvent(type=EventType.BATCH_COMPLETE))
+        await bus.publish(EventFactory.create(type=EventType.BATCH_COMPLETE))
         assert queue.empty()
 
     @pytest.mark.asyncio
@@ -354,11 +397,11 @@ class TestEventBusClear:
     @pytest.mark.asyncio
     async def test_bus_usable_after_clear(self) -> None:
         bus = EventBus()
-        await bus.publish(HydraEvent(type=EventType.BATCH_START))
+        await bus.publish(EventFactory.create(type=EventType.BATCH_START))
         bus.clear()
 
         queue = bus.subscribe()
-        event = HydraEvent(type=EventType.BATCH_COMPLETE)
+        event = EventFactory.create(type=EventType.BATCH_COMPLETE)
         await bus.publish(event)
 
         assert queue.get_nowait() is event
@@ -379,7 +422,9 @@ class TestEventBusSlowSubscriber:
 
         # Fill the queue
         for i in range(5):
-            await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE, data={"i": i}))
+            await bus.publish(
+                EventFactory.create(type=EventType.TRANSCRIPT_LINE, data={"i": i})
+            )
 
         # Queue should still have exactly max_queue items
         assert queue.qsize() == 2
@@ -391,7 +436,8 @@ class TestEventBusSlowSubscriber:
         queue = bus.subscribe(max_queue=2)
 
         events = [
-            HydraEvent(type=EventType.WORKER_UPDATE, data={"n": i}) for i in range(4)
+            EventFactory.create(type=EventType.WORKER_UPDATE, data={"n": i})
+            for i in range(4)
         ]
         for event in events:
             await bus.publish(event)
@@ -413,7 +459,8 @@ class TestEventBusSlowSubscriber:
 
         # Overflow the slow queue
         events = [
-            HydraEvent(type=EventType.PHASE_CHANGE, data={"n": i}) for i in range(5)
+            EventFactory.create(type=EventType.PHASE_CHANGE, data={"n": i})
+            for i in range(5)
         ]
         for event in events:
             await bus.publish(event)
@@ -428,7 +475,9 @@ class TestEventBusSlowSubscriber:
         bus.subscribe(max_queue=1)  # tiny queue - will drop
 
         for i in range(10):
-            await bus.publish(HydraEvent(type=EventType.TRANSCRIPT_LINE, data={"i": i}))
+            await bus.publish(
+                EventFactory.create(type=EventType.TRANSCRIPT_LINE, data={"i": i})
+            )
 
         # History should contain all 10, regardless of subscriber drops
         assert len(bus.get_history()) == 10
@@ -443,7 +492,7 @@ class TestEventBusSubscription:
     async def test_subscription_yields_queue_that_receives_events(self) -> None:
         bus = EventBus()
         async with bus.subscription() as queue:
-            event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+            event = EventFactory.create(type=EventType.BATCH_START, data={"batch": 1})
             await bus.publish(event)
             received = queue.get_nowait()
             assert received is event
@@ -454,7 +503,7 @@ class TestEventBusSubscription:
             pass  # immediately exit
 
         # After exiting, queue should no longer receive events
-        await bus.publish(HydraEvent(type=EventType.ERROR))
+        await bus.publish(EventFactory.create(type=EventType.ERROR))
         assert queue.empty()
         assert len(bus._subscribers) == 0
 
@@ -476,13 +525,52 @@ class TestEventBusSubscription:
         bus = EventBus()
         async with bus.subscription() as q1:
             async with bus.subscription() as q2:
-                event1 = HydraEvent(type=EventType.PHASE_CHANGE, data={"n": 1})
+                event1 = EventFactory.create(type=EventType.PHASE_CHANGE, data={"n": 1})
                 await bus.publish(event1)
                 assert q1.get_nowait() is event1
                 assert q2.get_nowait() is event1
 
             # q2's context has exited; only q1 remains
-            event2 = HydraEvent(type=EventType.PHASE_CHANGE, data={"n": 2})
+            event2 = EventFactory.create(type=EventType.PHASE_CHANGE, data={"n": 2})
             await bus.publish(event2)
             assert q1.get_nowait() is event2
             assert q2.empty()
+
+
+# ---------------------------------------------------------------------------
+# EventLog._rotate_sync delegates to atomic_write
+# ---------------------------------------------------------------------------
+
+
+class TestRotateSyncUsesAtomicWrite:
+    def test_rotate_sync_calls_atomic_write(self, tmp_path: Path) -> None:
+        """_rotate_sync should delegate file writing to atomic_write."""
+        log_path = tmp_path / "events.jsonl"
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        # Write enough data to exceed max_size_bytes
+        log_path.write_text((event.model_dump_json() + "\n") * 100)
+
+        event_log = EventLog(log_path)
+        with patch("events.atomic_write") as mock_aw:
+            event_log._rotate_sync(max_size_bytes=10, max_age_days=365)
+
+        mock_aw.assert_called_once()
+        call_args = mock_aw.call_args[0]
+        assert call_args[0] == log_path
+
+    def test_rotate_sync_passes_joined_content(self, tmp_path: Path) -> None:
+        """_rotate_sync should pass newline-joined kept lines to atomic_write."""
+        log_path = tmp_path / "events.jsonl"
+        event = HydraEvent(type=EventType.BATCH_START, data={"batch": 1})
+        log_path.write_text((event.model_dump_json() + "\n") * 5)
+
+        event_log = EventLog(log_path)
+        with patch("events.atomic_write") as mock_aw:
+            event_log._rotate_sync(max_size_bytes=10, max_age_days=365)
+
+        call_args = mock_aw.call_args[0]
+        content = call_args[1]
+        # Content should end with newline and contain valid JSON lines
+        assert content.endswith("\n")
+        lines = [line for line in content.split("\n") if line.strip()]
+        assert len(lines) == 5
