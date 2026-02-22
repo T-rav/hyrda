@@ -169,10 +169,11 @@ class TestStartOrchestratorBroadcast:
         data = json.loads(response.body)
         assert data["status"] == "started"
 
-        # Verify that orchestrator_status event was published
+        # Verify that orchestrator_status event was published with reset flag
         event = queue.get_nowait()
         assert event.type == "orchestrator_status"
         assert event.data["status"] == "running"
+        assert event.data["reset"] is True
 
 
 class TestControlStatusImproveLabel:

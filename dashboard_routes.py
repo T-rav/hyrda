@@ -369,7 +369,7 @@ def create_router(
         await event_bus.publish(
             HydraEvent(
                 type=EventType.ORCHESTRATOR_STATUS,
-                data={"status": "running"},
+                data={"status": "running", "reset": True},
             )
         )
         return JSONResponse({"status": "started"})
