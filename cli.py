@@ -65,7 +65,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--model",
         default=None,
-        help="Model for implementation agents (default: sonnet)",
+        help="Model for implementation agents (default: opus)",
     )
     parser.add_argument(
         "--review-model",

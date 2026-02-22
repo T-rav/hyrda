@@ -65,7 +65,7 @@ class TestBuildConfigWithConfigFile:
 
         # Should use defaults
         assert cfg.max_workers == 3
-        assert cfg.model == "sonnet"
+        assert cfg.model == "opus"
 
     def test_no_config_file_uses_defaults(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -77,7 +77,7 @@ class TestBuildConfigWithConfigFile:
         cfg = build_config(args)
 
         assert cfg.max_workers == 3
-        assert cfg.model == "sonnet"
+        assert cfg.model == "opus"
 
     def test_config_file_with_multiple_fields(self, tmp_path: Path) -> None:
         """Config file should support multiple fields."""

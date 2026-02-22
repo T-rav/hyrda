@@ -192,7 +192,7 @@ class TestConfigFileMergePriority:
         )
 
         assert cfg.max_workers == 3  # Default
-        assert cfg.model == "sonnet"  # Default
+        assert cfg.model == "opus"  # Default
 
     def test_config_file_with_float_field(self, tmp_path: Path) -> None:
         """Float fields from config file should be preserved."""

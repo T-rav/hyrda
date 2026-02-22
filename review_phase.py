@@ -159,6 +159,44 @@ class ReviewPhase:
         diff = await self._prs.get_pr_diff(pr.number)
         result = await self._run_and_post_review(pr, issue, wt_path, diff, idx)
 
+        # If reviewer fixed its own findings, re-review the updated code
+        if result.fixes_made and result.verdict in (
+            ReviewVerdict.REQUEST_CHANGES,
+            ReviewVerdict.COMMENT,
+        ):
+            logger.info(
+                "PR #%d: reviewer self-fixed with %s verdict — re-reviewing updated code",
+                pr.number,
+                result.verdict.value,
+            )
+            try:
+                await self._publish_review_status(pr, idx, "re_reviewing")
+                updated_diff = await self._prs.get_pr_diff(pr.number)
+                diff = updated_diff  # Use updated diff for post-merge hooks
+                re_result = await self._reviewers.review(
+                    pr, issue, wt_path, updated_diff, worker_id=idx
+                )
+                if re_result.fixes_made:
+                    await self._prs.push_branch(wt_path, pr.branch)
+                if re_result.verdict == ReviewVerdict.APPROVE:
+                    logger.info(
+                        "PR #%d: self-fix re-review passed — upgrading verdict to APPROVE",
+                        pr.number,
+                    )
+                    result = re_result
+                else:
+                    logger.info(
+                        "PR #%d: self-fix re-review still returned %s — proceeding with rejection",
+                        pr.number,
+                        re_result.verdict.value,
+                    )
+            except Exception:
+                logger.warning(
+                    "PR #%d: self-fix re-review failed — falling back to original rejection",
+                    pr.number,
+                    exc_info=True,
+                )
+
         self._state.mark_pr(pr.number, result.verdict.value)
         self._state.mark_issue(pr.issue_number, "reviewed")
         self._state.record_review_verdict(result.verdict.value, result.fixes_made)

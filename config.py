@@ -62,10 +62,10 @@ class HydraFlowConfig(BaseModel):
     max_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
     )
-    model: str = Field(default="sonnet", description="Model for implementation agents")
+    model: str = Field(default="opus", description="Model for implementation agents")
 
     # Review configuration
-    review_model: str = Field(default="sonnet", description="Model for review agents")
+    review_model: str = Field(default="opus", description="Model for review agents")
     review_budget_usd: float = Field(
         default=0, ge=0, description="USD cap per review agent (0 = unlimited)"
     )
