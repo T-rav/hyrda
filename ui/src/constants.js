@@ -40,6 +40,21 @@ export const PIPELINE_LOOPS = [
 ]
 
 /**
+ * Preset interval options for background worker schedule editor.
+ */
+export const INTERVAL_PRESETS = [
+  { label: '30m', seconds: 1800 },
+  { label: '1h', seconds: 3600 },
+  { label: '2h', seconds: 7200 },
+  { label: '4h', seconds: 14400 },
+]
+
+/**
+ * Workers whose interval can be edited from the UI.
+ */
+export const EDITABLE_INTERVAL_WORKERS = new Set(['memory_sync', 'metrics'])
+
+/**
  * Background worker definitions — maintenance and system loops that can be toggled on/off.
  * Workers with `system: true` are internal services shown with a "system" badge.
  */

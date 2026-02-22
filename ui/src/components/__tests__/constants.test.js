@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { ACTIVE_STATUSES, PIPELINE_STAGES } from '../../constants'
+import { ACTIVE_STATUSES, PIPELINE_STAGES, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../../constants'
 import { theme } from '../../theme'
 
 describe('ACTIVE_STATUSES', () => {
@@ -105,5 +105,37 @@ describe('PIPELINE_STAGES', () => {
   it('has unique keys', () => {
     const keys = PIPELINE_STAGES.map(s => s.key)
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('INTERVAL_PRESETS', () => {
+  it('has expected number of presets', () => {
+    expect(INTERVAL_PRESETS).toHaveLength(4)
+  })
+
+  it('each preset has label and seconds', () => {
+    for (const preset of INTERVAL_PRESETS) {
+      expect(preset).toHaveProperty('label')
+      expect(preset).toHaveProperty('seconds')
+      expect(typeof preset.seconds).toBe('number')
+    }
+  })
+
+  it('presets are in ascending order', () => {
+    for (let i = 1; i < INTERVAL_PRESETS.length; i++) {
+      expect(INTERVAL_PRESETS[i].seconds).toBeGreaterThan(INTERVAL_PRESETS[i - 1].seconds)
+    }
+  })
+})
+
+describe('EDITABLE_INTERVAL_WORKERS', () => {
+  it('includes memory_sync and metrics', () => {
+    expect(EDITABLE_INTERVAL_WORKERS.has('memory_sync')).toBe(true)
+    expect(EDITABLE_INTERVAL_WORKERS.has('metrics')).toBe(true)
+  })
+
+  it('does not include non-editable workers', () => {
+    expect(EDITABLE_INTERVAL_WORKERS.has('retrospective')).toBe(false)
+    expect(EDITABLE_INTERVAL_WORKERS.has('triage')).toBe(false)
   })
 })

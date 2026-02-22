@@ -164,7 +164,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--memory-sync-interval",
         type=int,
         default=None,
-        help="Seconds between memory sync polls (default: 120)",
+        help="Seconds between memory sync polls (default: 3600)",
     )
     parser.add_argument(
         "--metrics-label",
@@ -180,7 +180,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--metrics-sync-interval",
         type=int,
         default=None,
-        help="Seconds between metrics snapshot syncs (default: 300)",
+        help="Seconds between metrics snapshot syncs (default: 7200)",
     )
     parser.add_argument(
         "--planner-model",

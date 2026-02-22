@@ -329,9 +329,11 @@ export function reducer(state, action) {
       const rest = state.backgroundWorkers.filter(w => w.name !== worker)
       // Preserve local enabled flag if backend doesn't send one
       const enabled = action.data.enabled !== undefined ? action.data.enabled : (prev?.enabled ?? true)
+      // Heartbeat events don't carry interval_seconds — preserve from prior state
+      const interval_seconds = action.data.interval_seconds ?? prev?.interval_seconds ?? null
       return {
         ...addEvent(state, action),
-        backgroundWorkers: [...rest, { name: worker, status, last_run, details, enabled }],
+        backgroundWorkers: [...rest, { name: worker, status, last_run, details, enabled, interval_seconds }],
       }
     }
 
@@ -363,6 +365,23 @@ export function reducer(state, action) {
         enabled: localOverrides[w.name] !== undefined ? localOverrides[w.name] : w.enabled,
       }))
       return { ...state, backgroundWorkers: merged }
+    }
+
+    case 'UPDATE_BG_WORKER_INTERVAL': {
+      const { name: intervalName, interval_seconds } = action.data
+      const existingBw = state.backgroundWorkers.find(w => w.name === intervalName)
+      if (existingBw) {
+        return {
+          ...state,
+          backgroundWorkers: state.backgroundWorkers.map(w =>
+            w.name === intervalName ? { ...w, interval_seconds } : w
+          ),
+        }
+      }
+      return {
+        ...state,
+        backgroundWorkers: [...state.backgroundWorkers, { name: intervalName, status: 'ok', enabled: true, last_run: null, interval_seconds, details: {} }],
+      }
     }
 
     case 'METRICS':
@@ -570,6 +589,18 @@ export function HydraProvider({ children }) {
     } catch { /* ignore — local state already updated */ }
   }, [])
 
+  const updateBgWorkerInterval = useCallback(async (name, intervalSeconds) => {
+    // Optimistic local update
+    dispatch({ type: 'UPDATE_BG_WORKER_INTERVAL', data: { name, interval_seconds: intervalSeconds } })
+    try {
+      await fetch('/api/control/bg-worker/interval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, interval_seconds: intervalSeconds }),
+      })
+    } catch { /* ignore — local state already updated */ }
+  }, [])
+
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
     try {
       await fetch(`/api/human-input/${issueNumber}`, {
@@ -727,6 +758,7 @@ export function HydraProvider({ children }) {
     submitIntent,
     submitHumanInput,
     toggleBgWorker,
+    updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,
   }
 

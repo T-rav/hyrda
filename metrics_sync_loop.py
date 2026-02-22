@@ -28,6 +28,7 @@ class MetricsSyncLoop:
         status_cb: Callable[[str, str, dict[str, Any] | None], None],
         enabled_cb: Callable[[str], bool],
         sleep_fn: Callable[[int | float], Coroutine[Any, Any, None]],
+        interval_cb: Callable[[str], int] | None = None,
     ) -> None:
         self._config = config
         self._store = store
@@ -37,12 +38,20 @@ class MetricsSyncLoop:
         self._status_cb = status_cb
         self._enabled_cb = enabled_cb
         self._sleep_fn = sleep_fn
+        self._interval_cb = interval_cb
+
+    def _get_interval(self) -> int:
+        """Return the effective interval, preferring dynamic override."""
+        if self._interval_cb is not None:
+            return self._interval_cb("metrics")
+        return self._config.metrics_sync_interval
 
     async def run(self) -> None:
         """Continuously aggregate and persist metrics snapshots."""
         while not self._stop_event.is_set():
+            interval = self._get_interval()
             if not self._enabled_cb("metrics"):
-                await self._sleep_fn(self._config.metrics_sync_interval)
+                await self._sleep_fn(interval)
                 continue
             try:
                 queue_stats = self._store.get_queue_stats()
@@ -64,4 +73,4 @@ class MetricsSyncLoop:
                         },
                     )
                 )
-            await self._sleep_fn(self._config.metrics_sync_interval)
+            await self._sleep_fn(interval)

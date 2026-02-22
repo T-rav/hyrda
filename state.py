@@ -314,6 +314,17 @@ class StateTracker:
             self._data.memory_last_synced,
         )
 
+    # --- worker interval overrides ---
+
+    def get_worker_intervals(self) -> dict[str, int]:
+        """Return persisted worker interval overrides."""
+        return dict(self._data.worker_intervals)
+
+    def set_worker_intervals(self, intervals: dict[str, int]) -> None:
+        """Persist worker interval overrides."""
+        self._data.worker_intervals = intervals
+        self.save()
+
     # --- metrics state ---
 
     def get_metrics_issue_number(self) -> int | None:
