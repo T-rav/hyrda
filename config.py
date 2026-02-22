@@ -656,22 +656,38 @@ class HydraConfig(BaseModel):
         if self.docker_cpu_limit == 2.0:  # still at default
             env_cpu = os.environ.get("HYDRA_DOCKER_CPU_LIMIT")
             if env_cpu is not None:
-                with contextlib.suppress(ValueError):
-                    object.__setattr__(self, "docker_cpu_limit", float(env_cpu))
+                try:
+                    cpu_val = float(env_cpu)
+                except ValueError:
+                    pass
+                else:
+                    if not (0.5 <= cpu_val <= 16.0):
+                        msg = f"HYDRA_DOCKER_CPU_LIMIT must be between 0.5 and 16.0, got {cpu_val}"
+                        raise ValueError(msg)
+                    object.__setattr__(self, "docker_cpu_limit", cpu_val)
 
         if self.docker_memory_limit == "4g":  # still at default
             env_mem = os.environ.get("HYDRA_DOCKER_MEMORY_LIMIT")
             if env_mem is not None:
+                if not re.fullmatch(r"\d+[bkmg]", env_mem, re.IGNORECASE):
+                    msg = f"Invalid HYDRA_DOCKER_MEMORY_LIMIT '{env_mem}'; expected digits followed by b/k/m/g (e.g., '4g', '512m')"
+                    raise ValueError(msg)
                 object.__setattr__(self, "docker_memory_limit", env_mem)
 
         if self.docker_tmp_size == "1g":  # still at default
             env_tmp = os.environ.get("HYDRA_DOCKER_TMP_SIZE")
             if env_tmp is not None:
+                if not re.fullmatch(r"\d+[bkmg]", env_tmp, re.IGNORECASE):
+                    msg = f"Invalid HYDRA_DOCKER_TMP_SIZE '{env_tmp}'; expected digits followed by b/k/m/g (e.g., '1g', '512m')"
+                    raise ValueError(msg)
                 object.__setattr__(self, "docker_tmp_size", env_tmp)
 
         if self.docker_network_mode == "bridge":  # still at default
             env_net = os.environ.get("HYDRA_DOCKER_NETWORK_MODE")
             if env_net is not None:
+                if env_net not in ("bridge", "none"):
+                    msg = f"HYDRA_DOCKER_NETWORK_MODE must be 'bridge' or 'none', got '{env_net}'"
+                    raise ValueError(msg)
                 object.__setattr__(self, "docker_network_mode", env_net)
 
         # Docker read-only root override (bool)

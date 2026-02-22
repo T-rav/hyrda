@@ -2915,3 +2915,63 @@ class TestDockerResourceEnvOverrides:
             state_file=tmp_path / "s.json",
         )
         assert cfg.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_network_mode_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_NETWORK_MODE=host must be rejected (security: bypasses isolation)."""
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK_MODE", "host")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_NETWORK_MODE must be"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_memory_limit_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_MEMORY_LIMIT with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_MEMORY_LIMIT", "invalid_val")
+        with pytest.raises(ValueError, match="Invalid HYDRA_DOCKER_MEMORY_LIMIT"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_TMP_SIZE with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_TMP_SIZE", "4gb")
+        with pytest.raises(ValueError, match="Invalid HYDRA_DOCKER_TMP_SIZE"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_cpu_limit_env_override_below_minimum_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_CPU_LIMIT below ge=0.5 must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "0.1")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_CPU_LIMIT must be between"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_cpu_limit_env_override_above_maximum_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRA_DOCKER_CPU_LIMIT above le=16.0 must be rejected."""
+        monkeypatch.setenv("HYDRA_DOCKER_CPU_LIMIT", "32.0")
+        with pytest.raises(ValueError, match="HYDRA_DOCKER_CPU_LIMIT must be between"):
+            HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
