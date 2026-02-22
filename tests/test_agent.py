@@ -796,6 +796,7 @@ class TestCountCommits:
             cwd=str(tmp_path),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=None,
         )
 
     @pytest.mark.asyncio

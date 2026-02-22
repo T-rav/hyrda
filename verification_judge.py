@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from execution import get_default_runner
 from models import (
     CriterionResult,
     CriterionVerdict,
@@ -16,6 +18,9 @@ from models import (
 )
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
+
+if TYPE_CHECKING:
+    from execution import SubprocessRunner
 
 logger = logging.getLogger("hydra.verification_judge")
 
@@ -28,10 +33,16 @@ class VerificationJudge:
     instructions (max 1 retry), and persists a judge report.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        config: HydraConfig,
+        event_bus: EventBus,
+        runner: SubprocessRunner | None = None,
+    ) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
+        self._runner = runner or get_default_runner()
 
     async def judge(
         self,
@@ -517,6 +528,7 @@ REFINED_INSTRUCTIONS_END
             event_bus=self._bus,
             event_data={"issue": issue_number, "source": "verification_judge"},
             logger=logger,
+            runner=self._runner,
         )
 
     def terminate(self) -> None:
