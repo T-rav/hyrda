@@ -824,7 +824,11 @@ class PRManager:
     async def _count_open_issues_by_label(
         self, label_map: dict[str, list[str]]
     ) -> dict[str, int]:
-        """Count open issues for each display key in *label_map*."""
+        """Count open issues for each display key in *label_map*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         open_by_label: dict[str, int] = {}
         for display_key, label_names in label_map.items():
             count = 0
@@ -832,18 +836,12 @@ class PRManager:
                 try:
                     raw = await self._run_gh(
                         "gh",
-                        "issue",
-                        "list",
-                        "--repo",
-                        self._repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number",
+                        "api",
+                        "search/issues",
+                        "-f",
+                        f'q=repo:{self._repo} is:issue is:open label:"{label}"',
                         "--jq",
-                        "length",
+                        ".total_count",
                     )
                     count += int(raw.strip() or "0")
                 except (RuntimeError, ValueError):
@@ -852,24 +850,22 @@ class PRManager:
         return open_by_label
 
     async def _count_closed_issues(self, labels: list[str]) -> int:
-        """Count closed issues with any of the given *labels*."""
+        """Count closed issues with any of the given *labels*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         total = 0
         for label in labels:
             try:
                 raw = await self._run_gh(
                     "gh",
-                    "issue",
-                    "list",
-                    "--repo",
-                    self._repo,
-                    "--label",
-                    label,
-                    "--state",
-                    "closed",
-                    "--json",
-                    "number",
+                    "api",
+                    "search/issues",
+                    "-f",
+                    f'q=repo:{self._repo} is:issue is:closed label:"{label}"',
                     "--jq",
-                    "length",
+                    ".total_count",
                 )
                 total += int(raw.strip() or "0")
             except (RuntimeError, ValueError):
@@ -877,22 +873,20 @@ class PRManager:
         return total
 
     async def _count_merged_prs(self, label: str) -> int:
-        """Count merged PRs with the given *label*."""
+        """Count merged PRs with the given *label*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         try:
             raw = await self._run_gh(
                 "gh",
-                "pr",
-                "list",
-                "--repo",
-                self._repo,
-                "--state",
-                "merged",
-                "--label",
-                label,
-                "--json",
-                "number",
+                "api",
+                "search/issues",
+                "-f",
+                f'q=repo:{self._repo} is:pr is:merged label:"{label}"',
                 "--jq",
-                "length",
+                ".total_count",
             )
             return int(raw.strip() or "0")
         except (RuntimeError, ValueError):
