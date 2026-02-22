@@ -358,6 +358,32 @@ class AnalysisResultFactory:
         )
 
 
+# --- CI Scaffold Result Factory ---
+
+
+class CIScaffoldResultFactory:
+    """Factory for CIScaffoldResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        created: bool = True,
+        skipped: bool = False,
+        skip_reason: str = "",
+        language: str = "python",
+        workflow_path: str = ".github/workflows/quality.yml",
+    ):
+        from ci_scaffold import CIScaffoldResult
+
+        return CIScaffoldResult(
+            created=created,
+            skipped=skipped,
+            skip_reason=skip_reason,
+            language=language,
+            workflow_path=workflow_path,
+        )
+
+
 # --- State Fixture ---
 
 
