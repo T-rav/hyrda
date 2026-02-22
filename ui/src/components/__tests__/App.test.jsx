@@ -62,6 +62,7 @@ vi.mock('../../context/HydraContext', () => ({
 beforeEach(() => {
   mockState.hitlItems = []
   mockState.prs = []
+  mockState.resetSession = undefined
   cleanup()
 })
 

@@ -114,10 +114,8 @@ class TestStartOrchestratorBroadcast:
 
         pr_mgr = PRManager(config, event_bus)
 
-        captured_orch = {}
-
         def set_orch(o):
-            captured_orch["orch"] = o
+            pass
 
         def set_task(t):
             t.cancel()  # Cancel the actual run task to avoid side effects
