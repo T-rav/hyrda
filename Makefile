@@ -32,7 +32,10 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels prep hot
+# Docker agent image
+DOCKER_IMAGE ?= ghcr.io/t-rav/hydra-agent:latest
+
+.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test
 
 help:
 	@echo "$(BLUE)Hydra — Intent in. Software out.$(RESET)"
@@ -58,6 +61,8 @@ help:
 	@echo "  make ui-dev         Start React dashboard dev server"
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
 	@echo "  make hot            Send config update to running instance"
+	@echo "  make docker-build   Build Hydra agent Docker image"
+	@echo "  make docker-test    Build + smoke-test the agent image"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
 	@echo "  READY_LABEL      GitHub issue label (default: hydra-ready)"
@@ -238,3 +243,13 @@ ui-clean:
 	@echo "$(YELLOW)Cleaning dashboard build artifacts...$(RESET)"
 	@rm -rf $(HYDRA_DIR)ui/dist $(HYDRA_DIR)ui/node_modules
 	@echo "$(GREEN)Dashboard cleaned$(RESET)"
+
+docker-build:
+	@echo "$(BLUE)Building Hydra agent Docker image...$(RESET)"
+	docker build --platform linux/amd64 -f Dockerfile.agent -t $(DOCKER_IMAGE) .
+	@echo "$(GREEN)Image built: $(DOCKER_IMAGE)$(RESET)"
+
+docker-test: docker-build
+	@echo "$(BLUE)Running agent image smoke test...$(RESET)"
+	docker run --rm $(DOCKER_IMAGE) bash /opt/hydra/docker-smoke-test.sh
+	@echo "$(GREEN)Smoke test passed$(RESET)"
