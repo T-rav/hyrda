@@ -313,6 +313,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path to JSON config file for persisting runtime changes (default: .hydra/config.json)",
     )
     parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Scan the repo and report infrastructure gaps",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug-level logging",
@@ -448,6 +453,16 @@ async def _run_prep(config: HydraConfig) -> None:
     print(result.summary())  # noqa: T201
 
 
+async def _run_audit(config: HydraConfig) -> bool:
+    """Run a repo audit and print the report. Returns True if critical gaps found."""
+    from prep import RepoAuditor  # noqa: PLC0415
+
+    auditor = RepoAuditor(config)
+    result = await auditor.run_audit()
+    print(result.format_report())  # noqa: T201
+    return result.has_critical_gaps
+
+
 async def _run_clean(config: HydraConfig) -> None:
     """Remove all worktrees and reset state."""
     from state import StateTracker
@@ -541,6 +556,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.prep:
         asyncio.run(_run_prep(config))
         sys.exit(0)
+
+    if args.audit:
+        has_gaps = asyncio.run(_run_audit(config))
+        sys.exit(1 if has_gaps else 0)
 
     if args.clean:
         asyncio.run(_run_clean(config))

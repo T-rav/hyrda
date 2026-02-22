@@ -1523,6 +1523,23 @@ async def test_ensure_labels_exist_handles_individual_failures(
     assert create_count == len(PRManager._HYDRA_LABELS)
 
 
+def test_makefile_ensure_labels_delegates_to_prep() -> None:
+    """Makefile ensure-labels target must delegate to the prep target.
+
+    Regression guard: ensures ensure-labels stays in sync via prep,
+    which uses the authoritative HYDRA_LABELS table from prep.py.
+    """
+    import re
+
+    makefile = Path(__file__).parent.parent / "Makefile"
+    content = makefile.read_text()
+
+    # The ensure-labels target should declare prep as a dependency
+    assert re.search(r"^ensure-labels\s*:.*\bprep\b", content, re.MULTILINE), (
+        "Makefile ensure-labels target should delegate to prep target"
+    )
+
+
 # ---------------------------------------------------------------------------
 # _run_with_body_file
 # ---------------------------------------------------------------------------
