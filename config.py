@@ -461,6 +461,20 @@ class HydraFlowConfig(BaseModel):
         description="Tmpfs size for /tmp in containers",
     )
 
+    # Docker execution (PR #545)
+    docker_enabled: bool = Field(
+        default=False,
+        description="Run agent subprocesses inside Docker containers",
+    )
+    docker_network: str = Field(
+        default="",
+        description="Docker network name (empty = default bridge)",
+    )
+    docker_extra_mounts: list[str] = Field(
+        default=[],
+        description="Additional volume mounts as host:container:mode strings",
+    )
+
     # GitHub authentication
     gh_token: str = Field(
         default="",
@@ -813,6 +827,27 @@ class HydraFlowConfig(BaseModel):
                     "was not found on PATH"
                 )
                 raise ValueError(msg)
+
+        # Docker execution overrides (PR #545)
+        env_docker_enabled = os.environ.get("HYDRA_DOCKER_ENABLED")
+        if env_docker_enabled is not None and self.docker_enabled is False:
+            object.__setattr__(
+                self,
+                "docker_enabled",
+                env_docker_enabled.lower() in ("1", "true", "yes"),
+            )
+
+        env_docker_image = os.environ.get("HYDRA_DOCKER_IMAGE")
+        if env_docker_image is not None and not self.docker_image:
+            object.__setattr__(self, "docker_image", env_docker_image)
+
+        if self.docker_spawn_delay == 2.0:  # still at default
+            env_spawn_delay = os.environ.get("HYDRA_DOCKER_SPAWN_DELAY")
+            if env_spawn_delay is not None:
+                with contextlib.suppress(ValueError):
+                    object.__setattr__(
+                        self, "docker_spawn_delay", float(env_spawn_delay)
+                    )
 
         return self
 
