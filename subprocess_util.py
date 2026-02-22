@@ -189,7 +189,7 @@ async def run_subprocess_with_retry(
         try:
             return await run_subprocess(*cmd, cwd=cwd, gh_token=gh_token)
         except RuntimeError as exc:
-            if isinstance(exc, (AuthenticationError, CreditExhaustedError)):
+            if isinstance(exc, AuthenticationError | CreditExhaustedError):
                 raise
             last_error = exc
             error_msg = str(exc)
