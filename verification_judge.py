@@ -59,7 +59,10 @@ class VerificationJudge:
 
         criteria_list, instructions_text = self._parse_criteria(criteria_text)
 
-        verdict = JudgeVerdict(issue_number=issue_number)
+        verdict = JudgeVerdict(
+            issue_number=issue_number,
+            verification_instructions=instructions_text,
+        )
 
         cmd = self._build_command()
 
@@ -112,6 +115,7 @@ class VerificationJudge:
 
                     # Re-validate refined instructions
                     revalidate_text = refined or instructions_text
+                    verdict.verification_instructions = revalidate_text
                     revalidate_prompt = self._build_instructions_validation_prompt(
                         revalidate_text, issue_number
                     )

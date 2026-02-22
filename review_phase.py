@@ -15,11 +15,14 @@ from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
 from models import (
+    CriterionVerdict,
     GitHubIssue,
     JudgeResult,
+    JudgeVerdict,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
+    VerificationCriterion,
     WorkerStatus,
 )
 from pr_manager import PRManager, SelfReviewError
@@ -358,9 +361,10 @@ class ReviewPhase:
                     pr.issue_number,
                     exc_info=True,
                 )
+        verdict: JudgeVerdict | None = None
         if self._verification_judge:
             try:
-                await self._verification_judge.judge(
+                verdict = await self._verification_judge.judge(
                     issue_number=pr.issue_number,
                     pr_number=pr.number,
                     diff=diff,
@@ -371,6 +375,10 @@ class ReviewPhase:
                     pr.issue_number,
                     exc_info=True,
                 )
+
+        judge_result = self._get_judge_result(issue, pr, verdict)
+        if judge_result is not None:
+            await self._create_verification_issue(issue, pr, judge_result)
 
         # Check if any parent epics can be closed
         if self._epic_checker:
@@ -696,6 +704,33 @@ class ReviewPhase:
                 event_cause="review_fix_cap_exceeded",
             )
             return False  # Destroy worktree
+
+    def _get_judge_result(
+        self,
+        issue: GitHubIssue,
+        pr: PRInfo,
+        verdict: JudgeVerdict | None,
+    ) -> JudgeResult | None:
+        """Convert a JudgeVerdict into a JudgeResult for verification issue creation."""
+        if verdict is None:
+            return None
+
+        criteria = [
+            VerificationCriterion(
+                description=cr.criterion,
+                passed=cr.verdict == CriterionVerdict.PASS,
+                details=cr.reasoning,
+            )
+            for cr in verdict.criteria_results
+        ]
+
+        return JudgeResult(
+            issue_number=issue.number,
+            pr_number=pr.number,
+            criteria=criteria,
+            verification_instructions=verdict.verification_instructions,
+            summary=verdict.summary,
+        )
 
     async def _create_verification_issue(
         self,
