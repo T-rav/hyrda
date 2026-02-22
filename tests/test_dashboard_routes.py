@@ -88,6 +88,8 @@ class TestCreateRouter:
             "/api/timeline",
             "/api/timeline/issue/{issue_num}",
             "/api/intent",
+            "/api/sessions",
+            "/api/sessions/{session_id}",
             "/api/request-changes",
             "/ws",
             "/{path:path}",

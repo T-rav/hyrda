@@ -44,6 +44,8 @@ class TestEventTypeEnum:
             "SYSTEM_ALERT",
             "VERIFICATION_JUDGE",
             "TRANSCRIPT_SUMMARY",
+            "SESSION_START",
+            "SESSION_END",
         }
         actual = {member.name for member in EventType}
         assert expected == actual
@@ -206,6 +208,35 @@ class TestEventBusPublishSubscribe:
         bus = EventBus()
         event = EventFactory.create(type=EventType.BATCH_COMPLETE)
         await bus.publish(event)  # should not raise
+
+    @pytest.mark.asyncio
+    async def test_set_session_id_auto_injects(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        event = HydraFlowEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        await bus.publish(event)
+        assert event.session_id == "sess-42"
+
+    @pytest.mark.asyncio
+    async def test_set_session_id_does_not_override_explicit(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        event = HydraFlowEvent(
+            type=EventType.SESSION_START,
+            session_id="explicit-id",
+            data={},
+        )
+        await bus.publish(event)
+        assert event.session_id == "explicit-id"
+
+    @pytest.mark.asyncio
+    async def test_set_session_id_none_disables_injection(self) -> None:
+        bus = EventBus()
+        bus.set_session_id("sess-42")
+        bus.set_session_id(None)
+        event = HydraFlowEvent(type=EventType.WORKER_UPDATE, data={"issue": 1})
+        await bus.publish(event)
+        assert event.session_id is None
 
     @pytest.mark.asyncio
     async def test_subscribe_with_custom_max_queue(self) -> None:

@@ -23,7 +23,7 @@ from issue_store import IssueStore
 from memory import MemorySyncWorker, file_memory_suggestion
 from memory_sync_loop import MemorySyncLoop
 from metrics_sync_loop import MetricsSyncLoop
-from models import BackgroundWorkerState, Phase
+from models import BackgroundWorkerState, Phase, SessionLog
 from plan_phase import PlanPhase
 from planner import PlannerRunner
 from pr_manager import PRManager
@@ -105,6 +105,9 @@ class HydraFlowOrchestrator:
         # Credit pause — set when API credits are exhausted
         self._credits_paused_until: datetime | None = None
         self._credit_pause_lock = asyncio.Lock()
+        # Session tracking
+        self._current_session: SessionLog | None = None
+        self._session_issue_results: dict[int, bool] = {}
 
         # Centralized issue store and fetcher
         self._fetcher = IssueFetcher(config)
@@ -253,6 +256,11 @@ class HydraFlowOrchestrator:
     def running(self) -> bool:
         """Whether the orchestrator is currently executing."""
         return self._running
+
+    @property
+    def current_session_id(self) -> str | None:
+        """Return the active session ID, or None."""
+        return self._current_session.id if self._current_session else None
 
     def _has_active_processes(self) -> bool:
         """Return True if any runner pool still has live subprocesses."""
@@ -449,9 +457,62 @@ class HydraFlowOrchestrator:
 
         await self._prs.ensure_labels_exist()
 
+        # Start a new session
+        repo_slug = self._config.repo.replace("/", "-")
+        session_start_time = datetime.now(UTC)
+        session_id = f"{repo_slug}-{session_start_time.strftime('%Y%m%dT%H%M%S')}"
+        self._current_session = SessionLog(
+            id=session_id,
+            repo=self._config.repo,
+            started_at=session_start_time.isoformat(),
+        )
+        self._session_issue_results = {}
+        self._state.save_session(self._current_session)
+        self._bus.set_session_id(session_id)
+        await self._bus.publish(
+            HydraFlowEvent(
+                type=EventType.SESSION_START,
+                session_id=session_id,
+                data={"session_id": session_id, "repo": self._config.repo},
+            )
+        )
+
         try:
             await self._supervise_loops()
         finally:
+            # Close the session
+            if self._current_session:
+                self._current_session.ended_at = datetime.now(UTC).isoformat()
+                self._current_session.issues_processed = list(
+                    self._session_issue_results.keys()
+                )
+                self._current_session.issues_succeeded = sum(
+                    1 for s in self._session_issue_results.values() if s
+                )
+                self._current_session.issues_failed = sum(
+                    1 for s in self._session_issue_results.values() if not s
+                )
+                self._current_session.status = "completed"
+                self._state.save_session(self._current_session)
+                self._state.prune_sessions(
+                    self._config.repo, self._config.max_sessions_per_repo
+                )
+                await self._bus.publish(
+                    HydraFlowEvent(
+                        type=EventType.SESSION_END,
+                        session_id=self._current_session.id,
+                        data={
+                            "session_id": self._current_session.id,
+                            "status": "completed",
+                            "issues_processed": self._current_session.issues_processed,
+                            "issues_succeeded": self._current_session.issues_succeeded,
+                            "issues_failed": self._current_session.issues_failed,
+                        },
+                    )
+                )
+                self._current_session = None
+                self._bus.set_session_id(None)
+
             self._planners.terminate()
             self._agents.terminate()
             self._reviewers.terminate()
@@ -639,8 +700,9 @@ class HydraFlowOrchestrator:
                     | self._active_hitl_issues
                 )
             )
-        results, _issues = await self._implementer.run_batch()
+        results, _ = await self._implementer.run_batch()
         for result in results:
+            self._session_issue_results[result.issue_number] = result.success
             if result.transcript:
                 try:
                     await file_memory_suggestion(

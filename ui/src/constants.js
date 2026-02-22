@@ -55,6 +55,11 @@ export const INTERVAL_PRESETS = [
 export const EDITABLE_INTERVAL_WORKERS = new Set(['memory_sync', 'metrics'])
 
 /**
+ * Valid session statuses for the session sidebar.
+ */
+export const SESSION_STATUSES = ['active', 'completed']
+
+/**
  * Background worker definitions — maintenance and system loops that can be toggled on/off.
  * Workers with `system: true` are internal services shown with a "system" badge.
  */

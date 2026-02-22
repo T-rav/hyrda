@@ -665,23 +665,162 @@ describe('Merged stage count display', () => {
 })
 
 describe('PipelineFlow failed and hitl dots', () => {
-  it('renders failed and hitl issue dots as non-pulsing', () => {
+  it('renders failed dots with red background and no animation', () => {
     mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
         plan: [],
         implement: [
           { issue_number: 1, title: 'Failed issue', status: 'failed' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const dot = screen.getByTestId('flow-dot-1')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.background).toBe('var(--red)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders hitl dots with yellow background and no animation', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
         ],
         review: [],
       },
     }))
     render(<StreamView {...defaultProps} />)
-    expect(screen.getByTestId('flow-dot-1')).toBeInTheDocument()
-    expect(screen.getByTestId('flow-dot-2')).toBeInTheDocument()
-    expect(screen.getByTestId('flow-dot-1').style.animation).toBe('')
-    expect(screen.getByTestId('flow-dot-2').style.animation).toBe('')
+    const dot = screen.getByTestId('flow-dot-2')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.background).toBe('var(--yellow)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders queued dots with stage color', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 3, title: 'Queued issue', status: 'queued' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const dot = screen.getByTestId('flow-dot-3')
+    expect(dot.style.background).toBe('var(--accent)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders mixed status dots with correct colors in the same stage', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 10, title: 'Active', status: 'active' },
+          { issue_number: 11, title: 'Failed', status: 'failed' },
+          { issue_number: 12, title: 'HITL', status: 'hitl' },
+          { issue_number: 13, title: 'Queued', status: 'queued' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    // Active: stage color (accent) + pulse animation
+    const activeDot = screen.getByTestId('flow-dot-10')
+    expect(activeDot.style.background).toBe('var(--accent)')
+    expect(activeDot.style.animation).toContain('stream-pulse')
+    // Failed: red, no animation
+    const failedDot = screen.getByTestId('flow-dot-11')
+    expect(failedDot.style.background).toBe('var(--red)')
+    expect(failedDot.style.animation).toBe('')
+    // HITL: yellow, no animation
+    const hitlDot = screen.getByTestId('flow-dot-12')
+    expect(hitlDot.style.background).toBe('var(--yellow)')
+    expect(hitlDot.style.animation).toBe('')
+    // Queued: stage color (accent), no animation
+    const queuedDot = screen.getByTestId('flow-dot-13')
+    expect(queuedDot.style.background).toBe('var(--accent)')
+    expect(queuedDot.style.animation).toBe('')
+  })
+})
+
+describe('PipelineFlow summary counts', () => {
+  it('shows summary counts when merged and failed issues exist', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed', status: 'failed' },
+        ],
+        review: [],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'Add feature', merged: true, url: 'https://github.com/test/pr/43' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary).toBeInTheDocument()
+    expect(summary.textContent).toContain('2 merged')
+    expect(summary.textContent).toContain('1 failed')
+  })
+
+  it('shows only merged count when no failed issues', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [],
+        review: [],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary.textContent).toContain('1 merged')
+    expect(summary.textContent).not.toContain('failed')
+  })
+
+  it('shows only failed count when no merged issues', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed', status: 'failed' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary.textContent).toContain('1 failed')
+    expect(summary.textContent).not.toContain('merged')
+  })
+
+  it('hides summary when both counts are zero', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [{ issue_number: 1, title: 'Queued', status: 'queued' }],
+        implement: [],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('flow-summary')).not.toBeInTheDocument()
   })
 })
 

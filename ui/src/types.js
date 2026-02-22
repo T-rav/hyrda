@@ -1,5 +1,5 @@
 /**
- * @typedef {'batch_start'|'phase_change'|'worker_update'|'transcript_line'|'pr_created'|'review_update'|'triage_update'|'planner_update'|'merge_update'|'ci_check'|'hitl_escalation'|'issue_created'|'batch_complete'|'hitl_update'|'orchestrator_status'|'error'|'memory_sync'|'retrospective'|'metrics_update'|'review_insight'|'background_worker_status'} EventType
+ * @typedef {'batch_start'|'phase_change'|'worker_update'|'transcript_line'|'pr_created'|'review_update'|'triage_update'|'planner_update'|'merge_update'|'ci_check'|'hitl_escalation'|'issue_created'|'batch_complete'|'hitl_update'|'orchestrator_status'|'error'|'memory_sync'|'retrospective'|'metrics_update'|'review_insight'|'background_worker_status'|'session_start'|'session_end'} EventType
  *
  * @typedef {{ type: EventType, timestamp: string, data: Record<string, any> }} HydraFlowEvent
  *
@@ -22,6 +22,16 @@
  * @typedef {{ text: string, issueNumber: number|null, timestamp: string, status: 'pending'|'created'|'failed' }} IntentData
  *
  * @typedef {{ issueNumber: number, title: string, issueUrl: string|null, currentStage: string, overallStatus: string, stages: Object, pr: Object|null, branch: string, startTime: string|null, endTime: string|null }} StreamCardData
+ *
+ * @typedef {Object} SessionData
+ * @property {string} id
+ * @property {string} repo
+ * @property {string} started_at
+ * @property {string|null} ended_at
+ * @property {number[]} issues_processed
+ * @property {number} issues_succeeded
+ * @property {number} issues_failed
+ * @property {string} status - 'active' | 'completed'
  */
 
 export {}
