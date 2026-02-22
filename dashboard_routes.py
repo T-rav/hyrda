@@ -487,7 +487,7 @@ def create_router(
     ]
 
     # Workers that have independent configurable intervals
-    _INTERVAL_WORKERS = {"memory_sync", "metrics"}
+    _INTERVAL_WORKERS = {"memory_sync", "metrics", "pr_unsticker"}
     # Pipeline loops share poll_interval (read-only display)
     _PIPELINE_WORKERS = {"triage", "plan", "implement", "review"}
 
@@ -526,6 +526,8 @@ def create_router(
                     interval = config.memory_sync_interval
                 elif name == "metrics":
                     interval = config.metrics_sync_interval
+                elif name == "pr_unsticker":
+                    interval = config.pr_unstick_interval
             elif name in _PIPELINE_WORKERS:
                 interval = config.poll_interval
 

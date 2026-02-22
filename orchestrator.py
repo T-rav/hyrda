@@ -388,6 +388,8 @@ class HydraOrchestrator:
             return self._config.memory_sync_interval
         if name == "metrics":
             return self._config.metrics_sync_interval
+        if name == "pr_unsticker":
+            return self._config.pr_unstick_interval
         return self._config.poll_interval
 
     async def _publish_status(self) -> None:

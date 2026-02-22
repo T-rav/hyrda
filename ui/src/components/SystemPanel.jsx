@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
+import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS, SYSTEM_WORKER_INTERVALS } from '../constants'
 import { useHydra } from '../context/HydraContext'
 import { Livestream } from './Livestream'
 import { PipelineControlPanel } from './PipelineControlPanel'
@@ -118,6 +118,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
     details = state.details || {}
   }
 
+  const effectiveInterval = state?.interval_seconds ?? SYSTEM_WORKER_INTERVALS[def.key] ?? null
   const enabled = !isSystem && (state ? state.enabled !== false : true)
   const showToggle = onToggleBgWorker && !isSystem
   const isError = statusText === 'error' || statusText === 'stopped'
@@ -155,14 +156,14 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
       <div style={styles.lastRun}>
         Last run: {relativeTime(lastRun)}
       </div>
-      {state?.interval_seconds != null && (
+      {effectiveInterval != null && (
         <div style={styles.scheduleRow} data-testid={`schedule-${def.key}`}>
           <span style={styles.scheduleText}>
-            Runs {formatInterval(state.interval_seconds)}
+            Runs {formatInterval(effectiveInterval)}
           </span>
           {lastRun && (
             <span style={styles.nextRunText}>
-              {' \u00b7 Next '}{formatNextRun(lastRun, state.interval_seconds)}
+              {' \u00b7 Next '}{formatNextRun(lastRun, effectiveInterval)}
             </span>
           )}
           {isEditable && onUpdateInterval && (
