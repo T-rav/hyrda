@@ -94,4 +94,14 @@ describe('TranscriptPreview', () => {
     render(<TranscriptPreview transcript={['hello']} />)
     expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
   })
+
+  it('does not show toggle when transcript has fewer lines than maxCollapsedLines', () => {
+    render(<TranscriptPreview transcript={['line A', 'line B']} />)
+    expect(screen.queryByTestId('transcript-toggle')).not.toBeInTheDocument()
+  })
+
+  it('does not show toggle when transcript has exactly maxCollapsedLines lines', () => {
+    render(<TranscriptPreview transcript={['line 1', 'line 2', 'line 3']} maxCollapsedLines={3} />)
+    expect(screen.queryByTestId('transcript-toggle')).not.toBeInTheDocument()
+  })
 })

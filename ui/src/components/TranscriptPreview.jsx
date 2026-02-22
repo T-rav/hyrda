@@ -29,13 +29,15 @@ export function TranscriptPreview({ transcript, maxCollapsedLines = 3, maxHeight
           </div>
         ))}
       </div>
-      <div
-        style={styles.toggle}
-        onClick={() => setExpanded(v => !v)}
-        data-testid="transcript-toggle"
-      >
-        {expanded ? 'Collapse' : `Show all (${transcript.length} lines)`}
-      </div>
+      {(expanded || transcript.length > maxCollapsedLines) && (
+        <div
+          style={styles.toggle}
+          onClick={() => setExpanded(v => !v)}
+          data-testid="transcript-toggle"
+        >
+          {expanded ? 'Collapse' : `Show all (${transcript.length} lines)`}
+        </div>
+      )}
     </div>
   )
 }
