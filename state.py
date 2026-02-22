@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
-import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from models import StateData
+from file_util import atomic_write
+from models import LifetimeStats, StateData, ThresholdProposal
 
 logger = logging.getLogger("hydra.state")
 
@@ -46,26 +44,8 @@ class StateTracker:
     def save(self) -> None:
         """Flush current state to disk atomically."""
         self._data.last_updated = datetime.now(UTC).isoformat()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
         data = self._data.model_dump_json(indent=2)
-        # Write to a temp file in the same directory, fsync, then atomically
-        # rename.  os.replace() is atomic on POSIX, so the state file is
-        # always either the old version or the new version — never partial.
-        fd, tmp = tempfile.mkstemp(
-            dir=self._path.parent,
-            prefix=".state-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(data)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._path)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        atomic_write(self._path, data)
 
     # --- issue tracking ---
 
@@ -313,9 +293,9 @@ class StateTracker:
         self._data.lifetime_stats.total_review_seconds += seconds
         self.save()
 
-    def get_lifetime_stats(self) -> dict[str, int | float]:
+    def get_lifetime_stats(self) -> LifetimeStats:
         """Return a copy of the lifetime stats counters."""
-        return self._data.lifetime_stats.model_dump()
+        return self._data.lifetime_stats.model_copy()
 
     # --- memory state ---
 
@@ -382,7 +362,7 @@ class StateTracker:
         quality_fix_rate_threshold: float,
         approval_rate_threshold: float,
         hitl_rate_threshold: float,
-    ) -> list[dict[str, str | float]]:
+    ) -> list[ThresholdProposal]:
         """Check metrics against thresholds, return list of crossed thresholds.
 
         Returns a list of dicts with keys: name, metric, threshold, value, action.
@@ -394,7 +374,7 @@ class StateTracker:
         total_reviews = (
             stats.total_review_approvals + stats.total_review_request_changes
         )
-        proposals: list[dict[str, str | float]] = []
+        proposals: list[ThresholdProposal] = []
 
         # Quality fix rate
         qf_rate = stats.total_quality_fix_rounds / total_issues if total_issues else 0.0

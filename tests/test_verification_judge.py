@@ -19,9 +19,8 @@ from models import (
     InstructionsQuality,
     JudgeVerdict,
     PRInfo,
-    ReviewResult,
-    ReviewVerdict,
 )
+from tests.conftest import ReviewResultFactory
 from tests.helpers import ConfigFactory
 from verification_judge import VerificationJudge
 
@@ -191,6 +190,19 @@ class TestReadCriteriaFile:
         judge = _make_judge(cfg)
 
         result = judge._read_criteria_file(42)
+        assert result is None
+
+    def test_returns_none_on_oserror(self, tmp_path):
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = _make_judge(cfg)
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        criteria_file = criteria_dir / "issue-42.md"
+        criteria_file.write_text("content")
+
+        with patch.object(Path, "read_text", side_effect=OSError("read error")):
+            result = judge._read_criteria_file(42)
+
         assert result is None
 
 
@@ -531,6 +543,14 @@ class TestSaveJudgeReport:
         assert "Steps are vague" in content
         assert "refined" in content.lower()
 
+    def test_handles_oserror(self, tmp_path):
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = _make_judge(cfg)
+        verdict = JudgeVerdict(issue_number=42, summary="All good")
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            judge._save_judge_report(42, verdict)  # should not raise
+
 
 # ---------------------------------------------------------------------------
 # _format_judge_report
@@ -613,6 +633,28 @@ class TestUpdateCriteriaFile:
         assert "## Verification Instructions" in content
         assert "New instructions here" in content
         assert "Acceptance Criteria" in content
+
+    def test_handles_read_oserror(self, tmp_path):
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = _make_judge(cfg)
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        criteria_file = criteria_dir / "issue-42.md"
+        criteria_file.write_text(SAMPLE_CRITERIA_FILE)
+
+        with patch.object(Path, "read_text", side_effect=OSError("read error")):
+            judge._update_criteria_file(42, "Refined")  # should not raise
+
+    def test_handles_write_oserror(self, tmp_path):
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = _make_judge(cfg)
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        criteria_file = criteria_dir / "issue-42.md"
+        criteria_file.write_text(SAMPLE_CRITERIA_FILE)
+
+        with patch.object(Path, "write_text", side_effect=OSError("disk full")):
+            judge._update_criteria_file(42, "Refined")  # should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -988,12 +1030,8 @@ class TestReviewPhaseWiring:
 
         mock_reviewers = AsyncMock()
         mock_reviewers.review = AsyncMock(
-            return_value=ReviewResult(
-                pr_number=101,
-                issue_number=42,
-                verdict=ReviewVerdict.APPROVE,
+            return_value=ReviewResultFactory.create(
                 summary="LGTM",
-                fixes_made=False,
                 transcript="THOROUGH_REVIEW_COMPLETE\nVERDICT: APPROVE",
             )
         )
@@ -1062,12 +1100,8 @@ class TestReviewPhaseWiring:
 
         mock_reviewers = AsyncMock()
         mock_reviewers.review = AsyncMock(
-            return_value=ReviewResult(
-                pr_number=101,
-                issue_number=42,
-                verdict=ReviewVerdict.APPROVE,
+            return_value=ReviewResultFactory.create(
                 summary="LGTM",
-                fixes_made=False,
                 transcript="THOROUGH_REVIEW_COMPLETE\nVERDICT: APPROVE",
             )
         )

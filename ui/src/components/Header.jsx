@@ -40,6 +40,7 @@ export function Header({
   const canStart = (orchestratorStatus === 'idle' || orchestratorStatus === 'done' || orchestratorStatus === 'auth_failed') &&
     !stoppingHeld
   const isRunning = orchestratorStatus === 'running'
+  const isCreditsPaused = orchestratorStatus === 'credits_paused'
 
   return (
     <header style={styles.header}>
@@ -80,6 +81,14 @@ export function Header({
           <button style={styles.stopBtn} onClick={onStop}>
             Stop
           </button>
+        )}
+        {isCreditsPaused && (
+          <>
+            <span style={styles.creditsPausedBadge}>Credits Paused</span>
+            <button style={styles.stopBtn} onClick={onStop}>
+              Stop
+            </button>
+          </>
         )}
         {isStopping && (
           <span style={styles.stoppingBadge}>
@@ -164,6 +173,14 @@ const styles = {
     cursor: 'pointer',
   },
   stoppingBadge: {
+    padding: '4px 12px',
+    borderRadius: 6,
+    background: theme.yellow,
+    color: theme.bg,
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  creditsPausedBadge: {
     padding: '4px 12px',
     borderRadius: 6,
     background: theme.yellow,

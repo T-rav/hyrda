@@ -22,7 +22,6 @@ from models import (
     ControlStatusResponse,
     IntentRequest,
     IntentResponse,
-    LifetimeStats,
     MetricsHistoryResponse,
     MetricsResponse,
     PipelineIssue,
@@ -73,7 +72,7 @@ def create_router(
 
     @router.get("/api/stats")
     async def get_stats() -> JSONResponse:
-        data: dict[str, Any] = state.get_lifetime_stats()
+        data: dict[str, Any] = state.get_lifetime_stats().model_dump()
         orch = get_orchestrator()
         if orch:
             data["queue"] = orch.issue_store.get_queue_stats().model_dump()
@@ -183,7 +182,12 @@ def create_router(
         orch = get_orchestrator()
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
-        correction = body.get("correction", "")
+        correction = body.get("correction") or ""
+        if not correction.strip():
+            return JSONResponse(
+                {"status": "error", "detail": "Correction text must not be empty"},
+                status_code=400,
+            )
         orch.submit_hitl_correction(issue_number, correction)
 
         # Swap labels for immediate dashboard feedback
@@ -209,10 +213,23 @@ def create_router(
         orch = get_orchestrator()
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
+
+        # Read origin before clearing state
+        origin = state.get_hitl_origin(issue_number)
+
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
+        state.remove_hitl_cause(issue_number)
         for lbl in config.hitl_label:
             await pr_manager.remove_label(issue_number, lbl)
+
+        # If this was an improve issue, transition to triage for implementation
+        if origin and origin in config.improve_label:
+            for lbl in config.improve_label:
+                await pr_manager.remove_label(issue_number, lbl)
+            if config.find_label:
+                await pr_manager.add_labels(issue_number, [config.find_label[0]])
+
         await event_bus.publish(
             HydraEvent(
                 type=EventType.HITL_UPDATE,
@@ -362,6 +379,8 @@ def create_router(
         "ci_check_timeout",
         "ci_poll_interval",
         "poll_interval",
+        "pr_unstick_interval",
+        "pr_unstick_batch_size",
     }
 
     @router.patch("/api/control/config")
@@ -417,6 +436,7 @@ def create_router(
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
+        ("pr_unsticker", "PR Unsticker"),
     ]
 
     @router.get("/api/system/workers")
@@ -463,8 +483,7 @@ def create_router(
     @router.get("/api/metrics")
     async def get_metrics() -> JSONResponse:
         """Return lifetime stats and derived rates."""
-        lifetime_data = state.get_lifetime_stats()
-        lifetime = LifetimeStats.model_validate(lifetime_data)
+        lifetime = state.get_lifetime_stats()
         rates: dict[str, float] = {}
         total_reviews = (
             lifetime.total_review_approvals + lifetime.total_review_request_changes

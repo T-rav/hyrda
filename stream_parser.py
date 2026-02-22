@@ -100,39 +100,6 @@ class StreamParser:
         return ""
 
 
-# Stateless convenience function (for tests and simple use cases)
-def parse_stream_event(raw_line: str) -> tuple[str, str | None]:
-    """Stateless single-event parse — no delta tracking."""
-    try:
-        event = json.loads(raw_line)
-    except (json.JSONDecodeError, TypeError):
-        return (raw_line, None)
-
-    event_type = event.get("type", "")
-
-    if event_type == "assistant":
-        message = event.get("message", {})
-        content = message.get("content", [])
-        parts: list[str] = []
-        for block in content:
-            if not isinstance(block, dict):
-                continue
-            if block.get("type") == "text":
-                text = block.get("text", "").strip()
-                if text:
-                    parts.append(text)
-            elif block.get("type") == "tool_use":
-                name = block.get("name", "?")
-                tool_input = block.get("input", {})
-                parts.append(f"  → {name}: {_summarize_input(name, tool_input)}")
-        return ("\n".join(parts), None)
-
-    if event_type == "result":
-        return ("", event.get("result", ""))
-
-    return ("", None)
-
-
 def _summarize_input(name: str, tool_input: dict) -> str:  # type: ignore[type-arg]  # noqa: PLR0911
     """One-line summary of a tool call's input."""
     if name in ("Read", "read"):

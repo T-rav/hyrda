@@ -36,11 +36,6 @@ class WorktreeManager:
         self._repo_root = config.repo_root
         self._base = config.worktree_base
 
-    def exists(self, issue_number: int) -> bool:
-        """Check whether a worktree directory already exists for *issue_number*."""
-        wt_path = self._config.worktree_path_for_issue(issue_number)
-        return wt_path.is_dir()
-
     async def _delete_local_branch(self, branch: str) -> None:
         """Delete a local branch if it exists, ignoring errors."""
         with contextlib.suppress(RuntimeError):
@@ -317,6 +312,39 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
+    async def get_main_commits_since_diverge(self, worktree_path: Path) -> str:
+        """Return recent commits on main since the branch diverged.
+
+        Runs ``git log --oneline HEAD..origin/main`` in *worktree_path*
+        (after fetching main) and returns up to 30 commit summaries as a
+        newline-separated string.  Returns an empty string on failure.
+        """
+        try:
+            await run_subprocess(
+                "git",
+                "fetch",
+                "origin",
+                self._config.main_branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            output = await run_subprocess(
+                "git",
+                "log",
+                "--oneline",
+                f"HEAD..origin/{self._config.main_branch}",
+                "-30",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return output.strip()
+        except RuntimeError:
+            logger.warning(
+                "Could not get main commits since diverge in %s",
+                worktree_path,
+            )
+            return ""
+
     # --- environment setup ---
 
     def _setup_env(self, wt_path: Path) -> None:
@@ -325,22 +353,42 @@ class WorktreeManager:
         env_src = self._repo_root / ".env"
         env_dst = wt_path / ".env"
         if env_src.exists() and not env_dst.exists():
-            env_dst.symlink_to(env_src)
+            try:
+                env_dst.symlink_to(env_src)
+            except OSError:
+                logger.debug(
+                    "Could not symlink %s → %s", env_dst, env_src, exc_info=True
+                )
 
         # Copy .claude/settings.local.json (not symlink - agents may modify)
         local_settings_src = self._repo_root / ".claude" / "settings.local.json"
         local_settings_dst = wt_path / ".claude" / "settings.local.json"
         if local_settings_src.exists() and not local_settings_dst.exists():
-            local_settings_dst.parent.mkdir(parents=True, exist_ok=True)
-            local_settings_dst.write_text(local_settings_src.read_text())
+            try:
+                local_settings_dst.parent.mkdir(parents=True, exist_ok=True)
+                local_settings_dst.write_text(local_settings_src.read_text())
+            except OSError:
+                logger.debug(
+                    "Could not copy settings to %s",
+                    local_settings_dst,
+                    exc_info=True,
+                )
 
         # Symlink node_modules for each UI directory
         for ui_dir in self._UI_DIRS:
             nm_src = self._repo_root / ui_dir / "node_modules"
             nm_dst = wt_path / ui_dir / "node_modules"
             if nm_src.exists() and not nm_dst.exists():
-                nm_dst.parent.mkdir(parents=True, exist_ok=True)
-                nm_dst.symlink_to(nm_src)
+                try:
+                    nm_dst.parent.mkdir(parents=True, exist_ok=True)
+                    nm_dst.symlink_to(nm_src)
+                except OSError:
+                    logger.debug(
+                        "Could not symlink %s → %s",
+                        nm_dst,
+                        nm_src,
+                        exc_info=True,
+                    )
 
     async def _configure_git_identity(self, wt_path: Path) -> None:
         """Set git user.name and user.email in the worktree (local scope)."""
@@ -369,7 +417,7 @@ class WorktreeManager:
             await run_subprocess(
                 "uv", "sync", cwd=wt_path, gh_token=self._config.gh_token
             )
-        except RuntimeError as exc:
+        except (RuntimeError, FileNotFoundError) as exc:
             logger.warning("uv sync failed in %s: %s", wt_path, exc)
 
     async def _install_hooks(self, wt_path: Path) -> None:

@@ -216,7 +216,7 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
   const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus, events } = useHydra()
   const [activeSubTab, setActiveSubTab] = useState('workers')
   const pipelineWorkers = Object.entries(workers || {}).filter(
-    ([, w]) => w.role && w.status !== 'queued'
+    ([, w]) => w.role && ACTIVE_STATUSES.includes(w.status)
   )
 
   const hasPipelineWorkers = pipelineWorkers.length > 0
@@ -250,16 +250,14 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
                     <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />
                     <span style={enabled ? styles.loopLabel : styles.loopLabelDim}>{loop.label}</span>
                     <span
-                      style={{ ...styles.loopCount, color: enabled && issueCount > 0 ? loop.color : theme.textMuted }}
+                      style={{ ...styles.loopCount, color: enabled && activeCount > 0 ? loop.color : theme.textMuted }}
                       data-testid={`loop-count-${loop.key}`}
                     >
-                      {issueCount}
+                      {activeCount}
                     </span>
-                    {activeCount > 0 && (
-                      <span style={{ ...styles.loopActiveCount, color: loop.color }}>
-                        {activeCount} active
-                      </span>
-                    )}
+                    <span style={styles.loopCountLabel}>
+                      {activeCount === 1 ? 'worker' : 'workers'}
+                    </span>
                     {onToggleBgWorker && (
                       <button
                         style={enabled ? styles.toggleOn : styles.toggleOff}
@@ -272,9 +270,18 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
                 )
               })}
             </div>
-            {hitlCount > 0 && (
-              <div style={styles.hitlBadge}>
-                {hitlCount} HITL {hitlCount === 1 ? 'issue' : 'issues'}
+            {(pipelineWorkers.length > 0 || hitlCount > 0) && (
+              <div style={styles.statusRow}>
+                {pipelineWorkers.length > 0 && (
+                  <div style={styles.activeBadge}>
+                    {pipelineWorkers.length} active
+                  </div>
+                )}
+                {hitlCount > 0 && (
+                  <div style={styles.hitlBadge}>
+                    {hitlCount} HITL {hitlCount === 1 ? 'issue' : 'issues'}
+                  </div>
+                )}
               </div>
             )}
             {!hasPipelineWorkers && (
@@ -527,9 +534,10 @@ const styles = {
     minWidth: 16,
     textAlign: 'center',
   },
-  loopActiveCount: {
+  loopCountLabel: {
     fontSize: 9,
     fontWeight: 600,
+    color: theme.textMuted,
     textTransform: 'uppercase',
   },
   toggleOn: {
@@ -584,6 +592,22 @@ const styles = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
+  statusRow: {
+    display: 'flex',
+    gap: 8,
+    marginBottom: 12,
+  },
+  activeBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    fontSize: 11,
+    fontWeight: 600,
+    color: theme.accent,
+    background: theme.accentSubtle,
+    border: `1px solid ${theme.accent}`,
+    borderRadius: 10,
+    padding: '2px 10px',
+  },
   hitlBadge: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -594,7 +618,6 @@ const styles = {
     border: `1px solid ${theme.orange}`,
     borderRadius: 10,
     padding: '2px 10px',
-    marginBottom: 12,
   },
   cardActions: {
     display: 'flex',

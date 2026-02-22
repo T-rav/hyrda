@@ -19,7 +19,9 @@ function PendingIntentCard({ intent }) {
 
 function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
-  const queuedCount = issues.length - activeCount
+  const failedCount = issues.filter(i => i.overallStatus === 'failed').length
+  const hitlCount = issues.filter(i => i.overallStatus === 'hitl').length
+  const queuedCount = issues.filter(i => i.overallStatus === 'queued').length
   const hasRole = !!stage.role
 
   return (
@@ -39,6 +41,8 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
         <span style={sectionCountStyles[stage.key]}>
           <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
           <span> · {queuedCount} queued</span>
+          {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
+          {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
           <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
         </span>
         {hasRole && (
@@ -69,16 +73,22 @@ const STAGE_INDEX = Object.fromEntries(STAGE_KEYS.map((k, i) => [k, i]))
  * Convert a PipelineIssue from the server into a StreamCard-compatible shape.
  * Builds a synthetic `stages` object based on current pipeline position.
  */
-function toStreamIssue(pipeIssue, stageKey, prs) {
+export function toStreamIssue(pipeIssue, stageKey, prs) {
   const currentIdx = STAGE_INDEX[stageKey] ?? 0
   const isActive = pipeIssue.status === 'active'
+  const isDone = pipeIssue.status === 'done'
   const stages = {}
   for (let i = 0; i < STAGE_KEYS.length; i++) {
     const k = STAGE_KEYS[i]
     if (i < currentIdx) {
       stages[k] = { status: 'done', startTime: null, endTime: null, transcript: [] }
     } else if (i === currentIdx) {
-      stages[k] = { status: isActive ? 'active' : 'pending', startTime: null, endTime: null, transcript: [] }
+      const currentStageStatus = isDone ? 'done'
+        : isActive ? 'active'
+        : pipeIssue.status === 'failed' ? 'failed'
+        : pipeIssue.status === 'hitl' ? 'hitl'
+        : 'queued'
+      stages[k] = { status: currentStageStatus, startTime: null, endTime: null, transcript: [] }
     } else {
       stages[k] = { status: 'pending', startTime: null, endTime: null, transcript: [] }
     }
@@ -92,7 +102,11 @@ function toStreamIssue(pipeIssue, stageKey, prs) {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
     currentStage: stageKey,
-    overallStatus: pipeIssue.status === 'hitl' ? 'hitl' : isActive ? 'active' : 'active',
+    overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
+      : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
+      : isDone ? 'done'
+      : pipeIssue.status === 'active' ? 'active'
+      : 'queued',
     startTime: null,
     endTime: null,
     pr,
@@ -275,6 +289,14 @@ const styles = {
   },
   activeBadge: {
     fontWeight: 700,
+  },
+  failedBadge: {
+    fontWeight: 700,
+    color: theme.red,
+  },
+  hitlBadge: {
+    fontWeight: 700,
+    color: theme.yellow,
   },
   statusDot: {
     display: 'inline-block',

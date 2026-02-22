@@ -22,23 +22,36 @@ function mockStageStatusFromSession(sessionCounts = {}) {
   }
 }
 
+function defaultContext(overrides = {}) {
+  return {
+    metrics: null,
+    lifetimeStats: null,
+    githubMetrics: null,
+    metricsHistory: null,
+    stageStatus: mockStageStatusFromSession({}),
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
-  mockUseHydra.mockReturnValue({ stageStatus: mockStageStatusFromSession({}) })
+  mockUseHydra.mockReturnValue(defaultContext())
 })
 
 describe('MetricsPanel', () => {
   it('shows empty state message when no data at all', () => {
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={null} />)
+    render(<MetricsPanel />)
     expect(screen.getByText('No metrics data available yet.')).toBeInTheDocument()
   })
 
   it('renders lifetime stats from GitHub metrics', () => {
-    const githubMetrics = {
-      open_by_label: { 'hydra-plan': 2, 'hydra-ready': 1, 'hydra-review': 0, 'hydra-hitl': 0, 'hydra-fixed': 0 },
-      total_closed: 10,
-      total_merged: 8,
-    }
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={githubMetrics} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      githubMetrics: {
+        open_by_label: { 'hydra-plan': 2, 'hydra-ready': 1, 'hydra-review': 0, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        total_closed: 10,
+        total_merged: 8,
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('Lifetime')).toBeInTheDocument()
     expect(screen.getByText('10')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
@@ -47,48 +60,58 @@ describe('MetricsPanel', () => {
   })
 
   it('shows open issues count from GitHub metrics', () => {
-    const githubMetrics = {
-      open_by_label: { 'hydra-plan': 3, 'hydra-ready': 2, 'hydra-review': 1, 'hydra-hitl': 0, 'hydra-fixed': 0 },
-      total_closed: 5,
-      total_merged: 4,
-    }
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={githubMetrics} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      githubMetrics: {
+        open_by_label: { 'hydra-plan': 3, 'hydra-ready': 2, 'hydra-review': 1, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        total_closed: 5,
+        total_merged: 4,
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('Open Issues')).toBeInTheDocument()
     expect(screen.getByText('6')).toBeInTheDocument() // 3+2+1
   })
 
   it('renders session stats when session has activity', () => {
     const sessionCounts = { triaged: 3, planned: 2, implemented: 1, reviewed: 1, merged: 0 }
-    mockUseHydra.mockReturnValue({ stageStatus: mockStageStatusFromSession(sessionCounts) })
-    const githubMetrics = {
-      open_by_label: {},
-      total_closed: 0,
-      total_merged: 0,
-    }
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={githubMetrics} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      stageStatus: mockStageStatusFromSession(sessionCounts),
+      githubMetrics: {
+        open_by_label: {},
+        total_closed: 0,
+        total_merged: 0,
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('Session')).toBeInTheDocument()
     expect(screen.getByText('Triaged')).toBeInTheDocument()
     expect(screen.getByText('Planned')).toBeInTheDocument()
     expect(screen.getByText('Implemented')).toBeInTheDocument()
+    expect(screen.getByText('Reviewed')).toBeInTheDocument()
+    expect(screen.getByText('Merged')).toBeInTheDocument()
   })
 
   it('does not render session section when all session counts are zero', () => {
-    const githubMetrics = {
-      open_by_label: {},
-      total_closed: 5,
-      total_merged: 3,
-    }
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={githubMetrics} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      githubMetrics: {
+        open_by_label: {},
+        total_closed: 5,
+        total_merged: 3,
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.queryByText('Session')).not.toBeInTheDocument()
   })
 
   it('renders pipeline blocks visualization with GitHub metrics', () => {
-    const githubMetrics = {
-      open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1, 'hydra-review': 2, 'hydra-hitl': 0, 'hydra-fixed': 0 },
-      total_closed: 0,
-      total_merged: 0,
-    }
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={githubMetrics} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      githubMetrics: {
+        open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1, 'hydra-review': 2, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        total_closed: 0,
+        total_merged: 0,
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('Pipeline')).toBeInTheDocument()
     expect(screen.getByText('Plan')).toBeInTheDocument()
     expect(screen.getByText('Ready')).toBeInTheDocument()
@@ -98,24 +121,41 @@ describe('MetricsPanel', () => {
   })
 
   it('falls back to lifetimeStats when metrics and githubMetrics are null', () => {
-    const lifetimeStats = { issues_completed: 5, prs_merged: 3, issues_created: 1 }
-    render(<MetricsPanel metrics={null} lifetimeStats={lifetimeStats} githubMetrics={null} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      lifetimeStats: { issues_completed: 5, prs_merged: 3, issues_created: 1 },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('5')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
   })
 
   it('falls back to metrics.lifetime when githubMetrics is null', () => {
-    const metrics = {
-      lifetime: { issues_completed: 10, prs_merged: 8, issues_created: 3 },
-      rates: {},
-    }
-    render(<MetricsPanel metrics={metrics} lifetimeStats={null} githubMetrics={null} />)
+    mockUseHydra.mockReturnValue(defaultContext({
+      metrics: {
+        lifetime: { issues_completed: 10, prs_merged: 8, issues_created: 3 },
+        rates: {},
+      },
+    }))
+    render(<MetricsPanel />)
     expect(screen.getByText('10')).toBeInTheDocument()
     expect(screen.getByText('8')).toBeInTheDocument()
   })
 
   it('shows empty state when everything is null and session is empty', () => {
-    render(<MetricsPanel metrics={null} lifetimeStats={null} githubMetrics={null} />)
+    render(<MetricsPanel />)
     expect(screen.getByText('No metrics data available yet.')).toBeInTheDocument()
+  })
+
+  it('renders rates section when metricsHistory has current snapshot', () => {
+    mockUseHydra.mockReturnValue(defaultContext({
+      metricsHistory: {
+        current: { merge_rate: 0.8, first_pass_approval_rate: 0.6, quality_fix_rate: 0.1, hitl_escalation_rate: 0.05, issues_completed: 10, prs_merged: 8 },
+        snapshots: [],
+      },
+    }))
+    render(<MetricsPanel />)
+    expect(screen.getByText('Rates')).toBeInTheDocument()
+    expect(screen.getByText('Merge Rate')).toBeInTheDocument()
+    expect(screen.getByText('First-Pass Approval')).toBeInTheDocument()
   })
 })
