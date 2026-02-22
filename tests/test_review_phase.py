@@ -3394,7 +3394,7 @@ class TestSelfFixReReview:
     """
 
     def _setup_phase(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> tuple[ReviewPhase, PRInfo, GitHubIssue]:
         """Helper to set up a ReviewPhase ready for self-fix re-review tests."""
         phase = make_review_phase(config)
@@ -3419,7 +3419,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_self_fix_with_re_review_approve_upgrades_verdict(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """fixes_made=True + REQUEST_CHANGES → re-review APPROVE → merge."""
         phase, pr, issue = self._setup_phase(config)
@@ -3445,7 +3445,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_self_fix_with_re_review_reject_preserves_behavior(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """fixes_made=True + REQUEST_CHANGES → re-review REQUEST_CHANGES → re-queue."""
         phase, pr, issue = self._setup_phase(config)
@@ -3469,7 +3469,7 @@ class TestSelfFixReReview:
         assert phase._state.get_review_attempts(42) == 1
 
     @pytest.mark.asyncio
-    async def test_no_fixes_no_re_review(self, config: HydraConfig) -> None:
+    async def test_no_fixes_no_re_review(self, config: HydraFlowConfig) -> None:
         """fixes_made=False + REQUEST_CHANGES → no re-review, just re-queue."""
         phase, pr, issue = self._setup_phase(config)
 
@@ -3486,7 +3486,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_self_fix_comment_verdict_triggers_re_review(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """fixes_made=True + COMMENT → re-review APPROVE → merge."""
         phase, pr, issue = self._setup_phase(config)
@@ -3509,7 +3509,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_self_fix_re_review_pushes_additional_fixes(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Re-review with fixes_made=True should push additional fixes."""
         phase, pr, issue = self._setup_phase(config)
@@ -3532,7 +3532,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_self_fix_re_review_approve_does_not_increment_attempts(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Self-fix + re-review APPROVE should NOT increment review attempts."""
         phase, pr, issue = self._setup_phase(config)
@@ -3553,7 +3553,7 @@ class TestSelfFixReReview:
 
     @pytest.mark.asyncio
     async def test_re_review_exception_falls_back_to_rejection(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Re-review exception falls back gracefully to original rejection (re-queue)."""
         phase, pr, issue = self._setup_phase(config)
