@@ -7,11 +7,12 @@ import hashlib
 import logging
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from file_util import atomic_write
+from models import MemoryIssueData, MemorySyncResult
 from state import StateTracker
 from subprocess_util import make_clean_env
 
@@ -129,7 +130,7 @@ class MemorySyncWorker:
         self._state = state
         self._bus = event_bus
 
-    async def sync(self, issues: list[dict[str, Any]]) -> dict[str, Any]:
+    async def sync(self, issues: list[MemoryIssueData]) -> MemorySyncResult:
         """Main sync entry point.
 
         *issues* is a list of dicts with ``number``, ``title``, ``body``,
@@ -347,11 +348,11 @@ class MemorySyncWorker:
         digest_path = self._config.repo_root / ".hydra" / "memory" / "digest.md"
         atomic_write(digest_path, content)
 
-    async def publish_sync_event(self, stats: dict[str, Any]) -> None:
+    async def publish_sync_event(self, stats: MemorySyncResult) -> None:
         """Publish a MEMORY_SYNC event with *stats*."""
         await self._bus.publish(
             HydraEvent(
                 type=EventType.MEMORY_SYNC,
-                data=stats,
+                data=dict(stats),
             )
         )

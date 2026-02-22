@@ -193,7 +193,7 @@ class TestPlanPhase:
         await phase.plan_issues()
 
         stats = state.get_lifetime_stats()
-        assert stats["issues_created"] == 2
+        assert stats.issues_created == 2
 
     @pytest.mark.asyncio
     async def test_plan_issues_files_new_issues(self, config: HydraConfig) -> None:
@@ -369,7 +369,7 @@ class TestPlanPhase:
         await phase.plan_issues()
 
         prs.create_issue.assert_not_awaited()
-        assert state.get_lifetime_stats()["issues_created"] == 0
+        assert state.get_lifetime_stats().issues_created == 0
 
     @pytest.mark.asyncio
     async def test_plan_issues_stop_event_cancels_remaining(

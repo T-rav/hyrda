@@ -7,7 +7,7 @@ import contextlib
 import logging
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
@@ -22,7 +22,7 @@ from issue_store import IssueStore
 from memory import MemorySyncWorker, file_memory_suggestion
 from memory_sync_loop import MemorySyncLoop
 from metrics_sync_loop import MetricsSyncLoop
-from models import Phase
+from models import BackgroundWorkerState, Phase
 from plan_phase import PlanPhase
 from planner import PlannerRunner
 from pr_manager import PRManager
@@ -37,6 +37,9 @@ from triage import TriageRunner
 from triage_phase import TriagePhase
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
+
+if TYPE_CHECKING:
+    from metrics_manager import MetricsManager
 
 logger = logging.getLogger("hydra.orchestrator")
 
@@ -79,7 +82,7 @@ class HydraOrchestrator:
         self._stop_event = asyncio.Event()
         self._running = False
         # Background worker last-known status: {worker_name: status dict}
-        self._bg_worker_states: dict[str, dict[str, Any]] = {}
+        self._bg_worker_states: dict[str, BackgroundWorkerState] = {}
         # Background worker enabled flags: {worker_name: bool}
         self._bg_worker_enabled: dict[str, bool] = {}
         # Auth failure flag — set when a loop crashes due to AuthenticationError
@@ -213,7 +216,7 @@ class HydraOrchestrator:
         return self._state
 
     @property
-    def metrics_manager(self) -> Any:
+    def metrics_manager(self) -> MetricsManager:
         """Expose metrics manager for dashboard API."""
         return self._metrics_manager
 
@@ -326,12 +329,12 @@ class HydraOrchestrator:
         self, name: str, status: str, details: dict[str, Any] | None = None
     ) -> None:
         """Record the latest heartbeat from a background worker."""
-        self._bg_worker_states[name] = {
-            "name": name,
-            "status": status,
-            "last_run": datetime.now(UTC).isoformat(),
-            "details": details or {},
-        }
+        self._bg_worker_states[name] = BackgroundWorkerState(
+            name=name,
+            status=status,
+            last_run=datetime.now(UTC).isoformat(),
+            details=dict(details) if details else {},
+        )
 
     def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
         """Enable or disable a background worker by name."""
@@ -341,9 +344,9 @@ class HydraOrchestrator:
         """Return whether a background worker is enabled (defaults to True)."""
         return self._bg_worker_enabled.get(name, True)
 
-    def get_bg_worker_states(self) -> dict[str, dict[str, Any]]:
+    def get_bg_worker_states(self) -> dict[str, BackgroundWorkerState]:
         """Return a copy of all background worker states with enabled flag."""
-        result: dict[str, dict[str, Any]] = {}
+        result: dict[str, BackgroundWorkerState] = {}
         for name, state_dict in self._bg_worker_states.items():
             result[name] = {**state_dict, "enabled": self.is_bg_worker_enabled(name)}
         return result

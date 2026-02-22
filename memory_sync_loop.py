@@ -11,6 +11,7 @@ from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from issue_fetcher import IssueFetcher
 from memory import MemorySyncWorker
+from models import MemoryIssueData
 from subprocess_util import AuthenticationError, CreditExhaustedError
 
 logger = logging.getLogger("hydra.memory_sync_loop")
@@ -49,19 +50,19 @@ class MemorySyncLoop:
                 issues = await self._fetcher.fetch_issues_by_labels(
                     self._config.memory_label, limit=100
                 )
-                # Convert to dicts for the sync worker
-                issue_dicts = [
-                    {
-                        "number": i.number,
-                        "title": i.title,
-                        "body": i.body,
-                        "createdAt": i.created_at,
-                    }
+                # Convert to typed dicts for the sync worker
+                issue_dicts: list[MemoryIssueData] = [
+                    MemoryIssueData(
+                        number=i.number,
+                        title=i.title,
+                        body=i.body,
+                        createdAt=i.created_at,
+                    )
                     for i in issues
                 ]
                 stats = await self._memory_sync.sync(issue_dicts)
                 await self._memory_sync.publish_sync_event(stats)
-                self._status_cb("memory_sync", "ok", stats)
+                self._status_cb("memory_sync", "ok", dict(stats))
             except (AuthenticationError, CreditExhaustedError):
                 raise
             except Exception:
