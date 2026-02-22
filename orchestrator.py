@@ -729,13 +729,3 @@ class HydraOrchestrator:
         )
         for loop_name, factory in loop_factories:
             tasks[loop_name] = asyncio.create_task(factory(), name=f"hydra-{loop_name}")
-
-    async def _set_phase(self, phase: Phase) -> None:
-        """Update the current phase and broadcast."""
-        logger.info("Phase: %s", phase.value)
-        await self._bus.publish(
-            HydraEvent(
-                type=EventType.PHASE_CHANGE,
-                data={"phase": phase.value},
-            )
-        )

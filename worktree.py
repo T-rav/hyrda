@@ -36,11 +36,6 @@ class WorktreeManager:
         self._repo_root = config.repo_root
         self._base = config.worktree_base
 
-    def exists(self, issue_number: int) -> bool:
-        """Check whether a worktree directory already exists for *issue_number*."""
-        wt_path = self._config.worktree_path_for_issue(issue_number)
-        return wt_path.is_dir()
-
     async def _delete_local_branch(self, branch: str) -> None:
         """Delete a local branch if it exists, ignoring errors."""
         with contextlib.suppress(RuntimeError):

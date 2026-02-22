@@ -369,17 +369,6 @@ class ReviewPhase:
                     exc_info=True,
                 )
 
-        judge_result = await self._get_judge_result(issue, pr)
-        if judge_result is not None:
-            try:
-                await self._create_verification_issue(issue, pr, judge_result)
-            except Exception:  # noqa: BLE001
-                logger.warning(
-                    "Verification issue creation failed for issue #%d",
-                    pr.issue_number,
-                    exc_info=True,
-                )
-
         # Check if any parent epics can be closed
         if self._epic_checker:
             try:
@@ -704,17 +693,6 @@ class ReviewPhase:
                 event_cause="review_fix_cap_exceeded",
             )
             return False  # Destroy worktree
-
-    async def _get_judge_result(
-        self,
-        issue: GitHubIssue,  # noqa: ARG002
-        pr: PRInfo,  # noqa: ARG002
-    ) -> JudgeResult | None:
-        """Retrieve the judge result for a merged PR.
-
-        Returns None until the LLM judge (#268) is implemented.
-        """
-        return None
 
     async def _create_verification_issue(
         self,

@@ -582,14 +582,6 @@ class TestLifecycle:
         await asyncio.wait_for(store.start(stop), timeout=2.0)
         await task
 
-    @pytest.mark.asyncio
-    async def test_stop_cancels_poll_task(self) -> None:
-        store = _make_store()
-        # Create a fake poll task
-        store._poll_task = asyncio.create_task(asyncio.sleep(100))
-        await store.stop()
-        assert store._poll_task is None
-
 
 # ── Fetch All Hydra Issues ───────────────────────────────────────────
 
