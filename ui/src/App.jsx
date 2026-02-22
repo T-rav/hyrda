@@ -142,7 +142,6 @@ function AppContent() {
             collapsed={!pipelinePanelOpen}
             onToggleCollapse={handleTogglePipelinePanel}
             onToggleBgWorker={toggleBgWorker}
-            onViewTranscript={handleViewTranscript}
           />
         </div>
       </div>

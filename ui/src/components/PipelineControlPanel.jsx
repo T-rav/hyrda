@@ -71,7 +71,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
   )
 }
 
-export function PipelineControlPanel({ collapsed, onToggleCollapse, onToggleBgWorker, onViewTranscript }) {
+export function PipelineControlPanel({ collapsed, onToggleCollapse, onToggleBgWorker }) {
   const { workers, stageStatus, hitlItems } = useHydra()
 
   const pipelineWorkers = Object.entries(workers || {}).filter(
@@ -96,7 +96,7 @@ export function PipelineControlPanel({ collapsed, onToggleCollapse, onToggleBgWo
           return (
             <span
               key={loop.key}
-              style={{ ...styles.collapsedDot, background: enabled ? loop.color : loop.dimColor }}
+              style={enabled ? collapsedDotLit[loop.key] : collapsedDotDim[loop.key]}
               data-testid={`collapsed-dot-${loop.key}`}
             />
           )
@@ -125,10 +125,10 @@ export function PipelineControlPanel({ collapsed, onToggleCollapse, onToggleBgWo
           const activeCount = status.workerCount || 0
           return (
             <div key={loop.key} style={styles.loopChip}>
-              <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />
+              <span style={enabled ? loopDotLit[loop.key] : loopDotDim[loop.key]} />
               <span style={enabled ? styles.loopLabel : styles.loopLabelDim}>{loop.label}</span>
               <span
-                style={{ ...styles.loopCount, color: enabled && activeCount > 0 ? loop.color : theme.textMuted }}
+                style={enabled && activeCount > 0 ? loopCountActive[loop.key] : loopCountDim}
                 data-testid={`loop-count-${loop.key}`}
               >
                 {activeCount}
@@ -238,12 +238,6 @@ const styles = {
     border: `1px solid ${theme.border}`,
     borderRadius: 12,
     background: theme.bg,
-  },
-  loopDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
   },
   loopLabel: {
     fontSize: 11,
@@ -404,3 +398,11 @@ const styles = {
     whiteSpace: 'nowrap',
   },
 }
+
+// Pre-computed per-loop style variants (avoids object spread in render loops)
+const loopDotLit = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.dot, background: l.color }]))
+const loopDotDim = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.dot, background: l.dimColor }]))
+const collapsedDotLit = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.collapsedDot, background: l.color }]))
+const collapsedDotDim = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.collapsedDot, background: l.dimColor }]))
+const loopCountActive = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.loopCount, color: l.color }]))
+const loopCountDim = { ...styles.loopCount, color: theme.textMuted }
