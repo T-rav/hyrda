@@ -138,7 +138,7 @@ class TestBuildConflictPrompt:
         prompt = build_conflict_prompt(issue, [], "", long_error, 3)
         # Should only include last 3000 chars
         assert "## Previous Attempt Failed" in prompt
-        error_section = prompt.split("## Previous Attempt Failed")[1]
+        error_section = prompt.split("## Previous Attempt Failed")[1].split("##")[0]
         # The x's in the error section should be <= 3000
         assert error_section.count("x") <= 3000
 
@@ -165,3 +165,10 @@ class TestBuildConflictPrompt:
         prompt = build_conflict_prompt(issue, [], "", None, 1)
         body_section = prompt.split("## Issue Description")[1].split("##")[0]
         assert body_section.count("a") == 3000
+
+    def test_includes_memory_suggestion_instructions(self) -> None:
+        issue = _make_issue()
+        prompt = build_conflict_prompt(issue, [], "", None, 1)
+        assert "MEMORY_SUGGESTION_START" in prompt
+        assert "MEMORY_SUGGESTION_END" in prompt
+        assert "## Optional: Memory Suggestion" in prompt

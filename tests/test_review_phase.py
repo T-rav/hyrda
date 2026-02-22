@@ -1498,6 +1498,65 @@ class TestResolveMergeConflicts:
         # Final abort_merge should still be called
         phase._worktrees.abort_merge.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_conflict_resolution_calls_file_memory_suggestion(
+        self, config: HydraConfig
+    ) -> None:
+        """file_memory_suggestion should be called with the conflict transcript."""
+        from unittest.mock import patch
+
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript with suggestion")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = make_review_phase(config, agents=mock_agents)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+
+        with patch(
+            "review_phase.file_memory_suggestion", new_callable=AsyncMock
+        ) as mock_fms:
+            await phase._resolve_merge_conflicts(
+                pr, issue, config.worktree_base / "issue-42", worker_id=0
+            )
+
+            mock_fms.assert_awaited_once_with(
+                "transcript with suggestion",
+                "conflict_resolver",
+                f"PR #{pr.number}",
+                phase._config,
+                phase._prs,
+                phase._state,
+            )
+
+    @pytest.mark.asyncio
+    async def test_conflict_resolution_memory_failure_does_not_propagate(
+        self, config: HydraConfig
+    ) -> None:
+        """Exceptions from file_memory_suggestion must not break conflict resolution."""
+        from unittest.mock import patch
+
+        mock_agents = AsyncMock()
+        mock_agents._execute = AsyncMock(return_value="transcript")
+        mock_agents._verify_result = AsyncMock(return_value=(True, ""))
+        phase = make_review_phase(config, agents=mock_agents)
+        pr = PRInfoFactory.create()
+        issue = IssueFactory.create()
+
+        phase._worktrees.start_merge_main = AsyncMock(return_value=False)
+
+        with patch(
+            "review_phase.file_memory_suggestion",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("network error"),
+        ):
+            result = await phase._resolve_merge_conflicts(
+                pr, issue, config.worktree_base / "issue-42", worker_id=0
+            )
+
+            assert result is True
+
 
 # ---------------------------------------------------------------------------
 # Review exception isolation

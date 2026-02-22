@@ -14,6 +14,7 @@ from config import HydraConfig
 from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
+from memory import file_memory_suggestion
 from models import (
     GitHubIssue,
     JudgeResult,
@@ -788,6 +789,21 @@ class ReviewPhase:
                 self._save_conflict_transcript(
                     pr.number, issue.number, attempt, transcript
                 )
+
+                try:
+                    await file_memory_suggestion(
+                        transcript,
+                        "conflict_resolver",
+                        f"PR #{pr.number}",
+                        self._config,
+                        self._prs,
+                        self._state,
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to file memory suggestion for conflict resolution on PR #%d",
+                        pr.number,
+                    )
 
                 success, error_msg = await self._agents._verify_result(
                     wt_path, pr.branch
