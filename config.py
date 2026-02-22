@@ -23,8 +23,8 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("max_review_diff_chars", "HYDRA_MAX_REVIEW_DIFF_CHARS", 15_000),
     ("gh_max_retries", "HYDRA_GH_MAX_RETRIES", 3),
     ("max_issue_attempts", "HYDRA_MAX_ISSUE_ATTEMPTS", 3),
-    ("memory_sync_interval", "HYDRA_MEMORY_SYNC_INTERVAL", 120),
-    ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 300),
+    ("memory_sync_interval", "HYDRA_MEMORY_SYNC_INTERVAL", 3600),
+    ("metrics_sync_interval", "HYDRA_METRICS_SYNC_INTERVAL", 7200),
     ("max_merge_conflict_fix_attempts", "HYDRA_MAX_MERGE_CONFLICT_FIX_ATTEMPTS", 3),
     ("data_poll_interval", "HYDRA_DATA_POLL_INTERVAL", 60),
 ]

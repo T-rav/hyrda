@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType
 from models import BackgroundWorkersResponse, BackgroundWorkerStatus, MetricsResponse
+from state import StateTracker
 from tests.conftest import make_state
 
 
