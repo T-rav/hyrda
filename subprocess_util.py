@@ -1,4 +1,4 @@
-"""Shared async subprocess helper for Hydra."""
+"""Shared async subprocess helper for HydraFlow."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-logger = logging.getLogger("hydra.subprocess")
+logger = logging.getLogger("hydraflow.subprocess")
 
 
 class AuthenticationError(RuntimeError):

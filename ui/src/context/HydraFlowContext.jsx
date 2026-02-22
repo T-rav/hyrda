@@ -511,9 +511,9 @@ export function reducer(state, action) {
   }
 }
 
-const HydraContext = createContext(null)
+const HydraFlowContext = createContext(null)
 
-export function HydraProvider({ children }) {
+export function HydraFlowProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -781,16 +781,16 @@ export function HydraProvider({ children }) {
   }
 
   return (
-    <HydraContext.Provider value={value}>
+    <HydraFlowContext.Provider value={value}>
       {children}
-    </HydraContext.Provider>
+    </HydraFlowContext.Provider>
   )
 }
 
-export function useHydra() {
-  const context = useContext(HydraContext)
+export function useHydraFlow() {
+  const context = useContext(HydraFlowContext)
   if (!context) {
-    throw new Error('useHydra must be used within a HydraProvider')
+    throw new Error('useHydraFlow must be used within a HydraFlowProvider')
   }
   return context
 }

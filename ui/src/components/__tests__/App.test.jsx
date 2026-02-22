@@ -54,9 +54,9 @@ const { mockState } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../context/HydraContext', () => ({
-  HydraProvider: ({ children }) => children,
-  useHydra: () => mockState,
+vi.mock('../../context/HydraFlowContext', () => ({
+  HydraFlowProvider: ({ children }) => children,
+  useHydraFlow: () => mockState,
 }))
 
 beforeEach(() => {

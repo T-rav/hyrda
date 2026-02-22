@@ -144,7 +144,7 @@ class TestLoadMemoryDigest:
 
     def test_reads_existing_file(self, tmp_path: Path) -> None:
         config = ConfigFactory.create(repo_root=tmp_path)
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         digest_file = digest_dir / "digest.md"
         digest_file.write_text("## Learnings\n\nSome content here")
@@ -159,7 +159,7 @@ class TestLoadMemoryDigest:
 
     def test_empty_file_returns_empty(self, tmp_path: Path) -> None:
         config = ConfigFactory.create(repo_root=tmp_path)
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         (digest_dir / "digest.md").write_text("   \n  ")
 
@@ -168,7 +168,7 @@ class TestLoadMemoryDigest:
 
     def test_caps_at_max_chars(self, tmp_path: Path) -> None:
         config = ConfigFactory.create(repo_root=tmp_path)
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         # Write content longer than max_memory_prompt_chars (4000)
         long_content = "x" * 5000
@@ -181,7 +181,7 @@ class TestLoadMemoryDigest:
     def test_at_exact_max_chars_no_truncation(self, tmp_path: Path) -> None:
         """Content at exactly max_memory_prompt_chars should NOT be truncated."""
         config = ConfigFactory.create(repo_root=tmp_path)
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         exact_content = "x" * config.max_memory_prompt_chars
         (digest_dir / "digest.md").write_text(exact_content)
@@ -193,7 +193,7 @@ class TestLoadMemoryDigest:
     def test_one_over_max_chars_triggers_truncation(self, tmp_path: Path) -> None:
         """Content at max_memory_prompt_chars + 1 should be truncated."""
         config = ConfigFactory.create(repo_root=tmp_path)
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         over_content = "x" * (config.max_memory_prompt_chars + 1)
         (digest_dir / "digest.md").write_text(over_content)
@@ -383,7 +383,7 @@ class TestMemorySyncWorkerSync:
         assert stats["item_count"] == 2
         assert stats["action"] == "synced"
         # Digest file should exist
-        digest_path = tmp_path / ".hydra" / "memory" / "digest.md"
+        digest_path = tmp_path / ".hydraflow" / "memory" / "digest.md"
         assert digest_path.exists()
         content = digest_path.read_text()
         assert "Always test first" in content
@@ -397,7 +397,7 @@ class TestMemorySyncWorkerSync:
         bus = MagicMock()
 
         # Write a digest so the read works
-        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir = tmp_path / ".hydraflow" / "memory"
         digest_dir.mkdir(parents=True)
         (digest_dir / "digest.md").write_text("existing digest")
 
@@ -577,47 +577,47 @@ class TestMemoryConfig:
     """Tests for memory-related config fields."""
 
     def test_memory_label_default(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
-        assert config.memory_label == ["hydra-memory"]
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.memory_label == ["hydraflow-memory"]
 
     def test_memory_label_custom(self) -> None:
         config = ConfigFactory.create(memory_label=["custom-memory"])
         assert config.memory_label == ["custom-memory"]
 
     def test_memory_sync_interval_default(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.memory_sync_interval == 3600
 
     def test_max_memory_chars_default(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.max_memory_chars == 4000
 
     def test_max_memory_prompt_chars_default(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.max_memory_prompt_chars == 4000
 
     def test_memory_label_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        monkeypatch.setenv("HYDRA_LABEL_MEMORY", "my-memory-label")
-        config = HydraConfig(repo="test/repo")
+        monkeypatch.setenv("HYDRAFLOW_LABEL_MEMORY", "my-memory-label")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.memory_label == ["my-memory-label"]
 
     def test_memory_sync_interval_env_override(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        monkeypatch.setenv("HYDRA_MEMORY_SYNC_INTERVAL", "60")
-        config = HydraConfig(repo="test/repo")
+        monkeypatch.setenv("HYDRAFLOW_MEMORY_SYNC_INTERVAL", "60")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.memory_sync_interval == 60
 
 
@@ -659,8 +659,8 @@ class TestMemoryModels:
     def test_control_status_config_memory_label(self) -> None:
         from models import ControlStatusConfig
 
-        cfg = ControlStatusConfig(memory_label=["hydra-memory"])
-        assert cfg.memory_label == ["hydra-memory"]
+        cfg = ControlStatusConfig(memory_label=["hydraflow-memory"])
+        assert cfg.memory_label == ["hydraflow-memory"]
 
     def test_github_issue_created_at_from_camel_case(self) -> None:
         from models import GitHubIssue
@@ -694,9 +694,9 @@ class TestMemoryCompactionModelConfig:
     """Tests for the memory_compaction_model config field."""
 
     def test_default_is_haiku(self) -> None:
-        from config import HydraConfig
+        from config import HydraFlowConfig
 
-        config = HydraConfig(repo="test/repo")
+        config = HydraFlowConfig(repo="test/repo")
         assert config.memory_compaction_model == "haiku"
 
     def test_custom_model(self) -> None:
@@ -803,17 +803,17 @@ class TestMemoryPRManager:
     def test_hydra_labels_includes_memory(self) -> None:
         from pr_manager import PRManager
 
-        label_fields = [entry[0] for entry in PRManager._HYDRA_LABELS]
+        label_fields = [entry[0] for entry in PRManager._HYDRAFLOW_LABELS]
         assert "memory_label" in label_fields
 
     def test_memory_label_color(self) -> None:
         from pr_manager import PRManager
 
-        for field, color, _ in PRManager._HYDRA_LABELS:
+        for field, color, _ in PRManager._HYDRAFLOW_LABELS:
             if field == "memory_label":
                 assert color == "1d76db"
                 return
-        pytest.fail("memory_label not found in _HYDRA_LABELS")
+        pytest.fail("memory_label not found in _HYDRAFLOW_LABELS")
 
 
 # --- Orchestrator tests ---
@@ -899,9 +899,9 @@ class TestMemorySyncLoop:
         # Read the source to check the loop is registered
         import inspect
 
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        source = inspect.getsource(HydraOrchestrator._supervise_loops)
+        source = inspect.getsource(HydraFlowOrchestrator._supervise_loops)
         assert "memory_sync" in source
         assert "_memory_sync_loop" in source
 
@@ -921,5 +921,5 @@ class TestWriteDigestUsesAtomicWrite:
 
         mock_aw.assert_called_once()
         call_args = mock_aw.call_args[0]
-        assert call_args[0] == tmp_path / ".hydra" / "memory" / "digest.md"
+        assert call_args[0] == tmp_path / ".hydraflow" / "memory" / "digest.md"
         assert call_args[1] == "# Digest content"

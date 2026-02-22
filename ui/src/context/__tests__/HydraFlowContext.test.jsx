@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { reducer } from '../HydraContext'
+import { reducer } from '../HydraFlowContext'
 
 const emptyPipeline = {
   triage: [],
@@ -41,10 +41,10 @@ const initialState = {
   pipelinePollerLastRun: null,
 }
 
-describe('HydraContext reducer', () => {
+describe('HydraFlowContext reducer', () => {
   it('GITHUB_METRICS action sets githubMetrics state', () => {
     const data = {
-      open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1 },
+      open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 1 },
       total_closed: 10,
       total_merged: 8,
     }
@@ -58,7 +58,7 @@ describe('HydraContext reducer', () => {
       githubMetrics: { open_by_label: {}, total_closed: 0, total_merged: 0 },
     }
     const data = {
-      open_by_label: { 'hydra-plan': 5 },
+      open_by_label: { 'hydraflow-plan': 5 },
       total_closed: 15,
       total_merged: 12,
     }
@@ -89,7 +89,7 @@ describe('HydraContext reducer', () => {
       ...initialState,
       phase: 'idle',
       sessionTriaged: 3,
-      githubMetrics: { open_by_label: { 'hydra-plan': 2 }, total_closed: 1, total_merged: 1 },
+      githubMetrics: { open_by_label: { 'hydraflow-plan': 2 }, total_closed: 1, total_merged: 1 },
     }
     const next = reducer(state, {
       type: 'phase_change',
@@ -97,7 +97,7 @@ describe('HydraContext reducer', () => {
       timestamp: new Date().toISOString(),
     })
     expect(next.sessionTriaged).toBe(0)
-    expect(next.githubMetrics).toEqual({ open_by_label: { 'hydra-plan': 2 }, total_closed: 1, total_merged: 1 })
+    expect(next.githubMetrics).toEqual({ open_by_label: { 'hydraflow-plan': 2 }, total_closed: 1, total_merged: 1 })
   })
 })
 
@@ -325,18 +325,18 @@ describe('BACKGROUND_WORKERS preserves local overrides', () => {
   })
 })
 
-describe('HydraProvider', () => {
+describe('HydraFlowProvider', () => {
   it('renders children', async () => {
     // Dynamic import to avoid WebSocket connection in test
-    const { HydraProvider } = await import('../HydraContext')
+    const { HydraFlowProvider } = await import('../HydraFlowContext')
 
     // We can't fully test the provider without mocking WebSocket,
     // but we can verify it renders children
     // Note: The provider will attempt to connect but the test env has no server
     render(
-      <HydraProvider>
+      <HydraFlowProvider>
         <div>Test Child</div>
-      </HydraProvider>
+      </HydraFlowProvider>
     )
     expect(screen.getByText('Test Child')).toBeInTheDocument()
   })

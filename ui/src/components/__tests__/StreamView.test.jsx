@@ -4,15 +4,15 @@ import { PIPELINE_STAGES } from '../../constants'
 import { deriveStageStatus } from '../../hooks/useStageStatus'
 import { STAGE_KEYS } from '../../hooks/useTimeline'
 
-const mockUseHydra = vi.fn()
+const mockUseHydraFlow = vi.fn()
 
-vi.mock('../../context/HydraContext', () => ({
-  useHydra: (...args) => mockUseHydra(...args),
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
 const { StreamView, toStreamIssue } = await import('../StreamView')
 
-function defaultHydraContext(overrides = {}) {
+function defaultHydraFlowContext(overrides = {}) {
   const pipelineIssues = overrides.pipelineIssues || { triage: [], plan: [], implement: [], review: [] }
   const workers = overrides.workers || {}
   const backgroundWorkers = overrides.backgroundWorkers || []
@@ -27,7 +27,7 @@ function defaultHydraContext(overrides = {}) {
 }
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue(defaultHydraContext())
+  mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext())
 })
 
 // All stages open by default for test visibility
@@ -50,7 +50,7 @@ const basePipeIssue = {
 describe('StreamView stage indicators', () => {
   describe('Status dot colors', () => {
     it('shows green dot when stage has active workers', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         workers: {
           'triage-5': { status: 'evaluating', worker: 1, role: 'triage', title: 'Triage #5', branch: '', transcript: [], pr: null },
         },
@@ -68,7 +68,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('shows yellow dot when stage is enabled but no active workers', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -79,7 +79,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('shows red dot when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -90,7 +90,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('defaults to enabled (yellow) when no backgroundWorkers entry exists', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [],
       }))
       render(<StreamView {...defaultProps} />)
@@ -101,7 +101,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Disabled badge', () => {
     it('shows "Disabled" badge when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'review', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -111,7 +111,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('does not show "Disabled" badge when stage is enabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'review', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -123,7 +123,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Opacity dimming', () => {
     it('applies reduced opacity when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -134,7 +134,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('has full opacity when stage is enabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -154,7 +154,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Multiple stages with mixed states', () => {
     it('shows correct indicators for multiple stages simultaneously', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         workers: {
           'triage-5': { status: 'evaluating', worker: 1, role: 'triage', title: 'Triage #5', branch: '', transcript: [], pr: null },
         },
@@ -343,10 +343,10 @@ describe('toStreamIssue output shape', () => {
 
 describe('Stage header failed/hitl counts', () => {
   it('shows failed count when stage has failed issues', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        ...defaultHydraFlow.pipelineIssues,
         implement: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Failed issue', status: 'failed' },
@@ -359,10 +359,10 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows hitl count when stage has hitl issues', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        ...defaultHydraFlow.pipelineIssues,
         review: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
@@ -375,10 +375,10 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('hides failed and hitl counts when zero', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        ...defaultHydraFlow.pipelineIssues,
         plan: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Queued issue', status: 'queued' },
@@ -392,10 +392,10 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('excludes failed and hitl from queued count', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        ...defaultHydraFlow.pipelineIssues,
         implement: [
           { issue_number: 1, title: 'Active', status: 'active' },
           { issue_number: 2, title: 'Failed', status: 'failed' },
@@ -412,10 +412,10 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows correct counts with only failed issues (no active/queued)', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       pipelineIssues: {
-        ...defaultHydra.pipelineIssues,
+        ...defaultHydraFlow.pipelineIssues,
         implement: [
           { issue_number: 1, title: 'Failed 1', status: 'failed' },
           { issue_number: 2, title: 'Failed 2', status: 'failed' },
@@ -432,8 +432,8 @@ describe('Stage header failed/hitl counts', () => {
 
 describe('Merged stage rendering', () => {
   it('renders merged PR issues in the merged stage section', () => {
-    mockUseHydra.mockReturnValue({
-      ...defaultHydra,
+    mockUseHydraFlow.mockReturnValue({
+      ...defaultHydraFlow,
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
     })
     render(<StreamView {...defaultProps} />)

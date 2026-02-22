@@ -8,14 +8,14 @@ import re
 import time
 from pathlib import Path
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from memory import load_memory_digest
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
 
-logger = logging.getLogger("hydra.reviewer")
+logger = logging.getLogger("hydraflow.reviewer")
 
 
 class ReviewRunner:
@@ -25,7 +25,7 @@ class ReviewRunner:
     coverage, optionally makes fixes, and returns a verdict.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(self, config: HydraFlowConfig, event_bus: EventBus) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
@@ -49,7 +49,7 @@ class ReviewRunner:
         )
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -95,7 +95,7 @@ class ReviewRunner:
         result.duration_seconds = time.monotonic() - start
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -133,7 +133,7 @@ class ReviewRunner:
         )
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.CI_CHECK,
                 data={
                     "pr": pr.number,
@@ -170,7 +170,7 @@ class ReviewRunner:
             logger.error("CI fix failed for PR #%d: %s", pr.number, exc)
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.CI_CHECK,
                 data={
                     "pr": pr.number,
@@ -422,8 +422,8 @@ Only suggest genuinely valuable learnings — not trivial observations.
         )
 
     def _save_transcript(self, pr_number: int, transcript: str) -> None:
-        """Write the review transcript to .hydra/logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Write the review transcript to .hydraflow/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"review-pr-{pr_number}.txt"

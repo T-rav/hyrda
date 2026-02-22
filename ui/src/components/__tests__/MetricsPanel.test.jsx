@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-const mockUseHydra = vi.fn()
+const mockUseHydraFlow = vi.fn()
 
-vi.mock('../../context/HydraContext', () => ({
-  useHydra: (...args) => mockUseHydra(...args),
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
 const { MetricsPanel } = await import('../MetricsPanel')
@@ -34,7 +34,7 @@ function defaultContext(overrides = {}) {
 }
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue(defaultContext())
+  mockUseHydraFlow.mockReturnValue(defaultContext())
 })
 
 describe('MetricsPanel', () => {
@@ -44,9 +44,9 @@ describe('MetricsPanel', () => {
   })
 
   it('renders lifetime stats from GitHub metrics', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       githubMetrics: {
-        open_by_label: { 'hydra-plan': 2, 'hydra-ready': 1, 'hydra-review': 0, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        open_by_label: { 'hydraflow-plan': 2, 'hydraflow-ready': 1, 'hydraflow-review': 0, 'hydraflow-hitl': 0, 'hydraflow-fixed': 0 },
         total_closed: 10,
         total_merged: 8,
       },
@@ -60,9 +60,9 @@ describe('MetricsPanel', () => {
   })
 
   it('shows open issues count from GitHub metrics', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       githubMetrics: {
-        open_by_label: { 'hydra-plan': 3, 'hydra-ready': 2, 'hydra-review': 1, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 2, 'hydraflow-review': 1, 'hydraflow-hitl': 0, 'hydraflow-fixed': 0 },
         total_closed: 5,
         total_merged: 4,
       },
@@ -74,7 +74,7 @@ describe('MetricsPanel', () => {
 
   it('renders session stats when session has activity', () => {
     const sessionCounts = { triaged: 3, planned: 2, implemented: 1, reviewed: 1, merged: 0 }
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       stageStatus: mockStageStatusFromSession(sessionCounts),
       githubMetrics: {
         open_by_label: {},
@@ -92,7 +92,7 @@ describe('MetricsPanel', () => {
   })
 
   it('does not render session section when all session counts are zero', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       githubMetrics: {
         open_by_label: {},
         total_closed: 5,
@@ -104,9 +104,9 @@ describe('MetricsPanel', () => {
   })
 
   it('renders pipeline blocks visualization with GitHub metrics', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       githubMetrics: {
-        open_by_label: { 'hydra-plan': 3, 'hydra-ready': 1, 'hydra-review': 2, 'hydra-hitl': 0, 'hydra-fixed': 0 },
+        open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 1, 'hydraflow-review': 2, 'hydraflow-hitl': 0, 'hydraflow-fixed': 0 },
         total_closed: 0,
         total_merged: 0,
       },
@@ -121,7 +121,7 @@ describe('MetricsPanel', () => {
   })
 
   it('falls back to lifetimeStats when metrics and githubMetrics are null', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       lifetimeStats: { issues_completed: 5, prs_merged: 3, issues_created: 1 },
     }))
     render(<MetricsPanel />)
@@ -130,7 +130,7 @@ describe('MetricsPanel', () => {
   })
 
   it('falls back to metrics.lifetime when githubMetrics is null', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       metrics: {
         lifetime: { issues_completed: 10, prs_merged: 8, issues_created: 3 },
         rates: {},
@@ -147,7 +147,7 @@ describe('MetricsPanel', () => {
   })
 
   it('renders rates section when metricsHistory has current snapshot', () => {
-    mockUseHydra.mockReturnValue(defaultContext({
+    mockUseHydraFlow.mockReturnValue(defaultContext({
       metricsHistory: {
         current: { merge_rate: 0.8, first_pass_approval_rate: 0.6, quality_fix_rate: 0.1, hitl_escalation_rate: 0.05, issues_completed: 10, prs_merged: 8 },
         snapshots: [],

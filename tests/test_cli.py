@@ -19,7 +19,7 @@ class TestParseLabelArg:
     """Tests for the _parse_label_arg helper."""
 
     def test_single_label(self) -> None:
-        assert _parse_label_arg("hydra-ready") == ["hydra-ready"]
+        assert _parse_label_arg("hydraflow-ready") == ["hydraflow-ready"]
 
     def test_comma_separated_labels(self) -> None:
         assert _parse_label_arg("foo,bar") == ["foo", "bar"]
@@ -83,9 +83,9 @@ class TestParseArgs:
         assert args.clean is False
 
     def test_log_file_default(self) -> None:
-        """--log-file should default to .hydra/logs/hydra.log."""
+        """--log-file should default to .hydraflow/logs/hydra.log."""
         args = parse_args([])
-        assert args.log_file == ".hydra/logs/hydra.log"
+        assert args.log_file == ".hydraflow/logs/hydra.log"
 
     def test_log_file_explicit_value(self) -> None:
         """An explicit --log-file value should be preserved."""
@@ -110,26 +110,26 @@ class TestParseArgs:
 
 
 # ---------------------------------------------------------------------------
-# build_config — integration with HydraConfig
+# build_config — integration with HydraFlowConfig
 # ---------------------------------------------------------------------------
 
 
 class TestBuildConfig:
-    """Tests for build_config() converting CLI args → HydraConfig."""
+    """Tests for build_config() converting CLI args → HydraFlowConfig."""
 
     def test_no_cli_args_uses_hydra_config_defaults(self) -> None:
-        """With no CLI args, build_config should produce HydraConfig defaults."""
+        """With no CLI args, build_config should produce HydraFlowConfig defaults."""
         args = parse_args([])
         cfg = build_config(args)
 
-        # Check key defaults match HydraConfig
-        assert cfg.ready_label == ["hydra-ready"]
+        # Check key defaults match HydraFlowConfig
+        assert cfg.ready_label == ["hydraflow-ready"]
         assert cfg.batch_size == 15
         assert cfg.max_workers == 3
         assert cfg.max_planners == 1
         assert cfg.max_reviewers == 5
         assert cfg.max_hitl_workers == 1
-        assert cfg.hitl_active_label == ["hydra-hitl-active"]
+        assert cfg.hitl_active_label == ["hydraflow-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
         assert cfg.model == "sonnet"
         assert cfg.review_model == "sonnet"
@@ -137,12 +137,12 @@ class TestBuildConfig:
         assert cfg.ci_check_timeout == 600
         assert cfg.ci_poll_interval == 30
         assert cfg.max_ci_fix_attempts == 2
-        assert cfg.review_label == ["hydra-review"]
-        assert cfg.hitl_label == ["hydra-hitl"]
-        assert cfg.fixed_label == ["hydra-fixed"]
-        assert cfg.find_label == ["hydra-find"]
-        assert cfg.planner_label == ["hydra-plan"]
-        assert cfg.improve_label == ["hydra-improve"]
+        assert cfg.review_label == ["hydraflow-review"]
+        assert cfg.hitl_label == ["hydraflow-hitl"]
+        assert cfg.fixed_label == ["hydraflow-fixed"]
+        assert cfg.find_label == ["hydraflow-find"]
+        assert cfg.planner_label == ["hydraflow-plan"]
+        assert cfg.improve_label == ["hydraflow-improve"]
         assert cfg.planner_model == "opus"
         assert cfg.planner_budget_usd == pytest.approx(0)
         assert cfg.main_branch == "main"
@@ -151,7 +151,7 @@ class TestBuildConfig:
         assert cfg.dry_run is False
 
     def test_explicit_cli_arg_overrides_default(self) -> None:
-        """An explicit CLI arg should override the HydraConfig default."""
+        """An explicit CLI arg should override the HydraFlowConfig default."""
         args = parse_args(["--batch-size", "10"])
         cfg = build_config(args)
 
@@ -307,9 +307,9 @@ class TestBuildConfig:
         assert cfg.lite_plan_labels == ["hotfix", "patch", "minor"]
 
     def test_git_user_name_passed_through(self) -> None:
-        args = parse_args(["--git-user-name", "T-rav-Hydra-Ops"])
+        args = parse_args(["--git-user-name", "T-rav-HydraFlow-Ops"])
         cfg = build_config(args)
-        assert cfg.git_user_name == "T-rav-Hydra-Ops"
+        assert cfg.git_user_name == "T-rav-HydraFlow-Ops"
 
     def test_git_user_email_passed_through(self) -> None:
         args = parse_args(["--git-user-email", "bot@example.com"])
@@ -363,7 +363,7 @@ class TestRunMainSignalHandlers:
         mock_orch.stop = AsyncMock()
 
         with (
-            patch("cli.HydraOrchestrator", return_value=mock_orch),
+            patch("cli.HydraFlowOrchestrator", return_value=mock_orch),
             patch("asyncio.get_running_loop", return_value=mock_loop),
         ):
             await _run_main(config)
@@ -400,7 +400,7 @@ class TestRunMainSignalHandlers:
         mock_orch.run = fake_run
 
         with (
-            patch("cli.HydraOrchestrator", return_value=mock_orch),
+            patch("cli.HydraFlowOrchestrator", return_value=mock_orch),
             patch("asyncio.get_running_loop", return_value=mock_loop),
         ):
             await _run_main(config)
@@ -431,7 +431,7 @@ class TestRunMainSignalHandlers:
 
         with (
             patch.object(real_loop, "add_signal_handler", side_effect=tracking_add),
-            patch("dashboard.HydraDashboard", return_value=mock_dashboard),
+            patch("dashboard.HydraFlowDashboard", return_value=mock_dashboard),
         ):
             await _run_main(config)
 
@@ -462,7 +462,7 @@ class TestRunMainSignalHandlers:
 
         with (
             patch.object(real_loop, "add_signal_handler", side_effect=trigger_stop),
-            patch("dashboard.HydraDashboard", return_value=mock_dashboard),
+            patch("dashboard.HydraFlowDashboard", return_value=mock_dashboard),
         ):
             await _run_main(config)
 

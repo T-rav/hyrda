@@ -123,11 +123,11 @@ class TestCleanMerge:
             number=42,
             title="Test issue",
             body="body",
-            labels=["hydra-hitl"],
+            labels=["hydraflow-hitl"],
         )
         unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
         state.set_hitl_cause(42, "Merge conflict")
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
         wt.start_merge_main = AsyncMock(return_value=True)  # Clean merge
@@ -159,11 +159,11 @@ class TestSuccessfulResolution:
             number=42,
             title="Test issue",
             body="body",
-            labels=["hydra-hitl"],
+            labels=["hydraflow-hitl"],
         )
         unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(tmp_path)
         state.set_hitl_cause(42, "Merge conflict")
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
         wt.start_merge_main = AsyncMock(return_value=False)  # Conflicts exist
@@ -181,8 +181,8 @@ class TestSuccessfulResolution:
         wt_dir = tmp_path / "worktrees" / "issue-42"
         wt_dir.mkdir(parents=True)
 
-        # Also create .hydra/logs for transcript saving
-        (tmp_path / "repo" / ".hydra" / "logs").mkdir(parents=True)
+        # Also create .hydraflow/logs for transcript saving
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
 
         stats = await unsticker.unstick([_make_hitl_item(42)])
 
@@ -190,10 +190,10 @@ class TestSuccessfulResolution:
         assert stats["failed"] == 0
 
         # Verify label swaps: hitl removed, active added, then active removed, origin restored
-        prs.remove_label.assert_any_call(42, "hydra-hitl")
-        prs.add_labels.assert_any_call(42, ["hydra-hitl-active"])
-        prs.remove_label.assert_any_call(42, "hydra-hitl-active")
-        prs.add_labels.assert_any_call(42, ["hydra-review"])
+        prs.remove_label.assert_any_call(42, "hydraflow-hitl")
+        prs.add_labels.assert_any_call(42, ["hydraflow-hitl-active"])
+        prs.remove_label.assert_any_call(42, "hydraflow-hitl-active")
+        prs.add_labels.assert_any_call(42, ["hydraflow-review"])
 
         # Verify state cleared
         assert state.get_hitl_origin(42) is None
@@ -211,7 +211,7 @@ class TestFailedResolution:
             number=42,
             title="Test issue",
             body="body",
-            labels=["hydra-hitl"],
+            labels=["hydraflow-hitl"],
         )
         unsticker, state, prs, agents, wt, fetcher, bus = _make_unsticker(
             tmp_path, max_merge_conflict_fix_attempts=2
@@ -232,15 +232,15 @@ class TestFailedResolution:
         # Create worktree dir
         wt_dir = tmp_path / "worktrees" / "issue-42"
         wt_dir.mkdir(parents=True)
-        (tmp_path / "repo" / ".hydra" / "logs").mkdir(parents=True)
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
 
         stats = await unsticker.unstick([_make_hitl_item(42)])
 
         assert stats["failed"] == 1
         assert stats["resolved"] == 0
 
-        # Should re-add hydra-hitl label
-        prs.add_labels.assert_any_call(42, ["hydra-hitl"])
+        # Should re-add hydraflow-hitl label
+        prs.add_labels.assert_any_call(42, ["hydraflow-hitl"])
 
         # Comment should mention failure
         comment_calls = [
@@ -307,7 +307,7 @@ class TestConflictPromptUsesSharedBuilder:
 
         wt_dir = tmp_path / "worktrees" / "issue-42"
         wt_dir.mkdir(parents=True)
-        (tmp_path / "repo" / ".hydra" / "logs").mkdir(parents=True)
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
 
         # Capture the prompt passed to agent._execute
         captured_prompt = None
@@ -335,13 +335,17 @@ class TestSaveTranscript:
     def test_saves_transcript(self, tmp_path: Path) -> None:
         unsticker, *_ = _make_unsticker(tmp_path)
 
-        # Create the repo root so .hydra/logs can be created
+        # Create the repo root so .hydraflow/logs can be created
         (tmp_path / "repo").mkdir(parents=True, exist_ok=True)
 
         unsticker._save_transcript(42, 1, "transcript content here")
 
         path = (
-            tmp_path / "repo" / ".hydra" / "logs" / "unsticker-issue-42-attempt-1.txt"
+            tmp_path
+            / "repo"
+            / ".hydraflow"
+            / "logs"
+            / "unsticker-issue-42-attempt-1.txt"
         )
         assert path.exists()
         assert path.read_text() == "transcript content here"

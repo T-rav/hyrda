@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 import { StreamCard } from './StreamCard'
 import { PIPELINE_STAGES } from '../constants'
 import { STAGE_KEYS } from '../hooks/useTimeline'
@@ -116,7 +116,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
 }
 
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, prs, stageStatus } = useHydra()
+  const { pipelineIssues, prs, stageStatus } = useHydraFlow()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {

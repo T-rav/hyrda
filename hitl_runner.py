@@ -7,13 +7,13 @@ import logging
 import time
 from pathlib import Path
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from models import GitHubIssue, HITLResult
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
 
-logger = logging.getLogger("hydra.hitl_runner")
+logger = logging.getLogger("hydraflow.hitl_runner")
 
 # Prompt instructions keyed by escalation cause category.
 _CAUSE_INSTRUCTIONS: dict[str, str] = {
@@ -74,7 +74,7 @@ class HITLRunner:
     agent inside the issue's worktree.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(self, config: HydraFlowConfig, event_bus: EventBus) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
@@ -95,7 +95,7 @@ class HITLRunner:
         result = HITLResult(issue_number=issue.number)
 
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue.number,
@@ -136,7 +136,7 @@ class HITLRunner:
 
         status = "done" if result.success else "failed"
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.HITL_UPDATE,
                 data={
                     "issue": issue.number,
@@ -247,8 +247,8 @@ class HITLRunner:
         return True, "OK"
 
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
-        """Write the HITL transcript to .hydra/logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Write the HITL transcript to .hydraflow/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"hitl-issue-{issue_number}.txt"

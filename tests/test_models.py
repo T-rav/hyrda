@@ -1,10 +1,10 @@
-"""Tests for dx/hydra/models.py."""
+"""Tests for dx/hydraflow/models.py."""
 
 from __future__ import annotations
 
 import pytest
 
-# conftest.py already inserts the hydra package directory into sys.path
+# conftest.py already inserts the hydraflow package directory into sys.path
 from models import (
     BatchResult,
     ControlStatusConfig,
@@ -199,7 +199,7 @@ class TestGitHubIssue:
             "number": 42,
             "title": "Improve widget",
             "body": "The widget is slow.",
-            "labels": [{"name": "hydra-ready"}, {"name": "perf"}],
+            "labels": [{"name": "hydraflow-ready"}, {"name": "perf"}],
             "comments": [{"body": "LGTM"}, {"body": "Needs tests"}],
             "url": "https://github.com/org/repo/issues/42",
         }
@@ -211,7 +211,7 @@ class TestGitHubIssue:
         assert issue.number == 42
         assert issue.title == "Improve widget"
         assert issue.body == "The widget is slow."
-        assert issue.labels == ["hydra-ready", "perf"]
+        assert issue.labels == ["hydraflow-ready", "perf"]
         assert issue.comments == ["LGTM", "Needs tests"]
         assert issue.url == "https://github.com/org/repo/issues/42"
 
@@ -1132,12 +1132,12 @@ class TestControlStatusConfig:
     def test_all_fields_set(self) -> None:
         cfg = ControlStatusConfig(
             repo="org/repo",
-            ready_label=["hydra-ready"],
-            find_label=["hydra-find"],
-            planner_label=["hydra-plan"],
-            review_label=["hydra-review"],
-            hitl_label=["hydra-hitl"],
-            fixed_label=["hydra-fixed"],
+            ready_label=["hydraflow-ready"],
+            find_label=["hydraflow-find"],
+            planner_label=["hydraflow-plan"],
+            review_label=["hydraflow-review"],
+            hitl_label=["hydraflow-hitl"],
+            fixed_label=["hydraflow-fixed"],
             max_workers=4,
             max_planners=2,
             max_reviewers=1,
@@ -1145,7 +1145,7 @@ class TestControlStatusConfig:
             model="opus",
         )
         assert cfg.repo == "org/repo"
-        assert cfg.ready_label == ["hydra-ready"]
+        assert cfg.ready_label == ["hydraflow-ready"]
         assert cfg.max_workers == 4
         assert cfg.model == "opus"
 
@@ -1180,7 +1180,7 @@ class TestControlStatusResponse:
         """Verify nested config serializes correctly."""
         cfg = ControlStatusConfig(
             repo="org/repo",
-            ready_label=["hydra-ready"],
+            ready_label=["hydraflow-ready"],
             max_workers=2,
             batch_size=15,
             model="sonnet",
@@ -1189,7 +1189,7 @@ class TestControlStatusResponse:
         data = resp.model_dump()
         assert data["status"] == "running"
         assert data["config"]["repo"] == "org/repo"
-        assert data["config"]["ready_label"] == ["hydra-ready"]
+        assert data["config"]["ready_label"] == ["hydraflow-ready"]
         assert data["config"]["max_workers"] == 2
         assert data["config"]["batch_size"] == 15
         assert data["config"]["model"] == "sonnet"

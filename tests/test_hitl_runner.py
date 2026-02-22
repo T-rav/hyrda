@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from events import EventBus, EventType
 from hitl_runner import HITLRunner, _classify_cause
 from tests.conftest import HITLResultFactory, IssueFactory
@@ -276,12 +276,12 @@ class TestSaveTranscript:
         config.repo_root.mkdir(parents=True, exist_ok=True)
         hitl_runner._save_transcript(42, "test transcript content")
 
-        path = config.repo_root / ".hydra" / "logs" / "hitl-issue-42.txt"
+        path = config.repo_root / ".hydraflow" / "logs" / "hitl-issue-42.txt"
         assert path.exists()
         assert path.read_text() == "test transcript content"
 
     def test_save_transcript_handles_oserror(
-        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+        self, config: HydraFlowConfig, caplog: pytest.LogCaptureFixture
     ) -> None:
         config.repo_root.mkdir(parents=True, exist_ok=True)
         runner = HITLRunner(config, EventBus())
@@ -341,7 +341,7 @@ class TestVerifyQualityTimeout:
 
     @pytest.mark.asyncio
     async def test_verify_quality_timeout_returns_failure(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """_verify_quality should return (False, ...) when make quality times out."""
         runner = HITLRunner(config, EventBus())
@@ -362,7 +362,7 @@ class TestVerifyQualityTimeout:
 
     @pytest.mark.asyncio
     async def test_verify_quality_timeout_kills_process(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """_verify_quality should kill the process on timeout."""
         runner = HITLRunner(config, EventBus())

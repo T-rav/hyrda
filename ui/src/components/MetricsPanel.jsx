@@ -1,14 +1,14 @@
 import React from 'react'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 
 const BLOCK_LABELS = [
-  { key: 'hydra-plan',   label: 'Plan',   stage: 'plan' },
-  { key: 'hydra-ready',  label: 'Ready',  stage: 'implement' },
-  { key: 'hydra-review', label: 'Review', stage: 'review' },
-  { key: 'hydra-hitl',   label: 'HITL',   stage: 'review' },
-  { key: 'hydra-fixed',  label: 'Fixed',  stage: 'merged' },
+  { key: 'hydraflow-plan',   label: 'Plan',   stage: 'plan' },
+  { key: 'hydraflow-ready',  label: 'Ready',  stage: 'implement' },
+  { key: 'hydraflow-review', label: 'Review', stage: 'review' },
+  { key: 'hydraflow-hitl',   label: 'HITL',   stage: 'review' },
+  { key: 'hydraflow-fixed',  label: 'Fixed',  stage: 'merged' },
 ]
 
 function stageColor(stageKey) {
@@ -115,7 +115,7 @@ function SnapshotTimeline({ snapshots }) {
 export function MetricsPanel() {
   const {
     metrics, lifetimeStats, githubMetrics, metricsHistory, stageStatus,
-  } = useHydra()
+  } = useHydraFlow()
   const sessionTriaged = stageStatus?.triage?.sessionCount || 0
   const sessionPlanned = stageStatus?.plan?.sessionCount || 0
   const sessionImplemented = stageStatus?.implement?.sessionCount || 0

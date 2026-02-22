@@ -37,7 +37,7 @@ class TestBuildConfigWithConfigFile:
     """Tests for build_config() loading a config file."""
 
     def test_config_file_values_applied(self, tmp_path: Path) -> None:
-        """Config file values should be applied to the resulting HydraConfig."""
+        """Config file values should be applied to the resulting HydraFlowConfig."""
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps({"max_workers": 7, "model": "opus"}))
 
@@ -70,8 +70,8 @@ class TestBuildConfigWithConfigFile:
     def test_no_config_file_uses_defaults(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Without --config-file, build_config should use HydraConfig defaults."""
-        # Use tmp_path as CWD to avoid picking up a local .hydra/config.json
+        """Without --config-file, build_config should use HydraFlowConfig defaults."""
+        # Use tmp_path as CWD to avoid picking up a local .hydraflow/config.json
         monkeypatch.chdir(tmp_path)
         args = parse_args([])
         cfg = build_config(args)
@@ -104,7 +104,7 @@ class TestBuildConfigWithConfigFile:
         assert cfg.batch_size == 20
 
     def test_config_file_stores_path_on_config(self, tmp_path: Path) -> None:
-        """The config_file path should be stored on the resulting HydraConfig."""
+        """The config_file path should be stored on the resulting HydraFlowConfig."""
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps({}))
 

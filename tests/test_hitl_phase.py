@@ -20,7 +20,7 @@ from models import GitHubIssue
 from state import StateTracker
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +41,7 @@ def make_issue(
 
 
 def _make_phase(
-    config: HydraConfig,
+    config: HydraFlowConfig,
 ) -> tuple[
     HITLPhase, StateTracker, AsyncMock, AsyncMock, AsyncMock, AsyncMock, EventBus
 ]:
@@ -89,7 +89,7 @@ class TestHITLPhaseProcessing:
 
     @pytest.mark.asyncio
     async def test_process_corrections_skips_when_empty(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         phase, _state, _fetcher, prs, _wt, _runner, _bus = _make_phase(config)
 
@@ -98,7 +98,7 @@ class TestHITLPhaseProcessing:
         prs.remove_label.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_success_restores_origin_label(self, config: HydraConfig) -> None:
+    async def test_success_restores_origin_label(self, config: HydraFlowConfig) -> None:
         """On success, the origin label should be restored."""
         from models import HITLResult
 
@@ -106,7 +106,7 @@ class TestHITLPhaseProcessing:
         issue = make_issue(42, title="Test HITL", body="Fix it")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
@@ -116,22 +116,22 @@ class TestHITLPhaseProcessing:
 
         # Verify origin label was restored
         add_labels_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, ["hydra-review"]) in add_labels_calls
+        assert (42, ["hydraflow-review"]) in add_labels_calls
 
         # Verify HITL state was cleaned up
         assert state.get_hitl_origin(42) is None
         assert state.get_hitl_cause(42) is None
 
     @pytest.mark.asyncio
-    async def test_failure_keeps_hitl_label(self, config: HydraConfig) -> None:
-        """On failure, the hydra-hitl label should be re-applied."""
+    async def test_failure_keeps_hitl_label(self, config: HydraFlowConfig) -> None:
+        """On failure, the hydraflow-hitl label should be re-applied."""
         from models import HITLResult
 
         phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
         issue = make_issue(42, title="Test HITL", body="Fix it")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(
@@ -148,18 +148,18 @@ class TestHITLPhaseProcessing:
         assert (42, [config.hitl_label[0]]) in add_labels_calls
 
         # Verify HITL state is preserved (not cleaned up)
-        assert state.get_hitl_origin(42) == "hydra-review"
+        assert state.get_hitl_origin(42) == "hydraflow-review"
         assert state.get_hitl_cause(42) == "CI failed"
 
     @pytest.mark.asyncio
-    async def test_success_posts_comment(self, config: HydraConfig) -> None:
+    async def test_success_posts_comment(self, config: HydraFlowConfig) -> None:
         from models import HITLResult
 
         phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 
@@ -171,14 +171,14 @@ class TestHITLPhaseProcessing:
         assert "HITL correction applied successfully" in comment
 
     @pytest.mark.asyncio
-    async def test_failure_posts_comment(self, config: HydraConfig) -> None:
+    async def test_failure_posts_comment(self, config: HydraFlowConfig) -> None:
         from models import HITLResult
 
         phase, state, fetcher, prs, wt, runner, _bus = _make_phase(config)
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(
             return_value=HITLResult(
@@ -195,7 +195,7 @@ class TestHITLPhaseProcessing:
         assert "make quality failed" in comment
 
     @pytest.mark.asyncio
-    async def test_skips_when_issue_not_found(self, config: HydraConfig) -> None:
+    async def test_skips_when_issue_not_found(self, config: HydraFlowConfig) -> None:
         phase, _state, fetcher, prs, _wt, _runner, _bus = _make_phase(config)
         fetcher.fetch_issue_by_number = AsyncMock(return_value=None)
 
@@ -207,7 +207,7 @@ class TestHITLPhaseProcessing:
 
     @pytest.mark.asyncio
     async def test_publishes_resolved_event_on_success(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         from models import HITLResult
 
@@ -215,7 +215,7 @@ class TestHITLPhaseProcessing:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 
@@ -231,14 +231,16 @@ class TestHITLPhaseProcessing:
         assert events[0].data["status"] == "resolved"
 
     @pytest.mark.asyncio
-    async def test_publishes_failed_event_on_failure(self, config: HydraConfig) -> None:
+    async def test_publishes_failed_event_on_failure(
+        self, config: HydraFlowConfig
+    ) -> None:
         from models import HITLResult
 
         phase, state, fetcher, prs, wt, runner, bus = _make_phase(config)
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(
             return_value=HITLResult(issue_number=42, success=False, error="fail")
@@ -256,7 +258,7 @@ class TestHITLPhaseProcessing:
         assert events[0].data["status"] == "pending"
 
     @pytest.mark.asyncio
-    async def test_clears_active_issues(self, config: HydraConfig) -> None:
+    async def test_clears_active_issues(self, config: HydraFlowConfig) -> None:
         """Issue should be removed from active_hitl_issues after processing."""
         from models import HITLResult
 
@@ -273,7 +275,7 @@ class TestHITLPhaseProcessing:
         assert 42 not in phase.active_hitl_issues
 
     @pytest.mark.asyncio
-    async def test_swaps_to_active_label(self, config: HydraConfig) -> None:
+    async def test_swaps_to_active_label(self, config: HydraFlowConfig) -> None:
         """Processing should swap to hitl-active label before running agent."""
         from models import HITLResult
 
@@ -281,7 +283,7 @@ class TestHITLPhaseProcessing:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 
@@ -293,7 +295,7 @@ class TestHITLPhaseProcessing:
         assert (42, [config.hitl_active_label[0]]) in add_labels_calls
 
     @pytest.mark.asyncio
-    async def test_success_destroys_worktree(self, config: HydraConfig) -> None:
+    async def test_success_destroys_worktree(self, config: HydraFlowConfig) -> None:
         """On success, the worktree should be destroyed."""
         from models import HITLResult
 
@@ -301,7 +303,7 @@ class TestHITLPhaseProcessing:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 
@@ -311,7 +313,9 @@ class TestHITLPhaseProcessing:
         wt.destroy.assert_awaited_once_with(42)
 
     @pytest.mark.asyncio
-    async def test_failure_does_not_destroy_worktree(self, config: HydraConfig) -> None:
+    async def test_failure_does_not_destroy_worktree(
+        self, config: HydraFlowConfig
+    ) -> None:
         """On failure, the worktree should be kept for retry."""
         from models import HITLResult
 
@@ -319,7 +323,7 @@ class TestHITLPhaseProcessing:
         issue = make_issue(42)
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         runner.run = AsyncMock(
             return_value=HITLResult(issue_number=42, success=False, error="fail")
@@ -341,7 +345,7 @@ class TestHITLResetsAttempts:
 
     @pytest.mark.asyncio
     async def test_hitl_correction_resets_issue_attempts(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On successful HITL correction, issue_attempts should be reset."""
         from models import HITLResult
@@ -357,7 +361,7 @@ class TestHITLResetsAttempts:
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 
         # Set HITL origin/cause
-        state.set_hitl_origin(42, "hydra-ready")
+        state.set_hitl_origin(42, "hydraflow-ready")
         state.set_hitl_cause(42, "Cap exceeded")
 
         # Mock fetcher and PR manager
@@ -385,7 +389,7 @@ class TestHITLImproveTransition:
 
     @pytest.mark.asyncio
     async def test_success_improve_origin_transitions_to_triage(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On success with improve origin, should remove improve and add find label."""
         from models import HITLResult
@@ -394,7 +398,7 @@ class TestHITLImproveTransition:
         issue = make_issue(42, title="Improve: test", body="Details")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         state.set_hitl_cause(42, "Memory suggestion")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
@@ -404,13 +408,13 @@ class TestHITLImproveTransition:
 
         # Verify improve label was removed
         remove_calls = [c.args for c in prs.remove_label.call_args_list]
-        assert (42, "hydra-improve") in remove_calls
+        assert (42, "hydraflow-improve") in remove_calls
 
         # Verify find/triage label was added (not the improve label)
         add_calls = [c.args for c in prs.add_labels.call_args_list]
         assert (42, [config.find_label[0]]) in add_calls
-        # Ensure hydra-improve was NOT restored as a label
-        assert (42, ["hydra-improve"]) not in add_calls
+        # Ensure hydraflow-improve was NOT restored as a label
+        assert (42, ["hydraflow-improve"]) not in add_calls
 
         # Verify HITL state was cleaned up
         assert state.get_hitl_origin(42) is None
@@ -418,7 +422,7 @@ class TestHITLImproveTransition:
 
     @pytest.mark.asyncio
     async def test_success_non_improve_origin_restores_label(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Non-improve origins should still restore the original label."""
         from models import HITLResult
@@ -427,7 +431,7 @@ class TestHITLImproveTransition:
         issue = make_issue(42, title="Test", body="Details")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
@@ -437,14 +441,14 @@ class TestHITLImproveTransition:
 
         # Verify review label was restored (existing behavior)
         add_calls = [c.args for c in prs.add_labels.call_args_list]
-        assert (42, ["hydra-review"]) in add_calls
+        assert (42, ["hydraflow-review"]) in add_calls
 
         # Verify find label was NOT added
         assert (42, [config.find_label[0]]) not in add_calls
 
     @pytest.mark.asyncio
     async def test_failure_improve_origin_preserves_state(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """On failure, improve origin state should be preserved for retry."""
         from models import HITLResult
@@ -453,7 +457,7 @@ class TestHITLImproveTransition:
         issue = make_issue(42, title="Improve: test", body="Details")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         state.set_hitl_cause(42, "Memory suggestion")
 
         runner.run = AsyncMock(
@@ -470,12 +474,12 @@ class TestHITLImproveTransition:
         assert (42, [config.hitl_label[0]]) in add_calls
 
         # Verify improve origin state is preserved for retry
-        assert state.get_hitl_origin(42) == "hydra-improve"
+        assert state.get_hitl_origin(42) == "hydraflow-improve"
         assert state.get_hitl_cause(42) == "Memory suggestion"
 
     @pytest.mark.asyncio
     async def test_improve_success_comment_mentions_find_label(
-        self, config: HydraConfig
+        self, config: HydraFlowConfig
     ) -> None:
         """Success comment for improve origin should mention the find/triage stage."""
         from models import HITLResult
@@ -484,7 +488,7 @@ class TestHITLImproveTransition:
         issue = make_issue(42, title="Improve: test", body="Details")
 
         fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
 
         runner.run = AsyncMock(return_value=HITLResult(issue_number=42, success=True))
 

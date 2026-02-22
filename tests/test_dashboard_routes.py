@@ -248,7 +248,7 @@ class TestHITLEndpointCause:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -292,7 +292,7 @@ class TestHITLEndpointCause:
         from dashboard_routes import create_router
         from pr_manager import PRManager
 
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         pr_mgr = PRManager(config, event_bus)
 
         router = create_router(
@@ -394,7 +394,7 @@ class TestHITLEndpointCause:
         )
 
         # Set origin but not cause
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
         pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
@@ -485,7 +485,7 @@ class TestHITLEndpointCause:
         )
 
         state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         hitl_item = HITLItem(issue=42, title="Fix bug", pr=101)
         pr_mgr.list_hitl_items = AsyncMock(return_value=[hitl_item])  # type: ignore[method-assign]
@@ -658,11 +658,11 @@ class TestGitHubMetricsEndpoint:
 
         mock_counts = {
             "open_by_label": {
-                "hydra-plan": 3,
-                "hydra-ready": 1,
-                "hydra-review": 2,
-                "hydra-hitl": 0,
-                "hydra-fixed": 0,
+                "hydraflow-plan": 3,
+                "hydraflow-ready": 1,
+                "hydraflow-review": 2,
+                "hydraflow-hitl": 0,
+                "hydraflow-fixed": 0,
             },
             "total_closed": 10,
             "total_merged": 8,
@@ -675,7 +675,7 @@ class TestGitHubMetricsEndpoint:
         response = await get_github_metrics()
         data = json.loads(response.body)
 
-        assert data["open_by_label"]["hydra-plan"] == 3
+        assert data["open_by_label"]["hydraflow-plan"] == 3
         assert data["total_closed"] == 10
         assert data["total_merged"] == 8
 
@@ -918,7 +918,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Skipping an improve-origin HITL item should remove improve and add find label."""
-        state.set_hitl_origin(42, "hydra-improve")
+        state.set_hitl_origin(42, "hydraflow-improve")
         state.set_hitl_cause(42, "Memory suggestion")
 
         mock_orch = MagicMock()
@@ -935,7 +935,7 @@ class TestHITLSkipImproveTransition:
 
         # Verify improve label was removed
         remove_calls = [c.args for c in pr_mgr.remove_label.call_args_list]
-        assert (42, "hydra-improve") in remove_calls
+        assert (42, "hydraflow-improve") in remove_calls
 
         # Verify find/triage label was added
         add_calls = [c.args for c in pr_mgr.add_labels.call_args_list]
@@ -950,7 +950,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Non-improve HITL items should not get triage label on skip."""
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
 
         mock_orch = MagicMock()
         mock_orch.skip_hitl_issue = MagicMock()
@@ -993,7 +993,7 @@ class TestHITLSkipImproveTransition:
         self, config, event_bus, state, tmp_path
     ) -> None:
         """Skip should clean up hitl_cause in addition to hitl_origin."""
-        state.set_hitl_origin(42, "hydra-review")
+        state.set_hitl_origin(42, "hydraflow-review")
         state.set_hitl_cause(42, "CI failed after 2 fix attempt(s)")
 
         mock_orch = MagicMock()

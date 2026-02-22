@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from config import HydraConfig, load_config_file, save_config_file
+from config import HydraFlowConfig, load_config_file, save_config_file
 
 # ---------------------------------------------------------------------------
 # load_config_file
@@ -82,7 +82,7 @@ class TestSaveConfigFile:
 
     def test_writes_json_to_file(self, tmp_path: Path) -> None:
         """Should write a JSON config file."""
-        config_path = tmp_path / ".hydra" / "config.json"
+        config_path = tmp_path / ".hydraflow" / "config.json"
 
         save_config_file(config_path, {"max_workers": 4, "model": "opus"})
 
@@ -137,7 +137,7 @@ class TestSaveConfigFile:
 
 
 # ---------------------------------------------------------------------------
-# Config file integration with HydraConfig
+# Config file integration with HydraFlowConfig
 # ---------------------------------------------------------------------------
 
 
@@ -145,12 +145,12 @@ class TestConfigFileMergePriority:
     """Tests that config file values are merged correctly with other sources."""
 
     def test_config_file_overrides_defaults(self, tmp_path: Path) -> None:
-        """Config file values should override HydraConfig defaults."""
+        """Config file values should override HydraFlowConfig defaults."""
         config_path = tmp_path / "config.json"
         config_path.write_text(json.dumps({"max_workers": 7, "model": "opus"}))
 
         file_values = load_config_file(config_path)
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             **file_values,
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -168,7 +168,7 @@ class TestConfigFileMergePriority:
         file_values = load_config_file(config_path)
         # Explicit value for max_workers should win
         file_values["max_workers"] = 2
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             **file_values,
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -184,7 +184,7 @@ class TestConfigFileMergePriority:
         config_path.write_text(json.dumps({}))
 
         file_values = load_config_file(config_path)
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             **file_values,
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
@@ -200,7 +200,7 @@ class TestConfigFileMergePriority:
         config_path.write_text(json.dumps({"max_budget_usd": 5.0}))
 
         file_values = load_config_file(config_path)
-        cfg = HydraConfig(
+        cfg = HydraFlowConfig(
             **file_values,
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",

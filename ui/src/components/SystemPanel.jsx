@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
 import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 import { Livestream } from './Livestream'
 
 const SUB_TABS = [
@@ -279,7 +279,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
 }
 
 export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
-  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus, events } = useHydra()
+  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus, events } = useHydraFlow()
   const [activeSubTab, setActiveSubTab] = useState('workers')
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && ACTIVE_STATUSES.includes(w.status)
