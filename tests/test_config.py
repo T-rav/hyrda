@@ -2628,14 +2628,14 @@ class TestEnvVarOverrideTable:
         default: bool,
     ) -> None:
         """Bool overrides should treat '1', 'true', 'yes' as True."""
-        # First set to non-default so env var kicks in
-        monkeypatch.setenv(env_key, "0")
-        cfg = HydraConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert getattr(cfg, field) is False
+        for truthy in ("1", "true", "yes", "True", "YES"):
+            monkeypatch.setenv(env_key, truthy)
+            cfg = HydraConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+            assert getattr(cfg, field) is True, f"'{truthy}' should parse as True"
 
     @pytest.mark.parametrize(
         ("field", "env_key", "default"),
