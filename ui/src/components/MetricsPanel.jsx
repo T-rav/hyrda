@@ -1,4 +1,5 @@
 import React from 'react'
+import { useHydra } from '../context/HydraContext'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
 
@@ -111,15 +112,18 @@ function SnapshotTimeline({ snapshots }) {
   )
 }
 
-export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, metricsHistory, sessionCounts }) {
-  const session = sessionCounts || {}
+export function MetricsPanel() {
+  const {
+    metrics, lifetimeStats, githubMetrics, metricsHistory,
+    sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount,
+  } = useHydra()
   const github = githubMetrics || {}
   const openByLabel = github.open_by_label || {}
   const lifetime = metrics?.lifetime || lifetimeStats || {}
 
   const hasGithub = githubMetrics !== null && githubMetrics !== undefined
-  const hasSession = session.triaged > 0 || session.planned > 0 ||
-    session.implemented > 0 || session.reviewed > 0 || session.merged > 0
+  const hasSession = sessionTriaged > 0 || sessionPlanned > 0 ||
+    sessionImplemented > 0 || sessionReviewed > 0 || mergedCount > 0
   const hasLifetime = hasGithub || lifetime.issues_completed > 0 ||
     lifetime.prs_merged > 0
 
@@ -197,11 +201,11 @@ export function MetricsPanel({ metrics, lifetimeStats, githubMetrics, metricsHis
         <>
           <h3 style={styles.heading}>Session</h3>
           <div style={styles.row}>
-            <StatCard label="Triaged" value={session.triaged || 0} subtle />
-            <StatCard label="Planned" value={session.planned || 0} subtle />
-            <StatCard label="Implemented" value={session.implemented || 0} subtle />
-            <StatCard label="Reviewed" value={session.reviewed || 0} subtle />
-            <StatCard label="Merged" value={session.merged || 0} subtle />
+            <StatCard label="Triaged" value={sessionTriaged || 0} subtle />
+            <StatCard label="Planned" value={sessionPlanned || 0} subtle />
+            <StatCard label="Implemented" value={sessionImplemented || 0} subtle />
+            <StatCard label="Reviewed" value={sessionReviewed || 0} subtle />
+            <StatCard label="Merged" value={mergedCount || 0} subtle />
           </div>
         </>
       )}

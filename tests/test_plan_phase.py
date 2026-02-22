@@ -1,0 +1,638 @@
+"""Tests for plan_phase.py — PlanPhase."""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock
+from unittest.mock import patch as mock_patch
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from typing import TYPE_CHECKING
+
+from events import EventBus
+from issue_store import IssueStore
+from models import GitHubIssue, PlanResult
+from plan_phase import PlanPhase
+from state import StateTracker
+
+if TYPE_CHECKING:
+    from config import HydraConfig
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def make_issue(
+    number: int = 42, title: str = "Fix bug", body: str = "Details"
+) -> GitHubIssue:
+    return GitHubIssue(
+        number=number,
+        title=title,
+        body=body,
+        labels=["ready"],
+        comments=[],
+        url=f"https://github.com/test-org/test-repo/issues/{number}",
+    )
+
+
+def _make_phase(
+    config: HydraConfig,
+) -> tuple[PlanPhase, StateTracker, AsyncMock, AsyncMock, IssueStore, asyncio.Event]:
+    """Build a PlanPhase with mock dependencies.
+
+    Returns (phase, state, planners_mock, prs_mock, store, stop_event).
+    """
+    state = StateTracker(config.state_file)
+    bus = EventBus()
+    fetcher = AsyncMock()
+    store = IssueStore(config, fetcher, bus)
+    planners = AsyncMock()
+    prs = AsyncMock()
+    prs.post_comment = AsyncMock()
+    prs.remove_label = AsyncMock()
+    prs.add_labels = AsyncMock()
+    prs.create_issue = AsyncMock(return_value=99)
+    prs.close_issue = AsyncMock()
+    stop_event = asyncio.Event()
+    phase = PlanPhase(config, state, store, planners, prs, bus, stop_event)
+    return phase, state, planners, prs, store, stop_event
+
+
+# ---------------------------------------------------------------------------
+# Plan phase
+# ---------------------------------------------------------------------------
+
+
+class TestPlanPhase:
+    """Tests for PlanPhase.plan_issues()."""
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_posts_comment_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """On successful plan, post_comment should be called."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="Step 1: Do the thing",
+            summary="Plan done",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # post_comment called twice: plan comment + analysis comment
+        assert prs.post_comment.await_count >= 1
+        plan_call = prs.post_comment.call_args_list[0]
+        assert plan_call.args[0] == 42
+        assert "Step 1: Do the thing" in plan_call.args[1]
+        assert "agent/issue-42" in plan_call.args[1]
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_swaps_labels_on_success(
+        self, config: HydraConfig
+    ) -> None:
+        """On success, planner_label should be removed and config.ready_label added."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # With multi-label, remove_label is called once per planner label
+        remove_calls = [c.args for c in prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+        prs.add_labels.assert_awaited_once_with(42, [config.ready_label[0]])
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_skips_label_swap_on_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """On failure, no label changes should be made."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        prs.post_comment.assert_not_awaited()
+        prs.remove_label.assert_not_awaited()
+        prs.add_labels.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_returns_empty_when_no_issues(
+        self, config: HydraConfig
+    ) -> None:
+        """When no issues have the planner label, return empty list."""
+        phase, _state, _planners, _prs, store, _stop = _make_phase(config)
+        store.get_plannable = lambda _max_count: []  # type: ignore[method-assign]
+
+        results = await phase.plan_issues()
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_plan_issue_creation_records_lifetime_stats(
+        self, config: HydraConfig
+    ) -> None:
+        """record_issue_created should be called for each new issue filed by planner."""
+        from models import NewIssueSpec
+
+        phase, state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(
+                    title="Issue A",
+                    body="Issue A has a bug in the authentication flow "
+                    "that causes login failures on retry.",
+                    labels=["bug"],
+                ),
+                NewIssueSpec(
+                    title="Issue B",
+                    body="Issue B has a race condition in the websocket "
+                    "handler that drops messages under load.",
+                    labels=["bug"],
+                ),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        stats = state.get_lifetime_stats()
+        assert stats.issues_created == 2
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_files_new_issues(self, config: HydraConfig) -> None:
+        """When planner discovers new issues, they should be filed via create_issue."""
+        from models import NewIssueSpec
+
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(
+                    title="Tech debt",
+                    body="The auth module has accumulated significant tech debt "
+                    "that needs cleanup and refactoring.",
+                    labels=["tech-debt"],
+                ),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        prs.create_issue.assert_awaited_once_with(
+            "Tech debt",
+            "The auth module has accumulated significant tech debt "
+            "that needs cleanup and refactoring.",
+            ["tech-debt"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_semaphore_limits_concurrency(
+        self, config: HydraConfig
+    ) -> None:
+        """max_planners=1 means at most 1 planner runs concurrently."""
+        concurrency_counter = {"current": 0, "peak": 0}
+
+        async def fake_plan(issue: GitHubIssue, worker_id: int = 0) -> PlanResult:
+            concurrency_counter["current"] += 1
+            concurrency_counter["peak"] = max(
+                concurrency_counter["peak"], concurrency_counter["current"]
+            )
+            await asyncio.sleep(0)  # yield to allow other tasks to start
+            concurrency_counter["current"] -= 1
+            return PlanResult(
+                issue_number=issue.number,
+                success=True,
+                plan="The plan",
+                summary="Done",
+            )
+
+        issues = [make_issue(i) for i in range(1, 6)]
+
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        planners.plan = fake_plan
+        store.get_plannable = lambda _max_count: issues  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        assert concurrency_counter["peak"] <= config.max_planners
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_marks_active_during_processing(
+        self, config: HydraConfig
+    ) -> None:
+        """Plan should mark issues active to prevent re-queuing by refresh."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+
+        was_active_during_plan = False
+
+        async def check_active_plan(
+            issue_obj: object, worker_id: int = 0
+        ) -> PlanResult:
+            nonlocal was_active_during_plan
+            was_active_during_plan = store.is_active(42)
+            return PlanResult(
+                issue_number=42, success=True, plan="Plan", summary="Done"
+            )
+
+        planners.plan = AsyncMock(side_effect=check_active_plan)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        assert was_active_during_plan, "Issue should be marked active during planning"
+        assert not store.is_active(42), "Issue should be released after planning"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_failure_returns_result_with_error(
+        self, config: HydraConfig
+    ) -> None:
+        """Plan failure (success=False) should still return the result."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        results = await phase.plan_issues()
+
+        assert len(results) == 1
+        assert results[0].success is False
+        assert results[0].error == "Agent crashed"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_new_issues_use_default_planner_label_when_no_labels(
+        self, config: HydraConfig
+    ) -> None:
+        """New issues with empty labels should fall back to planner_label."""
+        from models import NewIssueSpec
+
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(
+                    title="Discovered issue",
+                    body="This issue was discovered during planning — the config "
+                    "parser does not handle nested environment variables.",
+                ),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        prs.create_issue.assert_awaited_once_with(
+            "Discovered issue",
+            "This issue was discovered during planning — the config "
+            "parser does not handle nested environment variables.",
+            [config.planner_label[0]],
+        )
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_skips_new_issues_with_short_body(
+        self, config: HydraConfig
+    ) -> None:
+        """New issues with body < 50 chars should be skipped, not filed."""
+        from models import NewIssueSpec
+
+        phase, state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+            new_issues=[
+                NewIssueSpec(title="Short body issue", body="Too short"),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        prs.create_issue.assert_not_awaited()
+        assert state.get_lifetime_stats().issues_created == 0
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_stop_event_cancels_remaining(
+        self, config: HydraConfig
+    ) -> None:
+        """Setting stop_event after first plan should cancel remaining."""
+        phase, _state, planners, prs, store, stop_event = _make_phase(config)
+        issues = [make_issue(1), make_issue(2), make_issue(3)]
+        call_count = {"n": 0}
+
+        async def fake_plan(issue: GitHubIssue, worker_id: int = 0) -> PlanResult:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                stop_event.set()
+            return PlanResult(
+                issue_number=issue.number,
+                success=False,
+                error="stopped",
+            )
+
+        planners.plan = fake_plan
+        store.get_plannable = lambda _max_count: issues  # type: ignore[method-assign]
+
+        results = await phase.plan_issues()
+
+        # Not all 3 should have completed — stop event triggers cancellation
+        assert len(results) < len(issues)
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_escalates_to_hitl_after_retry_failure(
+        self, config: HydraConfig
+    ) -> None:
+        """Failed retry triggers HITL label swap and comment."""
+        phase, state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            plan="Bad plan",
+            summary="Failed",
+            retry_attempted=True,
+            validation_errors=[
+                "Missing required section: ## Testing Strategy",
+                "Plan has 10 words, minimum is 200",
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # HITL comment should be posted
+        prs.post_comment.assert_awaited_once()
+        comment = prs.post_comment.call_args.args[1]
+        assert "Plan Validation Failed" in comment
+        assert "Testing Strategy" in comment
+
+        # Planner label removed, HITL label added
+        remove_calls = [c.args for c in prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+        prs.add_labels.assert_awaited_once_with(42, [config.hitl_label[0]])
+
+        # HITL origin and cause tracked in state
+        assert state.get_hitl_origin(42) == config.planner_label[0]
+        assert state.get_hitl_cause(42) == "Plan validation failed after retry"
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_no_hitl_on_failure_without_retry(
+        self, config: HydraConfig
+    ) -> None:
+        """Normal failure (no retry) should NOT escalate to HITL."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=False,
+            error="Agent crashed",
+            retry_attempted=False,
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        prs.post_comment.assert_not_awaited()
+        prs.remove_label.assert_not_awaited()
+        prs.add_labels.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_runs_analysis_before_label_swap(
+        self, config: HydraConfig
+    ) -> None:
+        """Analysis comment should be posted after the plan comment."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="## Files to Modify\n\n- `models.py`: change\n\n## Testing Strategy\n\nUse pytest.",
+            summary="Plan done",
+        )
+
+        # Create the files so analysis passes
+        repo = config.repo_root
+        repo.mkdir(parents=True, exist_ok=True)
+        (repo / "models.py").write_text("# models\n")
+        (repo / "tests").mkdir(exist_ok=True)
+        (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # Two comments: plan + analysis
+        assert prs.post_comment.await_count == 2
+        analysis_comment = prs.post_comment.call_args_list[1].args[1]
+        assert "Pre-Implementation Analysis" in analysis_comment
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_proceeds_on_analysis_pass(
+        self, config: HydraConfig
+    ) -> None:
+        """PASS verdict should proceed with normal label swap."""
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        pass_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="File Validation",
+                    verdict=AnalysisVerdict.PASS,
+                    details=["All good"],
+                ),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=pass_result):
+            await phase.plan_issues()
+
+        # Should add ready label
+        add_calls = [c.args for c in prs.add_labels.call_args_list]
+        assert (42, [config.ready_label[0]]) in add_calls
+
+    @pytest.mark.asyncio
+    async def test_plan_issues_proceeds_on_analysis_warn(
+        self, config: HydraConfig
+    ) -> None:
+        """WARN verdict should still proceed with normal label swap."""
+        from analysis import PlanAnalyzer
+        from models import AnalysisResult, AnalysisSection, AnalysisVerdict
+
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            plan="The plan",
+            summary="Done",
+        )
+
+        warn_result = AnalysisResult(
+            issue_number=42,
+            sections=[
+                AnalysisSection(
+                    name="Conflict Check",
+                    verdict=AnalysisVerdict.WARN,
+                    details=["Minor overlap"],
+                ),
+            ],
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        with mock_patch.object(PlanAnalyzer, "analyze", return_value=warn_result):
+            await phase.plan_issues()
+
+        # Should add ready label (warn doesn't block)
+        add_calls = [c.args for c in prs.add_labels.call_args_list]
+        assert (42, [config.ready_label[0]]) in add_calls
+
+
+# ---------------------------------------------------------------------------
+# Plan phase — already_satisfied
+# ---------------------------------------------------------------------------
+
+
+class TestPlanPhaseAlreadySatisfied:
+    """Tests for already_satisfied handling in the plan phase."""
+
+    @pytest.mark.asyncio
+    async def test_plan_already_satisfied_closes_issue_with_dup_label(
+        self, config: HydraConfig
+    ) -> None:
+        """When planner returns already_satisfied, issue should be closed with dup label."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            already_satisfied=True,
+            summary="The feature is already implemented in src/models.py",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # Planner labels should be removed
+        remove_calls = [c.args for c in prs.remove_label.call_args_list]
+        for lbl in config.planner_label:
+            assert (42, lbl) in remove_calls
+
+        # Dup labels should be added
+        prs.add_labels.assert_awaited_once_with(42, config.dup_label)
+
+        # Comment should be posted
+        prs.post_comment.assert_awaited_once()
+        comment = prs.post_comment.call_args.args[1]
+        assert "Already Satisfied" in comment
+        assert "Hydra Planner" in comment
+
+        # Issue should be closed
+        prs.close_issue.assert_awaited_once_with(42)
+
+    @pytest.mark.asyncio
+    async def test_plan_already_satisfied_does_not_swap_to_ready(
+        self, config: HydraConfig
+    ) -> None:
+        """When already_satisfied, issue should NOT get hydra-ready label."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = make_issue(42)
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            already_satisfied=True,
+            summary="Already met",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # Should NOT add ready label
+        add_calls = [c.args for c in prs.add_labels.call_args_list]
+        ready_calls = [c for c in add_calls if config.ready_label[0] in c[1]]
+        assert len(ready_calls) == 0

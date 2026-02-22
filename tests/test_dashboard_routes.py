@@ -12,11 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus
 from models import HITLItem
-from state import StateTracker
-
-
-def make_state(tmp_path: Path) -> StateTracker:
-    return StateTracker(tmp_path / "state.json")
+from tests.conftest import make_state
 
 
 class TestCreateRouter:

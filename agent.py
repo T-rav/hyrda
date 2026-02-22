@@ -385,14 +385,17 @@ Only suggest genuinely valuable learnings — not trivial observations.
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                output = stdout.decode(errors="replace") + stderr.decode(
-                    errors="replace"
-                )
-                return False, f"`make quality` failed:\n{output[-3000:]}"
         except FileNotFoundError:
             return False, "make not found — cannot run quality checks"
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return False, "make quality timed out after 3600s"
+        if proc.returncode != 0:
+            output = stdout.decode(errors="replace") + stderr.decode(errors="replace")
+            return False, f"`make quality` failed:\n{output[-3000:]}"
 
         return True, "OK"
 
@@ -460,6 +463,7 @@ Focus on fixing the root causes, not suppressing warnings.
 
     async def _count_commits(self, worktree_path: Path, branch: str) -> int:
         """Count commits on *branch* ahead of main."""
+        proc: asyncio.subprocess.Process | None = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git",
@@ -470,9 +474,12 @@ Focus on fixing the root causes, not suppressing warnings.
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             return int(stdout.decode().strip())
-        except (ValueError, FileNotFoundError):
+        except (TimeoutError, ValueError, FileNotFoundError):
+            if proc is not None and proc.returncode is None:
+                proc.kill()
+                await proc.wait()
             return 0
 
     async def _emit_status(

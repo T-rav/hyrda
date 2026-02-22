@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from collections import deque
 from datetime import UTC, datetime
@@ -86,7 +85,6 @@ class IssueStore:
         }
 
         self._last_poll_ts: str | None = None
-        self._poll_task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
@@ -110,14 +108,6 @@ class IssueStore:
             except TimeoutError:
                 pass
             await self.refresh()
-
-    async def stop(self) -> None:
-        """Cancel the background polling task if running."""
-        if self._poll_task is not None and not self._poll_task.done():
-            self._poll_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._poll_task
-            self._poll_task = None
 
     # ------------------------------------------------------------------
     # Polling / refresh

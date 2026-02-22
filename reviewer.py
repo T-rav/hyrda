@@ -448,12 +448,17 @@ Only suggest genuinely valuable learnings — not trivial observations.
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
-            if proc.returncode == 0:
-                return stdout.decode().strip()
-            return None
         except FileNotFoundError:
             return None
+        try:
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return None
+        if proc.returncode == 0:
+            return stdout.decode().strip()
+        return None
 
     async def _has_changes(self, worktree_path: Path, before_sha: str | None) -> bool:
         """Check if the agent made commits or left uncommitted changes."""
@@ -472,7 +477,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await proc.communicate()
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
             return proc.returncode == 0 and bool(stdout.decode().strip())
-        except FileNotFoundError:
+        except (TimeoutError, FileNotFoundError):
             return False

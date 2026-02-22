@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
@@ -485,6 +485,60 @@ class ControlStatusResponse(BaseModel):
 
     status: str = "idle"
     config: ControlStatusConfig = Field(default_factory=ControlStatusConfig)
+
+
+# --- TypedDicts for replacing Any annotations ---
+
+
+class BackgroundWorkerState(TypedDict):
+    """Internal dict shape for orchestrator ``_bg_worker_states`` entries."""
+
+    name: str
+    status: str
+    last_run: str | None
+    details: dict[str, Any]
+    enabled: NotRequired[bool]  # added by get_bg_worker_states()
+
+
+class MemoryIssueData(TypedDict):
+    """Shape of issue dicts passed to ``MemorySyncWorker.sync``."""
+
+    number: int
+    title: str
+    body: str
+    createdAt: str
+
+
+class MemorySyncResult(TypedDict):
+    """Return shape of ``MemorySyncWorker.sync``."""
+
+    action: str
+    item_count: int
+    compacted: bool
+    digest_chars: int
+
+
+class MetricsSyncResult(TypedDict, total=False):
+    """Return shape of ``MetricsManager.sync``.
+
+    Different code paths return different subsets of keys.
+    """
+
+    status: str
+    snapshot_hash: str
+    timestamp: str
+    reason: str
+    issue_number: int
+
+
+class ThresholdProposal(TypedDict):
+    """Shape of items returned by ``StateTracker.check_thresholds``."""
+
+    name: str
+    metric: str
+    threshold: float
+    value: float
+    action: str
 
 
 # --- Background Worker Status ---
