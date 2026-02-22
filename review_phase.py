@@ -932,8 +932,20 @@ class ReviewPhase:
             )
 
             try:
+                # Gather conflict-specific context for the prompt
+                conflicting_files = await self._worktrees.get_conflicting_files(wt_path)
+                main_diff = await self._worktrees.get_main_diff_for_files(
+                    wt_path, conflicting_files
+                )
+
                 prompt = build_conflict_prompt(
-                    issue, pr_changed_files, main_commits, last_error, attempt
+                    issue,
+                    pr_changed_files,
+                    main_commits,
+                    last_error,
+                    attempt,
+                    conflicting_files=conflicting_files,
+                    main_diff=main_diff,
                 )
                 cmd = self._agents._build_command(wt_path)
                 transcript = await self._agents._execute(

@@ -272,6 +272,124 @@ def test_extract_summary_fallback_ignores_empty_lines(config, event_bus):
 
 
 # ---------------------------------------------------------------------------
+# _sanitize_summary
+# ---------------------------------------------------------------------------
+
+
+def test_sanitize_summary_accepts_clean_text(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("Implementation looks good, tests pass.") == (
+        "Implementation looks good, tests pass."
+    )
+
+
+def test_sanitize_summary_rejects_tool_arrow_output(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("→ TaskOutput: {'task_id': 'abc123'}") is None
+
+
+def test_sanitize_summary_rejects_left_arrow_output(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("← Result: done") is None
+
+
+def test_sanitize_summary_rejects_raw_json(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary('{"task_id": "abc", "block": true}') is None
+
+
+def test_sanitize_summary_rejects_html_tags(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("<div>Some output</div>") is None
+
+
+def test_sanitize_summary_rejects_code_fences(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("```python") is None
+
+
+def test_sanitize_summary_rejects_git_trailers(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert (
+        runner._sanitize_summary("Co-Authored-By: Claude <noreply@anthropic.com>")
+        is None
+    )
+    assert runner._sanitize_summary("Signed-off-by: Bot <bot@example.com>") is None
+
+
+def test_sanitize_summary_rejects_short_strings(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("ok") is None
+    assert runner._sanitize_summary("   short   ") is None
+
+
+def test_sanitize_summary_rejects_metric_lines(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    assert runner._sanitize_summary("tokens: 12345") is None
+    assert runner._sanitize_summary("cost: $0.05") is None
+    assert runner._sanitize_summary("duration: 30s") is None
+
+
+def test_sanitize_summary_truncates_to_200_chars(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    long_text = "A" * 300
+    result = runner._sanitize_summary(long_text)
+    assert result is not None
+    assert len(result) == 200
+
+
+def test_sanitize_summary_strips_whitespace(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    result = runner._sanitize_summary("   Clean summary text here   ")
+    assert result == "Clean summary text here"
+
+
+# ---------------------------------------------------------------------------
+# _extract_summary — garbage-resistant fallback
+# ---------------------------------------------------------------------------
+
+
+def test_extract_summary_skips_tool_output_in_fallback(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    transcript = (
+        "Good review line here.\n"
+        "→ TaskOutput: {'task_id': 'a9d78cf47fcf6174b', 'block': True}\n"
+    )
+    summary = runner._extract_summary(transcript)
+    assert summary == "Good review line here."
+    assert "TaskOutput" not in summary
+
+
+def test_extract_summary_skips_json_in_fallback(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    transcript = 'Review completed successfully.\n{"status": "done", "result": true}\n'
+    summary = runner._extract_summary(transcript)
+    assert summary == "Review completed successfully."
+
+
+def test_extract_summary_returns_default_when_all_garbage(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    transcript = '→ Tool call\n{"json": true}\n```code```\nok\n'
+    summary = runner._extract_summary(transcript)
+    assert summary == "No summary provided"
+
+
+def test_extract_summary_sanitizes_summary_marker_content(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    transcript = "SUMMARY: → TaskOutput: {'task_id': 'abc'}\nGood fallback line here."
+    summary = runner._extract_summary(transcript)
+    # SUMMARY line is garbage, should fall back to clean line
+    assert summary == "Good fallback line here."
+
+
+def test_extract_summary_prefers_summary_marker_when_clean(config, event_bus):
+    runner = _make_runner(config, event_bus)
+    transcript = "SUMMARY: All checks pass, implementation is solid."
+    summary = runner._extract_summary(transcript)
+    assert summary == "All checks pass, implementation is solid."
+
+
+# ---------------------------------------------------------------------------
 # review - success path
 # ---------------------------------------------------------------------------
 

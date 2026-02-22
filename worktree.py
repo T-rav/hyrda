@@ -328,6 +328,71 @@ class WorktreeManager:
                 gh_token=self._config.gh_token,
             )
 
+    async def get_conflicting_files(self, worktree_path: Path) -> list[str]:
+        """Return the list of files with unresolved merge conflicts.
+
+        Runs ``git diff --name-only --diff-filter=U`` in *worktree_path*.
+        Returns an empty list on failure.
+        """
+        try:
+            output = await run_subprocess(
+                "git",
+                "diff",
+                "--name-only",
+                "--diff-filter=U",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return [f.strip() for f in output.strip().splitlines() if f.strip()]
+        except RuntimeError:
+            logger.warning("Could not get conflicting files in %s", worktree_path)
+            return []
+
+    async def get_main_diff_for_files(
+        self,
+        worktree_path: Path,
+        files: list[str],
+        max_chars: int = 30_000,
+    ) -> str:
+        """Return the diff of what changed on main for *files* since divergence.
+
+        Runs ``git merge-base HEAD origin/main`` then
+        ``git diff <base>..origin/main -- <files>``.  Truncates at
+        *max_chars*.  Returns an empty string on failure or when *files*
+        is empty.
+        """
+        if not files:
+            return ""
+        try:
+            merge_base = await run_subprocess(
+                "git",
+                "merge-base",
+                "HEAD",
+                f"origin/{self._config.main_branch}",
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            base_sha = merge_base.strip()
+            if not base_sha:
+                return ""
+
+            diff_output = await run_subprocess(
+                "git",
+                "diff",
+                f"{base_sha}..origin/{self._config.main_branch}",
+                "--",
+                *files,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            result = diff_output.strip()
+            if len(result) > max_chars:
+                return result[:max_chars] + "\n\n[Diff truncated]"
+            return result
+        except RuntimeError:
+            logger.warning("Could not get main diff for files in %s", worktree_path)
+            return ""
+
     async def get_main_commits_since_diverge(self, worktree_path: Path) -> str:
         """Return recent commits on main since the branch diverged.
 

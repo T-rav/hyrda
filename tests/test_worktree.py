@@ -1125,6 +1125,203 @@ class TestAbortMerge:
 
 
 # ---------------------------------------------------------------------------
+# WorktreeManager.get_conflicting_files
+# ---------------------------------------------------------------------------
+
+
+class TestGetConflictingFiles:
+    """Tests for WorktreeManager.get_conflicting_files."""
+
+    @pytest.mark.asyncio
+    async def test_returns_list_of_conflicting_files(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return file names from git diff --name-only --diff-filter=U."""
+        manager = WorktreeManager(config)
+        output = b"src/foo.py\nsrc/bar.py\n"
+        proc = _make_proc(returncode=0, stdout=output)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager.get_conflicting_files(tmp_path)
+
+        assert result == ["src/foo.py", "src/bar.py"]
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_conflicts(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return empty list when no files have conflicts."""
+        manager = WorktreeManager(config)
+        proc = _make_proc(returncode=0, stdout=b"")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager.get_conflicting_files(tmp_path)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_failure(self, config, tmp_path: Path) -> None:
+        """Should return empty list when git command fails."""
+        manager = WorktreeManager(config)
+        proc = _make_proc(returncode=1, stderr=b"fatal: not a git repo")
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager.get_conflicting_files(tmp_path)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_strips_whitespace_from_filenames(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should strip leading/trailing whitespace from each filename."""
+        manager = WorktreeManager(config)
+        output = b"  foo.py  \n  bar.py  \n\n"
+        proc = _make_proc(returncode=0, stdout=output)
+
+        with patch("asyncio.create_subprocess_exec", return_value=proc):
+            result = await manager.get_conflicting_files(tmp_path)
+
+        assert result == ["foo.py", "bar.py"]
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager.get_main_diff_for_files
+# ---------------------------------------------------------------------------
+
+
+class TestGetMainDiffForFiles:
+    """Tests for WorktreeManager.get_main_diff_for_files."""
+
+    @pytest.mark.asyncio
+    async def test_returns_diff_for_specified_files(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return the diff output for the given files."""
+        manager = WorktreeManager(config)
+        merge_base_proc = _make_proc(returncode=0, stdout=b"abc123\n")
+        diff_proc = _make_proc(
+            returncode=0, stdout=b"diff --git a/foo.py b/foo.py\n+added\n"
+        )
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return merge_base_proc
+            return diff_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_diff_for_files(tmp_path, ["foo.py"])
+
+        assert "diff --git a/foo.py b/foo.py" in result
+        assert "+added" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_for_empty_file_list(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return empty string when no files are provided."""
+        manager = WorktreeManager(config)
+
+        with patch("asyncio.create_subprocess_exec") as mock_exec:
+            result = await manager.get_main_diff_for_files(tmp_path, [])
+
+        assert result == ""
+        mock_exec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_truncates_large_diff(self, config, tmp_path: Path) -> None:
+        """Should truncate diff exceeding max_chars and append marker."""
+        manager = WorktreeManager(config)
+        merge_base_proc = _make_proc(returncode=0, stdout=b"abc123\n")
+        large_diff = b"x" * 50_000
+        diff_proc = _make_proc(returncode=0, stdout=large_diff)
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return merge_base_proc
+            return diff_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_diff_for_files(
+                tmp_path, ["foo.py"], max_chars=1000
+            )
+
+        assert len(result) < 1100  # 1000 + truncation marker
+        assert "[Diff truncated]" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_merge_base_failure(
+        self, config, tmp_path: Path
+    ) -> None:
+        """Should return empty string when git merge-base fails."""
+        manager = WorktreeManager(config)
+        fail_proc = _make_proc(returncode=1, stderr=b"fatal: bad revision")
+
+        with patch("asyncio.create_subprocess_exec", return_value=fail_proc):
+            result = await manager.get_main_diff_for_files(tmp_path, ["foo.py"])
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_on_diff_failure(self, config, tmp_path: Path) -> None:
+        """Should return empty string when git diff fails."""
+        manager = WorktreeManager(config)
+        merge_base_proc = _make_proc(returncode=0, stdout=b"abc123\n")
+        diff_fail_proc = _make_proc(returncode=1, stderr=b"fatal: bad path")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return merge_base_proc
+            return diff_fail_proc
+
+        with patch("asyncio.create_subprocess_exec", side_effect=fake_exec):
+            result = await manager.get_main_diff_for_files(tmp_path, ["foo.py"])
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_passes_multiple_files(self, config, tmp_path: Path) -> None:
+        """Should pass all files to the git diff command."""
+        manager = WorktreeManager(config)
+        merge_base_proc = _make_proc(returncode=0, stdout=b"abc123\n")
+        diff_proc = _make_proc(returncode=0, stdout=b"combined diff\n")
+
+        call_count = 0
+
+        async def fake_exec(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return merge_base_proc
+            return diff_proc
+
+        with patch(
+            "asyncio.create_subprocess_exec", side_effect=fake_exec
+        ) as mock_exec:
+            await manager.get_main_diff_for_files(
+                tmp_path, ["foo.py", "bar.py", "baz.py"]
+            )
+
+        # The second call is git diff — check that all files are in the args
+        diff_call = mock_exec.call_args_list[1]
+        assert "foo.py" in diff_call.args
+        assert "bar.py" in diff_call.args
+        assert "baz.py" in diff_call.args
+
+
+# ---------------------------------------------------------------------------
 # WorktreeManager.get_main_commits_since_diverge
 # ---------------------------------------------------------------------------
 

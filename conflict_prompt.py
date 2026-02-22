@@ -28,6 +28,9 @@ def build_conflict_prompt(
     main_commits: str,
     last_error: str | None,
     attempt: int,
+    *,
+    conflicting_files: list[str] | None = None,
+    main_diff: str = "",
 ) -> str:
     """Build an enriched conflict resolution prompt.
 
@@ -44,6 +47,12 @@ def build_conflict_prompt(
         Error output from the previous failed attempt, or *None*.
     attempt:
         Current attempt number (1-based).
+    conflicting_files:
+        File paths with unresolved merge conflicts (from
+        ``git diff --name-only --diff-filter=U``).
+    main_diff:
+        The actual diff of what changed on main for the conflicting
+        files (scoped, not the full main diff).
     """
     sections: list[str] = []
 
@@ -80,27 +89,31 @@ def build_conflict_prompt(
         file_list = "\n".join(f"- {f}" for f in pr_changed_files)
         sections.append(f"## Files Changed in This PR\n\n{file_list}")
 
+    # --- Conflicting files ---
+    if conflicting_files:
+        cf_list = "\n".join(f"- {f}" for f in conflicting_files)
+        sections.append(f"## Conflicting Files\n\n{cf_list}")
+
+    # --- What changed on main (scoped diff) ---
+    if main_diff:
+        sections.append(
+            f"## What Changed on Main\n\n"
+            f"Diff of what landed on main for the conflicting files "
+            f"since this branch diverged:\n\n"
+            f"```diff\n{main_diff}\n```"
+        )
+
     # --- Instructions ---
     sections.append(
         "## Instructions\n\n"
-        "1. Run `git diff --name-only --diff-filter=U` to list "
-        "conflicted files.\n"
-        "2. Open each conflicted file and understand BOTH sides of the "
-        "conflict:\n"
-        "   - **Ours** (HEAD) = the PR's changes for the issue above.\n"
-        "   - **Theirs** (origin/main) = what landed on main (see "
-        "commits above).\n"
-        "3. Resolve each conflict by keeping the PR's intent while "
-        "adopting main's patterns. If main refactored code (renamed "
-        "functions, changed APIs, moved files), use main's new patterns.\n"
-        "4. **Check non-conflicted files too.** If main renamed "
-        "functions, changed APIs, or moved code, non-conflicted files "
-        "may have stale references (imports, function calls, test "
-        "assertions). Fix these proactively.\n"
-        "5. Stage all resolved files with `git add`.\n"
-        "6. Complete the merge with `git commit --no-edit`.\n"
-        "7. Run `make quality` to ensure everything passes.\n"
-        "8. If quality fails, fix the issues and commit again."
+        "Resolve the merge conflicts preserving the PR's intent while "
+        "adopting main's changes. If main refactored code (renamed "
+        "functions, changed APIs, moved files), use main's new patterns "
+        "in non-conflicted files too. Complete the merge with "
+        "`git add . && git commit --no-edit`, then run `make quality` "
+        "to verify.\n\n"
+        f"For full context, see issue #{issue.number} "
+        f"(`gh issue view {issue.number}`)."
     )
 
     # --- Rules ---
