@@ -52,7 +52,8 @@ RUN npm install -g @anthropic-ai/claude-code --no-fund --no-audit
 # Pre-install Python quality tools into a venv
 COPY pyproject.toml uv.lock ./
 RUN uv venv /opt/hydra-venv \
-    && VIRTUAL_ENV=/opt/hydra-venv uv sync --all-extras --no-install-project
+    && . /opt/hydra-venv/bin/activate \
+    && uv sync --all-extras --no-install-project
 
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — final lean image
