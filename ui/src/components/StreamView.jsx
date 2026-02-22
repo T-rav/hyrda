@@ -2,7 +2,7 @@ import React, { useMemo, useCallback } from 'react'
 import { theme } from '../theme'
 import { useHydra } from '../context/HydraContext'
 import { StreamCard } from './StreamCard'
-import { PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
+import { PIPELINE_STAGES } from '../constants'
 import { STAGE_KEYS } from '../hooks/useTimeline'
 
 function PendingIntentCard({ intent }) {
@@ -116,7 +116,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
 }
 
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, workers, prs, backgroundWorkers } = useHydra()
+  const { pipelineIssues, prs, stageStatus } = useHydra()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -170,40 +170,6 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     })
   }, [pipelineIssues, prs])
 
-  // Count active pipeline workers per stage role
-  const workerCounts = useMemo(() => {
-    const counts = {}
-    for (const stage of PIPELINE_STAGES) {
-      if (!stage.role) continue
-      counts[stage.key] = Object.values(workers || {}).filter(
-        w => w.role === stage.role && ACTIVE_STATUSES.includes(w.status)
-      ).length
-    }
-    return counts
-  }, [workers])
-
-  // Compute per-stage enabled state and dot color from backgroundWorkers
-  const stageStatusInfo = useMemo(() => {
-    const bgMap = Object.fromEntries((backgroundWorkers || []).map(w => [w.name, w]))
-    const info = {}
-    for (const stage of PIPELINE_STAGES) {
-      if (!stage.role) continue
-      const bgWorker = bgMap[stage.key]
-      const enabled = bgWorker ? bgWorker.enabled !== false : true
-      const activeCount = workerCounts[stage.key] || 0
-      let dotColor
-      if (!enabled) {
-        dotColor = theme.red
-      } else if (activeCount > 0) {
-        dotColor = theme.green
-      } else {
-        dotColor = theme.yellow
-      }
-      info[stage.key] = { enabled, dotColor, activeCount }
-    }
-    return info
-  }, [backgroundWorkers, workerCounts])
-
   const handleToggleStage = useCallback((key) => {
     onToggleStage(prev => ({ ...prev, [key]: !prev[key] }))
   }, [onToggleStage])
@@ -218,20 +184,30 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
       ))}
 
       {stageGroups.map(({ stage, issues: stageIssues }) => {
-        const status = stageStatusInfo[stage.key]
+        const status = stageStatus[stage.key] || {}
+        const enabled = status.enabled !== false
+        const workerCount = status.workerCount || 0
+        let dotColor
+        if (!enabled) {
+          dotColor = theme.red
+        } else if (workerCount > 0) {
+          dotColor = theme.green
+        } else {
+          dotColor = theme.yellow
+        }
         return (
           <StageSection
             key={stage.key}
             stage={stage}
             issues={stageIssues}
-            workerCount={workerCounts[stage.key] || 0}
+            workerCount={workerCount}
             intentMap={intentMap}
             onViewTranscript={onViewTranscript}
             onRequestChanges={onRequestChanges}
             open={!!expandedStages[stage.key]}
             onToggle={() => handleToggleStage(stage.key)}
-            enabled={status?.enabled ?? true}
-            dotColor={status?.dotColor}
+            enabled={enabled}
+            dotColor={dotColor}
           />
         )
       })}

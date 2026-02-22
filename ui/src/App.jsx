@@ -92,7 +92,6 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
-        workers={workers}
       />
 
       <div style={styles.main}>

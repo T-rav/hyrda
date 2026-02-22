@@ -2,46 +2,57 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
 
-const { mockState } = vi.hoisted(() => ({
-  mockState: {
-    workers: {
-      1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
+const { mockState } = vi.hoisted(() => {
+  const emptyStage = { issueCount: 0, activeCount: 0, queuedCount: 0, workerCount: 0, enabled: true, sessionCount: 0 }
+  return {
+    mockState: {
+      workers: {
+        1: { status: 'running', title: 'Test issue', branch: 'test-1', worker: 0, role: 'implementer', transcript: ['line 1'] },
+      },
+      prs: [],
+      events: [],
+      connected: true,
+      orchestratorStatus: 'running',
+      sessionPrsCount: 0,
+      mergedCount: 0,
+      sessionTriaged: 0,
+      sessionPlanned: 0,
+      sessionImplemented: 0,
+      sessionReviewed: 0,
+      config: {},
+      phase: 'implement',
+      lifetimeStats: null,
+      hitlItems: [],
+      humanInputRequests: {},
+      submitHumanInput: () => {},
+      refreshHitl: () => {},
+      backgroundWorkers: [],
+      metrics: null,
+      githubMetrics: null,
+      metricsHistory: null,
+      intents: [],
+      submitIntent: () => {},
+      toggleBgWorker: () => {},
+      systemAlert: null,
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [],
+        review: [],
+        hitl: [],
+      },
+      pipelinePollerLastRun: null,
+      stageStatus: {
+        triage: { ...emptyStage },
+        plan: { ...emptyStage },
+        implement: { ...emptyStage, workerCount: 1 },
+        review: { ...emptyStage },
+        merged: { ...emptyStage },
+        workload: { total: 1, active: 1, done: 0, failed: 0 },
+      },
     },
-    prs: [],
-    events: [],
-    connected: true,
-    orchestratorStatus: 'running',
-    sessionPrsCount: 0,
-    mergedCount: 0,
-    sessionTriaged: 0,
-    sessionPlanned: 0,
-    sessionImplemented: 0,
-    sessionReviewed: 0,
-    config: {},
-    phase: 'implement',
-    lifetimeStats: null,
-    hitlItems: [],
-    humanInputRequests: {},
-    submitHumanInput: () => {},
-    refreshHitl: () => {},
-    backgroundWorkers: [],
-    metrics: null,
-    githubMetrics: null,
-    metricsHistory: null,
-    intents: [],
-    submitIntent: () => {},
-    toggleBgWorker: () => {},
-    systemAlert: null,
-    pipelineIssues: {
-      triage: [],
-      plan: [],
-      implement: [],
-      review: [],
-      hitl: [],
-    },
-    pipelinePollerLastRun: null,
-  },
-}))
+  }
+})
 
 vi.mock('../../context/HydraContext', () => ({
   HydraProvider: ({ children }) => children,

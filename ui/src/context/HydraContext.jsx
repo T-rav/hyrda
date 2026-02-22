@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer, useMemo } from 'react'
 import { MAX_EVENTS } from '../constants'
+import { deriveStageStatus } from '../hooks/useStageStatus'
 
 const emptyPipeline = {
   triage: [],
@@ -753,8 +754,25 @@ export function HydraProvider({ children }) {
     }
   }, [connect])
 
+  const stageStatus = useMemo(
+    () => deriveStageStatus(
+      state.pipelineIssues,
+      state.workers,
+      state.backgroundWorkers,
+      {
+        sessionTriaged: state.sessionTriaged,
+        sessionPlanned: state.sessionPlanned,
+        sessionImplemented: state.sessionImplemented,
+        sessionReviewed: state.sessionReviewed,
+        mergedCount: state.mergedCount,
+      },
+    ),
+    [state.pipelineIssues, state.workers, state.backgroundWorkers, state.sessionTriaged, state.sessionPlanned, state.sessionImplemented, state.sessionReviewed, state.mergedCount],
+  )
+
   const value = {
     ...state,
+    stageStatus,
     submitIntent,
     submitHumanInput,
     toggleBgWorker,
