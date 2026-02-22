@@ -2713,6 +2713,89 @@ class TestCountHelpers:
         result = await mgr._count_merged_prs("hydra-fixed")
         assert result == 0
 
+    @pytest.mark.asyncio
+    async def test_count_open_issues_by_label_passes_limit(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "5\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_open_issues_by_label({"hydra-plan": ["hydra-plan"]})
+        assert result == {"hydra-plan": 5}
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "--limit" in cmd
+        assert cmd[cmd.index("--limit") + 1] == "1000"
+
+    @pytest.mark.asyncio
+    async def test_count_closed_issues_passes_limit(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "7\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_closed_issues(["hydra-fixed"])
+        assert result == 7
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "--limit" in cmd
+        assert cmd[cmd.index("--limit") + 1] == "1000"
+
+    @pytest.mark.asyncio
+    async def test_count_merged_prs_passes_limit(self, config, event_bus, tmp_path):
+        from config import HydraConfig
+
+        cfg = HydraConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "12\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_merged_prs("hydra-fixed")
+        assert result == 12
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "--limit" in cmd
+        assert cmd[cmd.index("--limit") + 1] == "1000"
+
 
 # ---------------------------------------------------------------------------
 # close_issue

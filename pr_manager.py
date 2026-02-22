@@ -844,6 +844,8 @@ class PRManager:
                         "number",
                         "--jq",
                         "length",
+                        "--limit",
+                        "1000",
                     )
                     count += int(raw.strip() or "0")
                 except (RuntimeError, ValueError):
@@ -870,6 +872,8 @@ class PRManager:
                     "number",
                     "--jq",
                     "length",
+                    "--limit",
+                    "1000",
                 )
                 total += int(raw.strip() or "0")
             except (RuntimeError, ValueError):
@@ -893,6 +897,8 @@ class PRManager:
                 "number",
                 "--jq",
                 "length",
+                "--limit",
+                "1000",
             )
             return int(raw.strip() or "0")
         except (RuntimeError, ValueError):
