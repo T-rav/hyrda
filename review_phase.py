@@ -11,6 +11,7 @@ from pathlib import Path
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
 from config import HydraConfig
+from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraEvent
 from issue_store import IssueStore
 from models import (
@@ -57,6 +58,7 @@ class ReviewPhase:
         retrospective: RetrospectiveCollector | None = None,
         ac_generator: AcceptanceCriteriaGenerator | None = None,
         verification_judge: VerificationJudge | None = None,
+        epic_checker: EpicCompletionChecker | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -70,6 +72,7 @@ class ReviewPhase:
         self._retrospective = retrospective
         self._ac_generator = ac_generator
         self._verification_judge = verification_judge
+        self._epic_checker = epic_checker
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
         self._active_issues: set[int] = set()
 
@@ -324,7 +327,7 @@ class ReviewPhase:
         result: ReviewResult,
         diff: str,
     ) -> None:
-        """Run non-blocking post-merge hooks (AC, retrospective, judge)."""
+        """Run non-blocking post-merge hooks (AC, retrospective, judge, epic)."""
         if self._ac_generator:
             try:
                 await self._ac_generator.generate(
@@ -373,6 +376,19 @@ class ReviewPhase:
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Verification issue creation failed for issue #%d",
+                    pr.issue_number,
+                    exc_info=True,
+                )
+
+        # Check if any parent epics can be closed
+        if self._epic_checker:
+            try:
+                await self._epic_checker.check_and_close_epics(
+                    pr.issue_number,
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "Epic completion check failed for issue #%d",
                     pr.issue_number,
                     exc_info=True,
                 )

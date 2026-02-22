@@ -1406,6 +1406,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         memory_label=["custom-memory"],
         metrics_label=["custom-metrics"],
         dup_label=["custom-dup"],
+        epic_label=["custom-epic"],
         repo=config.repo,
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1437,6 +1438,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-memory",
         "custom-metrics",
         "custom-dup",
+        "custom-epic",
     }
 
 
