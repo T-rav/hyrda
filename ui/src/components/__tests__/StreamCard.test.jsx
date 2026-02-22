@@ -228,6 +228,26 @@ describe('StreamCard request changes feedback flow', () => {
     })
   })
 
+  it('clears feedback text when panel is toggle-closed via Request Changes button', () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn()
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    // Open panel and type text
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Some feedback' },
+    })
+
+    // Toggle-close via the button (not Cancel)
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.queryByTestId('request-changes-textarea-42')).toBeNull()
+
+    // Re-open — panel must start empty
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    expect(screen.getByTestId('request-changes-textarea-42').value).toBe('')
+  })
+
   it('clears feedback text so re-opened panel starts empty after success', async () => {
     const issue = makeIssue()
     const onRequestChanges = vi.fn().mockResolvedValue(true)

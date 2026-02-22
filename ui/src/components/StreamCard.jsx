@@ -184,7 +184,10 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
             {onRequestChanges && (
               <span
                 style={styles.actionBtn}
-                onClick={() => setShowFeedback(v => !v)}
+                onClick={() => {
+                  if (showFeedback) setFeedbackText('')
+                  setShowFeedback(v => !v)
+                }}
                 data-testid={`request-changes-btn-${issue.issueNumber}`}
               >
                 Request Changes

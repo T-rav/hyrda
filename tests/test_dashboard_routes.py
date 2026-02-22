@@ -1165,6 +1165,45 @@ class TestRequestChangesEndpoint:
         data = json.loads(response.body)
         assert "required" in data["detail"]
 
+    @pytest.mark.asyncio
+    async def test_request_changes_rejects_zero_issue_number(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Returns 400 when issue_number is 0 or negative."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        for bad_num in [0, -1, -99]:
+            response = await endpoint(
+                {"issue_number": bad_num, "feedback": "Fix it", "stage": "review"}
+            )
+            assert response.status_code == 400, (
+                f"Expected 400 for issue_number={bad_num}"
+            )
+            data = json.loads(response.body)
+            assert "required" in data["detail"]
+
+    @pytest.mark.asyncio
+    async def test_request_changes_rejects_non_integer_issue_number(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        """Returns 400 when issue_number is a string instead of an int."""
+        import json
+
+        router, _ = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._find_endpoint(router, "/api/request-changes")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"issue_number": "42", "feedback": "Fix it", "stage": "review"}
+        )
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert "required" in data["detail"]
+
     def test_route_is_registered(self, config, event_bus, state, tmp_path) -> None:
         router, _ = self._make_router(config, event_bus, state, tmp_path)
         paths = {route.path for route in router.routes if hasattr(route, "path")}
