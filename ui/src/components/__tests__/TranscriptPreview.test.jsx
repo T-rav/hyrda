@@ -104,4 +104,40 @@ describe('TranscriptPreview', () => {
     render(<TranscriptPreview transcript={['line 1', 'line 2', 'line 3']} maxCollapsedLines={3} />)
     expect(screen.queryByTestId('transcript-toggle')).not.toBeInTheDocument()
   })
+
+  describe('inline mode', () => {
+    it('uses transcript-preview-inline testid when inline is true', () => {
+      render(<TranscriptPreview transcript={['hello']} inline />)
+      expect(screen.getByTestId('transcript-preview-inline')).toBeInTheDocument()
+      expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+    })
+
+    it('does not have border-top style when inline is true', () => {
+      render(<TranscriptPreview transcript={['hello']} inline />)
+      const container = screen.getByTestId('transcript-preview-inline')
+      expect(container.style.borderTop).toBe('')
+      expect(container.style.marginTop).toBe('')
+    })
+
+    it('still shows collapsed and expanded lines correctly in inline mode', () => {
+      const lines = ['line 1', 'line 2', 'line 3', 'line 4', 'line 5']
+      render(<TranscriptPreview transcript={lines} inline maxCollapsedLines={2} />)
+      // Collapsed: only last 2 lines
+      expect(screen.queryByText('line 1')).not.toBeInTheDocument()
+      expect(screen.queryByText('line 2')).not.toBeInTheDocument()
+      expect(screen.queryByText('line 3')).not.toBeInTheDocument()
+      expect(screen.getByText('line 4')).toBeInTheDocument()
+      expect(screen.getByText('line 5')).toBeInTheDocument()
+      // Expand
+      fireEvent.click(screen.getByTestId('transcript-toggle'))
+      expect(screen.getByText('line 1')).toBeInTheDocument()
+      expect(screen.getByText('line 5')).toBeInTheDocument()
+    })
+
+    it('uses default transcript-preview testid when inline is false', () => {
+      render(<TranscriptPreview transcript={['hello']} inline={false} />)
+      expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+      expect(screen.queryByTestId('transcript-preview-inline')).not.toBeInTheDocument()
+    })
+  })
 })
