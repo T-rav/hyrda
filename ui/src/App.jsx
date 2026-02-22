@@ -35,7 +35,7 @@ function AppContent() {
   const {
     connected, orchestratorStatus, workers, prs,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
-    backgroundWorkers, systemAlert, intents, toggleBgWorker,
+    backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
   } = useHydra()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
@@ -127,7 +127,7 @@ function AppContent() {
             <TranscriptView workers={workers} selectedWorker={selectedWorker} />
           )}
           {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} />}
+          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
           {activeTab === 'metrics' && <MetricsPanel />}
         </div>
       </div>

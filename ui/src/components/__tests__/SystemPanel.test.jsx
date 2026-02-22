@@ -585,3 +585,119 @@ describe('SystemPanel', () => {
     })
   })
 })
+
+describe('formatInterval', () => {
+  let formatInterval
+  beforeEach(async () => {
+    const mod = await import('../SystemPanel')
+    formatInterval = mod.formatInterval
+  })
+
+  it('returns null for null input', () => {
+    expect(formatInterval(null)).toBeNull()
+  })
+
+  it('returns null for undefined input', () => {
+    expect(formatInterval(undefined)).toBeNull()
+  })
+
+  it('formats seconds under 60', () => {
+    expect(formatInterval(30)).toBe('every 30s')
+  })
+
+  it('formats minutes under 60', () => {
+    expect(formatInterval(300)).toBe('every 5m')
+    expect(formatInterval(1800)).toBe('every 30m')
+  })
+
+  it('formats exact hours', () => {
+    expect(formatInterval(3600)).toBe('every 1h')
+    expect(formatInterval(7200)).toBe('every 2h')
+  })
+
+  it('formats hours with remaining minutes', () => {
+    expect(formatInterval(5400)).toBe('every 1h 30m')
+  })
+})
+
+describe('formatNextRun', () => {
+  let formatNextRun
+  beforeEach(async () => {
+    const mod = await import('../SystemPanel')
+    formatNextRun = mod.formatNextRun
+  })
+
+  it('returns null when lastRun is null', () => {
+    expect(formatNextRun(null, 3600)).toBeNull()
+  })
+
+  it('returns null when intervalSeconds is null', () => {
+    expect(formatNextRun('2026-02-20T10:00:00Z', null)).toBeNull()
+  })
+
+  it('returns "now" when next run is overdue', () => {
+    const pastTime = new Date(Date.now() - 10000).toISOString()
+    expect(formatNextRun(pastTime, 1)).toBe('now')
+  })
+
+  it('returns time remaining for future next run', () => {
+    const recentTime = new Date(Date.now() - 1000).toISOString()
+    const result = formatNextRun(recentTime, 7200)
+    expect(result).toMatch(/^in \d+/)
+  })
+})
+
+describe('BackgroundWorkerCard schedule display', () => {
+  let SystemPanel
+  beforeEach(async () => {
+    const mod = await import('../SystemPanel')
+    SystemPanel = mod.SystemPanel
+  })
+
+  it('shows schedule when interval_seconds is present', () => {
+    const bgWorkers = [
+      { name: 'memory_sync', status: 'ok', enabled: true, last_run: '2026-02-20T10:00:00Z', interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel workers={{}} backgroundWorkers={bgWorkers} />)
+    expect(screen.getByTestId('schedule-memory_sync')).toBeInTheDocument()
+    expect(screen.getByText(/Runs every 1h/)).toBeInTheDocument()
+  })
+
+  it('does not show schedule when interval_seconds is null', () => {
+    const bgWorkers = [
+      { name: 'retrospective', status: 'ok', enabled: true, last_run: null, details: {} },
+    ]
+    render(<SystemPanel workers={{}} backgroundWorkers={bgWorkers} />)
+    expect(screen.queryByTestId('schedule-retrospective')).not.toBeInTheDocument()
+  })
+
+  it('shows edit link for editable workers', () => {
+    const bgWorkers = [
+      { name: 'memory_sync', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel workers={{}} backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    expect(screen.getByTestId('edit-interval-memory_sync')).toBeInTheDocument()
+  })
+
+  it('shows interval editor when edit is clicked', () => {
+    const bgWorkers = [
+      { name: 'memory_sync', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel workers={{}} backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    fireEvent.click(screen.getByTestId('edit-interval-memory_sync'))
+    expect(screen.getByTestId('interval-editor-memory_sync')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-1h')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-2h')).toBeInTheDocument()
+  })
+
+  it('calls onUpdateInterval when preset is clicked', () => {
+    const onUpdate = vi.fn()
+    const bgWorkers = [
+      { name: 'memory_sync', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel workers={{}} backgroundWorkers={bgWorkers} onUpdateInterval={onUpdate} />)
+    fireEvent.click(screen.getByTestId('edit-interval-memory_sync'))
+    fireEvent.click(screen.getByTestId('preset-2h'))
+    expect(onUpdate).toHaveBeenCalledWith('memory_sync', 7200)
+  })
+})

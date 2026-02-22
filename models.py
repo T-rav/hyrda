@@ -398,6 +398,7 @@ class StateData(BaseModel):
     metrics_issue_number: int | None = None
     metrics_last_snapshot_hash: str = ""
     metrics_last_synced: str | None = None
+    worker_intervals: dict[str, int] = Field(default_factory=dict)
     last_updated: str | None = None
 
 
@@ -552,6 +553,8 @@ class BackgroundWorkerStatus(BaseModel):
     status: str = "disabled"  # ok | error | disabled
     enabled: bool = True
     last_run: str | None = None
+    interval_seconds: int | None = None
+    next_run: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
