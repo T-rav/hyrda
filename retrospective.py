@@ -327,5 +327,12 @@ class RetrospectiveCollector:
 
     def _save_filed_patterns(self, patterns: set[str]) -> None:
         """Persist the set of filed pattern keys."""
-        self._filed_patterns_path.parent.mkdir(parents=True, exist_ok=True)
-        self._filed_patterns_path.write_text(json.dumps(sorted(patterns)))
+        try:
+            self._filed_patterns_path.parent.mkdir(parents=True, exist_ok=True)
+            self._filed_patterns_path.write_text(json.dumps(sorted(patterns)))
+        except OSError:
+            logger.warning(
+                "Could not save filed patterns to %s",
+                self._filed_patterns_path,
+                exc_info=True,
+            )
