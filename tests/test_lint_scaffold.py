@@ -380,6 +380,33 @@ class TestEnsurePythonDevDeps:
         assert "ruff" in content
         assert "pyright" in content
 
+    def test_skips_when_optional_deps_exists_but_no_dev_key(
+        self, tmp_path: Path
+    ) -> None:
+        """Should not create duplicate [project.optional-dependencies] when section exists without dev."""
+        _make_pyproject(
+            tmp_path,
+            '[project]\nname = "test"\n\n[project.optional-dependencies]\ntest = [\n    "pytest",\n]\n',
+        )
+        result = _ensure_python_dev_deps(tmp_path)
+        # Should skip rather than create a duplicate section (which would be invalid TOML)
+        assert result == []
+        content = (tmp_path / "pyproject.toml").read_text()
+        # File should remain valid TOML
+        data = tomllib.loads(content)
+        # Only one optional-dependencies section — no duplicate header corruption
+        assert list(data["project"]["optional-dependencies"].keys()) == ["test"]
+
+    def test_result_is_valid_toml_after_dep_insertion(self, tmp_path: Path) -> None:
+        """File must be valid TOML after inserting deps into an existing dev section."""
+        _make_pyproject(
+            tmp_path,
+            '[project]\nname = "test"\n\n[project.optional-dependencies]\ndev = [\n]\n',
+        )
+        _ensure_python_dev_deps(tmp_path)
+        # Should not raise
+        tomllib.loads((tmp_path / "pyproject.toml").read_text())
+
 
 # ---------------------------------------------------------------------------
 # _scaffold_eslint tests

@@ -253,7 +253,8 @@ def _ensure_python_dev_deps(repo_root: Path) -> list[str]:
             stripped = line.strip()
             if stripped.startswith("dev") and "=" in stripped and "[" in stripped:
                 in_dev = True
-            if in_dev and "]" in stripped:
+            # Use exact match to avoid matching "]" inside dependency strings like "pkg[extra]"
+            if in_dev and stripped == "]":
                 insert_idx = i
                 break
 
@@ -263,8 +264,20 @@ def _ensure_python_dev_deps(repo_root: Path) -> list[str]:
             for j, new_line in enumerate(new_lines):
                 lines.insert(insert_idx + j, new_line)
             pyproject.write_text("\n".join(lines))
+        # Combine both outcomes into one return (avoids PLR0911 too-many-returns)
+        return ["pyproject.toml"] if insert_idx >= 0 else []
+    elif "optional-dependencies" in data.get("project", {}):
+        # [project.optional-dependencies] exists but lacks 'dev' key; cannot safely
+        # inject a new key without a proper TOML writer — skip rather than creating
+        # a duplicate section header which would produce invalid TOML.
+        logger.warning(
+            "[project.optional-dependencies] exists but lacks 'dev' key in %s. "
+            "Add ruff and pyright to dev dependencies manually.",
+            pyproject,
+        )
+        return []
     else:
-        # Append full section
+        # Append full [project.optional-dependencies] section
         section = "\n[project.optional-dependencies]\ndev = [\n"
         for a in additions:
             section += f"    {a},\n"
@@ -273,8 +286,7 @@ def _ensure_python_dev_deps(repo_root: Path) -> list[str]:
             content += "\n"
         content += section
         pyproject.write_text(content)
-
-    return ["pyproject.toml"]
+        return ["pyproject.toml"]
 
 
 def _scaffold_eslint(repo_root: Path) -> list[str]:

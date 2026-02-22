@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from config import HydraConfig
     from events import HydraEvent
+    from lint_scaffold import LintScaffoldResult
     from models import (
         AnalysisResult,
         GitHubIssue,
@@ -402,7 +403,7 @@ class LintScaffoldResultFactory:
         modified_files: list[str] | None = None,
         created_files: list[str] | None = None,
         language: str = "python",
-    ):
+    ) -> LintScaffoldResult:
         from lint_scaffold import LintScaffoldResult
 
         return LintScaffoldResult(
