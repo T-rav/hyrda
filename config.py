@@ -838,7 +838,10 @@ class HydraFlowConfig(BaseModel):
             )
 
         env_docker_image = os.environ.get("HYDRA_DOCKER_IMAGE")
-        if env_docker_image is not None and not self.docker_image:
+        if (
+            env_docker_image is not None
+            and self.docker_image == "ghcr.io/t-rav/hydraflow-agent:latest"
+        ):
             object.__setattr__(self, "docker_image", env_docker_image)
 
         env_docker_network = os.environ.get("HYDRA_DOCKER_NETWORK")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -73,11 +72,11 @@ class TestHostRunnerCreateStreamingProcess:
         mock_create.assert_called_once_with(
             "claude",
             "-p",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
             cwd="/tmp/work",
             env={"FOO": "bar"},
+            stdin=None,
+            stdout=None,
+            stderr=None,
             limit=1024 * 1024,
             start_new_session=True,
         )
@@ -104,8 +103,8 @@ class TestHostRunnerCreateStreamingProcess:
             await runner.create_streaming_process(["echo", "hi"])
 
         _, kwargs = mock_create.call_args
-        assert kwargs["limit"] == 65536
-        assert kwargs["start_new_session"] is False
+        assert kwargs["limit"] == 1024 * 1024
+        assert kwargs["start_new_session"] is True
 
     @pytest.mark.asyncio
     async def test_custom_env_forwarded(self) -> None:

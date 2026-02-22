@@ -30,6 +30,47 @@ _STDOUT_STREAM = 1
 _STDERR_STREAM = 2
 
 
+def build_container_kwargs(config: HydraFlowConfig) -> dict[str, Any]:
+    """Build Docker SDK kwargs for container resource limits and security.
+
+    Returns a dict suitable for unpacking into ``client.containers.create()``
+    or ``client.containers.run()``.
+    """
+    kwargs: dict[str, Any] = {}
+
+    # Resource limits
+    kwargs["nano_cpus"] = int(config.docker_cpu_limit * 1e9)
+    kwargs["mem_limit"] = config.docker_memory_limit
+    kwargs["memswap_limit"] = config.docker_memory_limit  # No swap
+    kwargs["pids_limit"] = config.docker_pids_limit
+
+    # Network
+    kwargs["network_mode"] = config.docker_network_mode
+
+    # Security
+    kwargs["read_only"] = config.docker_read_only_root
+    security_opt: list[str] = []
+    if config.docker_no_new_privileges:
+        security_opt.append("no-new-privileges:true")
+    if security_opt:
+        kwargs["security_opt"] = security_opt
+    kwargs["cap_drop"] = ["ALL"]
+
+    # Writable tmpfs for /tmp (container-internal mount, not a host path)
+    kwargs["tmpfs"] = {"/tmp": f"size={config.docker_tmp_size}"}  # nosec B108
+
+    logger.info(
+        "Container constraints: cpu=%.1f mem=%s pids=%d net=%s readonly=%s",
+        config.docker_cpu_limit,
+        config.docker_memory_limit,
+        config.docker_pids_limit,
+        config.docker_network_mode,
+        config.docker_read_only_root,
+    )
+
+    return kwargs
+
+
 class DockerStdinWriter:
     """Wraps a Docker attach socket to provide a stdin-like write interface."""
 
@@ -204,6 +245,7 @@ class DockerRunner:
         spawn_delay: float = 2.0,
         network: str = "",
         extra_mounts: list[str] | None = None,
+        config: HydraFlowConfig | None = None,
     ) -> None:
         import docker  # noqa: PLC0415
 
@@ -217,6 +259,7 @@ class DockerRunner:
         self._spawn_delay = spawn_delay
         self._network = network
         self._extra_mounts = extra_mounts or []
+        self._config = config
         self._spawn_lock = asyncio.Lock()
         self._last_spawn_time: float = 0.0
         self._containers: set[Any] = set()
@@ -245,6 +288,12 @@ class DockerRunner:
             git_user_name=self._git_user_name,
             git_user_email=self._git_user_email,
         )
+
+    def _get_resource_kwargs(self) -> dict[str, Any]:
+        """Get resource limit and security kwargs from config, if available."""
+        if self._config is not None:
+            return build_container_kwargs(self._config)
+        return {}
 
     async def _enforce_spawn_delay(self) -> None:
         """Ensure minimum delay between container starts."""
@@ -301,6 +350,9 @@ class DockerRunner:
         if self._network:
             container_kwargs["network"] = self._network
 
+        # Apply resource limits and security settings from config
+        container_kwargs.update(self._get_resource_kwargs())
+
         container = await loop.run_in_executor(
             None,
             lambda: self._client.containers.create(**container_kwargs),  # type: ignore[arg-type]
@@ -354,6 +406,9 @@ class DockerRunner:
             container_kwargs["working_dir"] = working_dir
         if self._network:
             container_kwargs["network"] = self._network
+
+        # Apply resource limits and security settings from config
+        container_kwargs.update(self._get_resource_kwargs())
 
         container = await loop.run_in_executor(
             None,
@@ -452,4 +507,5 @@ def get_docker_runner(config: HydraFlowConfig) -> DockerRunner | HostRunner:
         spawn_delay=config.docker_spawn_delay,
         network=config.docker_network,
         extra_mounts=config.docker_extra_mounts,
+        config=config,
     )

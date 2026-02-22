@@ -209,7 +209,7 @@ wheels = [
 ]
 
 [[package]]
-name = "hyrda"
+name = "hydraflow"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
@@ -249,8 +249,8 @@ requires-dist = [
     { name = "docker", marker = "extra == 'docker'", specifier = ">=7.0.0" },
     { name = "fastapi", marker = "extra == 'dashboard'", specifier = ">=0.110.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
-    { name = "hyrda", extras = ["dashboard"], marker = "extra == 'test'" },
-    { name = "hyrda", extras = ["docker"], marker = "extra == 'test'" },
+    { name = "hydraflow", extras = ["dashboard"], marker = "extra == 'test'" },
+    { name = "hydraflow", extras = ["docker"], marker = "extra == 'test'" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pyright", marker = "extra == 'dev'", specifier = "==1.1.408" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.4.0" },
