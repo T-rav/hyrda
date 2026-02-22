@@ -131,8 +131,8 @@ class TestBuildConfig:
         assert cfg.max_hitl_workers == 1
         assert cfg.hitl_active_label == ["hydra-hitl-active"]
         assert cfg.max_budget_usd == pytest.approx(0)
-        assert cfg.model == "sonnet"
-        assert cfg.review_model == "sonnet"
+        assert cfg.model == "opus"
+        assert cfg.review_model == "opus"
         assert cfg.review_budget_usd == pytest.approx(0)
         assert cfg.ci_check_timeout == 600
         assert cfg.ci_poll_interval == 30
@@ -158,7 +158,7 @@ class TestBuildConfig:
         assert cfg.batch_size == 10
         # Other fields remain at defaults
         assert cfg.max_workers == 3
-        assert cfg.model == "sonnet"
+        assert cfg.model == "opus"
 
     def test_label_arg_parsed_to_list(self) -> None:
         """A comma-separated label CLI arg should become a list."""

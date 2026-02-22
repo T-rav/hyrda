@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { theme } from '../theme'
-import { BACKGROUND_WORKERS, PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
+import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS } from '../constants'
 import { useHydra } from '../context/HydraContext'
 import { Livestream } from './Livestream'
 
@@ -18,16 +18,6 @@ function relativeTime(isoString) {
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.floor(minutes / 60)
   return `${hours}h ago`
-}
-
-function formatDuration(startTime) {
-  if (!startTime) return ''
-  const diff = Date.now() - new Date(startTime).getTime()
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${minutes}m ${secs}s`
 }
 
 export function formatInterval(seconds) {
@@ -60,64 +50,6 @@ function statusColor(status) {
   if (status === 'ok') return theme.green
   if (status === 'error') return theme.red
   return theme.textInactive
-}
-
-function pipelineStatusColor(status) {
-  if (ACTIVE_STATUSES.includes(status)) return theme.accent
-  if (status === 'done') return theme.green
-  if (status === 'failed' || status === 'escalated') return theme.red
-  return theme.textInactive
-}
-
-function TranscriptPreview({ lines }) {
-  const [expanded, setExpanded] = useState(false)
-  if (!lines || lines.length === 0) return null
-
-  const shown = expanded ? lines : lines.slice(-3)
-
-  return (
-    <div style={styles.transcriptSection}>
-      <div
-        style={styles.transcriptToggle}
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? 'Hide' : 'Show'} transcript ({lines.length} lines)
-      </div>
-      {shown.map((line, i) => (
-        <div key={i} style={styles.transcriptLine}>{line}</div>
-      ))}
-    </div>
-  )
-}
-
-function PipelineWorkerCard({ workerKey, worker }) {
-  const stage = PIPELINE_STAGES.find(s => s.role === worker.role)
-  const stageColor = stage?.color || theme.textMuted
-  const issueMatch = workerKey.toString().match(/\d+$/)
-  const issueNum = issueMatch ? issueMatch[0] : workerKey
-
-  return (
-    <div style={styles.card}>
-      <div style={styles.cardHeader}>
-        <span
-          style={{ ...styles.dot, background: pipelineStatusColor(worker.status) }}
-          data-testid={`pipeline-dot-${workerKey}`}
-        />
-        <span style={styles.label}>#{issueNum}</span>
-        <span style={{ ...styles.roleBadge, background: stageColor }}>
-          {worker.role}
-        </span>
-        <span style={styles.status}>{worker.status}</span>
-      </div>
-      <div style={styles.workerMeta}>
-        {worker.title && <div style={styles.workerTitle}>{worker.title}</div>}
-        <div style={styles.lastRun}>
-          Duration: {formatDuration(worker.startTime)}
-        </div>
-      </div>
-      <TranscriptPreview lines={worker.transcript} />
-    </div>
-  )
 }
 
 function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval }) {
@@ -278,15 +210,9 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, orchestratorS
   )
 }
 
-export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
-  const { pipelinePollerLastRun, hitlItems, orchestratorStatus, stageStatus, events } = useHydra()
+export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, onUpdateInterval }) {
+  const { pipelinePollerLastRun, orchestratorStatus, events } = useHydra()
   const [activeSubTab, setActiveSubTab] = useState('workers')
-  const pipelineWorkers = Object.entries(workers || {}).filter(
-    ([, w]) => w.role && ACTIVE_STATUSES.includes(w.status)
-  )
-
-  const hasPipelineWorkers = pipelineWorkers.length > 0
-  const hitlCount = hitlItems?.length || 0
 
   return (
     <div style={styles.container}>
@@ -304,64 +230,7 @@ export function SystemPanel({ workers, backgroundWorkers, onToggleBgWorker, onVi
       <div style={styles.subTabContent}>
         {activeSubTab === 'workers' && (
           <div style={styles.workersContent}>
-            <h3 style={styles.heading}>Pipeline</h3>
-            <div style={styles.loopRow}>
-              {PIPELINE_LOOPS.map((loop) => {
-                const status = stageStatus[loop.key] || {}
-                const enabled = status.enabled !== false
-                const activeCount = status.workerCount || 0
-                const issueCount = status.issueCount || 0
-                return (
-                  <div key={loop.key} style={styles.loopChip}>
-                    <span style={{ ...styles.loopDot, background: enabled ? loop.color : loop.dimColor }} />
-                    <span style={enabled ? styles.loopLabel : styles.loopLabelDim}>{loop.label}</span>
-                    <span
-                      style={{ ...styles.loopCount, color: enabled && activeCount > 0 ? loop.color : theme.textMuted }}
-                      data-testid={`loop-count-${loop.key}`}
-                    >
-                      {activeCount}
-                    </span>
-                    <span style={styles.loopCountLabel}>
-                      {activeCount === 1 ? 'worker' : 'workers'}
-                    </span>
-                    {onToggleBgWorker && (
-                      <button
-                        style={enabled ? styles.toggleOn : styles.toggleOff}
-                        onClick={() => onToggleBgWorker(loop.key, !enabled)}
-                      >
-                        {enabled ? 'On' : 'Off'}
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            {(pipelineWorkers.length > 0 || hitlCount > 0) && (
-              <div style={styles.statusRow}>
-                {pipelineWorkers.length > 0 && (
-                  <div style={styles.activeBadge}>
-                    {pipelineWorkers.length} active
-                  </div>
-                )}
-                {hitlCount > 0 && (
-                  <div style={styles.hitlBadge}>
-                    {hitlCount} HITL {hitlCount === 1 ? 'issue' : 'issues'}
-                  </div>
-                )}
-              </div>
-            )}
-            {!hasPipelineWorkers && (
-              <div style={styles.empty}>No active pipeline workers</div>
-            )}
-            {hasPipelineWorkers && (
-              <div style={styles.grid}>
-                {pipelineWorkers.map(([key, worker]) => (
-                  <PipelineWorkerCard key={key} workerKey={key} worker={worker} />
-                ))}
-              </div>
-            )}
-
-            <h3 style={{ ...styles.heading, marginTop: 24 }}>Background Workers</h3>
+            <h3 style={styles.heading}>Background Workers</h3>
             <div style={styles.grid}>
               {BACKGROUND_WORKERS.map((def) => {
                 const state = backgroundWorkers.find(w => w.name === def.key)
@@ -462,14 +331,6 @@ const styles = {
     color: theme.text,
     flex: 1,
   },
-  roleBadge: {
-    fontSize: 10,
-    fontWeight: 600,
-    color: theme.white,
-    padding: '1px 6px',
-    borderRadius: 4,
-    textTransform: 'uppercase',
-  },
   status: {
     fontSize: 11,
     fontWeight: 600,
@@ -480,17 +341,6 @@ const styles = {
     fontSize: 12,
     color: theme.textMuted,
     marginBottom: 8,
-  },
-  workerMeta: {
-    marginBottom: 4,
-  },
-  workerTitle: {
-    fontSize: 12,
-    color: theme.text,
-    marginBottom: 4,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
   details: {
     borderTop: `1px solid ${theme.border}`,
@@ -538,74 +388,6 @@ const styles = {
   detailValueError: {
     color: theme.red,
     fontWeight: 600,
-  },
-  empty: {
-    fontSize: 13,
-    color: theme.textMuted,
-    padding: '8px 0 16px',
-  },
-  transcriptSection: {
-    borderTop: `1px solid ${theme.border}`,
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  transcriptToggle: {
-    fontSize: 11,
-    color: theme.accent,
-    cursor: 'pointer',
-    marginBottom: 4,
-  },
-  transcriptLine: {
-    fontSize: 10,
-    color: theme.textMuted,
-    fontFamily: 'monospace',
-    lineHeight: '16px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  loopRow: {
-    display: 'flex',
-    gap: 8,
-    flexWrap: 'wrap',
-    marginBottom: 16,
-  },
-  loopChip: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '4px 12px',
-    border: `1px solid ${theme.border}`,
-    borderRadius: 16,
-    background: theme.surface,
-  },
-  loopDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
-  loopLabel: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: theme.text,
-  },
-  loopLabelDim: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: theme.textMuted,
-  },
-  loopCount: {
-    fontSize: 10,
-    fontWeight: 700,
-    minWidth: 16,
-    textAlign: 'center',
-  },
-  loopCountLabel: {
-    fontSize: 9,
-    fontWeight: 600,
-    color: theme.textMuted,
-    textTransform: 'uppercase',
   },
   toggleOn: {
     padding: '2px 10px',
@@ -658,33 +440,6 @@ const styles = {
     padding: '1px 8px',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
-  },
-  statusRow: {
-    display: 'flex',
-    gap: 8,
-    marginBottom: 12,
-  },
-  activeBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    fontSize: 11,
-    fontWeight: 600,
-    color: theme.accent,
-    background: theme.accentSubtle,
-    border: `1px solid ${theme.accent}`,
-    borderRadius: 10,
-    padding: '2px 10px',
-  },
-  hitlBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    fontSize: 11,
-    fontWeight: 600,
-    color: theme.orange,
-    background: theme.orangeSubtle,
-    border: `1px solid ${theme.orange}`,
-    borderRadius: 10,
-    padding: '2px 10px',
   },
   cardActions: {
     display: 'flex',
