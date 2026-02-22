@@ -14,6 +14,7 @@ from typing import Any, Literal
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
 from models import GitHubIssue, HITLItem, PRInfo, PRListItem, ReviewVerdict
+from prep import HYDRA_LABELS
 from subprocess_util import run_subprocess, run_subprocess_with_retry
 
 logger = logging.getLogger("hydra.pr_manager")
@@ -29,21 +30,8 @@ class PRManager:
     _GITHUB_COMMENT_LIMIT = 65_536
     _HEADER_RESERVE = 50  # room for "*Part X/Y*\n\n" prefix
 
-    # All Hydra lifecycle labels: (config_field, color, description)
-    _HYDRA_LABELS: tuple[tuple[str, str, str], ...] = (
-        ("find_label", "e4e669", "New issue for Hydra to discover and triage"),
-        ("planner_label", "c5def5", "Issue needs planning before implementation"),
-        ("ready_label", "0e8a16", "Issue ready for implementation"),
-        ("review_label", "fbca04", "Issue/PR under review"),
-        ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
-        ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
-        ("fixed_label", "0075ca", "PR merged — issue completed"),
-        ("improve_label", "7057ff", "Review insight improvement proposal"),
-        ("memory_label", "1d76db", "Approved memory suggestion for sync"),
-        ("metrics_label", "006b75", "Metrics persistence issue"),
-        ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
-        ("epic_label", "5319e7", "Epic tracking issue with linked sub-issues"),
-    )
+    # Re-export from prep module for backward compatibility
+    _HYDRA_LABELS = HYDRA_LABELS
 
     def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
         self._config = config
@@ -63,33 +51,12 @@ class PRManager:
     async def ensure_labels_exist(self) -> None:
         """Create all Hydra lifecycle labels in the repo if they don't exist.
 
-        Uses ``gh label create --force`` which creates or updates each label.
-        Skipped in dry-run mode.
+        Delegates to :func:`prep.ensure_labels` which handles creation,
+        reporting, and dry-run behaviour.
         """
-        if self._config.dry_run:
-            logger.info("[dry-run] Would ensure Hydra labels exist")
-            return
+        from prep import ensure_labels  # noqa: PLC0415
 
-        for field, color, description in self._HYDRA_LABELS:
-            label_names = getattr(self._config, field)
-            for label_name in label_names:
-                try:
-                    await self._run_gh(
-                        "gh",
-                        "label",
-                        "create",
-                        label_name,
-                        "--repo",
-                        self._repo,
-                        "--color",
-                        color,
-                        "--description",
-                        description,
-                        "--force",
-                    )
-                    logger.debug("Ensured label %r exists", label_name)
-                except RuntimeError as exc:
-                    logger.warning("Could not ensure label %r: %s", label_name, exc)
+        await ensure_labels(self._config)
 
     async def push_branch(self, worktree_path: Path, branch: str) -> bool:
         """Push *branch* to origin from *worktree_path*.

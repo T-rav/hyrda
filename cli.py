@@ -327,6 +327,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Remove all worktrees and state, then exit",
     )
+    parser.add_argument(
+        "--prep",
+        action="store_true",
+        help="Create Hydra lifecycle labels on the target repo, then exit",
+    )
 
     return parser.parse_args(argv)
 
@@ -435,6 +440,14 @@ def build_config(args: argparse.Namespace) -> HydraConfig:
     return HydraConfig(**kwargs)
 
 
+async def _run_prep(config: HydraConfig) -> None:
+    """Create Hydra lifecycle labels on the target repo."""
+    from prep import ensure_labels  # noqa: PLC0415
+
+    result = await ensure_labels(config)
+    print(result.summary())  # noqa: T201
+
+
 async def _run_clean(config: HydraConfig) -> None:
     """Remove all worktrees and reset state."""
     from state import StateTracker
@@ -524,6 +537,10 @@ def main(argv: list[str] | None = None) -> None:
     setup_logging(level=level, json_output=not args.verbose, log_file=args.log_file)
 
     config = build_config(args)
+
+    if args.prep:
+        asyncio.run(_run_prep(config))
+        sys.exit(0)
 
     if args.clean:
         asyncio.run(_run_clean(config))
