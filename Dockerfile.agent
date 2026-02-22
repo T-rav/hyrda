@@ -3,8 +3,8 @@
 # Pre-loaded with Claude CLI, git, gh CLI, Python 3.11, Node.js 20,
 # and quality tooling (ruff, pyright, pytest).
 #
-# Build:  docker build -f Dockerfile.agent -t ghcr.io/t-rav/hydra-agent:latest .
-# Test:   docker run --rm ghcr.io/t-rav/hydra-agent:latest bash /opt/hydra/docker-smoke-test.sh
+# Build:  docker build -f Dockerfile.agent -t ghcr.io/t-rav/hydraflow-agent:latest .
+# Test:   docker run --rm ghcr.io/t-rav/hydraflow-agent:latest bash /opt/hydraflow/docker-smoke-test.sh
 
 # ---------------------------------------------------------------------------
 # Stage 1: base — system packages + Node.js + gh CLI + uv
@@ -51,8 +51,8 @@ RUN npm install -g @anthropic-ai/claude-code --no-fund --no-audit
 
 # Pre-install Python quality tools into a venv
 COPY pyproject.toml uv.lock ./
-RUN uv venv /opt/hydra-venv \
-    && UV_PROJECT_ENVIRONMENT=/opt/hydra-venv uv sync --all-extras --no-install-project
+RUN uv venv /opt/hydraflow-venv \
+    && UV_PROJECT_ENVIRONMENT=/opt/hydraflow-venv uv sync --all-extras --no-install-project
 
 # ---------------------------------------------------------------------------
 # Stage 3: runtime — final lean image
@@ -64,25 +64,25 @@ COPY --from=tools /usr/lib/node_modules /usr/lib/node_modules
 COPY --from=tools /usr/bin/claude /usr/bin/claude
 
 # Copy Python venv with quality tools
-COPY --from=tools /opt/hydra-venv /opt/hydra-venv
+COPY --from=tools /opt/hydraflow-venv /opt/hydraflow-venv
 
 # Copy smoke test script
-COPY scripts/docker-smoke-test.sh /opt/hydra/docker-smoke-test.sh
+COPY scripts/docker-smoke-test.sh /opt/hydraflow/docker-smoke-test.sh
 
 # Create non-root user
-RUN groupadd --gid 1000 hydra \
-    && useradd --uid 1000 --gid hydra --create-home hydra \
+RUN groupadd --gid 1000 hydraflow \
+    && useradd --uid 1000 --gid hydraflow --create-home hydraflow \
     && mkdir -p /workspace /tmp \
-    && chown hydra:hydra /workspace
+    && chown hydraflow:hydraflow /workspace
 
 # Configure PATH
-ENV PATH="/opt/hydra-venv/bin:${PATH}"
-ENV VIRTUAL_ENV=/opt/hydra-venv
+ENV PATH="/opt/hydraflow-venv/bin:${PATH}"
+ENV VIRTUAL_ENV=/opt/hydraflow-venv
 
 # Configure git safe directory for mounted worktrees
 RUN git config --system --add safe.directory /workspace
 
 WORKDIR /workspace
-USER hydra
+USER hydraflow
 
 CMD ["bash"]

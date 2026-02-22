@@ -1391,7 +1391,7 @@ async def test_ensure_labels_exist_creates_all_hydraflow_labels(
 
     # Verify create calls use gh label create --force
     create_calls = [c for c in mock_create.call_args_list if "create" in c[0]]
-    assert len(create_calls) == len(PRManager._HYDRA_LABELS)
+    assert len(create_calls) == len(PRManager._HYDRAFLOW_LABELS)
     for call in create_calls:
         args = call[0]
         assert args[0] == "gh"

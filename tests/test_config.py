@@ -2762,7 +2762,7 @@ class TestDockerConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.docker_image == "ghcr.io/t-rav/hydra-agent:latest"
+        assert cfg.docker_image == "ghcr.io/t-rav/hydraflow-agent:latest"
 
     def test_docker_cpu_limit_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(

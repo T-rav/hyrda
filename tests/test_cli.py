@@ -604,7 +604,7 @@ class TestDockerBuildConfig:
         args = parse_args([])
         cfg = build_config(args)
         assert cfg.execution_mode == "host"
-        assert cfg.docker_image == "ghcr.io/t-rav/hydra-agent:latest"
+        assert cfg.docker_image == "ghcr.io/t-rav/hydraflow-agent:latest"
         assert cfg.docker_cpu_limit == pytest.approx(2.0)
         assert cfg.docker_memory_limit == "4g"
         assert cfg.docker_network_mode == "bridge"

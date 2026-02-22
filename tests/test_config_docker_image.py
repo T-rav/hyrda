@@ -13,7 +13,7 @@ import pytest
 
 from config import HydraFlowConfig
 
-DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydra-agent:latest"
+DEFAULT_DOCKER_IMAGE = "ghcr.io/t-rav/hydraflow-agent:latest"
 
 
 # ---------------------------------------------------------------------------
