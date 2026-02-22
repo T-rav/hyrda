@@ -388,6 +388,32 @@ def event_bus():
     return EventBus()
 
 
+# --- Lint Scaffold Result Factory ---
+
+
+class LintScaffoldResultFactory:
+    """Factory for LintScaffoldResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        scaffolded: list[str] | None = None,
+        skipped: list[str] | None = None,
+        modified_files: list[str] | None = None,
+        created_files: list[str] | None = None,
+        language: str = "python",
+    ):
+        from lint_scaffold import LintScaffoldResult
+
+        return LintScaffoldResult(
+            scaffolded=scaffolded or [],
+            skipped=skipped or [],
+            modified_files=modified_files or [],
+            created_files=created_files or [],
+            language=language,
+        )
+
+
 # --- HITL Runner Fixture ---
 
 
