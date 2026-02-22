@@ -483,6 +483,9 @@ class HydraOrchestrator:
                         data={
                             "session_id": self._current_session.id,
                             "status": "completed",
+                            "issues_processed": self._current_session.issues_processed,
+                            "issues_succeeded": self._current_session.issues_succeeded,
+                            "issues_failed": self._current_session.issues_failed,
                         },
                     )
                 )
@@ -675,7 +678,7 @@ class HydraOrchestrator:
                     | self._active_hitl_issues
                 )
             )
-        results, _issues = await self._implementer.run_batch()  # noqa: F841
+        results, _ = await self._implementer.run_batch()
         for result in results:
             self._session_issue_results[result.issue_number] = result.success
             if result.transcript:

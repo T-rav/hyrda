@@ -464,6 +464,36 @@ describe('session_end reducer', () => {
     expect(result.sessions[0].ended_at).toBe('2026-02-22T13:00:00Z')
     expect(result.currentSessionId).toBeNull()
   })
+
+  it('propagates issue counts from session_end event to session state', () => {
+    const state = {
+      ...initialState,
+      sessions: [{
+        id: 'sess-1',
+        repo: 'test/repo',
+        status: 'active',
+        started_at: '2026-02-22T12:00:00Z',
+        ended_at: null,
+        issues_processed: [],
+        issues_succeeded: 0,
+        issues_failed: 0,
+      }],
+      currentSessionId: 'sess-1',
+    }
+    const result = reducer(state, {
+      type: 'session_end',
+      data: {
+        session_id: 'sess-1',
+        issues_processed: [10, 11, 12],
+        issues_succeeded: 2,
+        issues_failed: 1,
+      },
+      timestamp: '2026-02-22T13:00:00Z',
+    })
+    expect(result.sessions[0].issues_processed).toEqual([10, 11, 12])
+    expect(result.sessions[0].issues_succeeded).toBe(2)
+    expect(result.sessions[0].issues_failed).toBe(1)
+  })
 })
 
 describe('SESSIONS reducer', () => {

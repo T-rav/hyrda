@@ -533,7 +533,14 @@ export function reducer(state, action) {
         ...addEvent(state, action),
         sessions: state.sessions.map(s =>
           s.id === endedId
-            ? { ...s, ended_at: action.timestamp || new Date().toISOString(), status: 'completed' }
+            ? {
+                ...s,
+                ended_at: action.timestamp || new Date().toISOString(),
+                status: 'completed',
+                issues_processed: action.data.issues_processed ?? s.issues_processed,
+                issues_succeeded: action.data.issues_succeeded ?? s.issues_succeeded,
+                issues_failed: action.data.issues_failed ?? s.issues_failed,
+              }
             : s
         ),
         currentSessionId: null,
