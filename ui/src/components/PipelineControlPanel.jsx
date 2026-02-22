@@ -16,11 +16,17 @@ function formatDuration(startTime) {
   return remainMinutes > 0 ? `${hours}h ${remainMinutes}m` : `${hours}h`
 }
 
-function pipelineStatusColor(status) {
-  if (ACTIVE_STATUSES.includes(status)) return theme.accent
-  if (status === 'done') return theme.green
-  if (status === 'failed' || status === 'escalated') return theme.red
-  return theme.textInactive
+// Pre-computed worker card dot style variants — avoids object spread in render loops
+const workerDotActive = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: theme.accent }
+const workerDotDone = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: theme.green }
+const workerDotFailed = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: theme.red }
+const workerDotInactive = { width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: theme.textInactive }
+
+function pipelineWorkerDot(status) {
+  if (ACTIVE_STATUSES.includes(status)) return workerDotActive
+  if (status === 'done') return workerDotDone
+  if (status === 'failed' || status === 'escalated') return workerDotFailed
+  return workerDotInactive
 }
 
 function TranscriptPreview({ lines }) {
@@ -45,8 +51,6 @@ function TranscriptPreview({ lines }) {
 }
 
 function PipelineWorkerCard({ workerKey, worker }) {
-  const stage = PIPELINE_STAGES.find(s => s.role === worker.role)
-  const stageColor = stage?.color || theme.textMuted
   const issueMatch = workerKey.toString().match(/\d+$/)
   const issueNum = issueMatch ? issueMatch[0] : workerKey
 
@@ -54,11 +58,11 @@ function PipelineWorkerCard({ workerKey, worker }) {
     <div style={styles.card}>
       <div style={styles.cardHeader}>
         <span
-          style={{ ...styles.dot, background: pipelineStatusColor(worker.status) }}
+          style={pipelineWorkerDot(worker.status)}
           data-testid={`pipeline-dot-${workerKey}`}
         />
         <span style={styles.label}>#{issueNum}</span>
-        <span style={{ ...styles.roleBadge, background: stageColor }}>
+        <span style={roleBadgeByRole[worker.role] ?? roleBadgeFallback}>
           {worker.role}
         </span>
         <span style={styles.status}>{worker.status}</span>
@@ -401,6 +405,12 @@ const styles = {
     whiteSpace: 'nowrap',
   },
 }
+
+// Pre-computed role badge style variants — keyed by role string (avoids object spread in render loops)
+const roleBadgeByRole = Object.fromEntries(
+  PIPELINE_STAGES.filter(s => s.role).map(s => [s.role, { ...styles.roleBadge, background: s.color }])
+)
+const roleBadgeFallback = { ...styles.roleBadge, background: theme.textMuted }
 
 // Pre-computed per-loop style variants (avoids object spread in render loops)
 const loopDotLit = Object.fromEntries(PIPELINE_LOOPS.map(l => [l.key, { ...styles.dot, background: l.color }]))

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { deriveStageStatus } from '../../hooks/useStageStatus'
 import {
   dotConnected, dotDisconnected,
