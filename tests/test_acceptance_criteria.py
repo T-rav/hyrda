@@ -467,9 +467,9 @@ class TestPersist:
         assert "AC-1: Old" not in content
 
     def test_persist_handles_oserror(
-        self, config: HydraConfig, caplog: pytest.LogCaptureFixture
+        self, config: HydraConfig, event_bus, caplog: pytest.LogCaptureFixture
     ) -> None:
-        gen, _ = _make_generator(config)
+        gen, _ = _make_generator(config, event_bus)
         criteria = VerificationCriteria(
             issue_number=42,
             pr_number=101,

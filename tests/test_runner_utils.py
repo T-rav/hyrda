@@ -446,7 +446,7 @@ class TestStreamClaudeProcessTimeout:
     """Tests for stream_claude_process timeout behavior."""
 
     @pytest.mark.asyncio
-    async def test_no_timeout_by_default(self) -> None:
+    async def test_no_timeout_by_default(self, event_bus) -> None:
         """When timeout=None (default), no wait_for wrapping occurs."""
         mock_create = make_streaming_proc(returncode=0, stdout="ok")
 
@@ -454,12 +454,12 @@ class TestStreamClaudeProcessTimeout:
             patch("asyncio.create_subprocess_exec", mock_create),
             patch("asyncio.wait_for") as mock_wait_for,
         ):
-            await stream_claude_process(**_default_kwargs())
+            await stream_claude_process(**_default_kwargs(event_bus))
 
         mock_wait_for.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_timeout_kills_process_and_raises(self) -> None:
+    async def test_timeout_kills_process_and_raises(self, event_bus) -> None:
         """When timeout fires, process is killed and RuntimeError is raised."""
 
         class HangingIter:
@@ -490,14 +490,14 @@ class TestStreamClaudeProcessTimeout:
             pytest.raises(RuntimeError, match="timed out after 0.01s"),
         ):
             await stream_claude_process(
-                **_default_kwargs(active_procs=active_procs),
+                **_default_kwargs(event_bus, active_procs=active_procs),
                 timeout=0.01,
             )
 
         mock_proc.kill.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_timeout_cleans_up_active_procs(self) -> None:
+    async def test_timeout_cleans_up_active_procs(self, event_bus) -> None:
         """Process should be removed from active_procs on timeout."""
 
         class HangingIter:
@@ -528,7 +528,7 @@ class TestStreamClaudeProcessTimeout:
             pytest.raises(RuntimeError),
         ):
             await stream_claude_process(
-                **_default_kwargs(active_procs=active_procs),
+                **_default_kwargs(event_bus, active_procs=active_procs),
                 timeout=0.01,
             )
 

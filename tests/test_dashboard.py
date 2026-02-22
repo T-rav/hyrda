@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraEvent
 from models import HITLItem, PRListItem
-from tests.conftest import EventFactory, make_orchestrator_mock
+from tests.conftest import EventFactory, make_orchestrator_mock, make_state
 
 if TYPE_CHECKING:
     from config import HydraConfig

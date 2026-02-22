@@ -10,7 +10,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events import EventType
+from config import HydraConfig
+from events import EventBus, EventType
 from hitl_runner import HITLRunner, _classify_cause
 from tests.conftest import HITLResultFactory, IssueFactory
 
