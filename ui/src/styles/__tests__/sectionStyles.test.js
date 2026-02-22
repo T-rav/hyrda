@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PIPELINE_STAGES } from '../../constants'
 import {
-  sectionHeaderBase,
-  sectionLabelBase,
-  sectionCountBase,
   sectionHeaderStyles,
   sectionLabelStyles,
   sectionCountStyles,
@@ -19,12 +16,18 @@ describe('sectionStyles shared module', () => {
       }
     })
 
-    it('includes all base properties in each entry', () => {
+    it('includes correct base properties in each entry', () => {
       for (const key of stageKeys) {
         const style = sectionHeaderStyles[key]
-        for (const prop of Object.keys(sectionHeaderBase)) {
-          expect(style).toHaveProperty(prop, sectionHeaderBase[prop])
-        }
+        expect(style.display).toBe('flex')
+        expect(style.alignItems).toBe('center')
+        expect(style.gap).toBe(8)
+        expect(style.padding).toBe('8px 12px')
+        expect(style.margin).toBe('8px 8px 4px')
+        expect(style.cursor).toBe('pointer')
+        expect(style.userSelect).toBe('none')
+        expect(style.borderRadius).toBe(6)
+        expect(style.transition).toBe('background 0.15s')
       }
     })
 
@@ -32,7 +35,7 @@ describe('sectionStyles shared module', () => {
       for (const stage of PIPELINE_STAGES) {
         const style = sectionHeaderStyles[stage.key]
         expect(style.background).toBe(stage.subtleColor)
-        expect(style.border).toBe(`1px solid ${stage.color}33`)
+        expect(style.border).toBe(`1px solid ${stage.subtleColor}`)
         expect(style.borderLeft).toBe(`3px solid ${stage.color}`)
       }
     })
@@ -45,12 +48,13 @@ describe('sectionStyles shared module', () => {
       }
     })
 
-    it('includes all base properties in each entry', () => {
+    it('includes correct base properties in each entry', () => {
       for (const key of stageKeys) {
         const style = sectionLabelStyles[key]
-        for (const prop of Object.keys(sectionLabelBase)) {
-          expect(style).toHaveProperty(prop, sectionLabelBase[prop])
-        }
+        expect(style.fontSize).toBe(11)
+        expect(style.fontWeight).toBe(600)
+        expect(style.textTransform).toBe('uppercase')
+        expect(style.letterSpacing).toBe('0.5px')
       }
     })
 
@@ -68,12 +72,12 @@ describe('sectionStyles shared module', () => {
       }
     })
 
-    it('includes all base properties in each entry', () => {
+    it('includes correct base properties in each entry', () => {
       for (const key of stageKeys) {
         const style = sectionCountStyles[key]
-        for (const prop of Object.keys(sectionCountBase)) {
-          expect(style).toHaveProperty(prop, sectionCountBase[prop])
-        }
+        expect(style.fontSize).toBe(11)
+        expect(style.fontWeight).toBe(600)
+        expect(style.marginLeft).toBe('auto')
       }
     })
 
