@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { theme } from '../theme'
 import { PIPELINE_LOOPS, PIPELINE_STAGES, ACTIVE_STATUSES } from '../constants'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 
 function formatDuration(startTime) {
   if (!startTime) return ''
@@ -96,7 +96,7 @@ function PipelineWorkerCard({ workerKey, worker }) {
 }
 
 export function PipelineControlPanel({ onToggleBgWorker }) {
-  const { workers, stageStatus, hitlItems } = useHydra()
+  const { workers, stageStatus, hitlItems } = useHydraFlow()
 
   const pipelineWorkers = Object.entries(workers || {}).filter(
     ([, w]) => w.role && ACTIVE_STATUSES.includes(w.status)

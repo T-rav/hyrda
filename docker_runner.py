@@ -6,19 +6,19 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from config import HydraConfig
+    from config import HydraFlowConfig
 
-logger = logging.getLogger("hydra.docker")
+logger = logging.getLogger("hydraflow.docker")
 
 
 class DockerRunner:
     """Runs agent commands inside Docker containers with resource constraints.
 
-    Translates ``HydraConfig`` Docker settings into Docker SDK kwargs for
+    Translates ``HydraFlowConfig`` Docker settings into Docker SDK kwargs for
     ``containers.create()`` / ``containers.run()``.
     """
 
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
 
     def _build_container_kwargs(self) -> dict[str, Any]:

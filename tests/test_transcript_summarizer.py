@@ -136,8 +136,8 @@ class TestTranscriptSummarizer:
         prs.create_issue.assert_called_once()
         call_args = prs.create_issue.call_args
         assert call_args[0][0] == "[Transcript Summary] Issue #42 — implement phase"
-        assert "hydra-improve" in call_args[0][2]
-        assert "hydra-hitl" in call_args[0][2]
+        assert "hydraflow-improve" in call_args[0][2]
+        assert "hydraflow-hitl" in call_args[0][2]
         assert "Key Decisions" in call_args[0][1]
 
     @pytest.mark.asyncio
@@ -167,7 +167,7 @@ class TestTranscriptSummarizer:
                 transcript="x" * 1000, issue_number=42, phase="implement"
             )
 
-        state.set_hitl_origin.assert_called_once_with(123, "hydra-improve")
+        state.set_hitl_origin.assert_called_once_with(123, "hydraflow-improve")
         state.set_hitl_cause.assert_called_once_with(123, "Transcript summary")
 
     @pytest.mark.asyncio

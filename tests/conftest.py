@@ -1,4 +1,4 @@
-"""Shared fixtures and factories for Hydra tests."""
+"""Shared fixtures and factories for HydraFlow tests."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# Ensure hydra package is importable
+# Ensure hydraflow package is importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tests.helpers import ConfigFactory  # noqa: E402
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from typing import Any
 
     from ci_scaffold import CIScaffoldResult
-    from config import HydraConfig
-    from events import HydraEvent
+    from config import HydraFlowConfig
+    from events import HydraFlowEvent
     from lint_scaffold import LintScaffoldResult
     from models import (
         AnalysisResult,
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
         TriageResult,
         WorkerResult,
     )
-    from orchestrator import HydraOrchestrator
+    from orchestrator import HydraFlowOrchestrator
     from state import StateTracker
     from test_scaffold import TestScaffoldResult
 
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 def setup_test_environment():
     """Set minimal env vars and prevent real subprocess calls."""
     test_env = {
-        "HOME": "/tmp/hydra-test",
+        "HOME": "/tmp/hydraflow-test",
         "GH_TOKEN": "test-token",
     }
     with patch.dict(os.environ, test_env, clear=False):
@@ -56,8 +56,8 @@ def setup_test_environment():
 
 
 @pytest.fixture
-def config(tmp_path: Path) -> HydraConfig:
-    """A HydraConfig using tmp_path for all file operations."""
+def config(tmp_path: Path) -> HydraFlowConfig:
+    """A HydraFlowConfig using tmp_path for all file operations."""
 
     return ConfigFactory.create(
         repo_root=tmp_path / "repo",
@@ -67,8 +67,8 @@ def config(tmp_path: Path) -> HydraConfig:
 
 
 @pytest.fixture
-def dry_config(tmp_path: Path) -> HydraConfig:
-    """A HydraConfig in dry-run mode."""
+def dry_config(tmp_path: Path) -> HydraFlowConfig:
+    """A HydraFlowConfig in dry-run mode."""
     return ConfigFactory.create(
         dry_run=True,
         repo_root=tmp_path / "repo",
@@ -276,7 +276,7 @@ class HITLResultFactory:
 
 
 class EventFactory:
-    """Factory for HydraEvent instances."""
+    """Factory for HydraFlowEvent instances."""
 
     @staticmethod
     def create(
@@ -284,9 +284,9 @@ class EventFactory:
         type: Any = None,
         timestamp: str | None = None,
         data: dict[str, Any] | None = None,
-    ) -> HydraEvent:
+    ) -> HydraFlowEvent:
         from events import EventType as ET
-        from events import HydraEvent as HE
+        from events import HydraFlowEvent as HE
 
         return HE(
             type=type if type is not None else ET.BATCH_START,
@@ -497,6 +497,7 @@ def make_orchestrator_mock(
     orch.provide_human_input = MagicMock()
     orch.running = running
     orch.run_status = run_status
+    orch.current_session_id = None
     orch.stop = AsyncMock()
     orch.request_stop = AsyncMock()
     return orch
@@ -553,7 +554,7 @@ def subprocess_mock() -> SubprocessMockBuilder:
 class ReviewMockBuilder:
     """Fluent builder for _review_prs test mocks."""
 
-    def __init__(self, orch: HydraOrchestrator, config: HydraConfig) -> None:
+    def __init__(self, orch: HydraFlowOrchestrator, config: HydraFlowConfig) -> None:
         self._orch = orch
         self._config = config
         self._verdict: ReviewVerdict | None = None

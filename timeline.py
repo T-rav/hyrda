@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from models import IssueTimeline, TimelineStage
 
 STAGE_ORDER = ["triage", "plan", "implement", "review", "merge"]
@@ -61,8 +61,8 @@ class TimelineBuilder:
         return self._build_timeline(issue_number, grouped[issue_number])
 
     def _group_events_by_issue(
-        self, events: list[HydraEvent]
-    ) -> dict[int, list[HydraEvent]]:
+        self, events: list[HydraFlowEvent]
+    ) -> dict[int, list[HydraFlowEvent]]:
         # First pass: build pr_to_issue map from PR_CREATED events
         pr_to_issue: dict[int, int] = {}
         for event in events:
@@ -73,7 +73,7 @@ class TimelineBuilder:
                     pr_to_issue[pr_num] = issue_num
 
         # Second pass: group events by issue number
-        grouped: dict[int, list[HydraEvent]] = {}
+        grouped: dict[int, list[HydraFlowEvent]] = {}
         for event in events:
             issue_num = self._extract_issue_number(event, pr_to_issue)
             if issue_num is None:
@@ -82,7 +82,7 @@ class TimelineBuilder:
         return grouped
 
     def _extract_issue_number(
-        self, event: HydraEvent, pr_to_issue: dict[int, int]
+        self, event: HydraFlowEvent, pr_to_issue: dict[int, int]
     ) -> int | None:
         data = event.data
         # Direct issue field
@@ -100,10 +100,10 @@ class TimelineBuilder:
         return None
 
     def _build_timeline(
-        self, issue_number: int, events: list[HydraEvent]
+        self, issue_number: int, events: list[HydraFlowEvent]
     ) -> IssueTimeline:
         # Partition events by stage
-        stage_events: dict[str, list[HydraEvent]] = {s: [] for s in STAGE_ORDER}
+        stage_events: dict[str, list[HydraFlowEvent]] = {s: [] for s in STAGE_ORDER}
 
         for event in events:
             stage = self._event_to_stage(event)
@@ -150,13 +150,15 @@ class TimelineBuilder:
             branch=branch,
         )
 
-    def _event_to_stage(self, event: HydraEvent) -> str | None:
+    def _event_to_stage(self, event: HydraFlowEvent) -> str | None:
         if event.type == EventType.TRANSCRIPT_LINE:
             source = event.data.get("source", "")
             return SOURCE_TO_STAGE.get(source, "implement")
         return EVENT_TYPE_TO_STAGE.get(event.type)
 
-    def _build_stage(self, stage_name: str, events: list[HydraEvent]) -> TimelineStage:
+    def _build_stage(
+        self, stage_name: str, events: list[HydraFlowEvent]
+    ) -> TimelineStage:
         if not events:
             return TimelineStage(stage=stage_name, status="pending")
 
@@ -213,7 +215,7 @@ class TimelineBuilder:
             metadata=metadata,
         )
 
-    def _extract_transcript_preview(self, events: list[HydraEvent]) -> list[str]:
+    def _extract_transcript_preview(self, events: list[HydraFlowEvent]) -> list[str]:
         lines: list[str] = []
         for event in events:
             if event.type == EventType.TRANSCRIPT_LINE:
@@ -233,14 +235,16 @@ class TimelineBuilder:
         last_n = max_lines - first_n
         return lines[:first_n] + lines[-last_n:]
 
-    def _extract_title(self, events: list[HydraEvent]) -> str:
+    def _extract_title(self, events: list[HydraFlowEvent]) -> str:
         for event in events:
             title = event.data.get("title")
             if isinstance(title, str) and title:
                 return title
         return ""
 
-    def _extract_pr_info(self, events: list[HydraEvent]) -> tuple[int | None, str, str]:
+    def _extract_pr_info(
+        self, events: list[HydraFlowEvent]
+    ) -> tuple[int | None, str, str]:
         for event in events:
             if event.type == EventType.PR_CREATED:
                 pr_num = event.data.get("pr")

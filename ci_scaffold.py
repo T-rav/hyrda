@@ -4,7 +4,7 @@ Generates a `.github/workflows/quality.yml` workflow that runs `make quality`
 on pull requests and pushes to main. Supports Python, JavaScript/TypeScript,
 and mixed-language repositories.
 
-Part of the Hydra prep epic (#561). Language detection is self-contained
+Part of the HydraFlow prep epic (#561). Language detection is self-contained
 to avoid blocking on #562/#563; consolidate when `prep.py` lands.
 """
 

@@ -3,7 +3,7 @@
 .gitignore
 
 # Hydra runtime state
-.hydra/
+.hydraflow/
 
 # Python
 __pycache__/

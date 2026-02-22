@@ -215,12 +215,12 @@ describe('HITLTable component', () => {
 
   it('shows item count in header', () => {
     render(<HITLTable items={mockItems} onRefresh={() => {}} />)
-    expect(screen.getByText('3 issues stuck on CI')).toBeInTheDocument()
+    expect(screen.getByText('3 items awaiting action')).toBeInTheDocument()
   })
 
   it('shows singular form for one item', () => {
     render(<HITLTable items={[mockItems[0]]} onRefresh={() => {}} />)
-    expect(screen.getByText('1 issue stuck on CI')).toBeInTheDocument()
+    expect(screen.getByText('1 item awaiting action')).toBeInTheDocument()
   })
 
   it('refresh button calls onRefresh prop', () => {

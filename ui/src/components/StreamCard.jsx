@@ -97,7 +97,7 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
     ? `1px solid ${theme.cardActiveBorder}`
     : `1px solid ${theme.border}`
 
-  const showInlineTranscript = isActive && transcript.length > 0
+  const showInlineTranscript = isActive && transcript.length > 0 && !expanded
 
   return (
     <div style={{ ...styles.card, border: cardBorder }}>

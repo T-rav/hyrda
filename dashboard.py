@@ -1,4 +1,4 @@
-"""Live web dashboard for Hydra — FastAPI + WebSocket."""
+"""Live web dashboard for HydraFlow — FastAPI + WebSocket."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from events import EventBus
 from pr_manager import PRManager
 from state import StateTracker
@@ -16,9 +16,9 @@ from state import StateTracker
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
-    from orchestrator import HydraOrchestrator
+    from orchestrator import HydraFlowOrchestrator
 
-logger = logging.getLogger("hydra.dashboard")
+logger = logging.getLogger("hydraflow.dashboard")
 
 # React build output or fallback HTML template
 _UI_DIST_DIR = Path(__file__).parent / "ui" / "dist"
@@ -26,7 +26,7 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _STATIC_DIR = Path(__file__).parent / "static"
 
 
-class HydraDashboard:
+class HydraFlowDashboard:
     """Serves the live dashboard and streams events via WebSocket.
 
     Runs a uvicorn server in a background asyncio task so it
@@ -35,10 +35,10 @@ class HydraDashboard:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         event_bus: EventBus,
         state: StateTracker,
-        orchestrator: HydraOrchestrator | None = None,
+        orchestrator: HydraFlowOrchestrator | None = None,
     ) -> None:
         self._config = config
         self._bus = event_bus
@@ -62,7 +62,7 @@ class HydraDashboard:
 
         from dashboard_routes import create_router
 
-        app = FastAPI(title="Hydra Dashboard", version="1.0.0")
+        app = FastAPI(title="HydraFlow Dashboard", version="1.0.0")
 
         # Serve React build if available
         if _UI_DIST_DIR.exists() and (_UI_DIST_DIR / "index.html").exists():
@@ -99,7 +99,7 @@ class HydraDashboard:
         self._app = app
         return app
 
-    def _set_orchestrator(self, orch: HydraOrchestrator) -> None:
+    def _set_orchestrator(self, orch: HydraFlowOrchestrator) -> None:
         self._orchestrator = orch
 
     def _set_run_task(self, task: asyncio.Task[None]) -> None:

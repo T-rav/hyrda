@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { theme } from '../theme'
-import { useHydra } from '../context/HydraContext'
+import { useHydraFlow } from '../context/HydraFlowContext'
 
 export function Header({
   connected, orchestratorStatus,
   onStart, onStop,
 }) {
-  const { stageStatus } = useHydra()
+  const { stageStatus } = useHydraFlow()
   const workload = stageStatus.workload
   const hasActiveWorkers = workload.active > 0
 
@@ -45,7 +45,7 @@ export function Header({
   return (
     <header style={styles.header}>
       <div style={styles.left}>
-        <img src="/hydra-logo-small.png" alt="Hydra" style={styles.logoImg} />
+        <img src="/hydraflow-logo-small.png" alt="HydraFlow" style={styles.logoImg} />
         <div style={styles.logoGroup}>
           <span style={styles.logo}>HYDRA</span>
           <span style={styles.subtitle}>Intent in.</span>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hydra Dashboard</title>
+  <title>HydraFlow Dashboard</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -41,6 +41,10 @@
       --overlay: rgba(0,0,0,0.3);
       --intent-bg: rgba(88,166,255,0.06);
       --card-active-border: rgba(88,166,255,0.4);
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {

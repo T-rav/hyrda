@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from config import HydraConfig
-from events import EventBus, EventType, HydraEvent
+from config import HydraFlowConfig
+from events import EventBus, EventType, HydraFlowEvent
 from execution import get_default_runner
 from memory import load_memory_digest
 from models import GitHubIssue, NewIssueSpec, PlannerStatus, PlanResult
@@ -20,7 +20,7 @@ from subprocess_util import CreditExhaustedError
 if TYPE_CHECKING:
     from execution import SubprocessRunner
 
-logger = logging.getLogger("hydra.planner")
+logger = logging.getLogger("hydraflow.planner")
 
 
 class PlannerRunner:
@@ -32,7 +32,7 @@ class PlannerRunner:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         event_bus: EventBus,
         runner: SubprocessRunner | None = None,
     ) -> None:
@@ -289,7 +289,7 @@ class PlannerRunner:
             memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
 
         find_label = (
-            self._config.find_label[0] if self._config.find_label else "hydra-find"
+            self._config.find_label[0] if self._config.find_label else "hydraflow-find"
         )
 
         # --- Scale-adaptive schema section ---
@@ -914,7 +914,7 @@ SUMMARY: <brief one-line description of the plan>
     ) -> None:
         """Publish a planner status event."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.PLANNER_UPDATE,
                 data={
                     "issue": issue_number,
@@ -926,8 +926,8 @@ SUMMARY: <brief one-line description of the plan>
         )
 
     def _save_transcript(self, issue_number: int, transcript: str) -> None:
-        """Write the planning transcript to .hydra/logs/ for post-mortem review."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Write the planning transcript to .hydraflow/logs/ for post-mortem review."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             path = log_dir / f"plan-issue-{issue_number}.txt"
@@ -944,8 +944,8 @@ SUMMARY: <brief one-line description of the plan>
             )
 
     def _save_plan(self, issue_number: int, plan: str, summary: str) -> None:
-        """Write the extracted plan to .hydra/plans/ for the implementation worker."""
-        plan_dir = self._config.repo_root / ".hydra" / "plans"
+        """Write the extracted plan to .hydraflow/plans/ for the implementation worker."""
+        plan_dir = self._config.repo_root / ".hydraflow" / "plans"
         try:
             plan_dir.mkdir(parents=True, exist_ok=True)
             path = plan_dir / f"issue-{issue_number}.md"

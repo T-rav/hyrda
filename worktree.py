@@ -1,4 +1,4 @@
-"""Git worktree lifecycle management for Hydra."""
+"""Git worktree lifecycle management for HydraFlow."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import contextlib
 import logging
 from pathlib import Path
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydra.worktree")
+logger = logging.getLogger("hydraflow.worktree")
 
 
 class WorktreeManager:
@@ -31,7 +31,7 @@ class WorktreeManager:
         "dashboard-service/health_ui",
     ]
 
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
         self._repo_root = config.repo_root
         self._base = config.worktree_base
