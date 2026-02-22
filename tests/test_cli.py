@@ -490,3 +490,124 @@ class TestMaxIssueAttemptsCLI:
         args = parse_args(["--max-issue-attempts", "7"])
         config = build_config(args)
         assert config.max_issue_attempts == 7
+
+
+# ---------------------------------------------------------------------------
+# Docker CLI arguments
+# ---------------------------------------------------------------------------
+
+
+class TestDockerCLIArgs:
+    """Tests for Docker-related CLI arguments."""
+
+    def test_docker_flag_sets_execution_mode(self) -> None:
+        args = parse_args(["--docker"])
+        assert args.execution_mode == "docker"
+
+    def test_host_flag_sets_execution_mode(self) -> None:
+        args = parse_args(["--host"])
+        assert args.execution_mode == "host"
+
+    def test_no_flag_leaves_execution_mode_none(self) -> None:
+        args = parse_args([])
+        assert args.execution_mode is None
+
+    def test_docker_and_host_mutually_exclusive(self) -> None:
+        with pytest.raises(SystemExit):
+            parse_args(["--docker", "--host"])
+
+    def test_docker_image_arg(self) -> None:
+        args = parse_args(["--docker-image", "custom/image:v1"])
+        assert args.docker_image == "custom/image:v1"
+
+    def test_docker_cpu_limit_arg(self) -> None:
+        args = parse_args(["--docker-cpu-limit", "4.0"])
+        assert args.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_docker_memory_limit_arg(self) -> None:
+        args = parse_args(["--docker-memory-limit", "8g"])
+        assert args.docker_memory_limit == "8g"
+
+    def test_docker_network_mode_arg(self) -> None:
+        args = parse_args(["--docker-network-mode", "none"])
+        assert args.docker_network_mode == "none"
+
+    def test_docker_network_mode_invalid_choice(self) -> None:
+        with pytest.raises(SystemExit):
+            parse_args(["--docker-network-mode", "overlay"])
+
+    def test_docker_spawn_delay_arg(self) -> None:
+        args = parse_args(["--docker-spawn-delay", "5.0"])
+        assert args.docker_spawn_delay == pytest.approx(5.0)
+
+    def test_docker_read_only_root_arg(self) -> None:
+        args = parse_args(["--docker-read-only-root"])
+        assert args.docker_read_only_root is True
+
+    def test_docker_no_new_privileges_arg(self) -> None:
+        args = parse_args(["--docker-no-new-privileges"])
+        assert args.docker_no_new_privileges is True
+
+    def test_docker_args_default_to_none(self) -> None:
+        args = parse_args([])
+        assert args.docker_image is None
+        assert args.docker_cpu_limit is None
+        assert args.docker_memory_limit is None
+        assert args.docker_network_mode is None
+        assert args.docker_spawn_delay is None
+        assert args.docker_read_only_root is None
+        assert args.docker_no_new_privileges is None
+
+
+class TestDockerBuildConfig:
+    """Tests for Docker CLI args passing through to HydraConfig via build_config."""
+
+    def test_docker_flag_builds_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        args = parse_args(["--docker"])
+        cfg = build_config(args)
+        assert cfg.execution_mode == "docker"
+
+    def test_host_flag_builds_config(self) -> None:
+        args = parse_args(["--host"])
+        cfg = build_config(args)
+        assert cfg.execution_mode == "host"
+
+    def test_docker_image_builds_config(self) -> None:
+        args = parse_args(["--docker-image", "my/image:latest"])
+        cfg = build_config(args)
+        assert cfg.docker_image == "my/image:latest"
+
+    def test_docker_cpu_limit_builds_config(self) -> None:
+        args = parse_args(["--docker-cpu-limit", "4.0"])
+        cfg = build_config(args)
+        assert cfg.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_docker_memory_limit_builds_config(self) -> None:
+        args = parse_args(["--docker-memory-limit", "16g"])
+        cfg = build_config(args)
+        assert cfg.docker_memory_limit == "16g"
+
+    def test_docker_network_mode_builds_config(self) -> None:
+        args = parse_args(["--docker-network-mode", "host"])
+        cfg = build_config(args)
+        assert cfg.docker_network_mode == "host"
+
+    def test_docker_spawn_delay_builds_config(self) -> None:
+        args = parse_args(["--docker-spawn-delay", "10.0"])
+        cfg = build_config(args)
+        assert cfg.docker_spawn_delay == pytest.approx(10.0)
+
+    def test_no_docker_flags_uses_defaults(self) -> None:
+        args = parse_args([])
+        cfg = build_config(args)
+        assert cfg.execution_mode == "host"
+        assert cfg.docker_image == "ghcr.io/t-rav/hydra-agent:latest"
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)
+        assert cfg.docker_memory_limit == "4g"
+        assert cfg.docker_network_mode == "bridge"
+        assert cfg.docker_spawn_delay == pytest.approx(2.0)
+        assert cfg.docker_read_only_root is True
+        assert cfg.docker_no_new_privileges is True
