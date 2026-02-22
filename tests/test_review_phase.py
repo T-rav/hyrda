@@ -4111,14 +4111,18 @@ class TestRunPostMergeHooks:
         # Should not raise
         await phase._run_post_merge_hooks(pr, issue, result, "diff")
 
+        # No judge configured — verification issue must never be attempted
+        phase._prs.create_issue.assert_not_called()
+
     @pytest.mark.asyncio
     async def test_judge_verdict_creates_verification_issue(
         self, config: HydraConfig
     ) -> None:
         """When judge returns a verdict, a verification issue should be created."""
         mock_judge = AsyncMock()
+        issue = IssueFactory.create()
         verdict = JudgeVerdict(
-            issue_number=42,
+            issue_number=issue.number,
             criteria_results=[
                 CriterionResult(
                     criterion="AC-1",
@@ -4134,7 +4138,6 @@ class TestRunPostMergeHooks:
         phase._verification_judge = mock_judge
         phase._prs.create_issue = AsyncMock(return_value=500)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
         result = ReviewResultFactory.create()
 
         await phase._run_post_merge_hooks(pr, issue, result, "diff")
