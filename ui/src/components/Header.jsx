@@ -5,6 +5,7 @@ import { useHydra } from '../context/HydraContext'
 export function Header({
   connected, orchestratorStatus,
   onStart, onStop,
+  pipelinePanelOpen, onTogglePipelinePanel,
 }) {
   const { stageStatus } = useHydra()
   const workload = stageStatus.workload
@@ -68,6 +69,15 @@ export function Header({
         </div>
       </div>
       <div style={styles.controls}>
+        {onTogglePipelinePanel && (
+          <button
+            style={pipelinePanelOpen ? styles.panelToggleActive : styles.panelToggle}
+            onClick={onTogglePipelinePanel}
+            data-testid="pipeline-panel-toggle"
+          >
+            Pipeline
+          </button>
+        )}
         {canStart && (
           <button
             style={connected ? startBtnEnabled : startBtnDisabled}
@@ -187,6 +197,28 @@ const styles = {
     color: theme.bg,
     fontSize: 12,
     fontWeight: 600,
+  },
+  panelToggle: {
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: `1px solid ${theme.border}`,
+    background: theme.surface,
+    color: theme.textMuted,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  panelToggleActive: {
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: `1px solid ${theme.accent}`,
+    background: theme.accentSubtle,
+    color: theme.accent,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
 }
 
