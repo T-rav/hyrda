@@ -169,9 +169,7 @@ class ImplementPhase:
             f"Implementation attempt cap exceeded after {attempts - 1} attempt(s)",
         )
         self._state.record_hitl_escalation()
-        for lbl in self._config.ready_label:
-            await self._prs.remove_label(issue.number, lbl)
-        await self._prs.add_labels(issue.number, [self._config.hitl_label[0]])
+        await self._prs.swap_pipeline_labels(issue.number, self._config.hitl_label[0])
         self._state.mark_issue(issue.number, "failed")
         return WorkerResult(
             issue_number=issue.number,
@@ -257,15 +255,11 @@ class ImplementPhase:
                     result.pr_info = pr
 
                 if result.success:
-                    for lbl in self._config.ready_label:
-                        await self._prs.remove_label(issue.number, lbl)
-                    await self._prs.add_labels(
-                        issue.number, [self._config.review_label[0]]
+                    await self._prs.swap_pipeline_labels(
+                        issue.number,
+                        self._config.review_label[0],
+                        pr_number=pr.number if pr and pr.number > 0 else None,
                     )
-                    if pr and pr.number > 0:
-                        await self._prs.add_pr_labels(
-                            pr.number, [self._config.review_label[0]]
-                        )
 
         status = "success" if result.success else "failed"
         self._state.mark_issue(issue.number, status)

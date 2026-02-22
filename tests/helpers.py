@@ -191,6 +191,46 @@ class ConfigFactory:
         )
 
 
+class AuditCheckFactory:
+    """Factory for AuditCheck instances."""
+
+    @staticmethod
+    def create(
+        *,
+        name: str = "Test Check",
+        status: str = "present",
+        detail: str = "",
+        critical: bool = False,
+    ):
+        """Create an AuditCheck with test-friendly defaults."""
+        from models import AuditCheck, AuditCheckStatus
+
+        return AuditCheck(
+            name=name,
+            status=AuditCheckStatus(status),
+            detail=detail,
+            critical=critical,
+        )
+
+
+class AuditResultFactory:
+    """Factory for AuditResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        repo: str = "test-org/test-repo",
+        checks: list | None = None,
+    ):
+        """Create an AuditResult with test-friendly defaults."""
+        from models import AuditResult
+
+        return AuditResult(
+            repo=repo,
+            checks=checks if checks is not None else [],
+        )
+
+
 def make_review_phase(
     config,
     *,

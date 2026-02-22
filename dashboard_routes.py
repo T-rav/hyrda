@@ -37,6 +37,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("hydraflow.dashboard")
 
+# Backend stage keys → frontend stage names
+_STAGE_NAME_MAP = {
+    "find": "triage",
+    "plan": "plan",
+    "ready": "implement",
+    "review": "review",
+    "hitl": "hitl",
+}
+
+# Frontend stage key → config label field name (for request-changes)
+_FRONTEND_STAGE_TO_LABEL_FIELD = {
+    "triage": "find_label",
+    "plan": "planner_label",
+    "implement": "ready_label",
+    "review": "review_label",
+}
+
 
 def create_router(
     config: HydraFlowConfig,
@@ -88,14 +105,48 @@ def create_router(
             return JSONResponse(orch.issue_store.get_queue_stats().model_dump())
         return JSONResponse(QueueStats().model_dump())
 
-    # Backend stage keys → frontend stage names
-    _STAGE_NAME_MAP = {
-        "find": "triage",
-        "plan": "plan",
-        "ready": "implement",
-        "review": "review",
-        "hitl": "hitl",
-    }
+    @router.post("/api/request-changes")
+    async def request_changes(body: dict) -> JSONResponse:  # type: ignore[type-arg]
+        """Escalate an issue to HITL with user feedback."""
+        issue_number: int | None = body.get("issue_number")
+        feedback = (body.get("feedback") or "").strip()
+        stage: str = body.get("stage") or ""
+
+        if not isinstance(issue_number, int) or issue_number < 1 or not feedback:
+            return JSONResponse(
+                {"status": "error", "detail": "issue_number and feedback are required"},
+                status_code=400,
+            )
+
+        label_field = _FRONTEND_STAGE_TO_LABEL_FIELD.get(stage)
+        if not label_field:
+            return JSONResponse(
+                {"status": "error", "detail": f"Unknown stage: {stage}"},
+                status_code=400,
+            )
+
+        stage_labels: list[str] = getattr(config, label_field, [])
+        origin_label: str = stage_labels[0] if stage_labels else stage
+
+        for lbl in stage_labels:
+            await pr_manager.remove_label(issue_number, lbl)
+        await pr_manager.add_labels(issue_number, config.hitl_label)
+
+        state.set_hitl_cause(issue_number, feedback)
+        state.set_hitl_origin(issue_number, origin_label)
+
+        await event_bus.publish(
+            HydraFlowEvent(
+                type=EventType.HITL_ESCALATION,
+                data={
+                    "issue": issue_number,
+                    "cause": feedback,
+                    "origin": origin_label,
+                },
+            )
+        )
+
+        return JSONResponse({"status": "ok"})
 
     @router.get("/api/pipeline")
     async def get_pipeline() -> JSONResponse:
@@ -193,9 +244,7 @@ def create_router(
         orch.submit_hitl_correction(issue_number, correction)
 
         # Swap labels for immediate dashboard feedback
-        for lbl in config.hitl_label:
-            await pr_manager.remove_label(issue_number, lbl)
-        await pr_manager.add_labels(issue_number, config.hitl_active_label)
+        await pr_manager.swap_pipeline_labels(issue_number, config.hitl_active_label[0])
 
         await event_bus.publish(
             HydraFlowEvent(
@@ -222,15 +271,14 @@ def create_router(
         orch.skip_hitl_issue(issue_number)
         state.remove_hitl_origin(issue_number)
         state.remove_hitl_cause(issue_number)
-        for lbl in config.hitl_label:
-            await pr_manager.remove_label(issue_number, lbl)
 
         # If this was an improve issue, transition to triage for implementation
-        if origin and origin in config.improve_label:
-            for lbl in config.improve_label:
+        if origin and origin in config.improve_label and config.find_label:
+            await pr_manager.swap_pipeline_labels(issue_number, config.find_label[0])
+        else:
+            # Just remove all pipeline labels
+            for lbl in config.all_pipeline_labels:
                 await pr_manager.remove_label(issue_number, lbl)
-            if config.find_label:
-                await pr_manager.add_labels(issue_number, [config.find_label[0]])
 
         await event_bus.publish(
             HydraFlowEvent(
@@ -268,9 +316,8 @@ def create_router(
     @router.post("/api/hitl/{issue_number}/approve-memory")
     async def hitl_approve_memory(issue_number: int) -> JSONResponse:
         """Approve a HITL item as a memory suggestion, relabeling for sync."""
-        for lbl in config.improve_label:
-            await pr_manager.remove_label(issue_number, lbl)
-        for lbl in config.hitl_label:
+        # Remove all pipeline labels and add memory label
+        for lbl in config.all_pipeline_labels:
             await pr_manager.remove_label(issue_number, lbl)
         await pr_manager.add_labels(issue_number, config.memory_label)
         orch = get_orchestrator()

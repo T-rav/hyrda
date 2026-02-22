@@ -32,7 +32,10 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels hot
+# Docker agent image
+DOCKER_IMAGE ?= ghcr.io/t-rav/hydra-agent:latest
+
+.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check typecheck security quality quality-full install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test
 
 help:
 	@echo "$(BLUE)HydraFlow — Intent in. Software out.$(RESET)"
@@ -58,6 +61,8 @@ help:
 	@echo "  make ui-dev         Start React dashboard dev server"
 	@echo "  make ui-clean       Remove ui/dist and node_modules"
 	@echo "  make hot            Send config update to running instance"
+	@echo "  make docker-build   Build Hydra agent Docker image"
+	@echo "  make docker-test    Build + smoke-test the agent image"
 	@echo ""
 	@echo "$(GREEN)Options (override with make run LABEL=bug WORKERS=3):$(RESET)"
 	@echo "  READY_LABEL      GitHub issue label (default: hydraflow-ready)"
@@ -201,15 +206,12 @@ setup:
 
 REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.com[:/]||;s|\.git$$||')
 
-ensure-labels:
-	@echo "$(BLUE)Ensuring HydraFlow labels exist in $(REPO_SLUG)...$(RESET)"
-	@gh label create "$(PLANNER_LABEL)" --repo "$(REPO_SLUG)" --color c5def5 --description "Issue needs planning before implementation" --force 2>/dev/null || true
-	@gh label create "$(READY_LABEL)" --repo "$(REPO_SLUG)" --color 0e8a16 --description "Issue ready for implementation" --force 2>/dev/null || true
-	@gh label create "hydraflow-review" --repo "$(REPO_SLUG)" --color fbca04 --description "Issue/PR under review" --force 2>/dev/null || true
-	@gh label create "hydraflow-hitl" --repo "$(REPO_SLUG)" --color d93f0b --description "Escalated to human-in-the-loop" --force 2>/dev/null || true
-	@gh label create "hydraflow-hitl-active" --repo "$(REPO_SLUG)" --color e99695 --description "Being processed by HITL correction agent" --force 2>/dev/null || true
-	@gh label create "hydraflow-fixed" --repo "$(REPO_SLUG)" --color 0075ca --description "PR merged — issue completed" --force 2>/dev/null || true
-	@echo "$(GREEN)All HydraFlow labels ensured$(RESET)"
+prep:
+	@echo "$(BLUE)Creating HydraFlow lifecycle labels...$(RESET)"
+	@cd $(HYDRA_DIR) && $(UV) python cli.py --prep
+	@echo "$(GREEN)Prep complete$(RESET)"
+
+ensure-labels: prep
 
 hot:
 	@echo "$(BLUE)Sending config update to running HydraFlow instance on :$(PORT)...$(RESET)"
@@ -241,3 +243,13 @@ ui-clean:
 	@echo "$(YELLOW)Cleaning dashboard build artifacts...$(RESET)"
 	@rm -rf $(HYDRAFLOW_DIR)ui/dist $(HYDRAFLOW_DIR)ui/node_modules
 	@echo "$(GREEN)Dashboard cleaned$(RESET)"
+
+docker-build:
+	@echo "$(BLUE)Building Hydra agent Docker image...$(RESET)"
+	docker build --platform linux/amd64 -f Dockerfile.agent -t $(DOCKER_IMAGE) .
+	@echo "$(GREEN)Image built: $(DOCKER_IMAGE)$(RESET)"
+
+docker-test: docker-build
+	@echo "$(BLUE)Running agent image smoke test...$(RESET)"
+	docker run --rm $(DOCKER_IMAGE) bash /opt/hydra/docker-smoke-test.sh
+	@echo "$(GREEN)Smoke test passed$(RESET)"

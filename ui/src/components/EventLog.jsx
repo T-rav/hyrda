@@ -35,7 +35,7 @@ export function eventSummary(type, data) {
     case 'triage_update': return `#${data.issue} → ${data.status}`
     case 'planner_update': return `#${data.issue} → ${data.status}`
     case 'orchestrator_status': return `${data.status}`
-    case 'hitl_escalation': return `PR #${data.pr} escalated to HITL`
+    case 'hitl_escalation': return data.pr ? `PR #${data.pr} escalated to HITL` : `Issue #${data.issue} escalated to HITL`
     case 'hitl_update': return `#${data.issue} ${data.action || data.status}`
     case 'ci_check': return `PR #${data.pr} CI ${data.status}`
     case 'issue_created': return `#${data.issue} created`

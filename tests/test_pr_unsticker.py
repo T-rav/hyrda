@@ -189,11 +189,9 @@ class TestSuccessfulResolution:
         assert stats["resolved"] == 1
         assert stats["failed"] == 0
 
-        # Verify label swaps: hitl removed, active added, then active removed, origin restored
-        prs.remove_label.assert_any_call(42, "hydraflow-hitl")
-        prs.add_labels.assert_any_call(42, ["hydraflow-hitl-active"])
-        prs.remove_label.assert_any_call(42, "hydraflow-hitl-active")
-        prs.add_labels.assert_any_call(42, ["hydraflow-review"])
+        # Verify label swaps via swap_pipeline_labels
+        prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl-active")
+        prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-review")
 
         # Verify state cleared
         assert state.get_hitl_origin(42) is None
@@ -239,8 +237,8 @@ class TestFailedResolution:
         assert stats["failed"] == 1
         assert stats["resolved"] == 0
 
-        # Should re-add hydraflow-hitl label
-        prs.add_labels.assert_any_call(42, ["hydraflow-hitl"])
+        # Should swap back to hydraflow-hitl label
+        prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl")
 
         # Comment should mention failure
         comment_calls = [

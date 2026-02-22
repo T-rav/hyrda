@@ -78,10 +78,10 @@ class HITLPhase:
     def get_status(self, issue_number: int) -> str:
         """Return the HITL status for an issue.
 
-        Returns ``"processing"`` for actively-running issues, or a
-        human-readable origin label (e.g. ``"from review"``) for items
-        waiting on human action.  Falls back to ``"pending"`` when no
-        origin data is available.
+        Returns ``"processing"`` for actively-running issues, ``"approval"``
+        for memory suggestions awaiting human review, a human-readable origin
+        label (e.g. ``"from review"``) for escalated items, or ``"pending"``
+        when no origin data is available.
         """
         if (
             self._store.is_active(issue_number)
@@ -90,6 +90,8 @@ class HITLPhase:
             return "processing"
         origin = self._state.get_hitl_origin(issue_number)
         if origin:
+            if origin in self._config.improve_label:
+                return "approval"
             return _HITL_ORIGIN_DISPLAY.get(origin, "pending")
         return "pending"
 
@@ -152,10 +154,8 @@ class HITLPhase:
                 self._state.set_worktree(issue_number, str(wt_path))
 
                 # Swap to active label
-                for lbl in self._config.hitl_label:
-                    await self._prs.remove_label(issue_number, lbl)
-                await self._prs.add_labels(
-                    issue_number, [self._config.hitl_active_label[0]]
+                await self._prs.swap_pipeline_labels(
+                    issue_number, self._config.hitl_active_label[0]
                 )
 
                 result = await self._hitl_runner.run(issue, correction, cause, wt_path)
@@ -177,32 +177,30 @@ class HITLPhase:
                             issue_number,
                         )
 
-                # Remove active label
-                for lbl in self._config.hitl_active_label:
-                    await self._prs.remove_label(issue_number, lbl)
-
                 if result.success:
                     await self._prs.push_branch(wt_path, branch)
 
                     if origin and origin in self._config.improve_label:
                         # Improve issues go to triage for implementation
-                        for lbl in self._config.improve_label:
-                            await self._prs.remove_label(issue_number, lbl)
-                        if self._config.find_label:
-                            await self._prs.add_labels(
-                                issue_number,
-                                [self._config.find_label[0]],
-                            )
-                        target_stage = (
+                        target_label = (
                             self._config.find_label[0]
                             if self._config.find_label
-                            else "pipeline"
+                            else None
                         )
+                        target_stage = target_label or "pipeline"
                     elif origin:
-                        await self._prs.add_labels(issue_number, [origin])
+                        target_label = origin
                         target_stage = origin
                     else:
+                        target_label = None
                         target_stage = "pipeline"
+
+                    if target_label:
+                        await self._prs.swap_pipeline_labels(issue_number, target_label)
+                    else:
+                        # No target label — just remove active
+                        for lbl in self._config.hitl_active_label:
+                            await self._prs.remove_label(issue_number, lbl)
 
                     self._state.remove_hitl_origin(issue_number)
                     self._state.remove_hitl_cause(issue_number)
@@ -230,8 +228,8 @@ class HITLPhase:
                         origin,
                     )
                 else:
-                    await self._prs.add_labels(
-                        issue_number, [self._config.hitl_label[0]]
+                    await self._prs.swap_pipeline_labels(
+                        issue_number, self._config.hitl_label[0]
                     )
                     await self._prs.post_comment(
                         issue_number,

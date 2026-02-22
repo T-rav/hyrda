@@ -346,9 +346,9 @@ class ReviewPhase:
             self._state.reset_review_attempts(pr.issue_number)
             self._state.reset_issue_attempts(pr.issue_number)
             self._state.clear_review_feedback(pr.issue_number)
-            for lbl in self._config.review_label:
-                await self._prs.remove_label(pr.issue_number, lbl)
-            await self._prs.add_labels(pr.issue_number, [self._config.fixed_label[0]])
+            await self._prs.swap_pipeline_labels(
+                pr.issue_number, self._config.fixed_label[0]
+            )
             await self._run_post_merge_hooks(pr, issue, result, diff)
         else:
             logger.warning("PR #%d merge failed — escalating to HITL", pr.number)
@@ -591,11 +591,11 @@ class ReviewPhase:
         self._state.set_hitl_cause(issue_number, cause)
         self._state.record_hitl_escalation()
 
-        for lbl in self._config.review_label:
-            await self._prs.remove_label(issue_number, lbl)
-            await self._prs.remove_pr_label(pr_number, lbl)
-        await self._prs.add_labels(issue_number, [self._config.hitl_label[0]])
-        await self._prs.add_pr_labels(pr_number, [self._config.hitl_label[0]])
+        await self._prs.swap_pipeline_labels(
+            issue_number,
+            self._config.hitl_label[0],
+            pr_number=pr_number,
+        )
 
         if post_on_pr:
             await self._prs.post_pr_comment(pr_number, comment)
@@ -707,11 +707,11 @@ class ReviewPhase:
             self._state.set_review_feedback(pr.issue_number, result.summary)
 
             # Swap labels: review → ready (issue and PR)
-            for lbl in self._config.review_label:
-                await self._prs.remove_label(pr.issue_number, lbl)
-                await self._prs.remove_pr_label(pr.number, lbl)
-            await self._prs.add_labels(pr.issue_number, [self._config.ready_label[0]])
-            await self._prs.add_pr_labels(pr.number, [self._config.ready_label[0]])
+            await self._prs.swap_pipeline_labels(
+                pr.issue_number,
+                self._config.ready_label[0],
+                pr_number=pr.number,
+            )
 
             await self._prs.post_comment(
                 pr.issue_number,

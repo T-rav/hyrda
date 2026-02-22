@@ -10,10 +10,13 @@ vi.mock('../../context/HydraFlowContext', () => ({
   useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
-const { StreamView, toStreamIssue } = await import('../StreamView')
+const { StreamView, toStreamIssue, findWorkerTranscript } = await import('../StreamView')
 
 function defaultHydraFlowContext(overrides = {}) {
-  const pipelineIssues = overrides.pipelineIssues || { triage: [], plan: [], implement: [], review: [] }
+  const defaultPipeline = { triage: [], plan: [], implement: [], review: [], merged: [] }
+  const pipelineIssues = overrides.pipelineIssues
+    ? { ...defaultPipeline, ...overrides.pipelineIssues }
+    : defaultPipeline
   const workers = overrides.workers || {}
   const backgroundWorkers = overrides.backgroundWorkers || []
   return {
@@ -25,6 +28,8 @@ function defaultHydraFlowContext(overrides = {}) {
     ...overrides,
   }
 }
+
+const defaultHydraFlow = defaultHydraFlowContext()
 
 beforeEach(() => {
   mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext())
@@ -339,52 +344,72 @@ describe('toStreamIssue output shape', () => {
     const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
     expect(result.pr).toBeNull()
   })
+
+  it('passes through issueUrl from pipeIssue url field', () => {
+    const result = toStreamIssue({ ...basePipeIssue, status: 'active' }, 'plan', [])
+    expect(result.issueUrl).toBe('https://github.com/test/42')
+  })
+
+  it('returns null issueUrl when url is empty', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', url: '', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
+
+  it('returns null issueUrl when url is missing', () => {
+    const result = toStreamIssue(
+      { issue_number: 1, title: 'X', status: 'active' },
+      'plan',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
 })
 
 describe('Stage header failed/hitl counts', () => {
   it('shows failed count when stage has failed issues', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
-      pipelineIssues: {
-        ...defaultHydraFlow.pipelineIssues,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Failed issue', status: 'failed' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('1 failed')
   })
 
   it('shows hitl count when stage has hitl issues', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
-      pipelineIssues: {
-        ...defaultHydraFlow.pipelineIssues,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], implement: [],
         review: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-review')
     expect(section.textContent).toContain('1 hitl')
   })
 
   it('hides failed and hitl counts when zero', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
-      pipelineIssues: {
-        ...defaultHydraFlow.pipelineIssues,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], implement: [], review: [],
         plan: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Queued issue', status: 'queued' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-plan')
     expect(section.textContent).not.toContain('failed')
@@ -392,17 +417,16 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('excludes failed and hitl from queued count', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
-      pipelineIssues: {
-        ...defaultHydraFlow.pipelineIssues,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active', status: 'active' },
           { issue_number: 2, title: 'Failed', status: 'failed' },
           { issue_number: 3, title: 'HITL', status: 'hitl' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('1 active')
@@ -412,16 +436,15 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows correct counts with only failed issues (no active/queued)', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
-      pipelineIssues: {
-        ...defaultHydraFlow.pipelineIssues,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Failed 1', status: 'failed' },
           { issue_number: 2, title: 'Failed 2', status: 'failed' },
         ],
       },
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-implement')
     expect(section.textContent).toContain('0 active')
@@ -430,14 +453,310 @@ describe('Stage header failed/hitl counts', () => {
   })
 })
 
+describe('PipelineFlow visualization', () => {
+  it('renders all pipeline stage labels in the flow', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [{ issue_number: 1, title: 'Test', status: 'queued' }],
+        plan: [], implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const flow = screen.getByTestId('pipeline-flow')
+    expect(flow).toBeInTheDocument()
+    expect(flow.textContent).toContain('Triage')
+    expect(flow.textContent).toContain('Plan')
+    expect(flow.textContent).toContain('Implement')
+    expect(flow.textContent).toContain('Review')
+    expect(flow.textContent).toContain('Merged')
+  })
+
+  it('renders dots for issues at their current stage', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [
+          { issue_number: 10, title: 'Plan issue', status: 'queued' },
+          { issue_number: 11, title: 'Plan issue 2', status: 'active' },
+        ],
+        implement: [],
+        review: [{ issue_number: 20, title: 'Review issue', status: 'active' }],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('flow-dot-10')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-11')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-20')).toBeInTheDocument()
+  })
+
+  it('does not render pipeline flow when no issues exist', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: { triage: [], plan: [], implement: [], review: [] },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('pipeline-flow')).not.toBeInTheDocument()
+  })
+
+  it('shows all stage labels even when some stages have no issues', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [{ issue_number: 5, title: 'Only plan', status: 'queued' }],
+        implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const flow = screen.getByTestId('pipeline-flow')
+    expect(flow.textContent).toContain('Triage')
+    expect(flow.textContent).toContain('Plan')
+    expect(flow.textContent).toContain('Implement')
+    expect(flow.textContent).toContain('Review')
+    expect(flow.textContent).toContain('Merged')
+  })
+
+  it('applies pulse animation to active issue dots', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [
+          { issue_number: 10, title: 'Active', status: 'active' },
+          { issue_number: 11, title: 'Queued', status: 'queued' },
+        ],
+        implement: [], review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const activeDot = screen.getByTestId('flow-dot-10')
+    const queuedDot = screen.getByTestId('flow-dot-11')
+    expect(activeDot.style.animation).toContain('stream-pulse')
+    expect(queuedDot.style.animation).toBe('')
+  })
+})
+
 describe('Merged stage rendering', () => {
   it('renders merged PR issues in the merged stage section', () => {
-    mockUseHydraFlow.mockReturnValue({
-      ...defaultHydraFlow,
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
-    })
+    }))
     render(<StreamView {...defaultProps} />)
     expect(screen.getByText('#10')).toBeInTheDocument()
     expect(screen.getByText('Fix bug')).toBeInTheDocument()
+    // Merged-from-PR cards should NOT use the PR url as an issue link
+    expect(screen.getByText('#10').tagName).toBe('SPAN')
+  })
+
+  it('renders merged PR issue as a dot in PipelineFlow', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('pipeline-flow')).toBeInTheDocument()
+    const dot = screen.getByTestId('flow-dot-10')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('does not set issueUrl from PR url for merged-from-PR cards', () => {
+    // PRData.url is a PR URL, not an issue URL — merged cards should have issueUrl null
+    const result = toStreamIssue(
+      { issue_number: 10, title: 'Fix bug', url: null, status: 'done' },
+      'merged',
+      []
+    )
+    expect(result.issueUrl).toBeNull()
+  })
+})
+
+describe('Merged stage count display', () => {
+  it('shows merged item count instead of worker metrics', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('1 merged')
+    expect(section.textContent).not.toContain('active')
+    expect(section.textContent).not.toContain('queued')
+    expect(section.textContent).not.toContain('workers')
+  })
+
+  it('shows correct count with multiple merged items', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'Add feature', merged: true, url: 'https://github.com/test/pr/43' },
+        { pr: 44, issue: 12, title: 'Refactor', merged: true, url: 'https://github.com/test/pr/44' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('3 merged')
+  })
+
+  it('shows "0 merged" when no merged items exist', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext())
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('0 merged')
+  })
+
+  it('does not affect worker metrics display on non-merged stages', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [
+          { issue_number: 1, title: 'Active issue', status: 'active' },
+          { issue_number: 2, title: 'Queued issue', status: 'queued' },
+        ],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-implement')
+    expect(section.textContent).toContain('1 active')
+    expect(section.textContent).toContain('1 queued')
+    expect(section.textContent).toContain('workers')
+  })
+
+  it('counts items from pipelineIssues.merged', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [], plan: [], implement: [], review: [],
+        merged: [
+          { issue_number: 5, title: 'Pipeline merged issue', status: 'done' },
+          { issue_number: 6, title: 'Another merged issue', status: 'done' },
+        ],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    expect(section.textContent).toContain('2 merged')
+  })
+
+  it('deduplicates items present in both pipelineIssues.merged and prs', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [], plan: [], implement: [], review: [],
+        merged: [
+          { issue_number: 10, title: 'Shared issue', status: 'done' },
+        ],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Shared issue', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'PR-only issue', merged: true, url: 'https://github.com/test/pr/43' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const section = screen.getByTestId('stage-section-merged')
+    // issue 10 appears in both sources — should count once; issue 11 from prs only
+    expect(section.textContent).toContain('2 merged')
+  })
+})
+
+describe('PipelineFlow failed and hitl dots', () => {
+  it('renders failed and hitl issue dots as non-pulsing', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed issue', status: 'failed' },
+          { issue_number: 2, title: 'HITL issue', status: 'hitl' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.getByTestId('flow-dot-1')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-2')).toBeInTheDocument()
+    expect(screen.getByTestId('flow-dot-1').style.animation).toBe('')
+    expect(screen.getByTestId('flow-dot-2').style.animation).toBe('')
+  })
+})
+
+describe('findWorkerTranscript', () => {
+  const workers = {
+    'triage-42': { transcript: ['triaging issue 42'] },
+    'plan-42': { transcript: ['planning issue 42'] },
+    '42': { transcript: ['implementing issue 42'] },
+    'review-100': { transcript: ['reviewing PR 100'] },
+  }
+  const prs = [{ issue: 42, pr: 100, url: 'https://github.com/pr/100' }]
+
+  it('matches triage worker by triage-{issueNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'triage', 42)
+    expect(result).toEqual(['triaging issue 42'])
+  })
+
+  it('matches plan worker by plan-{issueNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'plan', 42)
+    expect(result).toEqual(['planning issue 42'])
+  })
+
+  it('matches implement worker by bare issue number key', () => {
+    const result = findWorkerTranscript(workers, prs, 'implement', 42)
+    expect(result).toEqual(['implementing issue 42'])
+  })
+
+  it('matches review worker via PR lookup to review-{prNumber} key', () => {
+    const result = findWorkerTranscript(workers, prs, 'review', 42)
+    expect(result).toEqual(['reviewing PR 100'])
+  })
+
+  it('returns empty array when no matching worker exists', () => {
+    const result = findWorkerTranscript(workers, prs, 'implement', 999)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array for merged stage', () => {
+    const result = findWorkerTranscript(workers, prs, 'merged', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when worker exists but has no transcript', () => {
+    const workersNoTranscript = { '42': { status: 'running' } }
+    const result = findWorkerTranscript(workersNoTranscript, [], 'implement', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array when workers is null', () => {
+    const result = findWorkerTranscript(null, prs, 'triage', 42)
+    expect(result).toEqual([])
+  })
+
+  it('returns empty array for review when no PR exists for issue', () => {
+    const result = findWorkerTranscript(workers, [], 'review', 42)
+    expect(result).toEqual([])
+  })
+})
+
+describe('StreamView transcript integration', () => {
+  it('passes transcript to StreamCard for active issue with matching worker', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [{ issue_number: 42, title: 'Test issue', status: 'active' }],
+      },
+      workers: {
+        '42': { status: 'running', worker: 1, role: 'implementer', title: 'Test issue', branch: '', transcript: ['line 1', 'line 2', 'line 3'], pr: null },
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    // Active card should be expanded by default and show transcript preview
+    expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+    expect(screen.getByText('line 1')).toBeInTheDocument()
+  })
+
+  it('does not show transcript for queued issues even with worker data', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [], plan: [], review: [],
+        implement: [{ issue_number: 42, title: 'Test issue', status: 'queued' }],
+      },
+      workers: {
+        '42': { status: 'queued', worker: 1, role: 'implementer', title: 'Test issue', branch: '', transcript: ['line 1'], pr: null },
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
   })
 })

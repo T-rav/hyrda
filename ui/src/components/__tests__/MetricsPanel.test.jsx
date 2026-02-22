@@ -103,7 +103,7 @@ describe('MetricsPanel', () => {
     expect(screen.queryByText('Session')).not.toBeInTheDocument()
   })
 
-  it('renders pipeline blocks visualization with GitHub metrics', () => {
+  it('does not render pipeline section (moved to StreamView)', () => {
     mockUseHydraFlow.mockReturnValue(defaultContext({
       githubMetrics: {
         open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 1, 'hydraflow-review': 2, 'hydraflow-hitl': 0, 'hydraflow-fixed': 0 },
@@ -112,12 +112,7 @@ describe('MetricsPanel', () => {
       },
     }))
     render(<MetricsPanel />)
-    expect(screen.getByText('Pipeline')).toBeInTheDocument()
-    expect(screen.getByText('Plan')).toBeInTheDocument()
-    expect(screen.getByText('Ready')).toBeInTheDocument()
-    expect(screen.getByText('Review')).toBeInTheDocument()
-    expect(screen.getByText('HITL')).toBeInTheDocument()
-    expect(screen.getByText('Fixed')).toBeInTheDocument()
+    expect(screen.queryByText('Pipeline')).not.toBeInTheDocument()
   })
 
   it('falls back to lifetimeStats when metrics and githubMetrics are null', () => {

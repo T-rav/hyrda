@@ -1370,20 +1370,31 @@ async def test_ensure_labels_exist_creates_all_hydraflow_labels(
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    async def side_effect(*args, **_kwargs):
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+        if args[1] == "label" and args[2] == "list":
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        else:
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    mock_create = AsyncMock(side_effect=side_effect)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         await mgr.ensure_labels_exist()
 
-    # Should be called once per label (5 lifecycle labels)
-    assert mock_create.call_count == len(PRManager._HYDRAFLOW_LABELS)
+    # 1 list call + 1 create per label
+    assert mock_create.call_count == 1 + len(PRManager._HYDRAFLOW_LABELS)
 
-    # Verify each call uses gh label create --force
-    for call in mock_create.call_args_list:
+    # Verify create calls use gh label create --force
+    create_calls = [c for c in mock_create.call_args_list if "create" in c[0]]
+    assert len(create_calls) == len(PRManager._HYDRA_LABELS)
+    for call in create_calls:
         args = call[0]
         assert args[0] == "gh"
-        assert "label" in args
-        assert "create" in args
         assert "--force" in args
         assert "--color" in args
         assert "--description" in args
@@ -1413,7 +1424,18 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         state_file=tmp_path / "state.json",
     )
     mgr = _make_manager(cfg, event_bus)
-    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    async def side_effect(*args, **_kwargs):
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock(return_value=0)
+        if args[1] == "label" and args[2] == "list":
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        else:
+            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+        return mock_proc
+
+    mock_create = AsyncMock(side_effect=side_effect)
 
     with patch("asyncio.create_subprocess_exec", mock_create):
         await mgr.ensure_labels_exist()
@@ -1422,6 +1444,8 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
     created_labels = set()
     for call in mock_create.call_args_list:
         args = call[0]
+        if "create" not in args:
+            continue
         # Label name is the arg after "create"
         create_idx = list(args).index("create")
         created_labels.add(args[create_idx + 1])
@@ -1470,19 +1494,24 @@ async def test_ensure_labels_exist_handles_individual_failures(
     )
     mgr = _make_manager(cfg, event_bus)
 
-    # First call fails, rest succeed
-    call_count = 0
+    create_count = 0
 
-    async def side_effect(*args, **kwargs):
-        nonlocal call_count
-        call_count += 1
+    async def side_effect(*args, **_kwargs):
+        nonlocal create_count
         mock_proc = AsyncMock()
-        if call_count == 1:
-            mock_proc.returncode = 1
-            mock_proc.communicate = AsyncMock(return_value=(b"", b"permission denied"))
-        else:
+        if args[1] == "label" and args[2] == "list":
             mock_proc.returncode = 0
-            mock_proc.communicate = AsyncMock(return_value=(b"", b""))
+            mock_proc.communicate = AsyncMock(return_value=(b"[]", b""))
+        elif args[1] == "label" and args[2] == "create":
+            create_count += 1
+            if create_count == 1:
+                mock_proc.returncode = 1
+                mock_proc.communicate = AsyncMock(
+                    return_value=(b"", b"permission denied")
+                )
+            else:
+                mock_proc.returncode = 0
+                mock_proc.communicate = AsyncMock(return_value=(b"", b""))
         mock_proc.wait = AsyncMock(return_value=mock_proc.returncode)
         return mock_proc
 
@@ -1491,7 +1520,27 @@ async def test_ensure_labels_exist_handles_individual_failures(
         await mgr.ensure_labels_exist()
 
     # All labels should be attempted even though first one failed
-    assert call_count == len(PRManager._HYDRAFLOW_LABELS)
+    assert create_count == len(PRManager._HYDRAFLOW_LABELS)
+
+
+def test_makefile_ensure_labels_delegates_to_prep() -> None:
+    """Makefile ensure-labels target must delegate to the prep target.
+
+    This test reads the Makefile to verify that ``ensure-labels``
+    depends on ``prep`` (which calls ``cli.py --prep``), rather than
+    duplicating label-creation logic directly in the Makefile target.
+    """
+    from pathlib import Path
+
+    makefile = Path(__file__).resolve().parent.parent / "Makefile"
+    content = makefile.read_text()
+
+    # Find the ensure-labels target and assert it depends on prep
+    import re
+
+    match = re.search(r"^ensure-labels:\s*(.+)$", content, re.MULTILINE)
+    assert match is not None, "ensure-labels target not found in Makefile"
+    assert "prep" in match.group(1), "ensure-labels must depend on 'prep' target"
 
 
 # ---------------------------------------------------------------------------
@@ -2094,7 +2143,7 @@ class TestRetryWrapperUsage:
 
     @pytest.mark.asyncio
     async def test_ensure_labels_uses_retry(self, config, event_bus, tmp_path):
-        """ensure_labels_exist should use run_subprocess_with_retry."""
+        """ensure_labels_exist should use run_subprocess_with_retry via prep."""
         from config import HydraFlowConfig
 
         cfg = HydraFlowConfig(
@@ -2106,12 +2155,13 @@ class TestRetryWrapperUsage:
         )
         mgr = _make_manager(cfg, event_bus)
         with patch(
-            "pr_manager.run_subprocess_with_retry", new_callable=AsyncMock
+            "prep.run_subprocess_with_retry", new_callable=AsyncMock
         ) as mock_retry:
-            mock_retry.return_value = ""
+            mock_retry.return_value = "[]"
             await mgr.ensure_labels_exist()
 
-        assert mock_retry.await_count == len(PRManager._HYDRAFLOW_LABELS)
+        # 1 list call + 12 create calls = 13
+        assert mock_retry.await_count == 1 + len(PRManager._HYDRAFLOW_LABELS)
 
     @pytest.mark.asyncio
     async def test_pull_main_uses_retry(self, config, event_bus):
@@ -2717,6 +2767,117 @@ class TestCountHelpers:
         mgr._run_gh = mock_run_gh
         result = await mgr._count_merged_prs("hydraflow-fixed")
         assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_count_open_issues_by_label_uses_search_api(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraFlowConfig
+
+        cfg = HydraFlowConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "5\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_open_issues_by_label(
+            {"hydraflow-plan": ["hydraflow-plan"]}
+        )
+        assert result == {"hydraflow-plan": 5}
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:open" in query_arg
+        assert 'label:"hydraflow-plan"' in query_arg
+
+    @pytest.mark.asyncio
+    async def test_count_closed_issues_uses_search_api(
+        self, config, event_bus, tmp_path
+    ):
+        from config import HydraFlowConfig
+
+        cfg = HydraFlowConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "7\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_closed_issues(["hydraflow-fixed"])
+        assert result == 7
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:issue" in query_arg
+        assert "is:closed" in query_arg
+        assert 'label:"hydraflow-fixed"' in query_arg
+
+    @pytest.mark.asyncio
+    async def test_count_merged_prs_uses_search_api(self, config, event_bus, tmp_path):
+        from config import HydraFlowConfig
+
+        cfg = HydraFlowConfig(
+            ready_label=config.ready_label,
+            repo=config.repo,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+
+        captured_cmds: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured_cmds.append(cmd)
+            return "12\n"
+
+        mgr._run_gh = mock_run_gh
+        result = await mgr._count_merged_prs("hydraflow-fixed")
+        assert result == 12
+        assert len(captured_cmds) == 1
+        cmd = captured_cmds[0]
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
+        # Verify query string contains correct filters
+        query_arg = [c for c in cmd if c.startswith("q=")][0]
+        assert "repo:test-org/test-repo" in query_arg
+        assert "is:pr" in query_arg
+        assert "is:merged" in query_arg
+        assert 'label:"hydraflow-fixed"' in query_arg
 
 
 # ---------------------------------------------------------------------------

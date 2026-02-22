@@ -104,9 +104,9 @@ class PRUnsticker:
         branch = self._config.branch_for_issue(issue_number)
 
         # Claim: swap labels
-        for lbl in self._config.hitl_label:
-            await self._prs.remove_label(issue_number, lbl)
-        await self._prs.add_labels(issue_number, [self._config.hitl_active_label[0]])
+        await self._prs.swap_pipeline_labels(
+            issue_number, self._config.hitl_active_label[0]
+        )
 
         await self._prs.post_comment(
             issue_number,
@@ -137,13 +137,13 @@ class PRUnsticker:
                 # Push the fixed branch
                 await self._prs.push_branch(wt_path, branch)
 
-                # Remove active label, restore origin label
-                for lbl in self._config.hitl_active_label:
-                    await self._prs.remove_label(issue_number, lbl)
-
+                # Restore origin label (swap removes all pipeline labels first)
                 origin = self._state.get_hitl_origin(issue_number)
                 if origin:
-                    await self._prs.add_labels(issue_number, [origin])
+                    await self._prs.swap_pipeline_labels(issue_number, origin)
+                else:
+                    for lbl in self._config.hitl_active_label:
+                        await self._prs.remove_label(issue_number, lbl)
 
                 # Clear HITL state
                 self._state.remove_hitl_origin(issue_number)
@@ -263,9 +263,7 @@ class PRUnsticker:
 
     async def _release_back_to_hitl(self, issue_number: int, reason: str) -> None:
         """Remove active label and re-add HITL label."""
-        for lbl in self._config.hitl_active_label:
-            await self._prs.remove_label(issue_number, lbl)
-        await self._prs.add_labels(issue_number, [self._config.hitl_label[0]])
+        await self._prs.swap_pipeline_labels(issue_number, self._config.hitl_label[0])
         await self._prs.post_comment(
             issue_number,
             f"**PR Unsticker** could not resolve merge conflicts: {reason}\n\n"

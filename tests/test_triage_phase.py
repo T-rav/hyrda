@@ -55,6 +55,7 @@ def _make_phase(
     prs = AsyncMock()
     prs.remove_label = AsyncMock()
     prs.add_labels = AsyncMock()
+    prs.swap_pipeline_labels = AsyncMock()
     prs.post_comment = AsyncMock()
     stop_event = asyncio.Event()
     phase = TriagePhase(config, state, store, triage, prs, bus, stop_event)
@@ -86,8 +87,7 @@ class TestTriagePhase:
         await phase.triage_issues()
 
         triage.evaluate.assert_awaited_once_with(issue)
-        prs.remove_label.assert_called_once_with(1, config.find_label[0])
-        prs.add_labels.assert_called_once_with(1, [config.planner_label[0]])
+        prs.swap_pipeline_labels.assert_called_once_with(1, config.planner_label[0])
         prs.post_comment.assert_not_called()
 
     @pytest.mark.asyncio
@@ -110,8 +110,7 @@ class TestTriagePhase:
 
         await phase.triage_issues()
 
-        prs.remove_label.assert_called_once_with(2, config.find_label[0])
-        prs.add_labels.assert_called_once_with(2, [config.hitl_label[0]])
+        prs.swap_pipeline_labels.assert_called_once_with(2, config.hitl_label[0])
         prs.post_comment.assert_called_once()
         comment = prs.post_comment.call_args.args[1]
         assert "Needs More Information" in comment

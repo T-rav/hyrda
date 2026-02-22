@@ -300,11 +300,17 @@ export function reducer(state, action) {
       }
 
     case 'hitl_escalation': {
+      // Automated escalation: worker is keyed by `review-<pr>`
+      // Manual escalation (request-changes): no pr, worker keyed by issue number
       const hitlReviewKey = `review-${action.data.pr}`
-      const hitlWorker = state.workers[hitlReviewKey]
-      const hitlWorkers = hitlWorker
-        ? { ...state.workers, [hitlReviewKey]: { ...hitlWorker, status: 'escalated' } }
-        : state.workers
+      const hitlReviewWorker = action.data.pr != null ? state.workers[hitlReviewKey] : null
+      const hitlIssueWorker = action.data.issue != null ? state.workers[action.data.issue] : null
+      let hitlWorkers = state.workers
+      if (hitlReviewWorker) {
+        hitlWorkers = { ...state.workers, [hitlReviewKey]: { ...hitlReviewWorker, status: 'escalated' } }
+      } else if (hitlIssueWorker) {
+        hitlWorkers = { ...state.workers, [action.data.issue]: { ...hitlIssueWorker, status: 'escalated' } }
+      }
       return {
         ...addEvent(state, action),
         workers: hitlWorkers,
@@ -602,6 +608,22 @@ export function HydraFlowProvider({ children }) {
     } catch { /* ignore — local state already updated */ }
   }, [])
 
+  const requestChanges = useCallback(async (issueNumber, feedback, stage) => {
+    try {
+      const resp = await fetch('/api/request-changes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issue_number: issueNumber, feedback, stage }),
+      })
+      if (resp.ok) {
+        fetchHitlItems()
+      }
+      return resp.ok
+    } catch {
+      return false
+    }
+  }, [fetchHitlItems])
+
   const submitHumanInput = useCallback(async (issueNumber, answer) => {
     try {
       await fetch(`/api/human-input/${issueNumber}`, {
@@ -775,6 +797,7 @@ export function HydraFlowProvider({ children }) {
     stageStatus,
     submitIntent,
     submitHumanInput,
+    requestChanges,
     toggleBgWorker,
     updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,

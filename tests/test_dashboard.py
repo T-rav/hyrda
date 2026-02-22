@@ -1495,10 +1495,7 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        with (
-            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
-            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
-        ):
+        with patch("pr_manager.PRManager.swap_pipeline_labels", new_callable=AsyncMock):
             response = client.post(
                 "/api/hitl/42/correct",
                 json={"correction": "Mock the DB connection"},
@@ -1520,10 +1517,7 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        with (
-            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
-            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
-        ):
+        with patch("pr_manager.PRManager.swap_pipeline_labels", new_callable=AsyncMock):
             client.post(
                 "/api/hitl/42/correct",
                 json={"correction": "Fix the test"},
@@ -1563,10 +1557,7 @@ class TestHITLCorrectEndpoint:
         app = dashboard.create_app()
 
         client = TestClient(app)
-        with (
-            patch("pr_manager.PRManager.remove_label", new_callable=AsyncMock),
-            patch("pr_manager.PRManager.add_labels", new_callable=AsyncMock),
-        ):
+        with patch("pr_manager.PRManager.swap_pipeline_labels", new_callable=AsyncMock):
             client.post(
                 "/api/hitl/42/correct",
                 json={"correction": "Fix it"},

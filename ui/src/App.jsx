@@ -7,6 +7,7 @@ import { HITLTable } from './components/HITLTable'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
+import { PipelineControlPanel } from './components/PipelineControlPanel'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
@@ -36,10 +37,12 @@ function AppContent() {
     connected, orchestratorStatus, workers, prs,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
+    requestChanges,
   } = useHydraFlow()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
+  const [pipelinePanelOpen, setPipelinePanelOpen] = useState(true)
 
   // Auto-select the first active worker when none is selected
   useEffect(() => {
@@ -81,8 +84,16 @@ function AppContent() {
     setActiveTab('transcript')
   }, [workers])
 
-  const handleRequestChanges = useCallback(() => {
-    setActiveTab('hitl')
+  const handleRequestChanges = useCallback(async (issueNumber, feedback, stage) => {
+    const ok = await requestChanges(issueNumber, feedback, stage)
+    if (ok) {
+      setActiveTab('hitl')
+    }
+    return ok
+  }, [requestChanges])
+
+  const handleTogglePipelinePanel = useCallback(() => {
+    setPipelinePanelOpen(prev => !prev)
   }, [])
 
   return (
@@ -92,6 +103,8 @@ function AppContent() {
         orchestratorStatus={orchestratorStatus}
         onStart={handleStart}
         onStop={handleStop}
+        pipelinePanelOpen={pipelinePanelOpen}
+        onTogglePipelinePanel={handleTogglePipelinePanel}
       />
 
       <div style={styles.main}>
@@ -112,22 +125,29 @@ function AppContent() {
           ))}
         </div>
 
-        <div style={styles.tabContent}>
-          {activeTab === 'issues' && (
-            <StreamView
-              intents={intents}
-              expandedStages={expandedStages}
-              onToggleStage={setExpandedStages}
-              onViewTranscript={handleViewTranscript}
-              onRequestChanges={handleRequestChanges}
-            />
-          )}
-          {activeTab === 'transcript' && (
-            <TranscriptView workers={workers} selectedWorker={selectedWorker} />
-          )}
-          {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
-          {activeTab === 'system' && <SystemPanel workers={workers} backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
-          {activeTab === 'metrics' && <MetricsPanel />}
+        <div style={styles.contentRow}>
+          <div style={styles.tabContent}>
+            {activeTab === 'issues' && (
+              <StreamView
+                intents={intents}
+                expandedStages={expandedStages}
+                onToggleStage={setExpandedStages}
+                onViewTranscript={handleViewTranscript}
+                onRequestChanges={handleRequestChanges}
+              />
+            )}
+            {activeTab === 'transcript' && (
+              <TranscriptView workers={workers} selectedWorker={selectedWorker} />
+            )}
+            {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
+            {activeTab === 'system' && <SystemPanel backgroundWorkers={backgroundWorkers} onToggleBgWorker={toggleBgWorker} onViewLog={handleViewTranscript} onUpdateInterval={updateBgWorkerInterval} />}
+            {activeTab === 'metrics' && <MetricsPanel />}
+          </div>
+          <PipelineControlPanel
+            collapsed={!pipelinePanelOpen}
+            onToggleCollapse={handleTogglePipelinePanel}
+            onToggleBgWorker={toggleBgWorker}
+          />
         </div>
       </div>
 
@@ -173,6 +193,11 @@ const styles = {
   tabActive: {
     color: theme.accent,
     borderBottomColor: theme.accent,
+  },
+  contentRow: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
   },
   tabContent: {
     flex: 1,

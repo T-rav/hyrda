@@ -14,6 +14,7 @@ from agent import AgentRunner
 from config import HydraFlowConfig
 from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraFlowEvent
+from execution import get_default_runner
 from hitl_phase import HITLPhase
 from hitl_runner import HITLRunner
 from implement_phase import ImplementPhase
@@ -63,11 +64,18 @@ class HydraFlowOrchestrator:
         self._bus = event_bus or EventBus()
         self._state = state or StateTracker(config.state_file)
         self._worktrees = WorktreeManager(config)
-        self._agents = AgentRunner(config, self._bus)
-        self._planners = PlannerRunner(config, self._bus)
+        self._subprocess_runner = get_default_runner()
+        self._agents = AgentRunner(config, self._bus, runner=self._subprocess_runner)
+        self._planners = PlannerRunner(
+            config, self._bus, runner=self._subprocess_runner
+        )
         self._prs = PRManager(config, self._bus)
-        self._reviewers = ReviewRunner(config, self._bus)
-        self._hitl_runner = HITLRunner(config, self._bus)
+        self._reviewers = ReviewRunner(
+            config, self._bus, runner=self._subprocess_runner
+        )
+        self._hitl_runner = HITLRunner(
+            config, self._bus, runner=self._subprocess_runner
+        )
         self._triage = TriageRunner(config, self._bus)
         self._summarizer = TranscriptSummarizer(
             config, self._prs, self._bus, self._state
@@ -157,8 +165,12 @@ class HydraFlowOrchestrator:
         )
         self._memory_sync = MemorySyncWorker(config, self._state, self._bus)
         self._retrospective = RetrospectiveCollector(config, self._state, self._prs)
-        self._ac_generator = AcceptanceCriteriaGenerator(config, self._prs, self._bus)
-        self._verification_judge = VerificationJudge(config, self._bus)
+        self._ac_generator = AcceptanceCriteriaGenerator(
+            config, self._prs, self._bus, runner=self._subprocess_runner
+        )
+        self._verification_judge = VerificationJudge(
+            config, self._bus, runner=self._subprocess_runner
+        )
         self._epic_checker = EpicCompletionChecker(config, self._prs, self._fetcher)
         self._reviewer = ReviewPhase(
             config,

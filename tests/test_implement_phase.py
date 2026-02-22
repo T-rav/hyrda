@@ -94,6 +94,7 @@ def _make_phase(
     )
     mock_prs.add_labels = AsyncMock()
     mock_prs.remove_label = AsyncMock()
+    mock_prs.swap_pipeline_labels = AsyncMock()
     mock_prs.post_comment = AsyncMock()
     mock_prs.add_pr_labels = AsyncMock()
 
@@ -1175,8 +1176,7 @@ class TestRetryCapEscalation:
         assert not agent_called
 
         # Labels should be swapped to HITL
-        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
-        assert any(c[1] == ["hydraflow-hitl"] for c in add_calls)
+        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl")
 
         # Comment should mention attempt cap
         comment_calls = [c.args for c in mock_prs.post_comment.call_args_list]
@@ -1387,8 +1387,7 @@ class TestCheckAttemptCap:
 
         await phase._check_attempt_cap(issue, "agent/issue-42")
 
-        add_calls = [c.args for c in mock_prs.add_labels.call_args_list]
-        assert any(c[1] == ["hydraflow-hitl"] for c in add_calls)
+        mock_prs.swap_pipeline_labels.assert_any_call(42, "hydraflow-hitl")
 
 
 class TestRunImplementation:
@@ -1539,9 +1538,9 @@ class TestHandleImplementationResult:
         assert returned.pr_info.number == 101
         assert phase._state.get_issue_status(42) == "success"
 
-        remove_calls = [c.args for c in mock_prs.remove_label.call_args_list]
-        for lbl in config.ready_label:
-            assert (42, lbl) in remove_calls
+        mock_prs.swap_pipeline_labels.assert_awaited_once_with(
+            42, config.review_label[0], pr_number=101
+        )
 
     @pytest.mark.asyncio
     async def test_retry_skips_pr_creation(self, config: HydraFlowConfig) -> None:

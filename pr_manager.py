@@ -14,6 +14,7 @@ from typing import Any, Literal
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from models import GitHubIssue, HITLItem, PRInfo, PRListItem, ReviewVerdict
+from prep import HYDRAFLOW_LABELS
 from subprocess_util import run_subprocess, run_subprocess_with_retry
 
 logger = logging.getLogger("hydraflow.pr_manager")
@@ -29,21 +30,8 @@ class PRManager:
     _GITHUB_COMMENT_LIMIT = 65_536
     _HEADER_RESERVE = 50  # room for "*Part X/Y*\n\n" prefix
 
-    # All HydraFlow lifecycle labels: (config_field, color, description)
-    _HYDRAFLOW_LABELS: tuple[tuple[str, str, str], ...] = (
-        ("find_label", "e4e669", "New issue for HydraFlow to discover and triage"),
-        ("planner_label", "c5def5", "Issue needs planning before implementation"),
-        ("ready_label", "0e8a16", "Issue ready for implementation"),
-        ("review_label", "fbca04", "Issue/PR under review"),
-        ("hitl_label", "d93f0b", "Escalated to human-in-the-loop"),
-        ("hitl_active_label", "e99695", "Being processed by HITL correction agent"),
-        ("fixed_label", "0075ca", "PR merged — issue completed"),
-        ("improve_label", "7057ff", "Review insight improvement proposal"),
-        ("memory_label", "1d76db", "Approved memory suggestion for sync"),
-        ("metrics_label", "006b75", "Metrics persistence issue"),
-        ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
-        ("epic_label", "5319e7", "Epic tracking issue with linked sub-issues"),
-    )
+    # Re-export from prep module for backward compatibility
+    _HYDRAFLOW_LABELS = HYDRAFLOW_LABELS
 
     def __init__(self, config: HydraFlowConfig, event_bus: EventBus) -> None:
         self._config = config
@@ -63,33 +51,13 @@ class PRManager:
     async def ensure_labels_exist(self) -> None:
         """Create all HydraFlow lifecycle labels in the repo if they don't exist.
 
-        Uses ``gh label create --force`` which creates or updates each label.
-        Skipped in dry-run mode.
+        Delegates to :func:`prep.ensure_labels` which handles creation,
+        reporting, and dry-run behaviour.
         """
-        if self._config.dry_run:
-            logger.info("[dry-run] Would ensure HydraFlow labels exist")
-            return
+        from prep import ensure_labels  # noqa: PLC0415
 
-        for field, color, description in self._HYDRAFLOW_LABELS:
-            label_names = getattr(self._config, field)
-            for label_name in label_names:
-                try:
-                    await self._run_gh(
-                        "gh",
-                        "label",
-                        "create",
-                        label_name,
-                        "--repo",
-                        self._repo,
-                        "--color",
-                        color,
-                        "--description",
-                        description,
-                        "--force",
-                    )
-                    logger.debug("Ensured label %r exists", label_name)
-                except RuntimeError as exc:
-                    logger.warning("Could not ensure label %r: %s", label_name, exc)
+        result = await ensure_labels(self._config)
+        logger.info(result.summary())
 
     async def push_branch(self, worktree_path: Path, branch: str) -> bool:
         """Push *branch* to origin from *worktree_path*.
@@ -464,6 +432,29 @@ class PRManager:
         """Add *labels* to a GitHub pull request."""
         await self._add_labels("pr", pr_number, labels)
 
+    async def swap_pipeline_labels(
+        self,
+        issue_number: int,
+        new_label: str,
+        *,
+        pr_number: int | None = None,
+    ) -> None:
+        """Atomically swap to *new_label*, removing all other pipeline labels.
+
+        This prevents the dual-label bug where a crash between remove and add
+        leaves an issue with conflicting pipeline labels (e.g. hydraflow-ready +
+        hydraflow-hitl simultaneously).
+        """
+        all_labels = self._config.all_pipeline_labels
+        for lbl in all_labels:
+            if lbl != new_label:
+                await self._remove_label("issue", issue_number, lbl)
+                if pr_number is not None:
+                    await self._remove_label("pr", pr_number, lbl)
+        await self._add_labels("issue", issue_number, [new_label])
+        if pr_number is not None:
+            await self._add_labels("pr", pr_number, [new_label])
+
     async def create_issue(
         self,
         title: str,
@@ -824,7 +815,11 @@ class PRManager:
     async def _count_open_issues_by_label(
         self, label_map: dict[str, list[str]]
     ) -> dict[str, int]:
-        """Count open issues for each display key in *label_map*."""
+        """Count open issues for each display key in *label_map*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         open_by_label: dict[str, int] = {}
         for display_key, label_names in label_map.items():
             count = 0
@@ -832,18 +827,12 @@ class PRManager:
                 try:
                     raw = await self._run_gh(
                         "gh",
-                        "issue",
-                        "list",
-                        "--repo",
-                        self._repo,
-                        "--label",
-                        label,
-                        "--state",
-                        "open",
-                        "--json",
-                        "number",
+                        "api",
+                        "search/issues",
+                        "-f",
+                        f'q=repo:{self._repo} is:issue is:open label:"{label}"',
                         "--jq",
-                        "length",
+                        ".total_count",
                     )
                     count += int(raw.strip() or "0")
                 except (RuntimeError, ValueError):
@@ -852,24 +841,22 @@ class PRManager:
         return open_by_label
 
     async def _count_closed_issues(self, labels: list[str]) -> int:
-        """Count closed issues with any of the given *labels*."""
+        """Count closed issues with any of the given *labels*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         total = 0
         for label in labels:
             try:
                 raw = await self._run_gh(
                     "gh",
-                    "issue",
-                    "list",
-                    "--repo",
-                    self._repo,
-                    "--label",
-                    label,
-                    "--state",
-                    "closed",
-                    "--json",
-                    "number",
+                    "api",
+                    "search/issues",
+                    "-f",
+                    f'q=repo:{self._repo} is:issue is:closed label:"{label}"',
                     "--jq",
-                    "length",
+                    ".total_count",
                 )
                 total += int(raw.strip() or "0")
             except (RuntimeError, ValueError):
@@ -877,22 +864,20 @@ class PRManager:
         return total
 
     async def _count_merged_prs(self, label: str) -> int:
-        """Count merged PRs with the given *label*."""
+        """Count merged PRs with the given *label*.
+
+        Uses the GitHub Search API (``search/issues``) which returns
+        ``total_count`` directly — no pagination, scales to 10k+ issues.
+        """
         try:
             raw = await self._run_gh(
                 "gh",
-                "pr",
-                "list",
-                "--repo",
-                self._repo,
-                "--state",
-                "merged",
-                "--label",
-                label,
-                "--json",
-                "number",
+                "api",
+                "search/issues",
+                "-f",
+                f'q=repo:{self._repo} is:pr is:merged label:"{label}"',
                 "--jq",
-                "length",
+                ".total_count",
             )
             return int(raw.strip() or "0")
         except (RuntimeError, ValueError):

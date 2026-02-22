@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { theme } from '../theme'
 import { PIPELINE_STAGES } from '../constants'
 import { formatDuration, STAGE_META, STAGE_KEYS } from '../hooks/useTimeline'
+import { TranscriptPreview } from './TranscriptPreview'
 
 export function StatusDot({ status }) {
   if (status === 'active') return <span style={dotStyles.active} />
@@ -61,9 +62,27 @@ function StageRow({ stageKey, stageData, isLast }) {
   )
 }
 
-export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges }) {
+export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges, transcript = [] }) {
   const [expanded, setExpanded] = useState(defaultExpanded || false)
+  const [showFeedback, setShowFeedback] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
   const toggle = useCallback(() => setExpanded(v => !v), [])
+
+  const handleSubmitFeedback = useCallback(async () => {
+    if (!feedbackText.trim() || submitting) return
+    setSubmitting(true)
+    setSubmitError(null)
+    const ok = await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
+    setSubmitting(false)
+    if (ok) {
+      setShowFeedback(false)
+      setFeedbackText('')
+    } else {
+      setSubmitError('Failed to submit. Please try again.')
+    }
+  }, [feedbackText, submitting, onRequestChanges, issue.issueNumber, issue.currentStage])
 
   const meta = STAGE_META[issue.currentStage]
   const isActive = issue.overallStatus === 'active'
@@ -83,7 +102,19 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
       <style>{pulseKeyframes}</style>
       <div style={styles.header} onClick={toggle}>
         <div style={styles.headerLeft}>
-          <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          {issue.issueUrl ? (
+            <a
+              style={styles.issueLink}
+              href={issue.issueUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              #{issue.issueNumber}
+            </a>
+          ) : (
+            <span style={styles.issueNum}>#{issue.issueNumber}</span>
+          )}
           <span style={styles.title}>{intent?.text || issue.title}</span>
         </div>
         <div style={styles.headerRight}>
@@ -132,6 +163,9 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
               />
             ))}
           </div>
+          {isActive && transcript.length > 0 && (
+            <TranscriptPreview transcript={transcript} />
+          )}
           <div style={styles.actions}>
             {onViewTranscript && (
               <span
@@ -153,13 +187,55 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
             )}
             {onRequestChanges && (
               <span
-                style={styles.actionBtn}
-                onClick={() => onRequestChanges(issue.issueNumber)}
+                style={submitting ? requestChangesBtnDisabled : styles.actionBtn}
+                onClick={() => {
+                  if (submitting) return
+                  if (showFeedback) {
+                    setFeedbackText('')
+                    setSubmitError(null)
+                  }
+                  setShowFeedback(v => !v)
+                }}
+                data-testid={`request-changes-btn-${issue.issueNumber}`}
               >
                 Request Changes
               </span>
             )}
           </div>
+          {showFeedback && (
+            <div style={styles.feedbackPanel}>
+              <textarea
+                style={styles.feedbackTextarea}
+                placeholder="What needs to change?"
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                data-testid={`request-changes-textarea-${issue.issueNumber}`}
+              />
+              <div style={styles.feedbackActions}>
+                <button
+                  style={(!feedbackText.trim() || submitting) ? feedbackSubmitBtnDisabled : styles.feedbackSubmitBtn}
+                  disabled={!feedbackText.trim() || submitting}
+                  onClick={handleSubmitFeedback}
+                  data-testid={`request-changes-submit-${issue.issueNumber}`}
+                >
+                  {submitting ? 'Submitting...' : 'Submit'}
+                </button>
+                <button
+                  style={submitting ? feedbackCancelBtnDisabled : styles.feedbackCancelBtn}
+                  disabled={submitting}
+                  onClick={() => { setShowFeedback(false); setFeedbackText(''); setSubmitError(null) }}
+                  data-testid={`request-changes-cancel-${issue.issueNumber}`}
+                >
+                  Cancel
+                </button>
+              </div>
+              {submitError && (
+                <div style={styles.feedbackError} data-testid={`request-changes-error-${issue.issueNumber}`}>
+                  {submitError}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -253,6 +329,7 @@ const styles = {
     fontWeight: 700,
     color: theme.textBright,
     flexShrink: 0,
+    whiteSpace: 'nowrap',
   },
   title: {
     fontSize: 12,
@@ -285,6 +362,14 @@ const styles = {
     fontSize: 10,
     color: theme.accent,
     textDecoration: 'none',
+    whiteSpace: 'nowrap',
+  },
+  issueLink: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: theme.accent,
+    textDecoration: 'none',
+    flexShrink: 0,
     whiteSpace: 'nowrap',
   },
   arrow: {
@@ -366,4 +451,59 @@ const styles = {
     textDecoration: 'none',
     transition: 'background 0.15s',
   },
+  feedbackPanel: {
+    marginTop: 8,
+    borderTop: `1px solid ${theme.border}`,
+    paddingTop: 8,
+  },
+  feedbackTextarea: {
+    width: '100%',
+    minHeight: 60,
+    padding: 8,
+    background: theme.bg,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 6,
+    color: theme.text,
+    fontFamily: 'inherit',
+    fontSize: 12,
+    resize: 'vertical',
+    boxSizing: 'border-box',
+  },
+  feedbackActions: {
+    display: 'flex',
+    gap: 8,
+    marginTop: 8,
+  },
+  feedbackSubmitBtn: {
+    padding: '6px 14px',
+    border: 'none',
+    borderRadius: 6,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    background: theme.btnGreen,
+    color: theme.white,
+  },
+  feedbackCancelBtn: {
+    padding: '6px 14px',
+    border: `1px solid ${theme.border}`,
+    borderRadius: 6,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    fontSize: 12,
+    background: theme.surfaceInset,
+    color: theme.text,
+  },
+  feedbackError: {
+    marginTop: 6,
+    fontSize: 11,
+    color: theme.red,
+  },
 }
+
+// Pre-computed disabled variants — avoids object spread in render
+const feedbackSubmitBtnDisabled = { ...styles.feedbackSubmitBtn, cursor: 'not-allowed', opacity: 0.5 }
+const feedbackCancelBtnDisabled = { ...styles.feedbackCancelBtn, cursor: 'not-allowed', opacity: 0.5 }
+const requestChangesBtnDisabled = { ...styles.actionBtn, cursor: 'not-allowed', opacity: 0.5 }

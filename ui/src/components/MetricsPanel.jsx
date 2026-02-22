@@ -1,21 +1,6 @@
 import React from 'react'
 import { theme } from '../theme'
-import { PIPELINE_STAGES } from '../constants'
 import { useHydraFlow } from '../context/HydraFlowContext'
-
-const BLOCK_LABELS = [
-  { key: 'hydraflow-plan',   label: 'Plan',   stage: 'plan' },
-  { key: 'hydraflow-ready',  label: 'Ready',  stage: 'implement' },
-  { key: 'hydraflow-review', label: 'Review', stage: 'review' },
-  { key: 'hydraflow-hitl',   label: 'HITL',   stage: 'review' },
-  { key: 'hydraflow-fixed',  label: 'Fixed',  stage: 'merged' },
-]
-
-function stageColor(stageKey) {
-  const stage = PIPELINE_STAGES.find(s => s.key === stageKey)
-  return stage?.color || theme.textMuted
-}
-
 function TrendIndicator({ current, previous, label, format }) {
   if (previous == null || current == null) return null
   const diff = current - previous
@@ -41,30 +26,6 @@ function StatCard({ label, value, subtle, trend }) {
         {trend}
       </div>
       <div style={styles.label}>{label}</div>
-    </div>
-  )
-}
-
-function BlocksRow({ labelDef, count }) {
-  const color = stageColor(labelDef.stage)
-  const blocks = Array.from({ length: count }, (_, i) => i)
-
-  return (
-    <div style={styles.blocksRow}>
-      <div style={styles.blocksLabel}>{labelDef.label}</div>
-      <div style={styles.blocksContainer}>
-        {blocks.length === 0 && (
-          <span style={styles.blocksEmpty}>0</span>
-        )}
-        {blocks.map(i => (
-          <div
-            key={i}
-            style={{ ...styles.block, background: color }}
-            title={`${labelDef.label} issue`}
-          />
-        ))}
-      </div>
-      <span style={styles.blocksCount}>{count}</span>
     </div>
   )
 }
@@ -214,21 +175,6 @@ export function MetricsPanel() {
         </>
       )}
 
-      {hasGithub && (
-        <>
-          <h3 style={styles.heading}>Pipeline</h3>
-          <div style={styles.blocksSection}>
-            {BLOCK_LABELS.map(def => (
-              <BlocksRow
-                key={def.key}
-                labelDef={def}
-                count={openByLabel[def.key] || 0}
-              />
-            ))}
-          </div>
-        </>
-      )}
-
       <SnapshotTimeline snapshots={snapshots} />
 
     </div>
@@ -314,50 +260,6 @@ const styles = {
     fontSize: 11,
     color: theme.textMuted,
     marginBottom: 4,
-  },
-  blocksSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    marginBottom: 24,
-  },
-  blocksRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
-  blocksLabel: {
-    width: 60,
-    fontSize: 12,
-    fontWeight: 600,
-    color: theme.textMuted,
-    flexShrink: 0,
-  },
-  blocksContainer: {
-    display: 'flex',
-    gap: 4,
-    flexWrap: 'wrap',
-    flex: 1,
-    minHeight: 16,
-    alignItems: 'center',
-  },
-  block: {
-    width: 16,
-    height: 16,
-    borderRadius: 3,
-    transition: 'all 0.3s ease',
-  },
-  blocksCount: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: theme.textMuted,
-    width: 24,
-    textAlign: 'right',
-    flexShrink: 0,
-  },
-  blocksEmpty: {
-    fontSize: 11,
-    color: theme.textInactive,
   },
   timelineSection: {
     marginTop: 8,

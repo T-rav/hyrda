@@ -4,6 +4,7 @@ import { useHydraFlow } from '../context/HydraFlowContext'
 import { StreamCard } from './StreamCard'
 import { PIPELINE_STAGES } from '../constants'
 import { STAGE_KEYS } from '../hooks/useTimeline'
+import { sectionHeaderStyles, sectionLabelStyles, sectionCountStyles, sectionLabelBase } from '../styles/sectionStyles'
 
 function PendingIntentCard({ intent }) {
   return (
@@ -17,7 +18,36 @@ function PendingIntentCard({ intent }) {
   )
 }
 
-function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor }) {
+function PipelineFlow({ stageGroups }) {
+  return (
+    <div style={styles.flowContainer} data-testid="pipeline-flow">
+      {stageGroups.map((group, idx) => (
+        <React.Fragment key={group.stage.key}>
+          <div style={styles.flowStage}>
+            <span style={flowLabelStyles[group.stage.key]}>{group.stage.label}</span>
+            {group.issues.length > 0 && (
+              <div style={styles.flowDots}>
+                {group.issues.map(issue => (
+                  <span
+                    key={issue.issueNumber}
+                    style={issue.overallStatus === 'active'
+                      ? flowDotActiveStyles[group.stage.key]
+                      : flowDotStyles[group.stage.key]}
+                    title={`#${issue.issueNumber}`}
+                    data-testid={`flow-dot-${issue.issueNumber}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          {idx < stageGroups.length - 1 && <div style={styles.flowConnector} />}
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
+function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript, onRequestChanges, open, onToggle, enabled, dotColor, workers, prs }) {
   const activeCount = issues.filter(i => i.overallStatus === 'active').length
   const failedCount = issues.filter(i => i.overallStatus === 'failed').length
   const hitlCount = issues.filter(i => i.overallStatus === 'hitl').length
@@ -39,11 +69,17 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
           <span style={styles.disabledBadge} data-testid={`stage-disabled-${stage.key}`}>Disabled</span>
         )}
         <span style={sectionCountStyles[stage.key]}>
-          <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
-          <span> · {queuedCount} queued</span>
-          {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
-          {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
-          <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
+          {hasRole ? (
+            <>
+              <span style={activeCount > 0 ? styles.activeBadge : undefined}>{activeCount} active</span>
+              <span> · {queuedCount} queued</span>
+              {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
+              {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
+              <span> · {workerCount} {workerCount === 1 ? 'worker' : 'workers'}</span>
+            </>
+          ) : (
+            <span>{issues.length} merged</span>
+          )}
         </span>
         {hasRole && (
           <span
@@ -60,6 +96,7 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
           defaultExpanded={issue.overallStatus === 'active'}
           onViewTranscript={onViewTranscript}
           onRequestChanges={onRequestChanges}
+          transcript={findWorkerTranscript(workers, prs, stage.key, issue.issueNumber)}
         />
       ))}
     </div>
@@ -101,6 +138,7 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   return {
     issueNumber: pipeIssue.issue_number,
     title: pipeIssue.title || `Issue #${pipeIssue.issue_number}`,
+    issueUrl: pipeIssue.url || null,
     currentStage: stageKey,
     overallStatus: pipeIssue.status === 'hitl' ? 'hitl'
       : pipeIssue.status === 'failed' || pipeIssue.status === 'error' ? 'failed'
@@ -115,8 +153,37 @@ export function toStreamIssue(pipeIssue, stageKey, prs) {
   }
 }
 
+/**
+ * Find the transcript array for a given issue in a pipeline stage.
+ * Worker keys vary by stage: triage-{issue}, plan-{issue}, {issue} (implement), review-{pr}.
+ */
+export function findWorkerTranscript(workers, prs, stageKey, issueNumber) {
+  if (!workers) return []
+  let key
+  switch (stageKey) {
+    case 'triage':
+      key = `triage-${issueNumber}`
+      break
+    case 'plan':
+      key = `plan-${issueNumber}`
+      break
+    case 'implement':
+      key = String(issueNumber)
+      break
+    case 'review': {
+      const pr = (prs || []).find(p => p.issue === issueNumber)
+      if (!pr) return []
+      key = `review-${pr.pr}`
+      break
+    }
+    default:
+      return []
+  }
+  return workers[key]?.transcript || []
+}
+
 export function StreamView({ intents, expandedStages, onToggleStage, onViewTranscript, onRequestChanges }) {
-  const { pipelineIssues, prs, stageStatus } = useHydraFlow()
+  const { pipelineIssues, prs, stageStatus, workers } = useHydraFlow()
 
   // Match intents to issues by issueNumber
   const intentMap = useMemo(() => {
@@ -141,7 +208,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
     const mergedFromPrs = (prs || [])
       .filter(p => p.merged && p.issue)
       .map(p => toStreamIssue(
-        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: p.url || '', status: 'done' },
+        { issue_number: p.issue, title: p.title || `Issue #${p.issue}`, url: null, status: 'done' },
         'merged',
         prs,
       ))
@@ -183,6 +250,8 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         <PendingIntentCard key={`pending-${i}`} intent={intent} />
       ))}
 
+      {totalIssues > 0 && <PipelineFlow stageGroups={stageGroups} />}
+
       {stageGroups.map(({ stage, issues: stageIssues }) => {
         const status = stageStatus[stage.key] || {}
         const enabled = status.enabled !== false
@@ -203,11 +272,13 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
             workerCount={workerCount}
             intentMap={intentMap}
             onViewTranscript={onViewTranscript}
-            onRequestChanges={onRequestChanges}
+            onRequestChanges={stage.role ? onRequestChanges : undefined}
             open={!!expandedStages[stage.key]}
             onToggle={() => handleToggleStage(stage.key)}
             enabled={enabled}
             dotColor={dotColor}
+            workers={workers}
+            prs={prs}
           />
         )
       })}
@@ -221,52 +292,34 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
   )
 }
 
-// Pre-computed per-stage section header styles (avoids object spread in .map())
-const sectionHeaderBase = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  padding: '8px 12px',
-  margin: '8px 8px 4px',
-  cursor: 'pointer',
-  userSelect: 'none',
-  borderRadius: 6,
-  transition: 'background 0.15s',
+// Pre-computed per-stage flow label/dot styles (avoids object spread in .map())
+const flowLabelBase = { ...sectionLabelBase, flexShrink: 0 }
+
+const dotBase = {
+  display: 'inline-block',
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  flexShrink: 0,
 }
 
-const sectionLabelBase = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-}
+const flowDotBase = { ...dotBase, transition: 'all 0.3s ease' }
 
-const sectionCountBase = {
-  fontSize: 11,
-  fontWeight: 600,
-  marginLeft: 'auto',
-}
+const PULSE_ANIMATION = 'stream-pulse 1.5s ease-in-out infinite'
 
-const sectionHeaderStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionHeaderBase,
-    background: s.subtleColor,
-    border: `1px solid ${s.color}33`,
-    borderLeft: `3px solid ${s.color}`,
-  }])
+const flowLabelStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowLabelBase, color: s.color }])
 )
 
-const sectionLabelStyles = Object.fromEntries(
-  PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionLabelBase,
-    color: s.color,
-  }])
+const flowDotStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: s.color }])
 )
 
-const sectionCountStyles = Object.fromEntries(
+const flowDotActiveStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, {
-    ...sectionCountBase,
-    color: s.color,
+    ...flowDotBase,
+    background: s.color,
+    animation: PULSE_ANIMATION,
   }])
 )
 
@@ -275,6 +328,35 @@ const styles = {
     flex: 1,
     overflowY: 'auto',
     padding: 8,
+  },
+  flowContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '8px 12px',
+    margin: '0 8px 8px',
+    background: theme.surfaceInset,
+    borderRadius: 8,
+    border: `1px solid ${theme.border}`,
+    overflowX: 'auto',
+    flexWrap: 'nowrap',
+  },
+  flowStage: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  flowDots: {
+    display: 'flex',
+    gap: 4,
+    alignItems: 'center',
+  },
+  flowConnector: {
+    width: 16,
+    height: 1,
+    background: theme.border,
+    flexShrink: 0,
   },
   empty: {
     display: 'flex',
@@ -298,13 +380,7 @@ const styles = {
     fontWeight: 700,
     color: theme.yellow,
   },
-  statusDot: {
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    flexShrink: 0,
-  },
+  statusDot: dotBase,
   disabledBadge: {
     fontSize: 9,
     fontWeight: 600,
@@ -326,13 +402,9 @@ const styles = {
     marginBottom: 8,
   },
   pendingDot: {
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
+    ...dotBase,
     background: theme.accent,
-    animation: 'stream-pulse 1.5s ease-in-out infinite',
-    flexShrink: 0,
+    animation: PULSE_ANIMATION,
   },
   pendingText: {
     flex: 1,
