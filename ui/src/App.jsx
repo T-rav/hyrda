@@ -121,6 +121,7 @@ function AppContent() {
         onStop={handleStop}
       />
 
+      <div style={styles.body}>
       <SessionSidebar />
 
       <div style={styles.main}>
@@ -163,6 +164,7 @@ function AppContent() {
         </div>
       </div>
 
+      </div>
     </div>
   )
 }
@@ -177,13 +179,18 @@ export default function App() {
 
 const styles = {
   layout: {
-    display: 'grid',
-    gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '280px 1fr',
+    display: 'flex',
+    flexDirection: 'column',
     height: '100vh',
     minWidth: '1080px',
   },
+  body: {
+    display: 'flex',
+    flex: 1,
+    overflow: 'hidden',
+  },
   main: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
