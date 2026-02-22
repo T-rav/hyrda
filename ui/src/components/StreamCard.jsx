@@ -67,16 +67,20 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
   const toggle = useCallback(() => setExpanded(v => !v), [])
 
   const handleSubmitFeedback = useCallback(async () => {
     if (!feedbackText.trim() || submitting) return
     setSubmitting(true)
+    setSubmitError(null)
     const ok = await onRequestChanges(issue.issueNumber, feedbackText.trim(), issue.currentStage)
     setSubmitting(false)
     if (ok) {
       setShowFeedback(false)
       setFeedbackText('')
+    } else {
+      setSubmitError('Failed to submit. Please try again.')
     }
   }, [feedbackText, submitting, onRequestChanges, issue.issueNumber, issue.currentStage])
 
@@ -215,12 +219,17 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
                 <button
                   style={submitting ? feedbackCancelBtnDisabled : styles.feedbackCancelBtn}
                   disabled={submitting}
-                  onClick={() => { setShowFeedback(false); setFeedbackText('') }}
+                  onClick={() => { setShowFeedback(false); setFeedbackText(''); setSubmitError(null) }}
                   data-testid={`request-changes-cancel-${issue.issueNumber}`}
                 >
                   Cancel
                 </button>
               </div>
+              {submitError && (
+                <div style={styles.feedbackError} data-testid={`request-changes-error-${issue.issueNumber}`}>
+                  {submitError}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -482,6 +491,11 @@ const styles = {
     fontSize: 12,
     background: theme.surfaceInset,
     color: theme.text,
+  },
+  feedbackError: {
+    marginTop: 6,
+    fontSize: 11,
+    color: theme.red,
   },
 }
 

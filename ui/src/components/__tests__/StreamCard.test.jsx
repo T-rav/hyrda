@@ -203,6 +203,42 @@ describe('StreamCard request changes feedback flow', () => {
     expect(screen.getByTestId('request-changes-textarea-42')).toBeTruthy()
   })
 
+  it('shows error message after failed submit', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+    expect(screen.getByTestId('request-changes-error-42').textContent).toContain('Failed')
+  })
+
+  it('clears error message on Cancel', async () => {
+    const issue = makeIssue()
+    const onRequestChanges = vi.fn().mockResolvedValue(false)
+    render(<StreamCard issue={issue} defaultExpanded onRequestChanges={onRequestChanges} />)
+
+    fireEvent.click(screen.getByTestId('request-changes-btn-42'))
+    fireEvent.change(screen.getByTestId('request-changes-textarea-42'), {
+      target: { value: 'Fix the tests' },
+    })
+    fireEvent.click(screen.getByTestId('request-changes-submit-42'))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('request-changes-error-42')).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByTestId('request-changes-cancel-42'))
+    expect(screen.queryByTestId('request-changes-error-42')).toBeNull()
+  })
+
   it('disables submit button and shows Submitting text while in-flight', async () => {
     const issue = makeIssue()
     let resolveRequest
