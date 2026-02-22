@@ -586,6 +586,25 @@ class TestFormatJudgeReport:
         report = judge._format_judge_report(verdict)
         assert "curl \\| jq" in report
 
+    def test_includes_verification_instructions(self):
+        """verification_instructions from verdict appear in the report."""
+        judge = _make_judge()
+        verdict = JudgeVerdict(
+            issue_number=1,
+            verification_instructions="1. Open app\n2. Click submit",
+        )
+        report = judge._format_judge_report(verdict)
+        assert "Verification Instructions" in report
+        assert "Open app" in report
+        assert "Click submit" in report
+
+    def test_omits_verification_instructions_when_empty(self):
+        """When verification_instructions is empty, the section is not rendered."""
+        judge = _make_judge()
+        verdict = JudgeVerdict(issue_number=1)
+        report = judge._format_judge_report(verdict)
+        assert "Verification Instructions" not in report
+
 
 # ---------------------------------------------------------------------------
 # _update_criteria_file
@@ -973,6 +992,65 @@ class TestJudgeIntegration:
         assert len(result.criteria_results) == 2
         # Only 1 LLM call (code validation only, no instructions validation)
         assert result.instructions_quality == InstructionsQuality.NEEDS_REFINEMENT
+
+    @pytest.mark.asyncio
+    async def test_verification_instructions_populated(self, tmp_path, event_bus):
+        """verdict.verification_instructions should contain the parsed instructions."""
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = VerificationJudge(cfg, event_bus)
+
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
+
+        call_count = 0
+
+        async def mock_execute(_cmd, _prompt, _issue_number):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return SAMPLE_CODE_VALIDATION_TRANSCRIPT
+            return SAMPLE_INSTRUCTIONS_READY_TRANSCRIPT
+
+        with patch.object(judge, "_execute", side_effect=mock_execute):
+            result = await judge.judge(issue_number=42, pr_number=101, diff="diff")
+
+        assert result is not None
+        assert "Open the sidebar" in result.verification_instructions
+        assert "Submit an empty form" in result.verification_instructions
+
+    @pytest.mark.asyncio
+    async def test_verification_instructions_updated_after_refinement(
+        self, tmp_path, event_bus
+    ):
+        """After refinement, verification_instructions should contain refined text."""
+        cfg = ConfigFactory.create(repo_root=tmp_path)
+        judge = VerificationJudge(cfg, event_bus)
+
+        criteria_dir = tmp_path / ".hydra" / "verification"
+        criteria_dir.mkdir(parents=True)
+        (criteria_dir / "issue-42.md").write_text(SAMPLE_CRITERIA_FILE)
+
+        call_count = 0
+        responses = [
+            SAMPLE_CODE_VALIDATION_TRANSCRIPT,
+            SAMPLE_INSTRUCTIONS_NEEDS_REFINEMENT_TRANSCRIPT,
+            SAMPLE_REFINEMENT_TRANSCRIPT,
+            SAMPLE_INSTRUCTIONS_READY_TRANSCRIPT,
+        ]
+
+        async def mock_execute(_cmd, _prompt, _issue_number):
+            nonlocal call_count
+            call_count += 1
+            return responses[call_count - 1]
+
+        with patch.object(judge, "_execute", side_effect=mock_execute):
+            result = await judge.judge(issue_number=42, pr_number=101, diff="diff")
+
+        assert result is not None
+        # Should contain the refined instructions, not the original
+        assert "Navigate to /dashboard" in result.verification_instructions
+        assert "red error banner" in result.verification_instructions
 
 
 # ---------------------------------------------------------------------------
