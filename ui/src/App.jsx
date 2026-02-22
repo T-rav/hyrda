@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react'
-import { HydraProvider, useHydra } from './context/HydraContext'
+import { HydraFlowProvider, useHydraFlow } from './context/HydraFlowContext'
 import { Header } from './components/Header'
 import { TranscriptView } from './components/TranscriptView'
 import { HumanInputBanner } from './components/HumanInputBanner'
@@ -7,6 +7,7 @@ import { HITLTable } from './components/HITLTable'
 import { SystemPanel } from './components/SystemPanel'
 import { MetricsPanel } from './components/MetricsPanel'
 import { StreamView } from './components/StreamView'
+import { SessionSidebar } from './components/SessionSidebar'
 import { theme } from './theme'
 import { ACTIVE_STATUSES } from './constants'
 
@@ -31,13 +32,34 @@ function SystemAlertBanner({ alert }) {
   )
 }
 
+function SessionFilterBanner({ session, onClear }) {
+  if (!session) return null
+  const startDate = new Date(session.started_at).toLocaleString()
+  const issueCount = session.issues_processed?.length ?? 0
+  return (
+    <div style={styles.sessionBanner}>
+      <span style={session.status === 'active' ? styles.sessionDotActive : styles.sessionDotCompleted} />
+      <span style={styles.sessionBannerText}>
+        Session from {startDate}
+      </span>
+      <span style={styles.sessionBannerMeta}>
+        {issueCount} {issueCount === 1 ? 'issue' : 'issues'}
+        {session.issues_succeeded > 0 && ` · ${session.issues_succeeded} passed`}
+        {session.issues_failed > 0 && ` · ${session.issues_failed} failed`}
+      </span>
+      <span onClick={onClear} style={styles.sessionBannerClear}>Clear filter</span>
+    </div>
+  )
+}
+
 function AppContent() {
   const {
     connected, orchestratorStatus, workers, prs,
     hitlItems, humanInputRequests, submitHumanInput, refreshHitl,
     backgroundWorkers, systemAlert, intents, toggleBgWorker, updateBgWorkerInterval,
+    selectedSession, selectSession,
     requestChanges, resetSession,
-  } = useHydra()
+  } = useHydraFlow()
   const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
@@ -100,7 +122,11 @@ function AppContent() {
         onStop={handleStop}
       />
 
+      <div style={styles.body}>
+      <SessionSidebar />
+
       <div style={styles.main}>
+        <SessionFilterBanner session={selectedSession} onClear={() => selectSession(null)} />
         <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
 
@@ -139,27 +165,33 @@ function AppContent() {
         </div>
       </div>
 
+      </div>
     </div>
   )
 }
 
 export default function App() {
   return (
-    <HydraProvider>
+    <HydraFlowProvider>
       <AppContent />
-    </HydraProvider>
+    </HydraFlowProvider>
   )
 }
 
 const styles = {
   layout: {
-    display: 'grid',
-    gridTemplateRows: 'auto 1fr',
-    gridTemplateColumns: '1fr',
+    display: 'flex',
+    flexDirection: 'column',
     height: '100vh',
-    minWidth: '800px',
+    minWidth: '1080px',
+  },
+  body: {
+    display: 'flex',
+    flex: 1,
+    overflow: 'hidden',
   },
   main: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -231,6 +263,44 @@ const styles = {
     fontSize: 11,
     fontWeight: 400,
     opacity: 0.8,
+  },
+  sessionBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '8px 16px',
+    background: theme.accentSubtle,
+    borderBottom: `1px solid ${theme.accent}`,
+    fontSize: 12,
+  },
+  sessionDotActive: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.green,
+    flexShrink: 0,
+  },
+  sessionDotCompleted: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: theme.textMuted,
+    flexShrink: 0,
+  },
+  sessionBannerText: {
+    fontWeight: 600,
+    color: theme.accent,
+  },
+  sessionBannerMeta: {
+    color: theme.textMuted,
+    fontSize: 11,
+  },
+  sessionBannerClear: {
+    marginLeft: 'auto',
+    color: theme.accent,
+    cursor: 'pointer',
+    fontSize: 11,
+    fontWeight: 600,
   },
 }
 

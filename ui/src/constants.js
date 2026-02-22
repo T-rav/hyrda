@@ -68,6 +68,11 @@ export const SYSTEM_WORKER_INTERVALS = {
 }
 
 /**
+ * Valid session statuses for the session sidebar.
+ */
+export const SESSION_STATUSES = ['active', 'completed']
+
+/**
  * Background worker definitions — maintenance and system loops that can be toggled on/off.
  * Workers with `system: true` are internal services shown with a "system" badge.
  */

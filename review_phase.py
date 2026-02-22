@@ -1,4 +1,4 @@
-"""Review processing for the Hydra orchestrator."""
+"""Review processing for the HydraFlow orchestrator."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from pathlib import Path
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from agent import AgentRunner
-from config import HydraConfig
+from config import HydraFlowConfig
 from epic import EpicCompletionChecker
-from events import EventBus, EventType, HydraEvent
+from events import EventBus, EventType, HydraFlowEvent
 from issue_store import IssueStore
 from memory import file_memory_suggestion
 from models import (
@@ -43,7 +43,7 @@ from verification import format_verification_issue_body
 from verification_judge import VerificationJudge
 from worktree import WorktreeManager
 
-logger = logging.getLogger("hydra.review_phase")
+logger = logging.getLogger("hydraflow.review_phase")
 
 
 class ReviewPhase:
@@ -51,7 +51,7 @@ class ReviewPhase:
 
     def __init__(
         self,
-        config: HydraConfig,
+        config: HydraFlowConfig,
         state: StateTracker,
         worktrees: WorktreeManager,
         reviewers: ReviewRunner,
@@ -80,7 +80,7 @@ class ReviewPhase:
         self._verification_judge = verification_judge
         self._summarizer = transcript_summarizer
         self._epic_checker = epic_checker
-        self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._insights = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
         self._active_issues: set[int] = set()
 
     async def review_prs(
@@ -157,6 +157,10 @@ class ReviewPhase:
             )
 
         diff = await self._prs.get_pr_diff(pr.number)
+
+        # Delta verification: compare planned vs actual files
+        await self._run_delta_verification(pr, diff)
+
         result = await self._run_and_post_review(pr, issue, wt_path, diff, idx)
 
         # If reviewer fixed its own findings, re-review the updated code
@@ -313,6 +317,44 @@ class ReviewPhase:
 
         return result
 
+    async def _run_delta_verification(self, pr: PRInfo, diff: str) -> str:
+        """Run delta verification comparing plan's File Delta section to actual diff.
+
+        Returns a summary string (empty if no plan or no delta section).
+        """
+        from delta_verifier import parse_file_delta, verify_delta
+
+        plan_path = (
+            self._config.repo_root / ".hydra" / "plans" / f"issue-{pr.issue_number}.md"
+        )
+        if not plan_path.exists():
+            return ""
+
+        try:
+            plan_text = plan_path.read_text()
+        except OSError:
+            return ""
+
+        planned_files = parse_file_delta(plan_text)
+        if not planned_files:
+            return ""
+
+        # Extract actual changed files from the diff
+        actual_files = await self._prs.get_pr_diff_names(pr.number)
+        report = verify_delta(planned_files, actual_files)
+
+        if report.has_drift:
+            summary = report.format_summary()
+            logger.warning(
+                "Delta drift for PR #%d (issue #%d): %d missing, %d unexpected",
+                pr.number,
+                pr.issue_number,
+                len(report.missing),
+                len(report.unexpected),
+            )
+            return summary
+        return ""
+
     async def _handle_approved_merge(
         self,
         pr: PRInfo,
@@ -343,6 +385,38 @@ class ReviewPhase:
             self._state.record_issue_completed()
             if result.ci_fix_attempts > 0:
                 self._state.record_ci_fix_rounds(result.ci_fix_attempts)
+                for _ in range(result.ci_fix_attempts):
+                    self._state.record_stage_retry(pr.issue_number, "ci_fix")
+            # Track time-to-merge
+            if issue.created_at:
+                try:
+                    created = datetime.fromisoformat(issue.created_at)
+                    merge_seconds = (datetime.now(UTC) - created).total_seconds()
+                    self._state.record_merge_duration(merge_seconds)
+                except (ValueError, TypeError):
+                    pass
+            # Check thresholds and publish alerts
+            proposals = self._state.check_thresholds(
+                self._config.quality_fix_rate_threshold,
+                self._config.approval_rate_threshold,
+                self._config.hitl_rate_threshold,
+            )
+            for proposal in proposals:
+                self._state.mark_threshold_fired(proposal["name"])
+                await self._bus.publish(
+                    HydraFlowEvent(
+                        type=EventType.SYSTEM_ALERT,
+                        data={
+                            "message": (
+                                f"Threshold breached: {proposal['metric']} "
+                                f"({proposal['value']:.2f} vs {proposal['threshold']:.2f}). "
+                                f"{proposal['action']}"
+                            ),
+                            "source": "threshold_check",
+                            "threshold": proposal,
+                        },
+                    )
+                )
             self._state.reset_review_attempts(pr.issue_number)
             self._state.reset_issue_attempts(pr.issue_number)
             self._state.clear_review_feedback(pr.issue_number)
@@ -562,7 +636,7 @@ class ReviewPhase:
     ) -> None:
         """Emit a REVIEW_UPDATE event with the given status."""
         await self._bus.publish(
-            HydraEvent(
+            HydraFlowEvent(
                 type=EventType.REVIEW_UPDATE,
                 data={
                     "pr": pr.number,
@@ -612,7 +686,7 @@ class ReviewPhase:
         if extra_event_data:
             event_data.update(extra_event_data)
         await self._bus.publish(
-            HydraEvent(type=EventType.HITL_ESCALATION, data=event_data)
+            HydraFlowEvent(type=EventType.HITL_ESCALATION, data=event_data)
         )
 
     @staticmethod
@@ -946,8 +1020,8 @@ class ReviewPhase:
         attempt: int,
         transcript: str,
     ) -> None:
-        """Save a conflict resolution transcript to ``.hydra/logs/``."""
-        log_dir = self._config.repo_root / ".hydra" / "logs"
+        """Save a conflict resolution transcript to ``.hydraflow/logs/``."""
+        log_dir = self._config.repo_root / ".hydraflow" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         path = log_dir / f"conflict-pr-{pr_number}-attempt-{attempt}.txt"
         path.write_text(transcript)

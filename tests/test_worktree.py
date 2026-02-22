@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/worktree.py — WorktreeManager."""
+"""Tests for dx/hydraflow/worktree.py — WorktreeManager."""
 
 from __future__ import annotations
 
@@ -696,7 +696,7 @@ class TestSetupEnv:
         assert settings_dst.read_text() == '{"allowed": []}'
 
     def test_setup_env_symlinks_node_modules(self, config, tmp_path: Path) -> None:
-        """_setup_env should symlink node_modules for each UI directory."""
+        """_setup_env should symlink node_modules for each detected UI directory."""
         manager = WorktreeManager(config)
 
         repo_root = config.repo_root
@@ -704,13 +704,13 @@ class TestSetupEnv:
         wt_path.mkdir()
         repo_root.mkdir(parents=True, exist_ok=True)
 
-        # Create one node_modules under a UI dir
-        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        # Create node_modules under the default "ui" dir (from config.ui_dirs)
+        ui_nm_src = repo_root / "ui" / "node_modules"
         ui_nm_src.mkdir(parents=True)
 
         manager._setup_env(wt_path)
 
-        ui_nm_dst = wt_path / "bot" / "health_ui" / "node_modules"
+        ui_nm_dst = wt_path / "ui" / "node_modules"
         assert ui_nm_dst.is_symlink()
 
     def test_setup_env_skips_missing_sources(self, config, tmp_path: Path) -> None:
@@ -762,8 +762,8 @@ class TestSetupEnv:
         env_src = repo_root / ".env"
         env_src.write_text("SECRET=val")
 
-        # Also create node_modules source under a real _UI_DIRS entry
-        ui_nm_src = repo_root / "bot" / "health_ui" / "node_modules"
+        # Also create node_modules source under a detected UI dir
+        ui_nm_src = repo_root / "ui" / "node_modules"
         ui_nm_src.mkdir(parents=True)
 
         with patch.object(Path, "symlink_to", side_effect=OSError("perm denied")):
@@ -825,8 +825,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should not run any git config commands when identity is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 
@@ -847,8 +847,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should only set user.name when email is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 
@@ -876,8 +876,8 @@ class TestConfigureGitIdentity:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Should only set user.email when name is empty."""
-        monkeypatch.delenv("HYDRA_GIT_USER_NAME", raising=False)
-        monkeypatch.delenv("HYDRA_GIT_USER_EMAIL", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_NAME", raising=False)
+        monkeypatch.delenv("HYDRAFLOW_GIT_USER_EMAIL", raising=False)
 
         from tests.helpers import ConfigFactory
 
@@ -1228,6 +1228,132 @@ class TestGetMainCommitsSinceDiverge:
         # Second call is git log
         log_call = mock_exec.call_args_list[1]
         assert "-30" in log_call.args
+
+
+# ---------------------------------------------------------------------------
+# WorktreeManager._detect_ui_dirs
+# ---------------------------------------------------------------------------
+
+
+class TestDetectUiDirs:
+    """Tests for WorktreeManager._detect_ui_dirs."""
+
+    def test_detects_package_json_dirs(self, tmp_path: Path) -> None:
+        """Should discover UI dirs from package.json files in repo root."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        # Create two UI dirs with package.json
+        (repo_root / "ui").mkdir()
+        (repo_root / "ui" / "package.json").write_text("{}")
+        (repo_root / "dashboard" / "frontend").mkdir(parents=True)
+        (repo_root / "dashboard" / "frontend" / "package.json").write_text("{}")
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        assert "dashboard/frontend" in manager._ui_dirs
+        assert "ui" in manager._ui_dirs
+
+    def test_skips_node_modules_package_json(self, tmp_path: Path) -> None:
+        """Should not detect package.json inside node_modules."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / "ui").mkdir()
+        (repo_root / "ui" / "package.json").write_text("{}")
+        (repo_root / "ui" / "node_modules" / "some-pkg").mkdir(parents=True)
+        (repo_root / "ui" / "node_modules" / "some-pkg" / "package.json").write_text(
+            "{}"
+        )
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        assert manager._ui_dirs == ["ui"]
+
+    def test_skips_hidden_dirs(self, tmp_path: Path) -> None:
+        """Should not detect package.json inside hidden directories."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / ".hidden" / "sub").mkdir(parents=True)
+        (repo_root / ".hidden" / "sub" / "package.json").write_text("{}")
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        # No package.json found outside hidden dirs, falls back to config
+        assert manager._ui_dirs == ["ui"]
+
+    def test_skips_root_level_package_json(self, tmp_path: Path) -> None:
+        """Should not include root-level package.json as a UI dir."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / "package.json").write_text("{}")
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        manager = WorktreeManager(cfg)
+
+        # Root package.json is excluded, falls back to config
+        assert manager._ui_dirs == ["ui"]
+
+    def test_falls_back_to_config_when_no_package_json(self, tmp_path: Path) -> None:
+        """Should use config.ui_dirs when no package.json files are found."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+            ui_dirs=["custom/ui", "other/frontend"],
+        )
+        manager = WorktreeManager(cfg)
+
+        assert manager._ui_dirs == ["custom/ui", "other/frontend"]
+
+    def test_detection_overrides_config(self, tmp_path: Path) -> None:
+        """When package.json files are found, they override config.ui_dirs."""
+        from tests.helpers import ConfigFactory
+
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        (repo_root / "webapp").mkdir()
+        (repo_root / "webapp" / "package.json").write_text("{}")
+
+        cfg = ConfigFactory.create(
+            repo_root=repo_root,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+            ui_dirs=["old/ui"],
+        )
+        manager = WorktreeManager(cfg)
+
+        assert manager._ui_dirs == ["webapp"]
 
 
 # NOTE: Tests for the subprocess helper (stdout parsing, error handling,

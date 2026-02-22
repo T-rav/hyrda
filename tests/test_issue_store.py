@@ -35,7 +35,7 @@ def _make_store(
     config = ConfigFactory.create()
     if fetcher is None:
         fetcher = AsyncMock()
-        fetcher.fetch_all_hydra_issues = AsyncMock(return_value=[])
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(return_value=[])
     bus = event_bus or EventBus()
     return IssueStore(config, fetcher, bus)
 
@@ -48,7 +48,7 @@ class TestRouting:
 
     def test_routes_find_labeled_issues_to_find_queue(self) -> None:
         store = _make_store()
-        issue = _make_issue(1, ["hydra-find"])
+        issue = _make_issue(1, ["hydraflow-find"])
         store._route_issues([issue])
 
         assert store._queue_members[STAGE_FIND] == {1}
@@ -56,7 +56,7 @@ class TestRouting:
 
     def test_routes_plan_labeled_issues_to_plan_queue(self) -> None:
         store = _make_store()
-        issue = _make_issue(2, ["hydra-plan"])
+        issue = _make_issue(2, ["hydraflow-plan"])
         store._route_issues([issue])
 
         assert store._queue_members[STAGE_PLAN] == {2}
@@ -73,14 +73,14 @@ class TestRouting:
 
     def test_routes_review_labeled_issues_to_review_queue(self) -> None:
         store = _make_store()
-        issue = _make_issue(4, ["hydra-review"])
+        issue = _make_issue(4, ["hydraflow-review"])
         store._route_issues([issue])
 
         assert store._queue_members[STAGE_REVIEW] == {4}
 
     def test_routes_hitl_labeled_issues_to_hitl_set(self) -> None:
         store = _make_store()
-        issue = _make_issue(5, ["hydra-hitl"])
+        issue = _make_issue(5, ["hydraflow-hitl"])
         store._route_issues([issue])
 
         assert 5 in store._hitl_numbers
@@ -100,7 +100,7 @@ class TestRouting:
     def test_multi_label_issue_routed_to_most_advanced_stage(self) -> None:
         store = _make_store()
         # Issue has both find and review labels — should go to review (higher priority)
-        issue = _make_issue(7, ["hydra-find", "hydra-review"])
+        issue = _make_issue(7, ["hydraflow-find", "hydraflow-review"])
         store._route_issues([issue])
 
         assert store._queue_members[STAGE_REVIEW] == {7}
@@ -109,10 +109,10 @@ class TestRouting:
     def test_multiple_issues_routed_to_different_queues(self) -> None:
         store = _make_store()
         issues = [
-            _make_issue(10, ["hydra-find"]),
-            _make_issue(11, ["hydra-plan"]),
+            _make_issue(10, ["hydraflow-find"]),
+            _make_issue(11, ["hydraflow-plan"]),
             _make_issue(12, ["test-label"]),  # ready
-            _make_issue(13, ["hydra-review"]),
+            _make_issue(13, ["hydraflow-review"]),
         ]
         store._route_issues(issues)
 
@@ -123,7 +123,7 @@ class TestRouting:
 
     def test_does_not_duplicate_existing_queue_entries(self) -> None:
         store = _make_store()
-        issue = _make_issue(20, ["hydra-find"])
+        issue = _make_issue(20, ["hydraflow-find"])
         store._route_issues([issue])
         store._route_issues([issue])  # Route same issue again
 
@@ -131,7 +131,7 @@ class TestRouting:
 
     def test_active_issues_not_requeued(self) -> None:
         store = _make_store()
-        issue = _make_issue(21, ["hydra-find"])
+        issue = _make_issue(21, ["hydraflow-find"])
         store.mark_active(21, STAGE_FIND)
         store._route_issues([issue])
 
@@ -141,7 +141,7 @@ class TestRouting:
     def test_label_change_moves_issue_between_queues(self) -> None:
         store = _make_store()
         # First: issue in plan queue
-        issue_plan = _make_issue(30, ["hydra-plan"])
+        issue_plan = _make_issue(30, ["hydraflow-plan"])
         store._route_issues([issue_plan])
         assert store._queue_members[STAGE_PLAN] == {30}
 
@@ -154,8 +154,8 @@ class TestRouting:
 
     def test_closed_issues_removed_from_queues(self) -> None:
         store = _make_store()
-        issue1 = _make_issue(40, ["hydra-find"])
-        issue2 = _make_issue(41, ["hydra-find"])
+        issue1 = _make_issue(40, ["hydraflow-find"])
+        issue2 = _make_issue(41, ["hydraflow-find"])
         store._route_issues([issue1, issue2])
         assert len(store._queues[STAGE_FIND]) == 2
 
@@ -166,7 +166,7 @@ class TestRouting:
 
     def test_hitl_active_label_routes_to_hitl(self) -> None:
         store = _make_store()
-        issue = _make_issue(50, ["hydra-hitl-active"])
+        issue = _make_issue(50, ["hydraflow-hitl-active"])
         store._route_issues([issue])
 
         assert 50 in store._hitl_numbers
@@ -180,7 +180,7 @@ class TestQueueAccessors:
 
     def test_get_triageable_returns_find_queue_issues(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(1, ["hydra-find"])])
+        store._route_issues([_make_issue(1, ["hydraflow-find"])])
 
         result = store.get_triageable(10)
         assert len(result) == 1
@@ -188,7 +188,7 @@ class TestQueueAccessors:
 
     def test_get_plannable_returns_plan_queue_issues(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(2, ["hydra-plan"])])
+        store._route_issues([_make_issue(2, ["hydraflow-plan"])])
 
         result = store.get_plannable(10)
         assert len(result) == 1
@@ -204,7 +204,7 @@ class TestQueueAccessors:
 
     def test_get_reviewable_returns_review_queue_issues(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(4, ["hydra-review"])])
+        store._route_issues([_make_issue(4, ["hydraflow-review"])])
 
         result = store.get_reviewable(10)
         assert len(result) == 1
@@ -238,7 +238,7 @@ class TestQueueAccessors:
 
     def test_take_removes_issues_from_queue(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(1, ["hydra-find"])])
+        store._route_issues([_make_issue(1, ["hydraflow-find"])])
         result = store.get_triageable(10)
         assert len(result) == 1
 
@@ -250,8 +250,8 @@ class TestQueueAccessors:
         store = _make_store()
         store._route_issues(
             [
-                _make_issue(50, ["hydra-hitl"]),
-                _make_issue(51, ["hydra-hitl"]),
+                _make_issue(50, ["hydraflow-hitl"]),
+                _make_issue(51, ["hydraflow-hitl"]),
             ]
         )
 
@@ -262,9 +262,9 @@ class TestQueueAccessors:
         store = _make_store()
         store._route_issues(
             [
-                _make_issue(1, ["hydra-find"]),
-                _make_issue(2, ["hydra-find"]),
-                _make_issue(3, ["hydra-find"]),
+                _make_issue(1, ["hydraflow-find"]),
+                _make_issue(2, ["hydraflow-find"]),
+                _make_issue(3, ["hydraflow-find"]),
             ]
         )
 
@@ -336,10 +336,10 @@ class TestRefresh:
     @pytest.mark.asyncio
     async def test_refresh_populates_queues_from_github(self) -> None:
         fetcher = AsyncMock()
-        fetcher.fetch_all_hydra_issues = AsyncMock(
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
             return_value=[
-                _make_issue(1, ["hydra-find"]),
-                _make_issue(2, ["hydra-plan"]),
+                _make_issue(1, ["hydraflow-find"]),
+                _make_issue(2, ["hydraflow-plan"]),
             ]
         )
         store = _make_store(fetcher=fetcher)
@@ -352,7 +352,7 @@ class TestRefresh:
     @pytest.mark.asyncio
     async def test_refresh_handles_fetcher_error_gracefully(self) -> None:
         fetcher = AsyncMock()
-        fetcher.fetch_all_hydra_issues = AsyncMock(
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
             side_effect=RuntimeError("gh CLI failed")
         )
         store = _make_store(fetcher=fetcher)
@@ -369,14 +369,14 @@ class TestRefresh:
         store = _make_store(fetcher=fetcher)
 
         # First poll: issue in plan queue
-        fetcher.fetch_all_hydra_issues = AsyncMock(
-            return_value=[_make_issue(10, ["hydra-plan"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
+            return_value=[_make_issue(10, ["hydraflow-plan"])]
         )
         await store.refresh()
         assert store._queue_members[STAGE_PLAN] == {10}
 
         # Second poll: issue now in ready queue
-        fetcher.fetch_all_hydra_issues = AsyncMock(
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
             return_value=[_make_issue(10, ["test-label"])]
         )
         await store.refresh()
@@ -388,8 +388,8 @@ class TestRefresh:
         fetcher = AsyncMock()
         store = _make_store(fetcher=fetcher)
 
-        issues = [_make_issue(1, ["hydra-find"])]
-        fetcher.fetch_all_hydra_issues = AsyncMock(return_value=issues)
+        issues = [_make_issue(1, ["hydraflow-find"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(return_value=issues)
 
         await store.refresh()
         await store.refresh()
@@ -402,18 +402,18 @@ class TestRefresh:
         store = _make_store(fetcher=fetcher)
 
         # First poll: two issues
-        fetcher.fetch_all_hydra_issues = AsyncMock(
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
             return_value=[
-                _make_issue(1, ["hydra-find"]),
-                _make_issue(2, ["hydra-find"]),
+                _make_issue(1, ["hydraflow-find"]),
+                _make_issue(2, ["hydraflow-find"]),
             ]
         )
         await store.refresh()
         assert len(store._queues[STAGE_FIND]) == 2
 
         # Second poll: only issue 2 remains (issue 1 was closed)
-        fetcher.fetch_all_hydra_issues = AsyncMock(
-            return_value=[_make_issue(2, ["hydra-find"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
+            return_value=[_make_issue(2, ["hydraflow-find"])]
         )
         await store.refresh()
         assert store._queue_members[STAGE_FIND] == {2}
@@ -424,8 +424,8 @@ class TestRefresh:
         fetcher = AsyncMock()
         store = _make_store(fetcher=fetcher)
 
-        fetcher.fetch_all_hydra_issues = AsyncMock(
-            return_value=[_make_issue(1, ["hydra-find"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
+            return_value=[_make_issue(1, ["hydraflow-find"])]
         )
         await store.refresh()
         store.get_triageable(1)  # Take from queue
@@ -455,9 +455,9 @@ class TestStats:
         store = _make_store()
         store._route_issues(
             [
-                _make_issue(1, ["hydra-find"]),
-                _make_issue(2, ["hydra-find"]),
-                _make_issue(3, ["hydra-plan"]),
+                _make_issue(1, ["hydraflow-find"]),
+                _make_issue(2, ["hydraflow-find"]),
+                _make_issue(3, ["hydraflow-plan"]),
             ]
         )
 
@@ -504,8 +504,8 @@ class TestStats:
         store = _make_store()
         store._route_issues(
             [
-                _make_issue(50, ["hydra-hitl"]),
-                _make_issue(51, ["hydra-hitl"]),
+                _make_issue(50, ["hydraflow-hitl"]),
+                _make_issue(51, ["hydraflow-hitl"]),
             ]
         )
         stats = store.get_queue_stats()
@@ -531,8 +531,8 @@ class TestEventPublishing:
     @pytest.mark.asyncio
     async def test_queue_update_event_contains_depth_data(self, event_bus) -> None:
         fetcher = AsyncMock()
-        fetcher.fetch_all_hydra_issues = AsyncMock(
-            return_value=[_make_issue(1, ["hydra-find"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
+            return_value=[_make_issue(1, ["hydraflow-find"])]
         )
         store = _make_store(fetcher=fetcher, event_bus=event_bus)
 
@@ -552,8 +552,8 @@ class TestLifecycle:
     @pytest.mark.asyncio
     async def test_start_runs_initial_refresh(self) -> None:
         fetcher = AsyncMock()
-        fetcher.fetch_all_hydra_issues = AsyncMock(
-            return_value=[_make_issue(1, ["hydra-find"])]
+        fetcher.fetch_all_hydraflow_issues = AsyncMock(
+            return_value=[_make_issue(1, ["hydraflow-find"])]
         )
         store = _make_store(fetcher=fetcher)
         stop = asyncio.Event()
@@ -562,7 +562,7 @@ class TestLifecycle:
         await store.start(stop)
 
         assert store._queue_members[STAGE_FIND] == {1}
-        fetcher.fetch_all_hydra_issues.assert_called()
+        fetcher.fetch_all_hydraflow_issues.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_stops_when_event_set(self) -> None:
@@ -581,14 +581,14 @@ class TestLifecycle:
         await task
 
 
-# ── Fetch All Hydra Issues ───────────────────────────────────────────
+# ── Fetch All HydraFlow Issues ───────────────────────────────────────────
 
 
-class TestFetchAllHydraIssues:
-    """Tests for IssueFetcher.fetch_all_hydra_issues."""
+class TestFetchAllHydraFlowIssues:
+    """Tests for IssueFetcher.fetch_all_hydraflow_issues."""
 
     @pytest.mark.asyncio
-    async def test_fetch_all_hydra_issues_calls_fetch_by_labels(self) -> None:
+    async def test_fetch_all_hydraflow_issues_calls_fetch_by_labels(self) -> None:
         from issue_fetcher import IssueFetcher
 
         config = ConfigFactory.create()
@@ -600,21 +600,21 @@ class TestFetchAllHydraIssues:
             new_callable=AsyncMock,
             return_value=[],
         ) as mock_fetch:
-            result = await fetcher.fetch_all_hydra_issues()
+            result = await fetcher.fetch_all_hydraflow_issues()
 
             mock_fetch.assert_called_once()
             call_args = mock_fetch.call_args
             labels = call_args[0][0]
             # Should include all pipeline labels
-            assert "hydra-find" in labels
-            assert "hydra-plan" in labels
+            assert "hydraflow-find" in labels
+            assert "hydraflow-plan" in labels
             assert "test-label" in labels  # ready_label from ConfigFactory
-            assert "hydra-review" in labels
-            assert "hydra-hitl" in labels
+            assert "hydraflow-review" in labels
+            assert "hydraflow-hitl" in labels
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_fetch_all_hydra_issues_deduplicates(
+    async def test_fetch_all_hydraflow_issues_deduplicates(
         self,
     ) -> None:
         from issue_fetcher import IssueFetcher
@@ -622,7 +622,7 @@ class TestFetchAllHydraIssues:
         config = ConfigFactory.create()
         fetcher = IssueFetcher(config)
 
-        issue = _make_issue(42, ["hydra-find"])
+        issue = _make_issue(42, ["hydraflow-find"])
 
         with patch.object(
             fetcher,
@@ -630,7 +630,7 @@ class TestFetchAllHydraIssues:
             new_callable=AsyncMock,
             return_value=[issue],
         ):
-            result = await fetcher.fetch_all_hydra_issues()
+            result = await fetcher.fetch_all_hydraflow_issues()
             assert len(result) == 1
             assert result[0].number == 42
 
@@ -653,8 +653,8 @@ class TestPipelineSnapshot:
         store = _make_store()
         store._route_issues(
             [
-                _make_issue(1, ["hydra-find"]),
-                _make_issue(2, ["hydra-plan"]),
+                _make_issue(1, ["hydraflow-find"]),
+                _make_issue(2, ["hydraflow-plan"]),
             ]
         )
 
@@ -667,7 +667,7 @@ class TestPipelineSnapshot:
 
     def test_active_issues_appear_with_active_status(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(10, ["hydra-find"])])
+        store._route_issues([_make_issue(10, ["hydraflow-find"])])
         store.get_triageable(1)  # Remove from queue
         store.mark_active(10, STAGE_FIND)
 
@@ -679,7 +679,7 @@ class TestPipelineSnapshot:
 
     def test_hitl_issues_appear_in_snapshot(self) -> None:
         store = _make_store()
-        store._route_issues([_make_issue(50, ["hydra-hitl"])])
+        store._route_issues([_make_issue(50, ["hydraflow-hitl"])])
 
         snapshot = store.get_pipeline_snapshot()
         assert len(snapshot[STAGE_HITL]) == 1
@@ -707,7 +707,7 @@ class TestPipelineSnapshot:
     def test_issue_cache_populated_on_route(self) -> None:
         store = _make_store()
         issue = IssueFactory.create(
-            number=99, title="Cache test", labels=["hydra-find"]
+            number=99, title="Cache test", labels=["hydraflow-find"]
         )
         store._route_issues([issue])
 

@@ -4,15 +4,15 @@ import { PIPELINE_STAGES } from '../../constants'
 import { deriveStageStatus } from '../../hooks/useStageStatus'
 import { STAGE_KEYS } from '../../hooks/useTimeline'
 
-const mockUseHydra = vi.fn()
+const mockUseHydraFlow = vi.fn()
 
-vi.mock('../../context/HydraContext', () => ({
-  useHydra: (...args) => mockUseHydra(...args),
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
 }))
 
 const { StreamView, toStreamIssue, findWorkerTranscript } = await import('../StreamView')
 
-function defaultHydraContext(overrides = {}) {
+function defaultHydraFlowContext(overrides = {}) {
   const defaultPipeline = { triage: [], plan: [], implement: [], review: [], merged: [] }
   const pipelineIssues = overrides.pipelineIssues
     ? { ...defaultPipeline, ...overrides.pipelineIssues }
@@ -29,10 +29,10 @@ function defaultHydraContext(overrides = {}) {
   }
 }
 
-const defaultHydra = defaultHydraContext()
+const defaultHydraFlow = defaultHydraFlowContext()
 
 beforeEach(() => {
-  mockUseHydra.mockReturnValue(defaultHydraContext())
+  mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext())
 })
 
 // All stages open by default for test visibility
@@ -55,7 +55,7 @@ const basePipeIssue = {
 describe('StreamView stage indicators', () => {
   describe('Status dot colors', () => {
     it('shows green dot when stage has active workers', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         workers: {
           'triage-5': { status: 'evaluating', worker: 1, role: 'triage', title: 'Triage #5', branch: '', transcript: [], pr: null },
         },
@@ -73,7 +73,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('shows yellow dot when stage is enabled but no active workers', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'plan', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -84,7 +84,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('shows red dot when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -95,7 +95,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('defaults to enabled (yellow) when no backgroundWorkers entry exists', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [],
       }))
       render(<StreamView {...defaultProps} />)
@@ -106,7 +106,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Disabled badge', () => {
     it('shows "Disabled" badge when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'review', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -116,7 +116,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('does not show "Disabled" badge when stage is enabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'review', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -128,7 +128,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Opacity dimming', () => {
     it('applies reduced opacity when stage is disabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: false, last_run: null, details: {} },
         ],
@@ -139,7 +139,7 @@ describe('StreamView stage indicators', () => {
     })
 
     it('has full opacity when stage is enabled', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         backgroundWorkers: [
           { name: 'implement', status: 'ok', enabled: true, last_run: null, details: {} },
         ],
@@ -159,7 +159,7 @@ describe('StreamView stage indicators', () => {
 
   describe('Multiple stages with mixed states', () => {
     it('shows correct indicators for multiple stages simultaneously', () => {
-      mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
         workers: {
           'triage-5': { status: 'evaluating', worker: 1, role: 'triage', title: 'Triage #5', branch: '', transcript: [], pr: null },
         },
@@ -371,9 +371,9 @@ describe('toStreamIssue output shape', () => {
 
 describe('Stage header failed/hitl counts', () => {
   it('shows failed count when stage has failed issues', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
-      pipelineIssues: {
-        triage: [], plan: [], review: [],
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Failed issue', status: 'failed' },
@@ -386,9 +386,9 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows hitl count when stage has hitl issues', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
-      pipelineIssues: {
-        triage: [], plan: [], implement: [],
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], implement: [],
         review: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
@@ -401,9 +401,9 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('hides failed and hitl counts when zero', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
-      pipelineIssues: {
-        triage: [], implement: [], review: [],
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], implement: [], review: [],
         plan: [
           { issue_number: 1, title: 'Active issue', status: 'active' },
           { issue_number: 2, title: 'Queued issue', status: 'queued' },
@@ -417,9 +417,9 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('excludes failed and hitl from queued count', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
-      pipelineIssues: {
-        triage: [], plan: [], review: [],
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Active', status: 'active' },
           { issue_number: 2, title: 'Failed', status: 'failed' },
@@ -436,9 +436,9 @@ describe('Stage header failed/hitl counts', () => {
   })
 
   it('shows correct counts with only failed issues (no active/queued)', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
-      pipelineIssues: {
-        triage: [], plan: [], review: [],
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+        pipelineIssues: {
+          triage: [], plan: [], review: [],
         implement: [
           { issue_number: 1, title: 'Failed 1', status: 'failed' },
           { issue_number: 2, title: 'Failed 2', status: 'failed' },
@@ -455,7 +455,7 @@ describe('Stage header failed/hitl counts', () => {
 
 describe('PipelineFlow visualization', () => {
   it('renders "Pipeline Flow" label in the flow indicator', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [{ issue_number: 1, title: 'Test', status: 'queued' }],
         plan: [], implement: [], review: [],
@@ -467,7 +467,7 @@ describe('PipelineFlow visualization', () => {
   })
 
   it('renders all pipeline stage labels in the flow', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [{ issue_number: 1, title: 'Test', status: 'queued' }],
         plan: [], implement: [], review: [],
@@ -484,7 +484,7 @@ describe('PipelineFlow visualization', () => {
   })
 
   it('renders dots for issues at their current stage', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
         plan: [
@@ -502,7 +502,7 @@ describe('PipelineFlow visualization', () => {
   })
 
   it('does not render pipeline flow when no issues exist', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: { triage: [], plan: [], implement: [], review: [] },
     }))
     render(<StreamView {...defaultProps} />)
@@ -510,7 +510,7 @@ describe('PipelineFlow visualization', () => {
   })
 
   it('shows all stage labels even when some stages have no issues', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
         plan: [{ issue_number: 5, title: 'Only plan', status: 'queued' }],
@@ -527,7 +527,7 @@ describe('PipelineFlow visualization', () => {
   })
 
   it('applies pulse animation to active issue dots', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
         plan: [
@@ -547,7 +547,7 @@ describe('PipelineFlow visualization', () => {
 
 describe('Merged stage rendering', () => {
   it('renders merged PR issues in the merged stage section', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+      mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
     }))
     render(<StreamView {...defaultProps} />)
@@ -558,7 +558,7 @@ describe('Merged stage rendering', () => {
   })
 
   it('renders merged PR issue as a dot in PipelineFlow', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
     }))
     render(<StreamView {...defaultProps} />)
@@ -581,7 +581,7 @@ describe('Merged stage rendering', () => {
 
 describe('Merged stage count display', () => {
   it('shows merged item count instead of worker metrics', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       prs: [{ pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' }],
     }))
     render(<StreamView {...defaultProps} />)
@@ -593,7 +593,7 @@ describe('Merged stage count display', () => {
   })
 
   it('shows correct count with multiple merged items', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       prs: [
         { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
         { pr: 43, issue: 11, title: 'Add feature', merged: true, url: 'https://github.com/test/pr/43' },
@@ -606,14 +606,14 @@ describe('Merged stage count display', () => {
   })
 
   it('shows "0 merged" when no merged items exist', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext())
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext())
     render(<StreamView {...defaultProps} />)
     const section = screen.getByTestId('stage-section-merged')
     expect(section.textContent).toContain('0 merged')
   })
 
   it('does not affect worker metrics display on non-merged stages', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [], plan: [], review: [],
         implement: [
@@ -630,7 +630,7 @@ describe('Merged stage count display', () => {
   })
 
   it('counts items from pipelineIssues.merged', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [], plan: [], implement: [], review: [],
         merged: [
@@ -645,7 +645,7 @@ describe('Merged stage count display', () => {
   })
 
   it('deduplicates items present in both pipelineIssues.merged and prs', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [], plan: [], implement: [], review: [],
         merged: [
@@ -665,23 +665,162 @@ describe('Merged stage count display', () => {
 })
 
 describe('PipelineFlow failed and hitl dots', () => {
-  it('renders failed and hitl issue dots as non-pulsing', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+  it('renders failed dots with red background and no animation', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
         plan: [],
         implement: [
           { issue_number: 1, title: 'Failed issue', status: 'failed' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const dot = screen.getByTestId('flow-dot-1')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.background).toBe('var(--red)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders hitl dots with yellow background and no animation', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
           { issue_number: 2, title: 'HITL issue', status: 'hitl' },
         ],
         review: [],
       },
     }))
     render(<StreamView {...defaultProps} />)
-    expect(screen.getByTestId('flow-dot-1')).toBeInTheDocument()
-    expect(screen.getByTestId('flow-dot-2')).toBeInTheDocument()
-    expect(screen.getByTestId('flow-dot-1').style.animation).toBe('')
-    expect(screen.getByTestId('flow-dot-2').style.animation).toBe('')
+    const dot = screen.getByTestId('flow-dot-2')
+    expect(dot).toBeInTheDocument()
+    expect(dot.style.background).toBe('var(--yellow)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders queued dots with stage color', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 3, title: 'Queued issue', status: 'queued' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const dot = screen.getByTestId('flow-dot-3')
+    expect(dot.style.background).toBe('var(--accent)')
+    expect(dot.style.animation).toBe('')
+  })
+
+  it('renders mixed status dots with correct colors in the same stage', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 10, title: 'Active', status: 'active' },
+          { issue_number: 11, title: 'Failed', status: 'failed' },
+          { issue_number: 12, title: 'HITL', status: 'hitl' },
+          { issue_number: 13, title: 'Queued', status: 'queued' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    // Active: stage color (accent) + pulse animation
+    const activeDot = screen.getByTestId('flow-dot-10')
+    expect(activeDot.style.background).toBe('var(--accent)')
+    expect(activeDot.style.animation).toContain('stream-pulse')
+    // Failed: red, no animation
+    const failedDot = screen.getByTestId('flow-dot-11')
+    expect(failedDot.style.background).toBe('var(--red)')
+    expect(failedDot.style.animation).toBe('')
+    // HITL: yellow, no animation
+    const hitlDot = screen.getByTestId('flow-dot-12')
+    expect(hitlDot.style.background).toBe('var(--yellow)')
+    expect(hitlDot.style.animation).toBe('')
+    // Queued: stage color (accent), no animation
+    const queuedDot = screen.getByTestId('flow-dot-13')
+    expect(queuedDot.style.background).toBe('var(--accent)')
+    expect(queuedDot.style.animation).toBe('')
+  })
+})
+
+describe('PipelineFlow summary counts', () => {
+  it('shows summary counts when merged and failed issues exist', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed', status: 'failed' },
+        ],
+        review: [],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+        { pr: 43, issue: 11, title: 'Add feature', merged: true, url: 'https://github.com/test/pr/43' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary).toBeInTheDocument()
+    expect(summary.textContent).toContain('2 merged')
+    expect(summary.textContent).toContain('1 failed')
+  })
+
+  it('shows only merged count when no failed issues', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [],
+        review: [],
+      },
+      prs: [
+        { pr: 42, issue: 10, title: 'Fix bug', merged: true, url: 'https://github.com/test/pr/42' },
+      ],
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary.textContent).toContain('1 merged')
+    expect(summary.textContent).not.toContain('failed')
+  })
+
+  it('shows only failed count when no merged issues', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [],
+        implement: [
+          { issue_number: 1, title: 'Failed', status: 'failed' },
+        ],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    const summary = screen.getByTestId('flow-summary')
+    expect(summary.textContent).toContain('1 failed')
+    expect(summary.textContent).not.toContain('merged')
+  })
+
+  it('hides summary when both counts are zero', () => {
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
+      pipelineIssues: {
+        triage: [],
+        plan: [{ issue_number: 1, title: 'Queued', status: 'queued' }],
+        implement: [],
+        review: [],
+      },
+    }))
+    render(<StreamView {...defaultProps} />)
+    expect(screen.queryByTestId('flow-summary')).not.toBeInTheDocument()
   })
 })
 
@@ -743,7 +882,7 @@ describe('findWorkerTranscript', () => {
 
 describe('StreamView transcript integration', () => {
   it('passes transcript to StreamCard for active issue with matching worker', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [], plan: [], review: [],
         implement: [{ issue_number: 42, title: 'Test issue', status: 'active' }],
@@ -759,7 +898,7 @@ describe('StreamView transcript integration', () => {
   })
 
   it('does not show transcript for queued issues even with worker data', () => {
-    mockUseHydra.mockReturnValue(defaultHydraContext({
+    mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [], plan: [], review: [],
         implement: [{ issue_number: 42, title: 'Test issue', status: 'queued' }],

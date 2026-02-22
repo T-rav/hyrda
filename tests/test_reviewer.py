@@ -1,4 +1,4 @@
-"""Tests for dx/hydra/reviewer.py."""
+"""Tests for dx/hydraflow/reviewer.py."""
 
 from __future__ import annotations
 
@@ -383,7 +383,7 @@ def test_save_transcript_writes_to_correct_path(event_bus, tmp_path):
 
     runner._save_transcript(42, transcript)
 
-    expected_path = tmp_path / ".hydra" / "logs" / "review-pr-42.txt"
+    expected_path = tmp_path / ".hydraflow" / "logs" / "review-pr-42.txt"
     assert expected_path.exists()
     assert expected_path.read_text() == transcript
 
@@ -391,7 +391,7 @@ def test_save_transcript_writes_to_correct_path(event_bus, tmp_path):
 def test_save_transcript_creates_log_directory(event_bus, tmp_path):
     cfg = ConfigFactory.create(repo_root=tmp_path)
     runner = ReviewRunner(config=cfg, event_bus=event_bus)
-    log_dir = tmp_path / ".hydra" / "logs"
+    log_dir = tmp_path / ".hydraflow" / "logs"
     assert not log_dir.exists()
 
     runner._save_transcript(7, "transcript content")

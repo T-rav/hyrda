@@ -97,9 +97,9 @@ class TestOrchestratorBgWorkerTracking:
     """Verify orchestrator background worker state tracking."""
 
     def test_update_stores_state(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok", {"item_count": 5})
 
         states = orch.get_bg_worker_states()
@@ -109,9 +109,9 @@ class TestOrchestratorBgWorkerTracking:
         assert states["memory_sync"]["last_run"] is not None
 
     def test_get_returns_copy(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("metrics", "ok")
 
         states1 = orch.get_bg_worker_states()
@@ -119,9 +119,9 @@ class TestOrchestratorBgWorkerTracking:
         assert states1 is not states2
 
     def test_update_replaces_previous(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok", {"count": 1})
         orch.update_bg_worker_status("memory_sync", "error", {"count": 2})
 
@@ -130,9 +130,9 @@ class TestOrchestratorBgWorkerTracking:
         assert states["memory_sync"]["details"]["count"] == 2
 
     def test_empty_states_initially(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         assert orch.get_bg_worker_states() == {}
 
 
@@ -142,24 +142,24 @@ class TestBgWorkerEnabled:
     def test_is_bg_worker_enabled_defaults_to_true(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         assert orch.is_bg_worker_enabled("memory_sync") is True
 
     def test_set_bg_worker_enabled_false(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.set_bg_worker_enabled("memory_sync", False)
         assert orch.is_bg_worker_enabled("memory_sync") is False
 
     def test_set_bg_worker_enabled_true_after_disable(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.set_bg_worker_enabled("metrics", False)
         orch.set_bg_worker_enabled("metrics", True)
         assert orch.is_bg_worker_enabled("metrics") is True
@@ -167,9 +167,9 @@ class TestBgWorkerEnabled:
     def test_get_bg_worker_states_includes_enabled_flag(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok")
         orch.set_bg_worker_enabled("memory_sync", False)
 
@@ -255,9 +255,9 @@ class TestSystemWorkersEndpoint:
     async def test_returns_tracked_state(
         self, config, event_bus: EventBus, state, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok", {"item_count": 12})
 
         router = self._make_router(config, event_bus, state, tmp_path, orch=orch)
@@ -435,9 +435,9 @@ class TestSystemWorkersEndpointIntervals:
     async def test_workers_include_interval_seconds(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         router = self._make_router(config, event_bus, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
@@ -457,9 +457,9 @@ class TestSystemWorkersEndpointIntervals:
     async def test_workers_include_next_run(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.update_bg_worker_status("memory_sync", "ok", {"count": 1})
         router = self._make_router(config, event_bus, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
@@ -474,9 +474,9 @@ class TestSystemWorkersEndpointIntervals:
     async def test_pr_unsticker_has_interval_seconds(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         router = self._make_router(config, event_bus, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
@@ -501,9 +501,9 @@ class TestSystemWorkersEndpointIntervals:
     async def test_event_driven_workers_have_no_interval(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         router = self._make_router(config, event_bus, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
@@ -519,9 +519,9 @@ class TestSystemWorkersEndpointIntervals:
     async def test_next_run_none_when_no_last_run(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         router = self._make_router(config, event_bus, tmp_path, orch=orch)
         endpoint = self._find_endpoint(router, "/api/system/workers")
         response = await endpoint()
@@ -664,26 +664,26 @@ class TestOrchestratorIntervalManagement:
     def test_get_returns_config_default_when_no_override(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         assert orch.get_bg_worker_interval("memory_sync") == config.memory_sync_interval
         assert orch.get_bg_worker_interval("metrics") == config.metrics_sync_interval
 
     def test_set_stores_and_returns_override(self, config, event_bus: EventBus) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch.set_bg_worker_interval("memory_sync", 1800)
         assert orch.get_bg_worker_interval("memory_sync") == 1800
 
     def test_set_persists_to_state(
         self, config, event_bus: EventBus, tmp_path: Path
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
         state = StateTracker(tmp_path / "state.json")
-        orch = HydraOrchestrator(config, event_bus=event_bus, state=state)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus, state=state)
         orch.set_bg_worker_interval("metrics", 600)
 
         intervals = state.get_worker_intervals()
@@ -692,15 +692,15 @@ class TestOrchestratorIntervalManagement:
     def test_pr_unsticker_returns_pr_unstick_interval(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         assert orch.get_bg_worker_interval("pr_unsticker") == config.pr_unstick_interval
 
     def test_unknown_worker_returns_poll_interval(
         self, config, event_bus: EventBus
     ) -> None:
-        from orchestrator import HydraOrchestrator
+        from orchestrator import HydraFlowOrchestrator
 
-        orch = HydraOrchestrator(config, event_bus=event_bus)
+        orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         assert orch.get_bg_worker_interval("unknown") == config.poll_interval

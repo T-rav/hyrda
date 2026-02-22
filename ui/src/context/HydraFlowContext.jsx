@@ -41,6 +41,9 @@ export const initialState = {
   metricsHistory: null,
   pipelineIssues: { ...emptyPipeline },
   pipelinePollerLastRun: null,
+  sessions: [],
+  currentSessionId: null,
+  selectedSessionId: null,
 }
 
 function isDuplicate(state, action) {
@@ -551,14 +554,58 @@ export function reducer(state, action) {
         ),
       }
 
+    case 'session_start': {
+      const newSession = {
+        id: action.data.session_id,
+        repo: action.data.repo,
+        started_at: action.timestamp || new Date().toISOString(),
+        ended_at: null,
+        issues_processed: [],
+        issues_succeeded: 0,
+        issues_failed: 0,
+        status: 'active',
+      }
+      return {
+        ...addEvent(state, action),
+        sessions: [newSession, ...state.sessions],
+        currentSessionId: action.data.session_id,
+      }
+    }
+
+    case 'session_end': {
+      const endedId = action.data.session_id
+      return {
+        ...addEvent(state, action),
+        sessions: state.sessions.map(s =>
+          s.id === endedId
+            ? {
+                ...s,
+                ended_at: action.timestamp || new Date().toISOString(),
+                status: 'completed',
+                issues_processed: action.data.issues_processed ?? s.issues_processed,
+                issues_succeeded: action.data.issues_succeeded ?? s.issues_succeeded,
+                issues_failed: action.data.issues_failed ?? s.issues_failed,
+              }
+            : s
+        ),
+        currentSessionId: null,
+      }
+    }
+
+    case 'SESSIONS':
+      return { ...state, sessions: action.data || [] }
+
+    case 'SELECT_SESSION':
+      return { ...state, selectedSessionId: action.data.sessionId }
+
     default:
       return addEvent(state, action)
   }
 }
 
-const HydraContext = createContext(null)
+const HydraFlowContext = createContext(null)
 
-export function HydraProvider({ children }) {
+export function HydraFlowProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const wsRef = useRef(null)
   const reconnectTimer = useRef(null)
@@ -600,6 +647,17 @@ export function HydraProvider({ children }) {
       .then(r => r.json())
       .then(data => dispatch({ type: 'METRICS_HISTORY', data }))
       .catch(() => {})
+  }, [])
+
+  const fetchSessions = useCallback(() => {
+    fetch('/api/sessions')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'SESSIONS', data }))
+      .catch(() => {})
+  }, [])
+
+  const selectSession = useCallback((sessionId) => {
+    dispatch({ type: 'SELECT_SESSION', data: { sessionId } })
   }, [])
 
   const submitIntent = useCallback(async (text) => {
@@ -734,6 +792,7 @@ export function HydraProvider({ children }) {
       fetchGithubMetrics()
       fetchMetricsHistory()
       fetchPipeline()
+      fetchSessions()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
           .then(r => r.json())
@@ -790,7 +849,7 @@ export function HydraProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions])
 
   useEffect(() => {
     const poll = () => {
@@ -835,8 +894,22 @@ export function HydraProvider({ children }) {
     [state.pipelineIssues, state.workers, state.backgroundWorkers, state.sessionTriaged, state.sessionPlanned, state.sessionImplemented, state.sessionReviewed, state.mergedCount],
   )
 
+  const selectedSession = useMemo(() => {
+    if (!state.selectedSessionId) return null
+    return state.sessions.find(s => s.id === state.selectedSessionId) ?? null
+  }, [state.selectedSessionId, state.sessions])
+
+  const filteredEvents = useMemo(() => {
+    if (!selectedSession) return state.events
+    const start = selectedSession.started_at
+    const end = selectedSession.ended_at || new Date().toISOString()
+    return state.events.filter(e => e.timestamp && e.timestamp >= start && e.timestamp <= end)
+  }, [state.events, selectedSession])
+
   const value = {
     ...state,
+    events: filteredEvents,
+    selectedSession,
     stageStatus,
     resetSession,
     submitIntent,
@@ -845,19 +918,20 @@ export function HydraProvider({ children }) {
     toggleBgWorker,
     updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,
+    selectSession,
   }
 
   return (
-    <HydraContext.Provider value={value}>
+    <HydraFlowContext.Provider value={value}>
       {children}
-    </HydraContext.Provider>
+    </HydraFlowContext.Provider>
   )
 }
 
-export function useHydra() {
-  const context = useContext(HydraContext)
+export function useHydraFlow() {
+  const context = useContext(HydraFlowContext)
   if (!context) {
-    throw new Error('useHydra must be used within a HydraProvider')
+    throw new Error('useHydraFlow must be used within a HydraFlowProvider')
   }
   return context
 }

@@ -1,4 +1,4 @@
-"""Git worktree lifecycle management for Hydra."""
+"""Git worktree lifecycle management for HydraFlow."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import contextlib
 import logging
 from pathlib import Path
 
-from config import HydraConfig
+from config import HydraFlowConfig
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydra.worktree")
+logger = logging.getLogger("hydraflow.worktree")
 
 
 class WorktreeManager:
@@ -23,18 +23,34 @@ class WorktreeManager:
     - Pre-commit hooks installed
     """
 
-    # Node UI directories that need symlinked node_modules
-    _UI_DIRS = [
-        "bot/health_ui",
-        "tasks/ui",
-        "control_plane/ui",
-        "dashboard-service/health_ui",
-    ]
-
-    def __init__(self, config: HydraConfig) -> None:
+    def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
         self._repo_root = config.repo_root
         self._base = config.worktree_base
+        self._ui_dirs = self._detect_ui_dirs()
+
+    def _detect_ui_dirs(self) -> list[str]:
+        """Auto-detect UI directories by scanning for ``package.json`` files.
+
+        Falls back to ``config.ui_dirs`` if no ``package.json`` files are found.
+        """
+        detected: list[str] = []
+        try:
+            for pkg_json in self._repo_root.rglob("package.json"):
+                # Skip node_modules and hidden directories
+                parts = pkg_json.relative_to(self._repo_root).parts
+                if "node_modules" in parts or any(p.startswith(".") for p in parts):
+                    continue
+                parent = str(pkg_json.parent.relative_to(self._repo_root))
+                if parent == ".":
+                    continue  # Skip root-level package.json
+                detected.append(parent)
+        except OSError:
+            logger.debug("Could not scan for package.json files", exc_info=True)
+        if detected:
+            logger.info("Auto-detected UI dirs: %s", detected)
+            return sorted(detected)
+        return list(self._config.ui_dirs)
 
     async def _delete_local_branch(self, branch: str) -> None:
         """Delete a local branch if it exists, ignoring errors."""
@@ -375,7 +391,7 @@ class WorktreeManager:
                 )
 
         # Symlink node_modules for each UI directory
-        for ui_dir in self._UI_DIRS:
+        for ui_dir in self._ui_dirs:
             nm_src = self._repo_root / ui_dir / "node_modules"
             nm_dst = wt_path / ui_dir / "node_modules"
             if nm_src.exists() and not nm_dst.exists():
