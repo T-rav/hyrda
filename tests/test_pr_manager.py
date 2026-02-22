@@ -2714,7 +2714,7 @@ class TestCountHelpers:
         assert result == 0
 
     @pytest.mark.asyncio
-    async def test_count_open_issues_by_label_passes_limit(
+    async def test_count_open_issues_by_label_uses_search_api(
         self, config, event_bus, tmp_path
     ):
         from config import HydraConfig
@@ -2739,11 +2739,15 @@ class TestCountHelpers:
         assert result == {"hydra-plan": 5}
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "--limit" in cmd
-        assert cmd[cmd.index("--limit") + 1] == "1000"
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
 
     @pytest.mark.asyncio
-    async def test_count_closed_issues_passes_limit(self, config, event_bus, tmp_path):
+    async def test_count_closed_issues_uses_search_api(
+        self, config, event_bus, tmp_path
+    ):
         from config import HydraConfig
 
         cfg = HydraConfig(
@@ -2766,11 +2770,13 @@ class TestCountHelpers:
         assert result == 7
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "--limit" in cmd
-        assert cmd[cmd.index("--limit") + 1] == "1000"
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
 
     @pytest.mark.asyncio
-    async def test_count_merged_prs_passes_limit(self, config, event_bus, tmp_path):
+    async def test_count_merged_prs_uses_search_api(self, config, event_bus, tmp_path):
         from config import HydraConfig
 
         cfg = HydraConfig(
@@ -2793,8 +2799,10 @@ class TestCountHelpers:
         assert result == 12
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "--limit" in cmd
-        assert cmd[cmd.index("--limit") + 1] == "1000"
+        assert "api" in cmd
+        assert "search/issues" in cmd
+        assert ".total_count" in cmd
+        assert "--limit" not in cmd
 
 
 # ---------------------------------------------------------------------------
