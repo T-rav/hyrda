@@ -8,12 +8,14 @@ import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from execution import get_default_runner
 from models import VerificationCriteria
 from runner_utils import stream_claude_process
 
 if TYPE_CHECKING:
     from config import HydraConfig
     from events import EventBus
+    from execution import SubprocessRunner
     from models import GitHubIssue
     from pr_manager import PRManager
 
@@ -33,11 +35,13 @@ class AcceptanceCriteriaGenerator:
         config: HydraConfig,
         prs: PRManager,
         event_bus: EventBus,
+        runner: SubprocessRunner | None = None,
     ) -> None:
         self._config = config
         self._prs = prs
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
+        self._runner = runner or get_default_runner()
 
     async def generate(
         self,
@@ -77,6 +81,7 @@ class AcceptanceCriteriaGenerator:
                 "source": "ac_generator",
             },
             logger=logger,
+            runner=self._runner,
         )
 
         criteria = self._extract_criteria(transcript, issue_number, pr_number)
