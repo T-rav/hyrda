@@ -463,6 +463,26 @@ class TestScaffoldJsTests:
         assert (tmp_path / "__tests__").is_dir()
         assert "package.json" not in result.modified_files
 
+    def test_adds_jest_dom_to_dev_dependencies(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").write_text('{"name": "foo"}\n')
+
+        result = _scaffold_js_tests(tmp_path)
+
+        pkg = json.loads((tmp_path / "package.json").read_text())
+        assert "@testing-library/jest-dom" in pkg.get("devDependencies", {})
+        assert "package.json" in result.modified_files
+
+    def test_skips_package_json_modification_when_malformed(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "package.json").write_text("not valid json {{{")
+
+        result = _scaffold_js_tests(tmp_path)
+
+        assert "package.json" not in result.modified_files
+        # __tests__/ and vitest.config.js should still be created
+        assert (tmp_path / "__tests__").is_dir()
+
     def test_result_language_is_javascript(self, tmp_path: Path) -> None:
         (tmp_path / "package.json").write_text('{"name": "foo"}\n')
 
@@ -574,6 +594,31 @@ class TestScaffoldTests:
         # Check JS test dir
         js_tests = list((tmp_path / "__tests__").glob("*.test.*"))
         assert js_tests == []
+
+    def test_dry_run_js_repo_does_not_write(self, tmp_path: Path) -> None:
+        (tmp_path / "package.json").write_text('{"name": "foo"}\n')
+
+        result = scaffold_tests(tmp_path, dry_run=True)
+
+        assert result.skipped is False
+        assert result.language == "javascript"
+        assert not (tmp_path / "__tests__").exists()
+        assert not (tmp_path / "vitest.config.js").exists()
+        assert "__tests__" in result.created_dirs
+        assert "vitest.config.js" in result.created_files
+
+    def test_dry_run_mixed_repo_does_not_write(self, tmp_path: Path) -> None:
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'foo'\n")
+        (tmp_path / "package.json").write_text('{"name": "foo"}\n')
+
+        result = scaffold_tests(tmp_path, dry_run=True)
+
+        assert result.skipped is False
+        assert result.language == "mixed"
+        assert not (tmp_path / "tests").exists()
+        assert not (tmp_path / "__tests__").exists()
+        assert "tests" in result.created_dirs
+        assert "__tests__" in result.created_dirs
 
     def test_dry_run_does_not_report_package_json_when_already_complete(
         self, tmp_path: Path

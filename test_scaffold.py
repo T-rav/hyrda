@@ -229,7 +229,10 @@ def _scaffold_js_tests(repo_root: Path) -> TestScaffoldResult:
     # Modify package.json if it exists
     pkg_path = repo_root / "package.json"
     if pkg_path.is_file():
-        pkg = json.loads(pkg_path.read_text())
+        try:
+            pkg = json.loads(pkg_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return result  # Can't parse package.json; skip dependency injection
         modified = False
 
         # Add vitest to devDependencies
