@@ -7,14 +7,19 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from config import HydraConfig
 from events import EventBus, EventType, HydraEvent
+from execution import get_default_runner
 from memory import load_memory_digest
 from models import GitHubIssue, WorkerResult, WorkerStatus
 from review_insights import ReviewInsightStore, get_common_feedback_section
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
+
+if TYPE_CHECKING:
+    from execution import SubprocessRunner
 
 logger = logging.getLogger("hydra.agent")
 
@@ -26,11 +31,17 @@ class AgentRunner:
     changes but does **not** push or create PRs.
     """
 
-    def __init__(self, config: HydraConfig, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        config: HydraConfig,
+        event_bus: EventBus,
+        runner: SubprocessRunner | None = None,
+    ) -> None:
         self._config = config
         self._bus = event_bus
         self._active_procs: set[asyncio.subprocess.Process] = set()
         self._insights = ReviewInsightStore(config.repo_root / ".hydra" / "memory")
+        self._runner = runner or get_default_runner()
 
     async def run(
         self,
@@ -368,6 +379,7 @@ Only suggest genuinely valuable learnings — not trivial observations.
             event_bus=self._bus,
             event_data={"issue": issue_number},
             logger=logger,
+            runner=self._runner,
         )
 
     async def _verify_result(
@@ -385,23 +397,17 @@ Only suggest genuinely valuable learnings — not trivial observations.
 
         # Run the full quality gate
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "make",
-                "quality",
+            result = await self._runner.run_simple(
+                ["make", "quality"],
                 cwd=str(worktree_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                timeout=3600,
             )
         except FileNotFoundError:
             return False, "make not found — cannot run quality checks"
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3600)
         except TimeoutError:
-            proc.kill()
-            await proc.wait()
             return False, "make quality timed out after 3600s"
-        if proc.returncode != 0:
-            output = stdout.decode(errors="replace") + stderr.decode(errors="replace")
+        if result.returncode != 0:
+            output = "\n".join(filter(None, [result.stdout, result.stderr]))
             return False, f"`make quality` failed:\n{output[-3000:]}"
 
         return True, "OK"
@@ -470,23 +476,19 @@ Focus on fixing the root causes, not suppressing warnings.
 
     async def _count_commits(self, worktree_path: Path, branch: str) -> int:
         """Count commits on *branch* ahead of main."""
-        proc: asyncio.subprocess.Process | None = None
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git",
-                "rev-list",
-                "--count",
-                f"origin/{self._config.main_branch}..{branch}",
+            result = await self._runner.run_simple(
+                [
+                    "git",
+                    "rev-list",
+                    "--count",
+                    f"origin/{self._config.main_branch}..{branch}",
+                ],
                 cwd=str(worktree_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                timeout=30,
             )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            return int(stdout.decode().strip())
+            return int(result.stdout)
         except (TimeoutError, ValueError, FileNotFoundError):
-            if proc is not None and proc.returncode is None:
-                proc.kill()
-                await proc.wait()
             return 0
 
     async def _emit_status(

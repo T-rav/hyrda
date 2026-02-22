@@ -9,7 +9,11 @@ import random
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
+
+if TYPE_CHECKING:
+    from execution import SubprocessRunner
 
 logger = logging.getLogger("hydra.subprocess")
 
@@ -130,6 +134,7 @@ async def run_subprocess(
     cwd: Path | None = None,
     gh_token: str = "",
     timeout: float = 120.0,
+    runner: SubprocessRunner | None = None,
 ) -> str:
     """Run a subprocess and return stripped stdout.
 
@@ -140,30 +145,29 @@ async def run_subprocess(
     Raises :class:`SubprocessTimeoutError` if the command exceeds *timeout* seconds.
     Raises :class:`RuntimeError` on non-zero exit.
     """
+    from execution import get_default_runner
+
     env = make_clean_env(gh_token)
 
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=str(cwd) if cwd is not None else None,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=env,
-    )
+    if runner is None:
+        runner = get_default_runner()
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        result = await runner.run_simple(
+            list(cmd),
+            cwd=str(cwd) if cwd is not None else None,
+            env=env,
+            timeout=timeout,
+        )
     except TimeoutError:
-        proc.kill()
-        await proc.wait()
         raise SubprocessTimeoutError(
             f"Command {cmd!r} timed out after {timeout}s"
         ) from None
-    if proc.returncode != 0:
-        stderr_text = stderr.decode().strip()
-        msg = f"Command {cmd!r} failed (rc={proc.returncode}): {stderr_text}"
-        if _is_auth_error(stderr_text):
+    if result.returncode != 0:
+        msg = f"Command {cmd!r} failed (rc={result.returncode}): {result.stderr}"
+        if _is_auth_error(result.stderr):
             raise AuthenticationError(msg)
         raise RuntimeError(msg)
-    return stdout.decode().strip()
+    return result.stdout
 
 
 _RETRYABLE_PATTERNS = (
@@ -198,6 +202,7 @@ async def run_subprocess_with_retry(
     base_delay_seconds: float = 1.0,
     max_delay_seconds: float = 30.0,
     timeout: float = 120.0,
+    runner: SubprocessRunner | None = None,
 ) -> str:
     """Run a subprocess with exponential backoff retry on transient errors.
 
@@ -210,7 +215,7 @@ async def run_subprocess_with_retry(
     for attempt in range(max_retries + 1):
         try:
             return await run_subprocess(
-                *cmd, cwd=cwd, gh_token=gh_token, timeout=timeout
+                *cmd, cwd=cwd, gh_token=gh_token, timeout=timeout, runner=runner
             )
         except RuntimeError as exc:
             if isinstance(exc, AuthenticationError | CreditExhaustedError):

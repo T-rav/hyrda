@@ -403,6 +403,7 @@ class TestRunSubprocessWithRetry:
             cwd=Path("/tmp/test"),
             gh_token="ghp_test",
             timeout=120.0,
+            runner=None,
         )
 
 
@@ -558,4 +559,5 @@ class TestRetryWithTimeout:
             cwd=None,
             gh_token="",
             timeout=60.0,
+            runner=None,
         )
