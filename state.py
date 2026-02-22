@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
-import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from file_util import atomic_write
 from models import StateData
 
 logger = logging.getLogger("hydra.state")
@@ -46,26 +44,8 @@ class StateTracker:
     def save(self) -> None:
         """Flush current state to disk atomically."""
         self._data.last_updated = datetime.now(UTC).isoformat()
-        self._path.parent.mkdir(parents=True, exist_ok=True)
         data = self._data.model_dump_json(indent=2)
-        # Write to a temp file in the same directory, fsync, then atomically
-        # rename.  os.replace() is atomic on POSIX, so the state file is
-        # always either the old version or the new version — never partial.
-        fd, tmp = tempfile.mkstemp(
-            dir=self._path.parent,
-            prefix=".state-",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w") as f:
-                f.write(data)
-                f.flush()
-                os.fsync(f.fileno())
-            os.replace(tmp, self._path)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(tmp)
-            raise
+        atomic_write(self._path, data)
 
     # --- issue tracking ---
 

@@ -784,7 +784,7 @@ class TestAtomicSave:
     def test_save_uses_atomic_replace(self, tmp_path: Path) -> None:
         """save() should write to a temp file then atomically replace."""
         tracker = make_tracker(tmp_path)
-        with patch("state.os.replace", wraps=os.replace) as mock_replace:
+        with patch("file_util.os.replace", wraps=os.replace) as mock_replace:
             tracker.save()
             mock_replace.assert_called_once()
             args = mock_replace.call_args[0]
@@ -799,7 +799,7 @@ class TestAtomicSave:
         state_dir = tmp_path
 
         with (
-            patch("state.os.fdopen", side_effect=OSError("disk full")),
+            patch("file_util.os.fdopen", side_effect=OSError("disk full")),
             pytest.raises(OSError, match="disk full"),
         ):
             tracker.save()
@@ -813,7 +813,7 @@ class TestAtomicSave:
         tracker = make_tracker(tmp_path)
 
         with (
-            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            patch("file_util.os.fsync", side_effect=OSError("fsync failed")),
             pytest.raises(OSError, match="fsync failed"),
         ):
             tracker.save()
@@ -832,7 +832,7 @@ class TestAtomicSave:
         original_content = state_file.read_text()
 
         with (
-            patch("state.os.fsync", side_effect=OSError("fsync failed")),
+            patch("file_util.os.fsync", side_effect=OSError("fsync failed")),
             pytest.raises(OSError),
         ):
             tracker.save()
@@ -854,7 +854,7 @@ class TestAtomicSave:
         """The temp file must be created in the same dir as the state file."""
         tracker = make_tracker(tmp_path)
         with patch(
-            "state.tempfile.mkstemp", wraps=__import__("tempfile").mkstemp
+            "file_util.tempfile.mkstemp", wraps=__import__("tempfile").mkstemp
         ) as mock_mkstemp:
             tracker.save()
             mock_mkstemp.assert_called_once()

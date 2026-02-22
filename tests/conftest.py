@@ -19,15 +19,20 @@ if TYPE_CHECKING:
     from typing import Any
 
     from config import HydraConfig
+    from events import HydraEvent
     from models import (
+        AnalysisResult,
         GitHubIssue,
+        HITLResult,
         PlanResult,
         PRInfo,
         ReviewResult,
         ReviewVerdict,
+        TriageResult,
         WorkerResult,
     )
     from orchestrator import HydraOrchestrator
+    from state import StateTracker
 
 
 # --- Session-scoped environment setup ---
@@ -199,6 +204,168 @@ class PRInfoFactory:
 @pytest.fixture
 def pr_info() -> PRInfo:
     return PRInfoFactory.create()
+
+
+# --- Review Result Factory ---
+
+
+class ReviewResultFactory:
+    """Factory for ReviewResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        pr_number: int = 101,
+        issue_number: int = 42,
+        verdict: ReviewVerdict | None = None,
+        summary: str = "Looks good.",
+        fixes_made: bool = False,
+        transcript: str = "THOROUGH_REVIEW_COMPLETE",
+        merged: bool = False,
+        duration_seconds: float = 0.0,
+        ci_passed: bool | None = None,
+        ci_fix_attempts: int = 0,
+    ) -> ReviewResult:
+        from models import ReviewResult as RR
+        from models import ReviewVerdict as RV
+
+        return RR(
+            pr_number=pr_number,
+            issue_number=issue_number,
+            verdict=verdict if verdict is not None else RV.APPROVE,
+            summary=summary,
+            fixes_made=fixes_made,
+            transcript=transcript,
+            merged=merged,
+            duration_seconds=duration_seconds,
+            ci_passed=ci_passed,
+            ci_fix_attempts=ci_fix_attempts,
+        )
+
+
+# --- HITL Result Factory ---
+
+
+class HITLResultFactory:
+    """Factory for HITLResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        issue_number: int = 42,
+        success: bool = True,
+        error: str | None = None,
+        transcript: str = "",
+        duration_seconds: float = 0.0,
+    ) -> HITLResult:
+        from models import HITLResult as HR
+
+        return HR(
+            issue_number=issue_number,
+            success=success,
+            error=error,
+            transcript=transcript,
+            duration_seconds=duration_seconds,
+        )
+
+
+# --- Event Factory ---
+
+
+class EventFactory:
+    """Factory for HydraEvent instances."""
+
+    @staticmethod
+    def create(
+        *,
+        type: Any = None,
+        timestamp: str | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> HydraEvent:
+        from events import EventType as ET
+        from events import HydraEvent as HE
+
+        return HE(
+            type=type if type is not None else ET.BATCH_START,
+            timestamp=timestamp or "",
+            data=data if data is not None else {},
+        )
+
+
+# --- Triage Result Factory ---
+
+
+class TriageResultFactory:
+    """Factory for TriageResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        issue_number: int = 42,
+        ready: bool = True,
+        reasons: list[str] | None = None,
+    ) -> TriageResult:
+        from models import TriageResult as TR
+
+        return TR(
+            issue_number=issue_number,
+            ready=ready,
+            reasons=reasons or [],
+        )
+
+
+# --- Analysis Result Factory ---
+
+
+class AnalysisResultFactory:
+    """Factory for AnalysisResult instances."""
+
+    @staticmethod
+    def create(
+        *,
+        issue_number: int = 42,
+        sections: list[Any] | None = None,
+    ) -> AnalysisResult:
+        from models import AnalysisResult as AR
+        from models import AnalysisSection, AnalysisVerdict
+
+        if sections is None:
+            sections = [
+                AnalysisSection(
+                    name="File Validation",
+                    verdict=AnalysisVerdict.PASS,
+                    details=["All files exist."],
+                ),
+            ]
+        return AR(
+            issue_number=issue_number,
+            sections=sections,
+        )
+
+    @staticmethod
+    def create_section(
+        *,
+        name: str = "File Validation",
+        verdict: Any | None = None,
+        details: list[str] | None = None,
+    ) -> Any:
+        from models import AnalysisSection, AnalysisVerdict
+
+        return AnalysisSection(
+            name=name,
+            verdict=verdict or AnalysisVerdict.PASS,
+            details=details or [],
+        )
+
+
+# --- State Factory ---
+
+
+def make_state(tmp_path: Path) -> StateTracker:
+    """Create a StateTracker backed by a temp file."""
+    from state import StateTracker as ST
+
+    return ST(tmp_path / "state.json")
 
 
 # --- Event Bus Fixture ---

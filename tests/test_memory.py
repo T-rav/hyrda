@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from memory import (
     MemorySyncWorker,
     build_memory_issue_body,
+    file_memory_suggestion,
     load_memory_digest,
     parse_memory_suggestion,
 )
+from state import StateTracker
 from tests.helpers import ConfigFactory
 
 # --- parse_memory_suggestion tests ---
@@ -174,6 +177,31 @@ class TestLoadMemoryDigest:
         result = load_memory_digest(config)
         assert len(result) < 5000
         assert "truncated" in result
+
+    def test_at_exact_max_chars_no_truncation(self, tmp_path: Path) -> None:
+        """Content at exactly max_memory_prompt_chars should NOT be truncated."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir.mkdir(parents=True)
+        exact_content = "x" * config.max_memory_prompt_chars
+        (digest_dir / "digest.md").write_text(exact_content)
+
+        result = load_memory_digest(config)
+        assert result == exact_content
+        assert "truncated" not in result
+
+    def test_one_over_max_chars_triggers_truncation(self, tmp_path: Path) -> None:
+        """Content at max_memory_prompt_chars + 1 should be truncated."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        digest_dir = tmp_path / ".hydra" / "memory"
+        digest_dir.mkdir(parents=True)
+        over_content = "x" * (config.max_memory_prompt_chars + 1)
+        (digest_dir / "digest.md").write_text(over_content)
+
+        result = load_memory_digest(config)
+        assert "truncated" in result
+        # The truncated content should start with the original prefix
+        assert result.startswith("x" * 100)
 
 
 # --- MemorySyncWorker tests ---
@@ -456,6 +484,45 @@ class TestMemorySyncWorkerSync:
         event = bus.publish.call_args[0][0]
         assert event.type.value == "memory_sync"
         assert event.data["item_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_sync_concurrent_calls_complete_without_error(
+        self, tmp_path: Path
+    ) -> None:
+        """Two concurrent sync() calls should both complete without corruption."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        state = MagicMock()
+        state.get_memory_state.return_value = ([], "", None)
+        bus = MagicMock()
+
+        worker = MemorySyncWorker(config, state, bus)
+
+        issues_a = [
+            {
+                "number": 10,
+                "title": "A",
+                "body": "**Learning:** First learning",
+                "createdAt": "2024-06-01",
+            },
+        ]
+        issues_b = [
+            {
+                "number": 20,
+                "title": "B",
+                "body": "**Learning:** Second learning",
+                "createdAt": "2024-06-02",
+            },
+        ]
+
+        results = await asyncio.gather(
+            worker.sync(issues_a),
+            worker.sync(issues_b),
+            return_exceptions=True,
+        )
+
+        # Both calls should complete without raising
+        for r in results:
+            assert not isinstance(r, Exception), f"sync() raised: {r}"
 
 
 # --- State tracking tests ---
@@ -752,6 +819,78 @@ class TestMemoryPRManager:
 # --- Orchestrator tests ---
 
 
+class TestFileSuggestionSetsOrigin:
+    """Tests that file_memory_suggestion sets hitl_origin on created issues."""
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_sets_hitl_origin(
+        self, tmp_path: Path
+    ) -> None:
+        """When a memory suggestion is filed, hitl_origin should be set."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=99)
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something useful\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await file_memory_suggestion(
+            transcript, "implementer", "issue #42", config, mock_prs, state
+        )
+
+        # Verify issue was created with improve + hitl labels
+        mock_prs.create_issue.assert_awaited_once()
+        call_labels = mock_prs.create_issue.call_args.args[2]
+        assert config.improve_label[0] in call_labels
+        assert config.hitl_label[0] in call_labels
+
+        # Verify hitl_origin was set
+        assert state.get_hitl_origin(99) == config.improve_label[0]
+        assert state.get_hitl_cause(99) == "Memory suggestion"
+
+    @pytest.mark.asyncio
+    async def test_file_memory_suggestion_no_origin_on_failure(
+        self, tmp_path: Path
+    ) -> None:
+        """When create_issue returns 0, no hitl_origin should be set."""
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo",
+            state_file=tmp_path / "state.json",
+        )
+        state = StateTracker(config.state_file)
+        mock_prs = AsyncMock()
+        mock_prs.create_issue = AsyncMock(return_value=0)
+
+        transcript = (
+            "Some output\n"
+            "MEMORY_SUGGESTION_START\n"
+            "title: Test suggestion\n"
+            "learning: Learned something\n"
+            "context: During testing\n"
+            "MEMORY_SUGGESTION_END\n"
+        )
+
+        await file_memory_suggestion(
+            transcript, "implementer", "issue #42", config, mock_prs, state
+        )
+
+        # No hitl_origin should be set when create_issue fails
+        assert state.get_hitl_origin(0) is None
+
+
+# --- Orchestrator tests ---
+
+
 class TestMemorySyncLoop:
     """Tests for memory sync loop registration in orchestrator."""
 
@@ -765,3 +904,22 @@ class TestMemorySyncLoop:
         source = inspect.getsource(HydraOrchestrator._supervise_loops)
         assert "memory_sync" in source
         assert "_memory_sync_loop" in source
+
+
+# --- _write_digest delegates to atomic_write ---
+
+
+class TestWriteDigestUsesAtomicWrite:
+    """Verify _write_digest delegates to the shared atomic_write utility."""
+
+    def test_write_digest_calls_atomic_write(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        worker = MemorySyncWorker(config, MagicMock(), MagicMock())
+
+        with patch("memory.atomic_write") as mock_aw:
+            worker._write_digest("# Digest content")
+
+        mock_aw.assert_called_once()
+        call_args = mock_aw.call_args[0]
+        assert call_args[0] == tmp_path / ".hydra" / "memory" / "digest.md"
+        assert call_args[1] == "# Digest content"

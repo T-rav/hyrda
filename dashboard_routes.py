@@ -183,7 +183,12 @@ def create_router(
         orch = get_orchestrator()
         if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
-        correction = body.get("correction", "")
+        correction = body.get("correction") or ""
+        if not correction.strip():
+            return JSONResponse(
+                {"status": "error", "detail": "Correction text must not be empty"},
+                status_code=400,
+            )
         orch.submit_hitl_correction(issue_number, correction)
 
         # Swap labels for immediate dashboard feedback
@@ -375,6 +380,8 @@ def create_router(
         "ci_check_timeout",
         "ci_poll_interval",
         "poll_interval",
+        "pr_unstick_interval",
+        "pr_unstick_batch_size",
     }
 
     @router.patch("/api/control/config")
@@ -430,6 +437,7 @@ def create_router(
         ("retrospective", "Retrospective"),
         ("metrics", "Metrics"),
         ("review_insights", "Review Insights"),
+        ("pr_unsticker", "PR Unsticker"),
     ]
 
     @router.get("/api/system/workers")
