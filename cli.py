@@ -210,6 +210,15 @@ def _build_prep_failure_error_message(transcript: str, transcript_ref: str) -> s
     """Build a concrete failure message for local `.pre` issues."""
     if re.search(r"PREP_STATUS\s*:\s*FAILED", transcript, re.IGNORECASE):
         reason = "Agent returned PREP_STATUS: FAILED."
+    elif re.search(r"File has not been read yet", transcript, re.IGNORECASE):
+        reason = (
+            "Agent hit tool precondition failure: attempted Edit before Read "
+            '("File has not been read yet").'
+        )
+    elif re.search(
+        r"(max[\s_-]*turns?|turn limit|conversation limit)", transcript, re.IGNORECASE
+    ):
+        reason = "Agent hit conversation turn limit before finishing prep."
     elif not transcript.strip():
         reason = "Agent produced an empty transcript."
     else:
@@ -866,7 +875,11 @@ def _build_prep_agent_prompt(
         "5) Drive verification through Make targets when available "
         "(lint-fix, lint-check, typecheck, test, quality-lite, quality).\n"
         "6) Before each Edit, Read that file first. If a tool error says a file has not "
-        "been read yet, immediately read it and retry the edit.\n\n"
+        "been read yet, immediately read it and retry the edit.\n"
+        "7) Do not run parallel/batch edits. Apply edits one file at a time.\n"
+        "8) Do not refactor unrelated application source to chase existing lint debt. "
+        "If failures are outside prep-managed files, record/update `.pre` issues with "
+        "concrete failing commands and file paths.\n\n"
         "Local prep issue files:\n"
         f"{issues}\n\n"
         "Observed failed steps:\n"
@@ -959,7 +972,13 @@ async def _run_prep_agent_workflow(
         "9) Before each Edit, Read that file first. If a tool error says the file was not "
         "read yet, read it and retry the edit.\n"
         "10) Continue until `make quality` passes or you can provide a concrete failing "
-        "command and file list, then emit the final PREP_STATUS line.\n\n"
+        "command and file list, then emit the final PREP_STATUS line.\n"
+        "11) Keep edits scoped to prep-managed files only (Makefile, .github/workflows/*, "
+        "package manager files, lint/type config, test scaffold, hooks). Avoid refactoring "
+        "existing app source files for pre-existing lint debt.\n"
+        "12) Never batch or parallelize edits. Work one file at a time and verify each step.\n"
+        "13) If remaining failures are in existing app source, create/update `.pre` issues "
+        "with command output + affected files, then end with PREP_STATUS: FAILED.\n\n"
         "Current local prep issues:\n"
         f"{issue_list}\n"
     )
