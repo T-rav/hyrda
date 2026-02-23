@@ -862,7 +862,11 @@ def _build_prep_agent_prompt(
         "1) Read the local prep issue files listed below.\n"
         "2) Apply code/config fixes in this repo to resolve the failures.\n"
         "3) Keep changes minimal and safe.\n"
-        "4) Do not edit files outside this repository.\n\n"
+        "4) Do not edit files outside this repository.\n"
+        "5) Drive verification through Make targets when available "
+        "(lint-fix, lint-check, typecheck, test, quality-lite, quality).\n"
+        "6) Before each Edit, Read that file first. If a tool error says a file has not "
+        "been read yet, immediately read it and retry the edit.\n\n"
         "Local prep issue files:\n"
         f"{issues}\n\n"
         "Observed failed steps:\n"
@@ -950,13 +954,19 @@ async def _run_prep_agent_workflow(
         "5) Use local `.pre/*.md` files as issue tracker; update and mark done when fixed.\n"
         "6) Keep changes minimal and safe.\n"
         "7) End response with EXACTLY one final line: PREP_STATUS: SUCCESS or PREP_STATUS: FAILED.\n\n"
+        "8) Prefer Make targets for checks/fixes (lint-fix, lint-check, typecheck, test, "
+        "quality-lite, quality) instead of ad-hoc commands.\n"
+        "9) Before each Edit, Read that file first. If a tool error says the file was not "
+        "read yet, read it and retry the edit.\n"
+        "10) Continue until `make quality` passes or you can provide a concrete failing "
+        "command and file list, then emit the final PREP_STATUS line.\n\n"
         "Current local prep issues:\n"
         f"{issue_list}\n"
     )
     cmd = build_agent_command(
         tool=tool,  # type: ignore[arg-type]
         model=model,
-        max_turns=10,
+        max_turns=20,
     )
     transcript = await stream_claude_process(
         cmd=cmd,
