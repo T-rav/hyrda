@@ -129,6 +129,10 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
   const showToggle = onToggleBgWorker && !isSystem
   const isError = statusText === 'error' || statusText === 'stopped'
   const hasDetails = Object.keys(details).length > 0
+  const recentEvents = (events || [])
+    .filter(e => e.type === 'background_worker_status' && e.data?.worker === def.key)
+    .slice(0, 3)
+    .reverse()
 
   return (
     <div style={styles.card}>
@@ -201,7 +205,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
         </div>
       )}
       {hasDetails && !isPipelinePoller && (
-        <div style={isError ? styles.detailsError : styles.details}>
+        <div style={isError ? (recentEvents.length > 0 ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
             <div key={k} style={k === 'error' ? styles.errorRow : styles.detailRow}>
               <span style={isError ? styles.detailKeyError : styles.detailKey}>{k.replace(/_/g, ' ')}</span>
@@ -210,25 +214,19 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
           ))}
         </div>
       )}
-      {(() => {
-        const recentEvents = (events || [])
-          .filter(e => e.type === 'background_worker_status' && e.data?.worker === def.key)
-          .slice(0, 3)
-        if (recentEvents.length === 0) return null
-        return (
-          <div style={styles.logStream} data-testid={`log-stream-${def.key}`}>
-            {recentEvents.map((evt, i) => (
-              <div key={i} style={styles.logLine} data-testid="log-line">
-                <span style={styles.logTimestamp}>{formatLogTimestamp(evt.timestamp)}</span>
-                <span style={styles.logStatus}>{evt.data?.status || ''}</span>
-                <span style={styles.logMessage}>
-                  {evt.data?.details ? Object.entries(evt.data.details).map(([k, v]) => `${k}: ${v}`).join(', ') : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )
-      })()}
+      {recentEvents.length > 0 && (
+        <div style={styles.logStream} data-testid={`log-stream-${def.key}`}>
+          {recentEvents.map((evt, i) => (
+            <div key={evt.timestamp || String(i)} style={styles.logLine} data-testid="log-line">
+              <span style={styles.logTimestamp}>{formatLogTimestamp(evt.timestamp)}</span>
+              <span style={styles.logStatus}>{evt.data?.status || ''}</span>
+              <span style={styles.logMessage}>
+                {evt.data?.details ? Object.entries(evt.data.details).map(([k, v]) => `${k}: ${v}`).join(', ') : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -457,6 +455,12 @@ const styles = {
     margin: '0 -16px -16px',
     padding: '8px 16px 16px',
     borderRadius: '0 0 8px 8px',
+  },
+  detailsErrorCompact: {
+    borderTop: `1px solid ${theme.red}`,
+    background: theme.redSubtle,
+    margin: '0 -16px 0',
+    padding: '8px 16px',
   },
   logStream: {
     borderTop: `1px solid ${theme.border}`,

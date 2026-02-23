@@ -426,6 +426,20 @@ describe('SystemPanel', () => {
       expect(lines.length).toBe(2)
     })
 
+    it('displays events in chronological order (oldest at top)', () => {
+      const events = [
+        makeWorkerEvent('memory_sync', 'ok', { seq: 3 }, '2026-02-20T10:32:00Z'),
+        makeWorkerEvent('memory_sync', 'ok', { seq: 2 }, '2026-02-20T10:31:00Z'),
+        makeWorkerEvent('memory_sync', 'ok', { seq: 1 }, '2026-02-20T10:30:00Z'),
+      ]
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({ events, orchestratorStatus: 'running' }))
+      render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
+      const logStream = screen.getByTestId('log-stream-memory_sync')
+      const lines = logStream.querySelectorAll('[data-testid="log-line"]')
+      expect(lines[0].textContent).toContain('seq: 1')
+      expect(lines[2].textContent).toContain('seq: 3')
+    })
+
     it('shows timestamp and status on each log line', () => {
       const events = [
         makeWorkerEvent('memory_sync', 'ok', { item_count: 12 }, '2026-02-20T10:30:45Z'),
