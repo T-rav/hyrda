@@ -45,6 +45,26 @@ class TestInitialization:
         assert "active_branches" in d
         assert "reviewed_prs" in d
         assert "last_updated" in d
+        assert "current_batch" not in d
+
+    def test_loads_legacy_file_with_current_batch_field(self, tmp_path: Path) -> None:
+        """Old state files containing current_batch should load without error."""
+        state_file = tmp_path / "state.json"
+        legacy_data = {
+            "current_batch": 7,
+            "processed_issues": {"3": "success"},
+            "active_worktrees": {},
+            "active_branches": {},
+            "reviewed_prs": {"42": "approve"},
+            "last_updated": None,
+        }
+        state_file.write_text(json.dumps(legacy_data))
+
+        tracker = StateTracker(state_file)
+        # Existing data is preserved; current_batch is silently dropped
+        assert tracker.to_dict()["processed_issues"].get(str(3)) == "success"
+        assert tracker.to_dict()["reviewed_prs"].get(str(42)) == "approve"
+        assert "current_batch" not in tracker.to_dict()
 
     def test_loads_existing_file_on_init(self, tmp_path: Path) -> None:
         """If a state file already exists on disk it should be loaded."""
