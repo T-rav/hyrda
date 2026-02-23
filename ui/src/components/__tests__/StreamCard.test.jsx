@@ -431,12 +431,16 @@ describe('StreamCard transcript rendering', () => {
     render(<StreamCard issue={issue} defaultExpanded={true} />)
     expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
   })
-})
 
-describe('StreamCard View Transcript button removal', () => {
-  it('does not render a View Transcript button when expanded', () => {
+  it('does not render a View Transcript button for active issues with transcript', () => {
     const issue = makeIssue({ overallStatus: 'active' })
     render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1', 'line 2']} onRequestChanges={() => {}} />)
+    expect(screen.queryByText('View Transcript')).not.toBeInTheDocument()
+  })
+
+  it('does not render a View Transcript button for done issues with a PR URL', () => {
+    const issue = makeIssue({ overallStatus: 'done', pr: { number: 10, url: 'https://github.com/pr/10' } })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1']} />)
     expect(screen.queryByText('View Transcript')).not.toBeInTheDocument()
   })
 })

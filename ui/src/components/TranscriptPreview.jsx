@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { theme } from '../theme'
 
-export function TranscriptPreview({ transcript, maxCollapsedLines = 3, maxHeight = 375 /* ~25 lines × (fontSize 10 × lineHeight 1.5 = 15px) */, inline = false }) {
+export function TranscriptPreview({ transcript, maxCollapsedLines = 3, maxHeight = 375 /* ~22 visible lines: 10px font × 1.5 line-height = 15px + 2px padding (styles.line) = 17px/line; 375 ÷ 17 ≈ 22 */, inline = false }) {
   const [expanded, setExpanded] = useState(false)
   const scrollRef = useRef(null)
 
