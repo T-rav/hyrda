@@ -2,6 +2,7 @@
 
 HYDRAFLOW_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 PROJECT_ROOT := $(abspath $(HYDRAFLOW_DIR))
+TARGET_REPO_ROOT ?= $(shell python3 -c 'from pathlib import Path; cur=Path.cwd().resolve(); roots=[p for p in [cur,*cur.parents] if (p/".git").exists()]; print((roots[-1] if roots else cur).as_posix())')
 
 # Load .env if present (export all variables)
 -include $(PROJECT_ROOT)/.env
@@ -60,7 +61,7 @@ help:
 	@echo "  make quality        quality-lite + test (parallel)"
 	@echo "  make ensure-labels  Create HydraFlow labels in GitHub repo"
 	@echo "  make prep           Scan + scaffold CI/tests, then run fix/hooks/tests"
-	@echo "  make setup          Install git hooks + Claude/Codex assets"
+	@echo "  make setup          Install hooks/assets for target repo ($(TARGET_REPO_ROOT))"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
@@ -232,9 +233,18 @@ setup:
 		echo "  .env.sample not found: skipping .env bootstrap"; \
 	fi
 	@echo "$(BLUE)Ensuring HydraFlow lifecycle labels...$(RESET)"
-	@cd $(HYDRAFLOW_DIR) && $(UV) python cli.py --prep
+	@echo "  target repo: $(TARGET_REPO_ROOT)"
+	@cd $(TARGET_REPO_ROOT) && $(UV) python $(HYDRAFLOW_DIR)cli.py --prep
 	@echo "$(BLUE)Setting up git hooks...$(RESET)"
-	@git config core.hooksPath .githooks
+	@if [ "$(TARGET_REPO_ROOT)" != "$(PROJECT_ROOT)" ]; then \
+		mkdir -p "$(TARGET_REPO_ROOT)/.githooks"; \
+		cp "$(HYDRAFLOW_DIR).githooks/pre-commit" "$(TARGET_REPO_ROOT)/.githooks/pre-commit"; \
+		cp "$(HYDRAFLOW_DIR).githooks/pre-push" "$(TARGET_REPO_ROOT)/.githooks/pre-push"; \
+		chmod +x "$(TARGET_REPO_ROOT)/.githooks/pre-commit" "$(TARGET_REPO_ROOT)/.githooks/pre-push"; \
+	else \
+		echo "  target is HydraFlow repo; using existing .githooks files"; \
+	fi
+	@git -C "$(TARGET_REPO_ROOT)" config core.hooksPath .githooks
 	@echo "$(BLUE)Detecting local agent assets (Claude/Codex)...$(RESET)"
 	@if [ -d "$(PROJECT_ROOT)/.claude/hooks" ]; then \
 		for HOOK in "$(PROJECT_ROOT)"/.claude/hooks/*.sh; do \
@@ -275,14 +285,16 @@ REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.co
 
 prep:
 	@echo "$(BLUE)Scanning repo and scaffolding CI/tests...$(RESET)"
+	@echo "  target repo: $(TARGET_REPO_ROOT)"
 	@echo "$(BLUE)Resetting prep scratch directories (.pre/.prep)...$(RESET)"
-	@rm -rf $(HYDRAFLOW_DIR).pre $(HYDRAFLOW_DIR).prep
-	@cd $(HYDRAFLOW_DIR) && $(UV) python cli.py --scaffold
+	@rm -rf $(TARGET_REPO_ROOT)/.pre $(TARGET_REPO_ROOT)/.prep
+	@cd $(TARGET_REPO_ROOT) && $(UV) python $(HYDRAFLOW_DIR)cli.py --scaffold
 	@echo "$(GREEN)Prep complete$(RESET)"
 
 ensure-labels:
 	@echo "$(BLUE)Creating HydraFlow lifecycle labels...$(RESET)"
-	@cd $(HYDRAFLOW_DIR) && $(UV) python cli.py --prep
+	@echo "  target repo: $(TARGET_REPO_ROOT)"
+	@cd $(TARGET_REPO_ROOT) && $(UV) python $(HYDRAFLOW_DIR)cli.py --prep
 	@echo "$(GREEN)Labels ensured$(RESET)"
 
 hot:
