@@ -132,7 +132,7 @@ Or set `HYDRAFLOW_GITHUB_REPO` to target a different repo:
 HYDRAFLOW_GITHUB_REPO=owner/other-repo make ensure-labels
 ```
 
-### 5. Install the slash commands
+### 5. Install Claude commands (optional)
 
 Copy HydraFlow's Claude Code slash commands into your project so you can use `/gh-issue`, `/audit-tests`, and the other audit commands from Claude Code in your own repo:
 
@@ -157,7 +157,7 @@ export HYDRAFLOW_GITHUB_REPO=owner/repo       # auto-detected if unset
 export HYDRAFLOW_GITHUB_ASSIGNEE=username     # repo owner if unset
 ```
 
-### 6. Install Claude Code hooks (optional)
+### 6. Install Claude Code hooks + Codex skills (optional)
 
 HydraFlow ships with Claude Code hooks that enforce quality gates during development. To use them in your project:
 
@@ -188,7 +188,10 @@ Then merge HydraFlow's hook configuration into your `.claude/settings.json`. The
 | `warn-new-file-creation.sh` | PostToolUse(Write) | Warns on new file creation |
 | `cleanup-code-change-marker.sh` | Stop | Cleans up code change tracking markers |
 
-### 7. Install git hooks (optional)
+HydraFlow also ships a Codex skill package at `.codex/skills/gh-issue` (GitHub issue authoring workflow equivalent to Claude `/gh-issue`).
+Running `make setup` installs local Codex skills into `$CODEX_HOME/skills` (defaults to `~/.codex/skills`).
+
+### 7. One-command local setup (recommended)
 
 ```bash
 cd hydraflow
@@ -198,6 +201,8 @@ make setup
 This configures:
 - **pre-commit**: Ruff lint check on staged Python files
 - **pre-push**: Full quality gate (lint + typecheck + security + tests)
+- **Claude assets**: refreshes executable hook scripts under `.claude/hooks`
+- **Codex assets**: installs skills from `.codex/skills/*` into `~/.codex/skills`
 
 ### 8. Run HydraFlow
 

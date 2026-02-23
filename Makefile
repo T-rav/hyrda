@@ -58,7 +58,7 @@ help:
 	@echo "  make quality        Lint + typecheck + test (parallel)"
 	@echo "  make quality-full   quality + security scan"
 	@echo "  make ensure-labels  Create HydraFlow labels in GitHub repo"
-	@echo "  make setup          Install git hooks (pre-commit, pre-push)"
+	@echo "  make setup          Install git hooks + Claude/Codex assets"
 	@echo "  make install        Install dashboard dependencies"
 	@echo "  make ui             Build React dashboard (ui/dist/)"
 	@echo "  make ui-dev         Start React dashboard dev server"
@@ -210,6 +210,38 @@ setup:
 	@echo "  gh user: $$(gh api user --jq .login)"
 	@echo "$(BLUE)Setting up git hooks...$(RESET)"
 	@git config core.hooksPath .githooks
+	@echo "$(BLUE)Detecting local agent assets (Claude/Codex)...$(RESET)"
+	@if [ -d "$(PROJECT_ROOT)/.claude/hooks" ]; then \
+		for HOOK in "$(PROJECT_ROOT)"/.claude/hooks/*.sh; do \
+			[ -f "$$HOOK" ] || continue; \
+			chmod +x "$$HOOK"; \
+		done; \
+		echo "  Claude hooks: executable bits refreshed"; \
+	fi
+	@if [ -d "$(PROJECT_ROOT)/.claude/commands" ]; then \
+		echo "  Claude commands: detected in .claude/commands"; \
+	fi
+	@if [ -d "$(PROJECT_ROOT)/.codex/skills" ] || [ -f "$(PROJECT_ROOT)/AGENTS.md" ]; then \
+		CODEX_HOME_DIR="$${CODEX_HOME:-$$HOME/.codex}"; \
+		DEST="$$CODEX_HOME_DIR/skills"; \
+		mkdir -p "$$DEST"; \
+		INSTALLED=0; \
+		for SKILL_DIR in "$(PROJECT_ROOT)"/.codex/skills/*; do \
+			[ -d "$$SKILL_DIR" ] || continue; \
+			[ -f "$$SKILL_DIR/SKILL.md" ] || continue; \
+			SKILL_NAME="$$(basename "$$SKILL_DIR")"; \
+			rm -rf "$$DEST/$$SKILL_NAME"; \
+			cp -R "$$SKILL_DIR" "$$DEST/$$SKILL_NAME"; \
+			INSTALLED=$$((INSTALLED + 1)); \
+			echo "  Codex skill installed: $$SKILL_NAME"; \
+		done; \
+		if [ "$$INSTALLED" -eq 0 ]; then \
+			echo "  Codex skills: no SKILL.md packages found under .codex/skills"; \
+		else \
+			echo "  Codex skills destination: $$DEST"; \
+			echo "  Restart Codex to load updated skills"; \
+		fi; \
+	fi
 	@echo "$(GREEN)Setup complete$(RESET)"
 	@echo "  pre-commit: lint check on staged Python files"
 	@echo "  pre-push:   full quality gate (lint + typecheck + security + tests)"
