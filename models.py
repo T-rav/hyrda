@@ -455,6 +455,7 @@ class StateData(BaseModel):
     metrics_last_synced: str | None = None
     worker_intervals: dict[str, int] = Field(default_factory=dict)
     last_reviewed_sha: dict[str, str] = Field(default_factory=dict)
+    interrupted_issues: dict[str, str] = Field(default_factory=dict)
     last_updated: str | None = None
 
 
