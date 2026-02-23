@@ -564,6 +564,7 @@ async def _run_hardening_step(step: str, cmd: list[str], cwd: Path) -> bool:
 async def _run_scaffold(config: HydraFlowConfig) -> bool:
     """Scan and scaffold core repo essentials (CI + test infrastructure)."""
     from ci_scaffold import scaffold_ci  # noqa: PLC0415
+    from makefile_scaffold import scaffold_makefile  # noqa: PLC0415
     from polyglot_prep import (  # noqa: PLC0415
         detect_prep_stack,
         scaffold_tests_polyglot,
@@ -591,12 +592,29 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
     print(audit.format_report())  # noqa: T201
     run_log_lines.append("- Audit completed")
 
+    makefile_result = scaffold_makefile(config.repo_root, dry_run=config.dry_run)
     ci_result = scaffold_ci(config.repo_root, dry_run=config.dry_run)
     tests_result = scaffold_tests_polyglot(config.repo_root, dry_run=config.dry_run)
     stack = detect_prep_stack(config.repo_root)
     run_log_lines.append(f"- Detected prep stack: `{stack}`")
 
     action = "Would create" if config.dry_run else "Created"
+    makefile_action = "would add" if config.dry_run else "added"
+    if makefile_result.targets_added:
+        targets = ", ".join(makefile_result.targets_added)
+        print(f"Makefile scaffold: {makefile_action} targets [{targets}]")  # noqa: T201
+        run_log_lines.append(
+            f"- Makefile scaffold {makefile_action}: targets [{targets}]"
+        )
+    else:
+        print("Makefile scaffold: skipped (targets already present)")  # noqa: T201
+        run_log_lines.append("- Makefile scaffold skipped: targets already present")
+
+    if makefile_result.warnings:
+        for warning in makefile_result.warnings:
+            print(f"Makefile scaffold warning: {warning}")  # noqa: T201
+            run_log_lines.append(f"- Makefile scaffold warning: {warning}")
+
     if ci_result.skipped:
         print(f"CI scaffold: skipped ({ci_result.skip_reason})")  # noqa: T201
         run_log_lines.append(f"- CI scaffold skipped: {ci_result.skip_reason}")
