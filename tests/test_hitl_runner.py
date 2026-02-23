@@ -10,10 +10,26 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from base_runner import BaseRunner
 from config import HydraFlowConfig
 from events import EventBus, EventType
 from hitl_runner import HITLRunner, _classify_cause
 from tests.conftest import HITLResultFactory, IssueFactory
+
+# ---------------------------------------------------------------------------
+# Inheritance
+# ---------------------------------------------------------------------------
+
+
+class TestHITLRunnerInheritance:
+    """HITLRunner must extend BaseRunner."""
+
+    def test_inherits_from_base_runner(self, hitl_runner) -> None:
+        assert isinstance(hitl_runner, BaseRunner)
+
+    def test_has_terminate_method(self, hitl_runner) -> None:
+        assert callable(hitl_runner.terminate)
+
 
 # ---------------------------------------------------------------------------
 # Cause classification

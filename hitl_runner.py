@@ -6,7 +6,6 @@ import logging
 import time
 from pathlib import Path
 
-from agent_cli import build_agent_command
 from base_runner import BaseRunner
 from events import EventType, HydraFlowEvent
 from models import GitHubIssue, HITLResult
@@ -148,14 +147,6 @@ class HITLRunner(BaseRunner):
         )
 
         return result
-
-    def _build_command(self, worktree_path: Path) -> list[str]:
-        """Construct the CLI invocation for HITL."""
-        return build_agent_command(
-            tool=self._config.implementation_tool,
-            model=self._config.model,
-            budget_usd=self._config.max_budget_usd,
-        )
 
     def _build_prompt(self, issue: GitHubIssue, correction: str, cause: str) -> str:
         """Build the HITL prompt with cause-specific instructions and human guidance."""

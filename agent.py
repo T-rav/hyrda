@@ -147,18 +147,6 @@ class AgentRunner(BaseRunner):
 
         return result
 
-    def _build_command(self, worktree_path: Path) -> list[str]:
-        """Construct the implementation CLI invocation.
-
-        The working directory is set via ``cwd`` in the subprocess call,
-        not via a CLI flag.
-        """
-        return build_agent_command(
-            tool=self._config.implementation_tool,
-            model=self._config.model,
-            budget_usd=self._config.max_budget_usd,
-        )
-
     @staticmethod
     def _extract_plan_comment(comments: list[str]) -> tuple[str, list[str]]:
         """Separate the planner's implementation plan from other comments.

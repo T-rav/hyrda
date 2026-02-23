@@ -322,3 +322,52 @@ class TestVerifyQuality:
         assert success is False
         # Output should be truncated to last 3000 chars
         assert len(msg) < 5000 + 100  # some overhead for prefix text
+
+
+# ---------------------------------------------------------------------------
+# _build_command
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCommand:
+    """Tests for BaseRunner._build_command (default implementation-tool command)."""
+
+    def test_build_command_starts_with_claude(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        runner = _TestRunner(config, event_bus)
+        cmd = runner._build_command(tmp_path)
+        assert cmd[0] == "claude"
+
+    def test_build_command_uses_implementation_tool_model_and_budget(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        runner = _TestRunner(config, event_bus)
+        cmd = runner._build_command(tmp_path)
+        assert "--model" in cmd
+        assert cmd[cmd.index("--model") + 1] == config.model
+        assert "--max-budget-usd" in cmd
+        assert cmd[cmd.index("--max-budget-usd") + 1] == str(config.max_budget_usd)
+
+    def test_build_command_omits_budget_when_zero(
+        self, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_budget_usd=0,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        runner = _TestRunner(cfg, event_bus)
+        cmd = runner._build_command(tmp_path)
+        assert "--max-budget-usd" not in cmd
+
+    def test_build_command_path_argument_is_unused(
+        self, config, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """The worktree_path arg is accepted for API compatibility but not included in cmd."""
+        runner = _TestRunner(config, event_bus)
+        cmd = runner._build_command(tmp_path)
+        assert "--cwd" not in cmd

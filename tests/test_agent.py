@@ -13,9 +13,27 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from agent import AgentRunner
+from base_runner import BaseRunner
 from events import EventBus, EventType
 from models import WorkerStatus
 from tests.helpers import ConfigFactory, make_streaming_proc
+
+# ---------------------------------------------------------------------------
+# Inheritance
+# ---------------------------------------------------------------------------
+
+
+class TestAgentRunnerInheritance:
+    """AgentRunner must extend BaseRunner."""
+
+    def test_inherits_from_base_runner(self, config, event_bus: EventBus) -> None:
+        runner = AgentRunner(config, event_bus)
+        assert isinstance(runner, BaseRunner)
+
+    def test_has_terminate_method(self, config, event_bus: EventBus) -> None:
+        runner = AgentRunner(config, event_bus)
+        assert callable(runner.terminate)
+
 
 # ---------------------------------------------------------------------------
 # Helpers (agent-specific)

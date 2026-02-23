@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+from agent_cli import build_agent_command
 from config import HydraFlowConfig
 from events import EventBus
 from execution import get_default_runner
@@ -99,6 +100,21 @@ class BaseRunner:
             memory_section = f"\n\n## Accumulated Learnings\n\n{digest}"
 
         return manifest_section, memory_section
+
+    def _build_command(self, _worktree_path: Path) -> list[str]:
+        """Construct the default implementation CLI invocation.
+
+        Used by runners that call the implementation tool (``agent.py`` and
+        ``hitl_runner.py``).  Runners that use a different tool (planner,
+        reviewer) override this method.  The ``_worktree_path`` argument is
+        accepted for API compatibility with overriding runners (e.g.
+        ``ReviewRunner``) that need the path to build their command.
+        """
+        return build_agent_command(
+            tool=self._config.implementation_tool,
+            model=self._config.model,
+            budget_usd=self._config.max_budget_usd,
+        )
 
     async def _verify_quality(self, worktree_path: Path) -> tuple[bool, str]:
         """Run ``make quality`` and return ``(success, error_output)``."""
