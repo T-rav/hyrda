@@ -2100,6 +2100,6 @@ class TestLoadLocalMetricsCacheExceptionHandling:
         import asyncio
 
         with caplog.at_level(logging.DEBUG, logger="hydraflow.dashboard"):
-            asyncio.get_event_loop().run_until_complete(history_endpoint())
+            asyncio.run(history_endpoint())
 
         assert "Skipping corrupt metrics snapshot line" in caplog.text

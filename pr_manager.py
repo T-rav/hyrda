@@ -794,7 +794,7 @@ class PRManager:
                     if pr_data:
                         pr_number = pr_data[0]["number"]
                         pr_url = pr_data[0].get("url", "")
-                except (RuntimeError, json.JSONDecodeError, KeyError):
+                except (RuntimeError, json.JSONDecodeError, KeyError, TypeError):
                     logger.debug(
                         "PR lookup failed for branch %s",
                         branch,
