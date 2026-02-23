@@ -24,6 +24,7 @@ from models import (
     IntentResponse,
     MetricsHistoryResponse,
     MetricsResponse,
+    MetricsSnapshot,
     PipelineIssue,
     PipelineSnapshot,
     QueueStats,
@@ -80,6 +81,28 @@ def create_router(
         return HTMLResponse(
             "<h1>HydraFlow Dashboard</h1><p>Run 'make ui' to build.</p>"
         )
+
+    def _load_local_metrics_cache(
+        limit: int = 100,
+    ) -> list[MetricsSnapshot]:
+        """Load metrics snapshots from local disk cache without requiring the orchestrator."""
+        repo_slug = config.repo.replace("/", "-") or "unknown"
+        cache_file = (
+            config.state_file.parent / "metrics" / repo_slug / "snapshots.jsonl"
+        )
+        if not cache_file.exists():
+            return []
+        snapshots: list[MetricsSnapshot] = []
+        with open(cache_file) as f:
+            for raw_line in f:
+                stripped = raw_line.strip()
+                if not stripped:
+                    continue
+                try:
+                    snapshots.append(MetricsSnapshot.model_validate_json(stripped))
+                except Exception:
+                    continue
+        return snapshots[-limit:]
 
     @router.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
@@ -675,10 +698,17 @@ def create_router(
 
     @router.get("/api/metrics/history")
     async def get_metrics_history() -> JSONResponse:
-        """Historical snapshots from the metrics issue + current in-memory snapshot."""
+        """Historical snapshots from the metrics issue + current in-memory snapshot.
+
+        Falls back to local disk cache when the orchestrator is not running.
+        """
         orch = get_orchestrator()
         if orch is None:
-            return JSONResponse(MetricsHistoryResponse().model_dump())
+            # Serve from local cache without requiring the orchestrator
+            snapshots = _load_local_metrics_cache()
+            return JSONResponse(
+                MetricsHistoryResponse(snapshots=snapshots).model_dump()
+            )
         mgr = orch.metrics_manager
         snapshots = await mgr.fetch_history_from_issue()
         current = mgr.latest_snapshot
@@ -771,6 +801,17 @@ def create_router(
         data = session.model_dump()
         data["events"] = session_events
         return JSONResponse(data)
+
+    @router.delete("/api/sessions/{session_id}")
+    async def delete_session(session_id: str) -> JSONResponse:
+        """Delete a session by ID. Returns 400 if active, 404 if not found."""
+        try:
+            deleted = state.delete_session(session_id)
+        except ValueError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        if not deleted:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        return JSONResponse({"status": "ok"})
 
     @router.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket) -> None:

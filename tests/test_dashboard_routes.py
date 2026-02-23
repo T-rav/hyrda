@@ -1512,3 +1512,119 @@ class TestRequestChangesEndpoint:
         data = json.loads(response.body)
         assert data["status"] == "ok"
         assert state.get_hitl_origin(99) == "review"
+
+
+class TestDeleteSessionEndpoint:
+    """Tests for DELETE /api/sessions/{session_id}."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_delete_session_success(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        from models import SessionLog
+
+        state.save_session(
+            SessionLog(
+                id="s1",
+                repo="org/repo",
+                started_at="2024-01-01T00:00:00",
+                status="completed",
+            )
+        )
+        router = self._make_router(config, event_bus, state, tmp_path)
+        # The delete endpoint is separate from get — find by method
+        delete_endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/sessions/{session_id}"
+                and hasattr(route, "methods")
+                and "DELETE" in route.methods
+            ):
+                delete_endpoint = route.endpoint
+                break
+        assert delete_endpoint is not None
+        response = await delete_endpoint("s1")
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_delete_session_not_found(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        router = self._make_router(config, event_bus, state, tmp_path)
+        delete_endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/sessions/{session_id}"
+                and hasattr(route, "methods")
+                and "DELETE" in route.methods
+            ):
+                delete_endpoint = route.endpoint
+                break
+        assert delete_endpoint is not None
+        response = await delete_endpoint("nonexistent")
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_active_session_returns_400(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        from models import SessionLog
+
+        state.save_session(
+            SessionLog(
+                id="active-s",
+                repo="org/repo",
+                started_at="2024-01-01T00:00:00",
+                status="active",
+            )
+        )
+        router = self._make_router(config, event_bus, state, tmp_path)
+        delete_endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/sessions/{session_id}"
+                and hasattr(route, "methods")
+                and "DELETE" in route.methods
+            ):
+                delete_endpoint = route.endpoint
+                break
+        assert delete_endpoint is not None
+        response = await delete_endpoint("active-s")
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert "active" in data["error"].lower()
