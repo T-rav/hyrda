@@ -758,6 +758,51 @@ def create_router(
             return JSONResponse({"error": "artifact not found"}, status_code=404)
         return Response(content=content, media_type="text/plain")
 
+    @router.get("/api/harness-insights")
+    async def get_harness_insights() -> JSONResponse:
+        """Return recent harness failure patterns and improvement suggestions."""
+        from harness_insights import (
+            HarnessInsightStore,
+            generate_suggestions,
+        )
+
+        memory_dir = config.repo_root / ".hydraflow" / "memory"
+        store = HarnessInsightStore(memory_dir)
+        records = store.load_recent(config.harness_insight_window)
+        proposed = store.get_proposed_patterns()
+        suggestions = generate_suggestions(
+            records, config.harness_pattern_threshold, proposed
+        )
+
+        # Build category summary
+        from collections import Counter
+
+        cat_counts: Counter[str] = Counter(r.category for r in records)
+        sub_counts: Counter[str] = Counter()
+        for r in records:
+            for sub in r.subcategories:
+                sub_counts[sub] += 1
+
+        return JSONResponse(
+            {
+                "total_failures": len(records),
+                "category_counts": dict(cat_counts.most_common()),
+                "subcategory_counts": dict(sub_counts.most_common()),
+                "suggestions": [s.model_dump() for s in suggestions],
+                "proposed_patterns": sorted(proposed),
+            }
+        )
+
+    @router.get("/api/harness-insights/history")
+    async def get_harness_insights_history() -> JSONResponse:
+        """Return raw failure records for historical analysis."""
+        from harness_insights import HarnessInsightStore
+
+        memory_dir = config.repo_root / ".hydraflow" / "memory"
+        store = HarnessInsightStore(memory_dir)
+        records = store.load_recent(config.harness_insight_window)
+        return JSONResponse([r.model_dump() for r in records])
+
     @router.get("/api/timeline")
     async def get_timeline() -> JSONResponse:
         builder = TimelineBuilder(event_bus)
