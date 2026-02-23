@@ -10,6 +10,7 @@ import re
 import shutil
 import signal
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,7 @@ async def _await_with_prep_heartbeat(
     detail: str,
     color: bool,
     interval_seconds: float = 20.0,
+    tail_provider: Callable[[], list[str]] | None = None,
 ) -> Any:
     """Await long-running prep work while emitting periodic heartbeat lines."""
     task = asyncio.create_task(awaitable)
@@ -71,6 +73,36 @@ async def _await_with_prep_heartbeat(
                     color,
                 )
             )
+            if tail_provider is not None:
+                tail = [line for line in tail_provider() if line.strip()]
+                if tail:
+                    print(  # noqa: T201
+                        _prep_stage_line(
+                            stage,
+                            "latest output (rolling 3 lines):",
+                            "start",
+                            color,
+                        )
+                    )
+                    for line in tail[-3:]:
+                        print(f"  {line}")  # noqa: T201
+
+
+def _make_prep_output_tracker() -> tuple[
+    Callable[[str], bool], Callable[[], list[str]]
+]:
+    """Return (on_output callback, tail getter) for rolling prep task output."""
+    state: dict[str, list[str]] = {"tail": []}
+
+    def on_output(accumulated_text: str) -> bool:
+        lines = [ln for ln in accumulated_text.splitlines() if ln.strip()]
+        state["tail"] = lines[-3:]
+        return False
+
+    def get_tail() -> list[str]:
+        return list(state["tail"])
+
+    return on_output, get_tail
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -726,6 +758,7 @@ async def _run_prep_agent_correction(
     stack: str,
     failures: list[tuple[str, list[str], str]],
     issue_filenames: list[str],
+    on_output: Callable[[str], bool] | None = None,
 ) -> bool:
     """Run Claude/Codex as a prep correction agent for one attempt."""
     from agent_cli import build_agent_command  # noqa: PLC0415
@@ -750,6 +783,7 @@ async def _run_prep_agent_correction(
             event_bus=EventBus(),
             event_data={"source": "prep-agent"},
             logger=logger,
+            on_output=on_output,
             timeout=900.0,
         )
     except RuntimeError as exc:
@@ -771,6 +805,7 @@ async def _run_prep_agent_workflow(
     config: HydraFlowConfig,
     stack: str,
     local_issue_names: list[str],
+    on_output: Callable[[str], bool] | None = None,
 ) -> tuple[bool, str]:
     """Run an end-to-end prep workflow via Claude/Codex."""
     from agent_cli import build_agent_command  # noqa: PLC0415
@@ -809,6 +844,7 @@ async def _run_prep_agent_workflow(
         event_bus=EventBus(),
         event_data={"source": "prep-workflow-agent"},
         logger=logger,
+        on_output=on_output,
         timeout=1800.0,
     )
     success = "PREP_STATUS: SUCCESS" in transcript
@@ -978,6 +1014,7 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                 use_color,
             )
         )
+        workflow_on_output, workflow_tail = _make_prep_output_tracker()
         agent_ok, transcript = await _await_with_prep_heartbeat(
             _run_prep_agent_workflow(
                 tool=selected_tool,
@@ -985,10 +1022,12 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                 config=config,
                 stack=stack,
                 local_issue_names=issue_names,
+                on_output=workflow_on_output,
             ),
             stage="hardening",
             detail=f"attempt {attempt}/{max_attempts}: prep workflow agent",
             color=use_color,
+            tail_provider=workflow_tail,
         )
         if agent_ok:
             agent_successes += 1
@@ -1072,6 +1111,7 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                     use_color,
                 )
             )
+            correction_on_output, correction_tail = _make_prep_output_tracker()
             agent_ok = await _await_with_prep_heartbeat(
                 _run_prep_agent_correction(
                     config=config,
@@ -1081,10 +1121,12 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                     stack=stack,
                     failures=attempt_failures,
                     issue_filenames=attempt_issue_names,
+                    on_output=correction_on_output,
                 ),
                 stage="hardening",
                 detail=f"attempt {attempt}/{max_attempts}: correction agent",
                 color=use_color,
+                tail_provider=correction_tail,
             )
             if agent_ok:
                 agent_successes += 1
