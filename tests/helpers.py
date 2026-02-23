@@ -45,7 +45,9 @@ def make_streaming_proc(
     return AsyncMock(return_value=mock_proc)
 
 
-def instant_sleep_factory(stop_event: asyncio.Event):
+def instant_sleep_factory(
+    stop_event: asyncio.Event,
+) -> Callable[[int | float], Coroutine[Any, Any, None]]:
     """Return a sleep function that stops the loop after 2 sleep cycles.
 
     Used by background worker loop tests to prevent infinite loops.
