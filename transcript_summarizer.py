@@ -324,6 +324,6 @@ class TranscriptSummarizer:
         except TimeoutError:
             logger.warning("Transcript summary model timed out")
             return None
-        except (OSError, FileNotFoundError) as exc:
+        except (OSError, FileNotFoundError, NotImplementedError) as exc:
             logger.warning("Transcript summary model unavailable: %s", exc)
             return None
