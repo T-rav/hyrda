@@ -50,7 +50,7 @@ def has_quality_workflow(repo_root: Path) -> tuple[bool, str]:
     return False, ""
 
 
-_PYTHON_WORKFLOW = """\
+_UNIVERSAL_WORKFLOW = """\
 name: Quality
 # prep-managed: quality-workflow
 
@@ -61,416 +61,170 @@ on:
     branches: [main]
 
 jobs:
+  discover-projects:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.scan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover project paths
+        id: scan
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path(".")
+          ignored = {
+              ".git", ".github", ".venv", "venv", "node_modules",
+              "dist", "build", "target", ".next", ".turbo", ".idea",
+              "__pycache__", ".pytest_cache"
+          }
+          markers = {
+              "Makefile", "makefile", "GNUmakefile",
+              "pyproject.toml", "requirements.txt", "setup.py",
+              "package.json", "go.mod", "Cargo.toml", "pom.xml",
+              "build.gradle", "build.gradle.kts", "Gemfile",
+              "CMakeLists.txt"
+          }
+
+          paths = {"."}
+          for path in root.rglob("*"):
+              if any(part in ignored for part in path.parts):
+                  continue
+              if not path.is_file():
+                  continue
+              if (
+                  path.name in markers
+                  or path.name.endswith(".sln")
+                  or path.name.endswith(".csproj")
+              ):
+                  rel = path.parent.relative_to(root)
+                  paths.add(str(rel) if str(rel) else ".")
+
+          items = [{"project_dir": p} for p in sorted(paths)]
+          payload = json.dumps({"include": items})
+          with open(".github_output", "w", encoding="utf-8") as f:
+              f.write(f"matrix={payload}\\n")
+          print(f"matrix={payload}")
+          PY
+          cat .github_output >> "$GITHUB_OUTPUT"
+
   quality:
     runs-on: ubuntu-latest
+    needs: discover-projects
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover-projects.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install dependencies
-        run: |
-          pip install ruff pyright pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            ruff check .
-            pyright
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            pytest -q
-            python -m compileall -q .
-          fi
-"""
-
-_NODE_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            npm run lint --if-present
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            npm test --if-present
-            npm run build --if-present
-          fi
-"""
-
-_MIXED_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
+        if: ${{ hashFiles(format('{0}/pyproject.toml', matrix.project_dir), format('{0}/requirements.txt', matrix.project_dir), format('{0}/setup.py', matrix.project_dir)) != '' }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Set up Node
+        if: ${{ hashFiles(format('{0}/package.json', matrix.project_dir)) != '' }}
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install Python dependencies
-        run: |
-          pip install ruff pyright pytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Install Node dependencies
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            ruff check .
-            pyright
-            npm run lint --if-present
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            pytest -q
-            python -m compileall -q .
-            npm test --if-present
-            npm run build --if-present
-          fi
-"""
-
-_JAVA_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - name: Set up Java
+        if: ${{ hashFiles(format('{0}/pom.xml', matrix.project_dir), format('{0}/build.gradle', matrix.project_dir), format('{0}/build.gradle.kts', matrix.project_dir)) != '' }}
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - name: Build and test (Maven/Gradle)
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-            make quality;
-          elif [ -f pom.xml ]; then
-            mvn -B verify;
-          elif [ -f gradlew ]; then
-            ./gradlew check build;
-          elif [ -f build.gradle ] || [ -f build.gradle.kts ]; then
-            gradle check build;
-          fi
-"""
-
-_RUBY_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - name: Set up Ruby
+        if: ${{ hashFiles(format('{0}/Gemfile', matrix.project_dir)) != '' }}
         uses: ruby/setup-ruby@v1
-      - name: Install dependencies
-        run: bundle install --jobs 4 --retry 3
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            bundle exec rubocop
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            bundle exec rspec || bundle exec rake test
-            bundle exec rake -T > /dev/null
-          fi
-"""
-
-_RAILS_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-      - name: Install dependencies
-        run: bundle install --jobs 4 --retry 3
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            bundle exec rubocop
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            bundle exec rails test || bundle exec rspec
-            bundle exec rails runner "puts Rails.env"
-          fi
-"""
-
-_CSHARP_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - name: Set up .NET
+        if: ${{ hashFiles(format('{0}/*.sln', matrix.project_dir), format('{0}/*.csproj', matrix.project_dir)) != '' }}
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Restore
-        run: dotnet restore
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            dotnet build --configuration Release --no-restore
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            dotnet test --configuration Release --no-build
-          fi
-"""
-
-_GO_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - name: Set up Go
+        if: ${{ hashFiles(format('{0}/go.mod', matrix.project_dir)) != '' }}
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
       - name: Quality Lite
+        shell: bash
         run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            go vet ./...
+          set -euo pipefail
+          cd "${{ matrix.project_dir }}"
+          if [ -f Makefile ] || [ -f makefile ] || [ -f GNUmakefile ]; then
+            make quality-lite
+            exit 0
           fi
+          if [ -f package.json ]; then
+            if [ -f package-lock.json ]; then npm ci; else npm install; fi
+            npm run lint --if-present
+            npm run typecheck --if-present
+            npm audit --audit-level=moderate --omit=dev
+            exit 0
+          fi
+          if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f setup.py ]; then
+            python -m pip install --upgrade pip
+            pip install ruff pyright bandit pytest
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            ruff check .
+            pyright
+            bandit -r . --severity-level medium
+            exit 0
+          fi
+          if [ -f go.mod ]; then go vet ./...; exit 0; fi
+          if [ -f Cargo.toml ]; then cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo audit; exit 0; fi
+          if ls *.sln *.csproj >/dev/null 2>&1; then dotnet restore && dotnet build --configuration Release --no-restore; exit 0; fi
+          if [ -f pom.xml ]; then mvn -B -DskipTests compile; exit 0; fi
+          if [ -f gradlew ]; then ./gradlew classes; exit 0; fi
+          if [ -f build.gradle ] || [ -f build.gradle.kts ]; then gradle classes; exit 0; fi
+          if [ -f Gemfile ]; then bundle install --jobs 4 --retry 3 && bundle exec rubocop && bundle exec brakeman -q; exit 0; fi
+          if [ -f CMakeLists.txt ]; then cmake -S . -B build && cmake --build build; exit 0; fi
+          echo "No supported quality-lite command for ${{ matrix.project_dir }}" >&2
+          exit 1
       - name: Quality Full
+        shell: bash
         run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            go test ./...
-            go build ./...
+          set -euo pipefail
+          cd "${{ matrix.project_dir }}"
+          if [ -f Makefile ] || [ -f makefile ] || [ -f GNUmakefile ]; then
+            make quality
+            exit 0
           fi
-"""
-
-_RUST_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          else
-            cargo fmt --check
-            cargo clippy --all-targets -- -D warnings
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          else
-            cargo build --all-targets
-            cargo test --all-targets
-          fi
-"""
-
-_CPP_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Quality Lite
-        run: |
-          if [ -f Makefile ]; then
-            make quality-lite;
-          elif [ -f CMakeLists.txt ]; then
-            cmake -S . -B build;
-          else
-            echo "No Makefile or CMakeLists.txt found for C++ project" >&2
-            exit 1
-          fi
-      - name: Quality Full
-        run: |
-          if [ -f Makefile ]; then
-            make quality;
-          elif [ -d build ]; then
-            cmake --build build
-            ctest --test-dir build --output-on-failure
-          else
-            echo "Build directory missing for C++ project" >&2
-            exit 1
-          fi
-"""
-
-_UNKNOWN_WORKFLOW = """\
-name: Quality
-# prep-managed: quality-workflow
-
-on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
-
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Quality Lite
-        run: make quality-lite
-      - name: Quality Full
-        run: make quality
+          if [ -f package.json ]; then npm test --if-present && npm run build --if-present; exit 0; fi
+          if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f setup.py ]; then pytest -q && python -m compileall -q .; exit 0; fi
+          if [ -f go.mod ]; then go test ./... && go build ./...; exit 0; fi
+          if [ -f Cargo.toml ]; then cargo build --all-targets && cargo test --all-targets; exit 0; fi
+          if ls *.sln *.csproj >/dev/null 2>&1; then dotnet test --configuration Release --no-build; exit 0; fi
+          if [ -f pom.xml ]; then mvn -B test; exit 0; fi
+          if [ -f gradlew ]; then ./gradlew test; exit 0; fi
+          if [ -f build.gradle ] || [ -f build.gradle.kts ]; then gradle test; exit 0; fi
+          if [ -f Gemfile ]; then bundle exec rails test || bundle exec rspec || bundle exec rake test; exit 0; fi
+          if [ -f CMakeLists.txt ]; then [ -d build ] || cmake -S . -B build; ctest --test-dir build --output-on-failure; exit 0; fi
+          echo "No supported quality command for ${{ matrix.project_dir }}" >&2
+          exit 1
 """
 
 _WORKFLOW_TEMPLATES: dict[str, str] = {
-    "python": _PYTHON_WORKFLOW,
-    "javascript": _NODE_WORKFLOW,
-    "node": _NODE_WORKFLOW,
-    "mixed": _MIXED_WORKFLOW,
-    "java": _JAVA_WORKFLOW,
-    "ruby": _RUBY_WORKFLOW,
-    "rails": _RAILS_WORKFLOW,
-    "csharp": _CSHARP_WORKFLOW,
-    "go": _GO_WORKFLOW,
-    "rust": _RUST_WORKFLOW,
-    "cpp": _CPP_WORKFLOW,
-    "unknown": _UNKNOWN_WORKFLOW,
+    "python": _UNIVERSAL_WORKFLOW,
+    "javascript": _UNIVERSAL_WORKFLOW,
+    "node": _UNIVERSAL_WORKFLOW,
+    "mixed": _UNIVERSAL_WORKFLOW,
+    "java": _UNIVERSAL_WORKFLOW,
+    "ruby": _UNIVERSAL_WORKFLOW,
+    "rails": _UNIVERSAL_WORKFLOW,
+    "csharp": _UNIVERSAL_WORKFLOW,
+    "go": _UNIVERSAL_WORKFLOW,
+    "rust": _UNIVERSAL_WORKFLOW,
+    "cpp": _UNIVERSAL_WORKFLOW,
+    "unknown": _UNIVERSAL_WORKFLOW,
 }
 
 
 def generate_workflow(language: str) -> str:
     """Return the GitHub Actions workflow YAML for the given language."""
-    return _WORKFLOW_TEMPLATES.get(language, _UNKNOWN_WORKFLOW)
+    return _WORKFLOW_TEMPLATES.get(language, _UNIVERSAL_WORKFLOW)
 
 
 _WORKFLOW_REL_PATH = ".github/workflows/quality.yml"
