@@ -150,10 +150,12 @@ describe('StreamView stage indicators', () => {
     })
   })
 
-  describe('Merged stage exclusion', () => {
-    it('does not render status dot for merged stage', () => {
+  describe('Merged stage dot', () => {
+    it('renders green status dot for merged stage', () => {
       render(<StreamView {...defaultProps} />)
-      expect(screen.queryByTestId('stage-dot-merged')).not.toBeInTheDocument()
+      const dot = screen.getByTestId('stage-dot-merged')
+      expect(dot).toBeInTheDocument()
+      expect(dot.style.background).toBe('var(--green)')
     })
   })
 

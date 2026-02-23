@@ -2,19 +2,6 @@ import React, { useState, useMemo } from 'react'
 import { useHydraFlow } from '../context/HydraFlowContext'
 import { theme } from '../theme'
 
-function relativeTime(isoString) {
-  if (!isoString) return ''
-  const diff = Date.now() - new Date(isoString).getTime()
-  const seconds = Math.floor(diff / 1000)
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
 export function SessionSidebar() {
   const { sessions, currentSessionId, selectedSessionId, selectSession } = useHydraFlow()
   const [expandedRepos, setExpandedRepos] = useState({})
@@ -85,7 +72,7 @@ export function SessionSidebar() {
                     <span style={isActive ? styles.dotActive : styles.dotCompleted} />
                     <div style={styles.sessionInfo}>
                       <span style={styles.sessionTime}>
-                        {relativeTime(session.started_at)}
+                        {session.started_at ? new Date(session.started_at).toLocaleString() : ''}
                       </span>
                       <div style={styles.sessionMeta}>
                         {issueCount > 0 && (

@@ -227,3 +227,29 @@ describe('SessionSidebar active session state', () => {
     expect(screen.getByText('org/repo')).toBeDefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Session naming: date/time instead of relative time
+// ---------------------------------------------------------------------------
+
+describe('SessionSidebar session naming', () => {
+  it('displays formatted date/time instead of relative time', () => {
+    mockUseHydraFlow.mockReturnValue(
+      defaultContext({ sessions: [SESSION_A] })
+    )
+    render(<SessionSidebar />)
+    // Should show toLocaleString() output for the session's started_at
+    const expected = new Date(SESSION_A.started_at).toLocaleString()
+    expect(screen.getByText(expected)).toBeDefined()
+  })
+
+  it('does not show relative time strings', () => {
+    mockUseHydraFlow.mockReturnValue(
+      defaultContext({ sessions: [SESSION_A] })
+    )
+    render(<SessionSidebar />)
+    // Relative time strings like "Xm ago", "Xh ago", "Xd ago" should not appear
+    expect(screen.queryByText(/\d+[mhd] ago/)).toBeNull()
+    expect(screen.queryByText('just now')).toBeNull()
+  })
+})

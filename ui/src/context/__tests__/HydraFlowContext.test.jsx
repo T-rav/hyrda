@@ -446,6 +446,25 @@ describe('session_start reducer', () => {
     expect(result.sessions[0].id).toBe('new-session')
     expect(result.sessions[1].id).toBe('old-session')
   })
+
+  it('deduplicates when session_start fires for an existing session id', () => {
+    const state = {
+      ...initialState,
+      sessions: [
+        { id: 'sess-1', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z' },
+        { id: 'old-session', repo: 'test/repo', status: 'completed', started_at: '2026-02-21T12:00:00Z' },
+      ],
+      currentSessionId: 'sess-1',
+    }
+    const result = reducer(state, {
+      type: 'session_start',
+      data: { session_id: 'sess-1', repo: 'test/repo' },
+      timestamp: '2026-02-22T12:00:01Z',
+    })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('sess-1')
+    expect(result.sessions[1].id).toBe('old-session')
+  })
 })
 
 describe('session_end reducer', () => {
@@ -510,6 +529,38 @@ describe('SESSIONS reducer', () => {
   it('handles null data gracefully', () => {
     const result = reducer(initialState, { type: 'SESSIONS', data: null })
     expect(result.sessions).toEqual([])
+  })
+
+  it('preserves active WS session not yet in HTTP response', () => {
+    const state = {
+      ...initialState,
+      sessions: [
+        { id: 'ws-session', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z' },
+      ],
+    }
+    const fetched = [
+      { id: 'old-session', repo: 'test/repo', status: 'completed', started_at: '2026-02-21T12:00:00Z' },
+    ]
+    const result = reducer(state, { type: 'SESSIONS', data: fetched })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions[0].id).toBe('ws-session')
+    expect(result.sessions[1].id).toBe('old-session')
+  })
+
+  it('does not duplicate active session already in HTTP response', () => {
+    const state = {
+      ...initialState,
+      sessions: [
+        { id: 's1', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z' },
+      ],
+    }
+    const fetched = [
+      { id: 's1', repo: 'test/repo', status: 'active', started_at: '2026-02-22T12:00:00Z' },
+      { id: 's0', repo: 'test/repo', status: 'completed', started_at: '2026-02-21T12:00:00Z' },
+    ]
+    const result = reducer(state, { type: 'SESSIONS', data: fetched })
+    expect(result.sessions).toHaveLength(2)
+    expect(result.sessions.filter(s => s.id === 's1')).toHaveLength(1)
   })
 })
 

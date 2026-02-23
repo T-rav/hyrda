@@ -101,12 +101,10 @@ function StageSection({ stage, issues, workerCount, intentMap, onViewTranscript,
             <span>{issues.length} merged</span>
           )}
         </span>
-        {hasRole && (
-          <span
-            style={{ ...styles.statusDot, background: dotColor }}
-            data-testid={`stage-dot-${stage.key}`}
-          />
-        )}
+        <span
+          style={{ ...styles.statusDot, background: dotColor }}
+          data-testid={`stage-dot-${stage.key}`}
+        />
       </div>
       {open && issues.map(issue => (
         <StreamCard
@@ -277,7 +275,9 @@ export function StreamView({ intents, expandedStages, onToggleStage, onViewTrans
         const enabled = status.enabled !== false
         const workerCount = status.workerCount || 0
         let dotColor
-        if (!enabled) {
+        if (!stage.role) {
+          dotColor = theme.green
+        } else if (!enabled) {
           dotColor = theme.red
         } else if (workerCount > 0) {
           dotColor = theme.green

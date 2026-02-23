@@ -565,9 +565,10 @@ export function reducer(state, action) {
         issues_failed: 0,
         status: 'active',
       }
+      const filtered = state.sessions.filter(s => s.id !== action.data.session_id)
       return {
         ...addEvent(state, action),
-        sessions: [newSession, ...state.sessions],
+        sessions: [newSession, ...filtered],
         currentSessionId: action.data.session_id,
       }
     }
@@ -592,8 +593,13 @@ export function reducer(state, action) {
       }
     }
 
-    case 'SESSIONS':
-      return { ...state, sessions: action.data || [] }
+    case 'SESSIONS': {
+      const fetched = action.data || []
+      const fetchedIds = new Set(fetched.map(s => s.id))
+      // Keep any active session added via WS event that isn't in the HTTP response yet
+      const preserved = state.sessions.filter(s => s.status === 'active' && !fetchedIds.has(s.id))
+      return { ...state, sessions: [...preserved, ...fetched] }
+    }
 
     case 'SELECT_SESSION':
       return { ...state, selectedSessionId: action.data.sessionId }
