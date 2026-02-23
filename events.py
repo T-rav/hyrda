@@ -249,7 +249,7 @@ class EventBus:
         try:
             assert self._event_log is not None  # noqa: S101
             await self._event_log.append(event)
-        except (OSError, ValidationError):
+        except OSError:
             logger.warning("Failed to persist event to disk", exc_info=True)
 
     async def load_history_from_disk(self) -> None:
