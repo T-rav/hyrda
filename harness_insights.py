@@ -418,7 +418,8 @@ async def file_harness_suggestions(
         labels = improve_label[:1] + hitl_label[:1]
         issue_num = await prs.create_issue(title, body, labels)
         if issue_num:
-            state.set_hitl_origin(issue_num, improve_label[0])
+            if improve_label:
+                state.set_hitl_origin(issue_num, improve_label[0])
             state.set_hitl_cause(issue_num, f"Harness pattern detected: {desc}")
             store.mark_pattern_proposed(key)
             filed += 1
