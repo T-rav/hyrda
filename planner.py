@@ -189,14 +189,7 @@ class PlannerRunner(BaseRunner):
         result.duration_seconds = time.monotonic() - start
         self._save_transcript("plan-issue", issue.number, result.transcript)
         if result.success and result.plan:
-            try:
-                self._save_plan(issue.number, result.plan, result.summary)
-            except OSError:
-                logger.warning(
-                    "Failed to save plan for issue #%d",
-                    issue.number,
-                    exc_info=True,
-                )
+            self._save_plan(issue.number, result.plan, result.summary)
         return result
 
     def _build_command(self, _worktree_path: Path | None = None) -> list[str]:  # type: ignore[override]
