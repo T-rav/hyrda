@@ -45,6 +45,34 @@ def _prep_stage_line(stage: str, detail: str, status: str, color: bool) -> str:
     return f"{tint}[prep:{stage}] {glyph} {detail}{reset}"
 
 
+async def _await_with_prep_heartbeat(
+    awaitable: Any,
+    *,
+    stage: str,
+    detail: str,
+    color: bool,
+    interval_seconds: float = 20.0,
+) -> Any:
+    """Await long-running prep work while emitting periodic heartbeat lines."""
+    task = asyncio.create_task(awaitable)
+    start = asyncio.get_running_loop().time()
+    while True:
+        try:
+            return await asyncio.wait_for(
+                asyncio.shield(task), timeout=interval_seconds
+            )
+        except TimeoutError:
+            elapsed = int(asyncio.get_running_loop().time() - start)
+            print(  # noqa: T201
+                _prep_stage_line(
+                    stage,
+                    f"{detail} (still running, {elapsed}s elapsed)",
+                    "start",
+                    color,
+                )
+            )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -927,6 +955,17 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
         )
 
         issue_names = [issue.path.name for issue in load_open_issues(repo_root)]
+        issue_preview = ", ".join(issue_names[:3]) if issue_names else "none"
+        if len(issue_names) > 3:
+            issue_preview = f"{issue_preview}, +{len(issue_names) - 3} more"
+        print(  # noqa: T201
+            _prep_stage_line(
+                "hardening",
+                f"attempt {attempt}/{max_attempts}: active issues [{issue_preview}]",
+                "start",
+                use_color,
+            )
+        )
         agent_runs += 1
         print(  # noqa: T201
             _prep_stage_line(
@@ -939,12 +978,17 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                 use_color,
             )
         )
-        agent_ok, transcript = await _run_prep_agent_workflow(
-            tool=selected_tool,
-            model=selected_model,
-            config=config,
-            stack=stack,
-            local_issue_names=issue_names,
+        agent_ok, transcript = await _await_with_prep_heartbeat(
+            _run_prep_agent_workflow(
+                tool=selected_tool,
+                model=selected_model,
+                config=config,
+                stack=stack,
+                local_issue_names=issue_names,
+            ),
+            stage="hardening",
+            detail=f"attempt {attempt}/{max_attempts}: prep workflow agent",
+            color=use_color,
         )
         if agent_ok:
             agent_successes += 1
@@ -1028,14 +1072,19 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                     use_color,
                 )
             )
-            agent_ok = await _run_prep_agent_correction(
-                config=config,
-                tool=selected_tool,
-                model=selected_model,
-                repo_root=repo_root,
-                stack=stack,
-                failures=attempt_failures,
-                issue_filenames=attempt_issue_names,
+            agent_ok = await _await_with_prep_heartbeat(
+                _run_prep_agent_correction(
+                    config=config,
+                    tool=selected_tool,
+                    model=selected_model,
+                    repo_root=repo_root,
+                    stack=stack,
+                    failures=attempt_failures,
+                    issue_filenames=attempt_issue_names,
+                ),
+                stage="hardening",
+                detail=f"attempt {attempt}/{max_attempts}: correction agent",
+                color=use_color,
             )
             if agent_ok:
                 agent_successes += 1
