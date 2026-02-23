@@ -1221,6 +1221,68 @@ class TestBgWorkerIntervalEndpoint:
         assert "between 60 and 86400" in data["error"]
 
     @pytest.mark.asyncio
+    async def test_interval_update_succeeds_for_pipeline_poller(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        mock_orch = MagicMock()
+        mock_orch.set_bg_worker_interval = MagicMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/control/bg-worker/interval")
+        assert endpoint is not None
+
+        response = await endpoint({"name": "pipeline_poller", "interval_seconds": 3600})
+        data = json.loads(response.body)
+        assert response.status_code == 200
+        assert data["status"] == "ok"
+        assert data["name"] == "pipeline_poller"
+        assert data["interval_seconds"] == 3600
+        mock_orch.set_bg_worker_interval.assert_called_once_with(
+            "pipeline_poller", 3600
+        )
+
+    @pytest.mark.asyncio
+    async def test_interval_rejects_below_minimum_for_pipeline_poller(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        mock_orch = MagicMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/control/bg-worker/interval")
+        assert endpoint is not None
+
+        response = await endpoint({"name": "pipeline_poller", "interval_seconds": 2})
+        data = json.loads(response.body)
+        assert response.status_code == 422
+        assert "between 5 and 14400" in data["error"]
+
+    @pytest.mark.asyncio
+    async def test_interval_rejects_above_maximum_for_pipeline_poller(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        mock_orch = MagicMock()
+        router = self._make_router(
+            config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/control/bg-worker/interval")
+        assert endpoint is not None
+
+        response = await endpoint(
+            {"name": "pipeline_poller", "interval_seconds": 20000}
+        )
+        data = json.loads(response.body)
+        assert response.status_code == 422
+        assert "between 5 and 14400" in data["error"]
+
+    @pytest.mark.asyncio
     async def test_interval_rejects_non_editable_worker(
         self, config, event_bus, state, tmp_path
     ) -> None:

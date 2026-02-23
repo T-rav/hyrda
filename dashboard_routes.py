@@ -522,7 +522,7 @@ def create_router(
     ]
 
     # Workers that have independent configurable intervals
-    _INTERVAL_WORKERS = {"memory_sync", "metrics", "pr_unsticker"}
+    _INTERVAL_WORKERS = {"memory_sync", "metrics", "pr_unsticker", "pipeline_poller"}
     # Pipeline loops share poll_interval (read-only display)
     _PIPELINE_WORKERS = {"triage", "plan", "implement", "review"}
 
@@ -608,12 +608,11 @@ def create_router(
         return JSONResponse({"status": "ok", "name": name, "enabled": bool(enabled)})
 
     # Interval bounds per editable worker (must match config.py Field constraints).
-    # pipeline_poller is excluded: it is a frontend-only setInterval in HydraFlowContext
-    # (not a backend orchestrator loop), so it cannot be controlled via this endpoint.
     _INTERVAL_BOUNDS = {
         "memory_sync": (10, 14400),
         "metrics": (30, 14400),
         "pr_unsticker": (60, 86400),
+        "pipeline_poller": (5, 14400),
     }
 
     @router.post("/api/control/bg-worker/interval")
