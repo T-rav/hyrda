@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from collections.abc import Callable
 
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
@@ -40,7 +40,7 @@ class HITLPhase:
         prs: PRManager,
         event_bus: EventBus,
         stop_event: asyncio.Event,
-        active_issues_cb: Any = None,
+        active_issues_cb: Callable[[], None] | None = None,
     ) -> None:
         self._config = config
         self._state = state
