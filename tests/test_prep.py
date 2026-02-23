@@ -477,7 +477,14 @@ class TestCheckMakefile:
     def test_makefile_with_all_targets(self, tmp_path: Path) -> None:
         """Should report PRESENT when all required targets exist."""
         (tmp_path / "Makefile").write_text(
-            "quality:\n\t@echo quality\n\nlint:\n\t@echo lint\n\ntest:\n\t@echo test\n"
+            "lint:\n\t@echo lint\n\n"
+            "lint-check:\n\t@echo lint-check\n\n"
+            "fix-lint:\n\t@echo fix-lint\n\n"
+            "typecheck:\n\t@echo typecheck\n\n"
+            "security:\n\t@echo security\n\n"
+            "test:\n\t@echo test\n\n"
+            "quality-lite:\n\t@echo quality-lite\n\n"
+            "quality:\n\t@echo quality\n"
         )
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
@@ -512,7 +519,14 @@ class TestCheckMakefile:
     def test_makefile_with_dependencies_on_targets(self, tmp_path: Path) -> None:
         """Should detect targets that have dependencies."""
         (tmp_path / "Makefile").write_text(
-            "quality: lint test\n\t@echo quality\n\nlint:\n\t@echo lint\n\ntest:\n\t@echo test\n"
+            "lint:\n\t@echo lint\n\n"
+            "lint-check:\n\t@echo lint-check\n\n"
+            "fix-lint: lint\n\t@echo fix-lint\n\n"
+            "typecheck:\n\t@echo typecheck\n\n"
+            "security:\n\t@echo security\n\n"
+            "test:\n\t@echo test\n\n"
+            "quality-lite: lint-check typecheck security\n\t@echo quality-lite\n\n"
+            "quality: quality-lite test\n\t@echo quality\n"
         )
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
