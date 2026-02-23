@@ -507,9 +507,7 @@ class TestBuildCommand:
         cmd = gen._build_command()
         assert "--disallowedTools" in cmd
 
-    def test_excludes_budget_flag(
-        self, config: HydraFlowConfig, event_bus
-    ) -> None:
+    def test_excludes_budget_flag(self, config: HydraFlowConfig, event_bus) -> None:
         gen, _ = _make_generator(config, event_bus)
         cmd = gen._build_command()
         assert "--max-budget-usd" not in cmd
