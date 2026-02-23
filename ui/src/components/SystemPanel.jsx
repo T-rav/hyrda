@@ -194,7 +194,6 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
           ))}
         </div>
       )}
-      {extraContent}
       {hasDetails && (
         <div style={isError ? (onViewLog ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
@@ -205,6 +204,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
           ))}
         </div>
       )}
+      {extraContent}
       {onViewLog && (
         <div style={styles.cardActions}>
           <span

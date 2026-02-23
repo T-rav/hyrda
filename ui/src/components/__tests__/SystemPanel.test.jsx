@@ -209,10 +209,8 @@ describe('SystemPanel', () => {
       const onToggle = vi.fn()
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running', backgroundWorkers: mockBgWorkers }))
       render(<SystemPanel backgroundWorkers={mockBgWorkers} onToggleBgWorker={onToggle} />)
-      // Click the worker Off button (not the memory auto-approve toggle)
-      const offButtons = screen.getAllByText('Off')
-      const workerOffButton = offButtons.find(btn => btn.dataset.testid !== 'memory-auto-approve-toggle')
-      fireEvent.click(workerOffButton)
+      const reviewInsightsCard = screen.getByTestId('worker-card-review_insights')
+      fireEvent.click(within(reviewInsightsCard).getByText('Off'))
       expect(onToggle).toHaveBeenCalledWith('review_insights', true)
     })
 
