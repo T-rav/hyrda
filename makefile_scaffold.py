@@ -204,7 +204,6 @@ def _targets_for_language(language: str) -> dict[str, str]:
     """Return the target templates for a given language."""
     templates: dict[str, dict[str, str]] = {
         "python": _PYTHON_TARGETS,
-        "mixed": _PYTHON_TARGETS,
         "javascript": _JS_TARGETS,
         "node": _JS_TARGETS,
         "java": _JAVA_TARGETS,

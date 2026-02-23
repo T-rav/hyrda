@@ -128,10 +128,9 @@ class TestGenerateMakefile:
         for line in recipe_lines:
             assert line.startswith("\t"), f"Recipe line should start with tab: {line!r}"
 
-    def test_mixed_defaults_to_python(self) -> None:
+    def test_mixed_no_longer_defaults_to_python(self) -> None:
         content = generate_makefile("mixed")
-        assert "ruff check" in content
-        assert "pyright" in content
+        assert content == ""
 
 
 class TestMergeMakefile:
