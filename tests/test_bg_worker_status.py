@@ -225,7 +225,7 @@ class TestSystemWorkersEndpoint:
 
         response = await endpoint()
         data = json.loads(response.body)
-        assert len(data["workers"]) == 9
+        assert len(data["workers"]) == 10
         names = [w["name"] for w in data["workers"]]
         assert names == [
             "triage",
@@ -236,6 +236,7 @@ class TestSystemWorkersEndpoint:
             "retrospective",
             "metrics",
             "review_insights",
+            "pipeline_poller",
             "pr_unsticker",
         ]
 
