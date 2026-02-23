@@ -1105,7 +1105,7 @@ class TestBgWorkerIntervalEndpoint:
             template_dir=tmp_path / "no-templates",
         )
 
-    def _find_endpoint(self, router, path, method="POST"):
+    def _find_endpoint(self, router, path):
         for route in router.routes:
             if (
                 hasattr(route, "path")
@@ -1242,6 +1242,8 @@ class TestBgWorkerIntervalEndpoint:
     async def test_interval_rejects_missing_name(
         self, config, event_bus, state, tmp_path
     ) -> None:
+        import json
+
         mock_orch = MagicMock()
         router = self._make_router(
             config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
@@ -1250,12 +1252,16 @@ class TestBgWorkerIntervalEndpoint:
         assert endpoint is not None
 
         response = await endpoint({"interval_seconds": 3600})
+        data = json.loads(response.body)
         assert response.status_code == 400
+        assert "required" in data["error"]
 
     @pytest.mark.asyncio
     async def test_interval_rejects_missing_interval(
         self, config, event_bus, state, tmp_path
     ) -> None:
+        import json
+
         mock_orch = MagicMock()
         router = self._make_router(
             config, event_bus, state, tmp_path, get_orch=lambda: mock_orch
@@ -1264,7 +1270,9 @@ class TestBgWorkerIntervalEndpoint:
         assert endpoint is not None
 
         response = await endpoint({"name": "pr_unsticker"})
+        data = json.loads(response.body)
         assert response.status_code == 400
+        assert "required" in data["error"]
 
     @pytest.mark.asyncio
     async def test_interval_rejects_non_integer_interval(
