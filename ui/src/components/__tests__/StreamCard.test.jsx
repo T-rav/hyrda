@@ -431,6 +431,18 @@ describe('StreamCard transcript rendering', () => {
     expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
   })
 
+  it('shows transcript after expanding a collapsed active card', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={false} transcript={['line 1', 'line 2']} />)
+    // Collapsed — no transcript
+    expect(screen.queryByTestId('transcript-preview')).not.toBeInTheDocument()
+    // Expand by clicking the title
+    fireEvent.click(screen.getByText('Fix the frobnicator'))
+    // Transcript now visible
+    expect(screen.getByTestId('transcript-preview')).toBeInTheDocument()
+    expect(screen.getByText('line 2')).toBeInTheDocument()
+  })
+
   it('does not render a View Transcript button for active issues with transcript', () => {
     const issue = makeIssue({ overallStatus: 'active' })
     render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1', 'line 2']} onRequestChanges={() => {}} />)
