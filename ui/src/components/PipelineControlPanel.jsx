@@ -125,7 +125,7 @@ export function PipelineControlPanel({ onToggleBgWorker }) {
                 {maxWorkers != null ? `${activeCount}/${maxWorkers}` : activeCount}
               </span>
               <span style={styles.loopCountLabel}>
-                {activeCount === 1 ? 'worker' : 'workers'}
+                {activeCount === 1 && maxWorkers == null ? 'worker' : 'workers'}
               </span>
               {onToggleBgWorker && (
                 <button

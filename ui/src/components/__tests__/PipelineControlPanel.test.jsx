@@ -62,13 +62,27 @@ describe('PipelineControlPanel', () => {
       expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1/2')
     })
 
-    it('shows "worker" singular when count is 1', () => {
-      const singleWorker = {
-        10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
+    it('shows "worker" singular only for triage (no configKey) when count is 1', () => {
+      const singleTriageWorker = {
+        'triage-5': { status: 'evaluating', worker: 1, role: 'triage', title: 'Triage #5', branch: '', transcript: [], pr: null },
       }
-      mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: singleWorker }))
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: singleTriageWorker }))
       render(<PipelineControlPanel />)
       expect(screen.getByText('worker')).toBeInTheDocument()
+    })
+
+    it('shows "workers" plural for non-triage stages even when active count is 1', () => {
+      const singleImplementer = {
+        10: { status: 'running', worker: 1, role: 'implementer', title: 'Issue #10', branch: '', transcript: [], pr: null },
+      }
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: singleImplementer }))
+      render(<PipelineControlPanel />)
+      const implementCount = screen.getByTestId('loop-count-implement')
+      expect(implementCount).toHaveTextContent('1/3')
+      // Label is plural when showing ratio, even with activeCount=1
+      const implementChip = implementCount.closest('[style]')
+      expect(implementChip).not.toBeNull()
+      expect(screen.queryByText('worker')).not.toBeInTheDocument()
     })
 
     it('shows "workers" plural when count is not 1', () => {
@@ -174,6 +188,15 @@ describe('PipelineControlPanel', () => {
       // Triage still shows no ratio since it has no configKey
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('0')
       expect(screen.getByTestId('loop-count-triage').textContent).not.toContain('/')
+    })
+
+    it('falls back to active-only count when config is present but missing a key', () => {
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers, config: {} }))
+      render(<PipelineControlPanel />)
+      // All non-triage stages fall back gracefully when keys are absent (undefined != null is false)
+      expect(screen.getByTestId('loop-count-plan').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-implement').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-review').textContent).not.toContain('/')
     })
   })
 
