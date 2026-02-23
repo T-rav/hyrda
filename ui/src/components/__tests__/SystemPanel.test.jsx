@@ -621,4 +621,67 @@ describe('BackgroundWorkerCard schedule display', () => {
     expect(screen.getByTestId('schedule-memory_sync')).toBeInTheDocument()
     expect(screen.getByTestId('schedule-memory_sync').textContent).toMatch(/Runs every 1h/)
   })
+
+  it('shows edit link for pr_unsticker when onUpdateInterval provided', () => {
+    const bgWorkers = [
+      { name: 'pr_unsticker', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    expect(screen.getByTestId('edit-interval-pr_unsticker')).toBeInTheDocument()
+  })
+
+  it('shows interval editor for pr_unsticker when edit clicked', () => {
+    const bgWorkers = [
+      { name: 'pr_unsticker', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    fireEvent.click(screen.getByTestId('edit-interval-pr_unsticker'))
+    expect(screen.getByTestId('interval-editor-pr_unsticker')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-1h')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-2h')).toBeInTheDocument()
+  })
+
+  it('calls onUpdateInterval with pr_unsticker when preset clicked', () => {
+    const onUpdate = vi.fn()
+    const bgWorkers = [
+      { name: 'pr_unsticker', status: 'ok', enabled: true, last_run: null, interval_seconds: 3600, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={onUpdate} />)
+    fireEvent.click(screen.getByTestId('edit-interval-pr_unsticker'))
+    fireEvent.click(screen.getByTestId('preset-2h'))
+    expect(onUpdate).toHaveBeenCalledWith('pr_unsticker', 7200)
+  })
+
+  it('shows edit link for pipeline_poller when onUpdateInterval provided', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    const bgWorkers = [
+      { name: 'pipeline_poller', status: 'ok', enabled: true, last_run: null, interval_seconds: 5, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    expect(screen.getByTestId('edit-interval-pipeline_poller')).toBeInTheDocument()
+  })
+
+  it('shows interval editor for pipeline_poller when edit clicked', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    const bgWorkers = [
+      { name: 'pipeline_poller', status: 'ok', enabled: true, last_run: null, interval_seconds: 5, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={() => {}} />)
+    fireEvent.click(screen.getByTestId('edit-interval-pipeline_poller'))
+    expect(screen.getByTestId('interval-editor-pipeline_poller')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-30m')).toBeInTheDocument()
+    expect(screen.getByTestId('preset-1h')).toBeInTheDocument()
+  })
+
+  it('calls onUpdateInterval with pipeline_poller when preset clicked', () => {
+    mockUseHydraFlow.mockReturnValue(defaultMockContext({ orchestratorStatus: 'running' }))
+    const onUpdate = vi.fn()
+    const bgWorkers = [
+      { name: 'pipeline_poller', status: 'ok', enabled: true, last_run: null, interval_seconds: 5, details: {} },
+    ]
+    render(<SystemPanel backgroundWorkers={bgWorkers} onUpdateInterval={onUpdate} />)
+    fireEvent.click(screen.getByTestId('edit-interval-pipeline_poller'))
+    fireEvent.click(screen.getByTestId('preset-1h'))
+    expect(onUpdate).toHaveBeenCalledWith('pipeline_poller', 3600)
+  })
 })

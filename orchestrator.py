@@ -330,15 +330,14 @@ class HydraFlowOrchestrator:
         """
         if name in self._bg_worker_intervals:
             return self._bg_worker_intervals[name]
-        if name == "memory_sync":
-            return self._config.memory_sync_interval
-        if name == "metrics":
-            return self._config.metrics_sync_interval
-        if name == "pr_unsticker":
-            return self._config.pr_unstick_interval
-        if name == "manifest_refresh":
-            return self._config.manifest_refresh_interval
-        return self._config.poll_interval
+        defaults: dict[str, int] = {
+            "memory_sync": self._config.memory_sync_interval,
+            "metrics": self._config.metrics_sync_interval,
+            "pipeline_poller": 5,
+            "pr_unsticker": self._config.pr_unstick_interval,
+            "manifest_refresh": self._config.manifest_refresh_interval,
+        }
+        return defaults.get(name, self._config.poll_interval)
 
     async def _publish_status(self) -> None:
         """Broadcast the current orchestrator status to all subscribers."""
