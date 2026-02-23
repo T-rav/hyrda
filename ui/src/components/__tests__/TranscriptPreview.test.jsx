@@ -79,7 +79,7 @@ describe('TranscriptPreview', () => {
     expect(screen.getByText('e')).toBeInTheDocument()
   })
 
-  it('applies maxHeight when expanded', () => {
+  it('applies custom maxHeight when expanded', () => {
     const lines = Array.from({ length: 50 }, (_, i) => `line ${i}`)
     render(<TranscriptPreview transcript={lines} maxHeight={150} />)
     fireEvent.click(screen.getByTestId('transcript-toggle'))
@@ -87,6 +87,16 @@ describe('TranscriptPreview', () => {
     const linesContainer = preview.querySelector('[style*="max-height"]') || preview.firstChild
     // When expanded, the lines container should have maxHeight set
     expect(linesContainer.style.maxHeight).toBe('150px')
+    expect(linesContainer.style.overflowY).toBe('auto')
+  })
+
+  it('uses default maxHeight of 375px when expanded', () => {
+    const lines = Array.from({ length: 50 }, (_, i) => `line ${i}`)
+    render(<TranscriptPreview transcript={lines} />)
+    fireEvent.click(screen.getByTestId('transcript-toggle'))
+    const preview = screen.getByTestId('transcript-preview')
+    const linesContainer = preview.querySelector('[style*="max-height"]') || preview.firstChild
+    expect(linesContainer.style.maxHeight).toBe('375px')
     expect(linesContainer.style.overflowY).toBe('auto')
   })
 

@@ -433,6 +433,14 @@ describe('StreamCard transcript rendering', () => {
   })
 })
 
+describe('StreamCard View Transcript button removal', () => {
+  it('does not render a View Transcript button when expanded', () => {
+    const issue = makeIssue({ overallStatus: 'active' })
+    render(<StreamCard issue={issue} defaultExpanded={true} transcript={['line 1', 'line 2']} onRequestChanges={() => {}} />)
+    expect(screen.queryByText('View Transcript')).not.toBeInTheDocument()
+  })
+})
+
 describe('StreamCard inline transcript column', () => {
   it('shows inline transcript column for active cards without expanding', () => {
     const issue = makeIssue({ overallStatus: 'active' })

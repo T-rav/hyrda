@@ -62,7 +62,7 @@ function StageRow({ stageKey, stageData, isLast }) {
   )
 }
 
-export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, onRequestChanges, transcript = [] }) {
+export function StreamCard({ issue, intent, defaultExpanded, onRequestChanges, transcript = [] }) {
   const [expanded, setExpanded] = useState(defaultExpanded || false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [feedbackText, setFeedbackText] = useState('')
@@ -178,14 +178,6 @@ export function StreamCard({ issue, intent, defaultExpanded, onViewTranscript, o
             <TranscriptPreview transcript={transcript} />
           )}
           <div style={styles.actions}>
-            {onViewTranscript && (
-              <span
-                style={styles.actionBtn}
-                onClick={() => onViewTranscript(issue.issueNumber)}
-              >
-                View Transcript
-              </span>
-            )}
             {issue.pr?.url && (
               <a
                 style={styles.actionBtn}

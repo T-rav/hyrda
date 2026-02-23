@@ -42,7 +42,6 @@ const defaultProps = {
   intents: [],
   expandedStages: allExpanded,
   onToggleStage: () => {},
-  onViewTranscript: () => {},
   onRequestChanges: () => {},
 }
 
