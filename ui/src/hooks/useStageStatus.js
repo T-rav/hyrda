@@ -72,7 +72,7 @@ export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, se
   const workload = {
     total: workerValues.length,
     active: workerValues.filter(w => ACTIVE_STATUSES.includes(w.status)).length,
-    done: workerValues.filter(w => w.status === 'done').length,
+    done: counters.mergedCount || 0,
     failed: workerValues.filter(w => w.status === 'failed').length,
   }
 

@@ -162,14 +162,28 @@ describe('deriveStageStatus', () => {
         5: { role: 'reviewer', status: 'queued' },
       }
 
-      const result = deriveStageStatus(emptyPipeline, workers, [], {})
+      const result = deriveStageStatus(emptyPipeline, workers, [], { mergedCount: 2 })
 
       expect(result.workload).toEqual({
         total: 5,
         active: 2,  // running + planning
-        done: 1,
+        done: 2,    // from mergedCount, not workers with status 'done'
         failed: 1,
       })
+    })
+
+    it('done uses mergedCount from session counters, not worker status', () => {
+      const workers = {
+        1: { role: 'implementer', status: 'done' },
+        2: { role: 'implementer', status: 'done' },
+        3: { role: 'planner', status: 'done' },
+        4: { role: 'reviewer', status: 'done' },
+        5: { role: 'implementer', status: 'done' },
+      }
+
+      const result = deriveStageStatus(emptyPipeline, workers, [], { mergedCount: 2 })
+
+      expect(result.workload.done).toBe(2) // mergedCount, not 5 workers with 'done'
     })
 
     it('returns all zeros for empty workers', () => {
@@ -240,7 +254,7 @@ describe('deriveStageStatus', () => {
       workerCount: 0, enabled: true, sessionCount: 3,
     })
     expect(result.workload).toEqual({
-      total: 4, active: 3, done: 1, failed: 0,
+      total: 4, active: 3, done: 3, failed: 0,  // done = mergedCount from counters
     })
   })
 })
