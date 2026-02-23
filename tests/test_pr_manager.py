@@ -2378,6 +2378,53 @@ class TestCreatePrEdgeCases:
         assert result.issue_number == issue.number
         assert result.branch == "agent/issue-42"
 
+    @pytest.mark.asyncio
+    async def test_create_pr_empty_output_returns_zero_pr(
+        self, config, event_bus, issue
+    ) -> None:
+        """create_pr should return PRInfo(number=0) when gh output is empty."""
+        manager = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await manager.create_pr(issue, "agent/issue-42")
+
+        assert result.number == 0
+        assert result.issue_number == issue.number
+        assert result.branch == "agent/issue-42"
+
+
+class TestCreateIssueEdgeCases:
+    """Edge case tests for PRManager.create_issue."""
+
+    @pytest.mark.asyncio
+    async def test_create_issue_malformed_output_returns_zero(
+        self, config, event_bus
+    ) -> None:
+        """create_issue should return 0 when gh output is not a valid URL."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(
+            returncode=0, stdout="Error: something went wrong"
+        )
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.create_issue("Bug found", "Details here", ["bug"])
+
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_create_issue_empty_output_returns_zero(
+        self, config, event_bus
+    ) -> None:
+        """create_issue should return 0 when gh output is empty."""
+        mgr = _make_manager(config, event_bus)
+        mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.create_issue("Bug found", "Details here", ["bug"])
+
+        assert result == 0
+
 
 class TestWaitForCiEdgeCases:
     """Edge case tests for PRManager.wait_for_ci."""
@@ -2467,6 +2514,38 @@ class TestListOpenPrsEdgeCases:
         assert len(result) == 1
         assert result[0].branch == ""
         assert result[0].issue == 0
+
+    @pytest.mark.asyncio
+    async def test_list_open_prs_skips_entry_missing_number(
+        self, config, event_bus
+    ) -> None:
+        """PR JSON entry missing 'number' key should be skipped."""
+        mgr = _make_manager(config, event_bus)
+
+        pr_json = json.dumps(
+            [
+                {
+                    "url": "https://github.com/org/repo/pull/10",
+                    "headRefName": "agent/issue-10",
+                    "isDraft": False,
+                    "title": "Missing number field",
+                },
+                {
+                    "number": 20,
+                    "url": "https://github.com/org/repo/pull/20",
+                    "headRefName": "agent/issue-20",
+                    "isDraft": False,
+                    "title": "Has number field",
+                },
+            ]
+        )
+        mock_create = _make_subprocess_mock(returncode=0, stdout=pr_json)
+
+        with patch("asyncio.create_subprocess_exec", mock_create):
+            result = await mgr.list_open_prs(["test-label"])
+
+        assert len(result) == 1
+        assert result[0].pr == 20
 
 
 # ---------------------------------------------------------------------------
