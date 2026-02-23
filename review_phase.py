@@ -140,6 +140,28 @@ class ReviewPhase:
 
         return results
 
+    async def _should_skip_review(self, pr: PRInfo) -> bool:
+        """Return True if this PR was already reviewed at its current HEAD.
+
+        Relies on internal state tracking (``last_reviewed_sha``) rather than
+        querying the GitHub Reviews API, since ``SelfReviewError`` means the
+        bot may not have a formal review on its own PRs.
+        """
+        head_sha = await self._prs.get_pr_head_sha(pr.number)
+        if not head_sha:
+            return False  # Can't determine — proceed with review
+
+        last_sha = self._state.get_last_reviewed_sha(pr.number)
+        if last_sha != head_sha:
+            return False  # New commits since last review — proceed
+
+        logger.info(
+            "PR #%d: skipping review — already reviewed at SHA %s",
+            pr.number,
+            head_sha[:8],
+        )
+        return True
+
     async def _review_one_inner(
         self,
         idx: int,
@@ -155,6 +177,13 @@ class ReviewPhase:
                 pr_number=pr.number,
                 issue_number=pr.issue_number,
                 summary="Issue not found",
+            )
+
+        if await self._should_skip_review(pr):
+            return ReviewResult(
+                pr_number=pr.number,
+                issue_number=pr.issue_number,
+                summary="Skipped — already reviewed at current HEAD",
             )
 
         wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
@@ -221,6 +250,11 @@ class ReviewPhase:
         if result.duration_seconds > 0:
             self._state.record_review_duration(result.duration_seconds)
         await self._record_review_insight(result)
+
+        # Record HEAD SHA so we can skip re-review if no new commits arrive
+        head_sha = await self._prs.get_pr_head_sha(pr.number)
+        if head_sha and isinstance(head_sha, str):
+            self._state.set_last_reviewed_sha(pr.number, head_sha)
 
         # Verdict-specific handling
         skip_worktree_cleanup = False
@@ -511,6 +545,7 @@ class ReviewPhase:
         self._state.set_hitl_origin(issue_number, origin_label)
         self._state.set_hitl_cause(issue_number, cause)
         self._state.record_hitl_escalation()
+        self._state.clear_last_reviewed_sha(pr_number)
 
         await self._prs.swap_pipeline_labels(
             issue_number,
@@ -626,6 +661,7 @@ class ReviewPhase:
             # Under cap: re-queue for implementation with feedback
             new_count = self._state.increment_review_attempts(pr.issue_number)
             self._state.set_review_feedback(pr.issue_number, result.summary)
+            self._state.clear_last_reviewed_sha(pr.number)
 
             # Swap labels: review → ready (issue and PR)
             await self._prs.swap_pipeline_labels(

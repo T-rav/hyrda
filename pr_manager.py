@@ -500,6 +500,41 @@ class PRManager:
             logger.error("Issue creation failed for %r: %s", title, exc)
             return 0
 
+    async def get_pr_reviews(self, pr_number: int) -> list[dict[str, str]]:
+        """Fetch reviews for *pr_number* with author and state info."""
+        try:
+            raw = await self._run_gh(
+                "gh",
+                "api",
+                f"repos/{self._repo}/pulls/{pr_number}/reviews",
+                "--jq",
+                "[.[] | {author: .user.login, state: .state}]",
+            )
+            return json.loads(raw)  # type: ignore[no-any-return]
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            logger.warning("Could not fetch reviews for PR #%d: %s", pr_number, exc)
+            return []
+
+    async def get_pr_head_sha(self, pr_number: int) -> str:
+        """Fetch the HEAD commit SHA for *pr_number*. Returns empty string on failure."""
+        try:
+            raw = await self._run_gh(
+                "gh",
+                "pr",
+                "view",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--json",
+                "headRefOid",
+                "--jq",
+                ".headRefOid",
+            )
+            return raw.strip()
+        except RuntimeError as exc:
+            logger.warning("Could not get HEAD SHA for PR #%d: %s", pr_number, exc)
+            return ""
+
     async def get_pr_diff(self, pr_number: int) -> str:
         """Fetch the diff for *pr_number*."""
         try:

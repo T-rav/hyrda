@@ -329,6 +329,22 @@ class StateTracker:
             self._data.manifest_last_updated,
         )
 
+    # --- last reviewed SHA tracking ---
+
+    def set_last_reviewed_sha(self, pr_number: int, sha: str) -> None:
+        """Record the commit SHA at which *pr_number* was last reviewed."""
+        self._data.last_reviewed_sha[str(pr_number)] = sha
+        self.save()
+
+    def get_last_reviewed_sha(self, pr_number: int) -> str | None:
+        """Return the SHA at which *pr_number* was last reviewed, or *None*."""
+        return self._data.last_reviewed_sha.get(str(pr_number))
+
+    def clear_last_reviewed_sha(self, pr_number: int) -> None:
+        """Clear the last reviewed SHA for *pr_number*."""
+        self._data.last_reviewed_sha.pop(str(pr_number), None)
+        self.save()
+
     # --- worker interval overrides ---
 
     def get_worker_intervals(self) -> dict[str, int]:
