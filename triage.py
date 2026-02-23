@@ -40,6 +40,21 @@ def _coerce_reasons(raw: object) -> list[str]:
     return []
 
 
+def _coerce_ready(raw: object) -> bool:
+    """Normalise the ``ready`` field from an LLM JSON response.
+
+    - bool → returned as-is (normal case).
+    - String → ``False`` for ``"false"``/``"no"``/``"0"``/empty, else ``True``.
+      Prevents ``bool("false") == True`` silently passing rejected issues.
+    - Anything else → standard bool coercion.
+    """
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, str):
+        return raw.strip().lower() not in ("false", "no", "0", "")
+    return bool(raw)
+
+
 class TriageRunner:
     """Evaluates whether a GitHub issue has enough context for planning.
 
@@ -262,7 +277,7 @@ or
                 raw = data.get("reasons", [])
                 return TriageResult(
                     issue_number=issue_number,
-                    ready=bool(data["ready"]),
+                    ready=_coerce_ready(data["ready"]),
                     reasons=_coerce_reasons(raw),
                 )
         except (json.JSONDecodeError, TypeError, ValueError):
@@ -277,7 +292,7 @@ or
                     raw = data.get("reasons", [])
                     return TriageResult(
                         issue_number=issue_number,
-                        ready=bool(data["ready"]),
+                        ready=_coerce_ready(data["ready"]),
                         reasons=_coerce_reasons(raw),
                     )
             except (json.JSONDecodeError, TypeError, ValueError):
@@ -292,7 +307,7 @@ or
                     raw = data.get("reasons", [])
                     return TriageResult(
                         issue_number=issue_number,
-                        ready=bool(data["ready"]),
+                        ready=_coerce_ready(data["ready"]),
                         reasons=_coerce_reasons(raw),
                     )
             except (json.JSONDecodeError, TypeError, ValueError):

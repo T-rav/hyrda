@@ -320,6 +320,21 @@ class TestParseVerdict:
             "Missing specificity"
         ]  # string preserved as single-item list
 
+    def test_ready_as_string_false_coerced_correctly(self) -> None:
+        """LLM returns ready as string 'false' — must NOT be coerced to True."""
+        # bool("false") == True in Python; _coerce_ready must handle this.
+        transcript = '{"ready": "false", "reasons": ["Missing detail"]}'
+        result = TriageRunner._parse_verdict(transcript, 1)
+        assert result is not None
+        assert result.ready is False  # string "false" → bool False, not True
+
+    def test_ready_as_string_true_coerced_correctly(self) -> None:
+        """LLM returns ready as string 'true' — should be coerced to True."""
+        transcript = '{"ready": "true", "reasons": []}'
+        result = TriageRunner._parse_verdict(transcript, 1)
+        assert result is not None
+        assert result.ready is True
+
 
 # ---------------------------------------------------------------------------
 # Command and prompt building
