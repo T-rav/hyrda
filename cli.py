@@ -158,7 +158,7 @@ def _write_prep_task_transcript(
 
 def _build_prep_failure_error_message(transcript: str, transcript_ref: str) -> str:
     """Build a concrete failure message for local `.pre` issues."""
-    if "PREP_STATUS: FAILED" in transcript:
+    if re.search(r"PREP_STATUS\s*:\s*FAILED", transcript, re.IGNORECASE):
         reason = "Agent returned PREP_STATUS: FAILED."
     elif not transcript.strip():
         reason = "Agent produced an empty transcript."
@@ -899,7 +899,7 @@ async def _run_prep_agent_workflow(
         "4) Run and fix quality/test/build failures iteratively.\n"
         "5) Use local `.pre/*.md` files as issue tracker; update and mark done when fixed.\n"
         "6) Keep changes minimal and safe.\n"
-        "7) End response with: PREP_STATUS: SUCCESS or PREP_STATUS: FAILED.\n\n"
+        "7) End response with EXACTLY one final line: PREP_STATUS: SUCCESS or PREP_STATUS: FAILED.\n\n"
         "Current local prep issues:\n"
         f"{issue_list}\n"
     )
@@ -919,7 +919,7 @@ async def _run_prep_agent_workflow(
         on_output=on_output,
         timeout=1800.0,
     )
-    success = "PREP_STATUS: SUCCESS" in transcript
+    success = bool(re.search(r"PREP_STATUS\s*:\s*SUCCESS", transcript, re.IGNORECASE))
     return success, transcript
 
 
