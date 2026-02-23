@@ -435,7 +435,7 @@ class TestHydraFlowConfigDefaults:
 class TestHydraFlowConfigCustomValues:
     """Tests that custom constructor values take precedence over defaults."""
 
-    def test_custom_label(self, tmp_path: Path) -> None:
+    def test_custom_label_overrides_ready_label_default(self, tmp_path: Path) -> None:
         # Arrange / Act
         cfg = HydraFlowConfig(
             ready_label=["sprint"],
