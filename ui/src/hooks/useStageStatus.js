@@ -26,6 +26,7 @@ const LOOP_KEYS = new Set(PIPELINE_LOOPS.map(l => l.key))
  * @param {Array} backgroundWorkers - Array of { name, status, enabled, ... }
  * @param {Object} sessionCounters - { sessionTriaged, sessionPlanned, sessionImplemented, sessionReviewed, mergedCount }
  * @returns {{ [stageKey]: { issueCount, activeCount, queuedCount, workerCount, enabled, sessionCount }, workload: { total, active, done, failed } }}
+ *   workload.done = sessionCounters.mergedCount (merged PRs), NOT workers with status 'done'
  */
 export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, sessionCounters) {
   const issues = pipelineIssues || {}
