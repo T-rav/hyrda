@@ -101,6 +101,14 @@ def _make_subprocess_mock(returncode: int = 0, stdout: str = "", stderr: str = "
     return AsyncMock(return_value=mock_proc)
 
 
+def _assert_search_api_cmd(cmd: tuple[str, ...]) -> None:
+    """Assert common structure of a gh API search command."""
+    assert "api" in cmd
+    assert "search/issues" in cmd
+    assert ".total_count" in cmd
+    assert "--limit" not in cmd
+
+
 # ---------------------------------------------------------------------------
 # post_comment
 # ---------------------------------------------------------------------------
@@ -458,7 +466,7 @@ async def test_submit_review_returns_false_on_generic_error(
 
 
 @pytest.mark.asyncio
-async def test_create_issue_calls_gh_issue_create(config, event_bus, tmp_path):
+async def test_create_issue_returns_parsed_issue_number(config, event_bus, tmp_path):
     from config import HydraFlowConfig
 
     cfg = HydraFlowConfig(
@@ -476,6 +484,26 @@ async def test_create_issue_calls_gh_issue_create(config, event_bus, tmp_path):
         number = await mgr.create_issue("Bug found", "Details here", ["bug"])
 
     assert number == 99
+
+
+@pytest.mark.asyncio
+async def test_create_issue_passes_correct_gh_args(config, event_bus, tmp_path):
+    from config import HydraFlowConfig
+
+    cfg = HydraFlowConfig(
+        ready_label=config.ready_label,
+        repo=config.repo,
+        repo_root=tmp_path,
+        worktree_base=tmp_path / "worktrees",
+        state_file=tmp_path / "state.json",
+    )
+    mgr = _make_manager(cfg, event_bus)
+    issue_url = "https://github.com/test-org/test-repo/issues/99"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=issue_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await mgr.create_issue("Bug found", "Details here", ["bug"])
+
     args = mock_create.call_args[0]
     assert "gh" in args
     assert "issue" in args
@@ -608,7 +636,7 @@ async def test_push_branch_failure_returns_false(config, event_bus, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_create_pr_constructs_correct_gh_command(config, event_bus, issue):
+async def test_create_pr_calls_gh_pr_create(config, event_bus, issue):
     manager = _make_manager(config, event_bus)
     pr_url = "https://github.com/test-org/test-repo/pull/55"
     mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
@@ -620,6 +648,18 @@ async def test_create_pr_constructs_correct_gh_command(config, event_bus, issue)
     assert args[0] == "gh"
     assert "pr" in args
     assert "create" in args
+
+
+@pytest.mark.asyncio
+async def test_create_pr_includes_required_flags(config, event_bus, issue):
+    manager = _make_manager(config, event_bus)
+    pr_url = "https://github.com/test-org/test-repo/pull/55"
+    mock_create = _make_subprocess_mock(returncode=0, stdout=pr_url)
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.create_pr(issue, "agent/issue-42")
+
+    args = mock_create.call_args[0]
     assert "--repo" in args
     assert config.repo in args
     assert "--head" in args
@@ -763,7 +803,7 @@ async def test_create_pr_dry_run_skips_command(dry_config, event_bus, issue):
 
 
 @pytest.mark.asyncio
-async def test_merge_pr_calls_gh_pr_merge_with_correct_flags(config, event_bus):
+async def test_merge_pr_calls_gh_pr_merge(config, event_bus):
     manager = _make_manager(config, event_bus)
     mock_create = _make_subprocess_mock(returncode=0, stdout="")
 
@@ -776,6 +816,17 @@ async def test_merge_pr_calls_gh_pr_merge_with_correct_flags(config, event_bus):
     assert "pr" in args
     assert "merge" in args
     assert "101" in args
+
+
+@pytest.mark.asyncio
+async def test_merge_pr_uses_squash_and_delete_branch(config, event_bus):
+    manager = _make_manager(config, event_bus)
+    mock_create = _make_subprocess_mock(returncode=0, stdout="")
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        await manager.merge_pr(101)
+
+    args = mock_create.call_args[0]
     assert "--squash" in args
     assert "--auto" not in args
     assert "--delete-branch" in args
@@ -2796,11 +2847,7 @@ class TestCountHelpers:
         assert result == {"hydraflow-plan": 5}
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "api" in cmd
-        assert "search/issues" in cmd
-        assert ".total_count" in cmd
-        assert "--limit" not in cmd
-        # Verify query string contains correct filters
+        _assert_search_api_cmd(cmd)
         query_arg = [c for c in cmd if c.startswith("q=")][0]
         assert "repo:test-org/test-repo" in query_arg
         assert "is:issue" in query_arg
@@ -2833,11 +2880,7 @@ class TestCountHelpers:
         assert result == 7
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "api" in cmd
-        assert "search/issues" in cmd
-        assert ".total_count" in cmd
-        assert "--limit" not in cmd
-        # Verify query string contains correct filters
+        _assert_search_api_cmd(cmd)
         query_arg = [c for c in cmd if c.startswith("q=")][0]
         assert "repo:test-org/test-repo" in query_arg
         assert "is:issue" in query_arg
@@ -2868,11 +2911,7 @@ class TestCountHelpers:
         assert result == 12
         assert len(captured_cmds) == 1
         cmd = captured_cmds[0]
-        assert "api" in cmd
-        assert "search/issues" in cmd
-        assert ".total_count" in cmd
-        assert "--limit" not in cmd
-        # Verify query string contains correct filters
+        _assert_search_api_cmd(cmd)
         query_arg = [c for c in cmd if c.startswith("q=")][0]
         assert "repo:test-org/test-repo" in query_arg
         assert "is:pr" in query_arg

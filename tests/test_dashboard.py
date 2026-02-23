@@ -440,7 +440,26 @@ class TestPRsRoute:
 
         assert response.json() == []
 
-    def test_prs_happy_path_returns_pr_list(
+    _TWO_MOCK_PRS = [
+        PRListItem(
+            pr=10,
+            issue=42,
+            branch="agent/issue-42",
+            url="https://github.com/org/repo/pull/10",
+            draft=False,
+            title="Fix widget",
+        ),
+        PRListItem(
+            pr=11,
+            issue=55,
+            branch="agent/issue-55",
+            url="https://github.com/org/repo/pull/11",
+            draft=True,
+            title="Add feature",
+        ),
+    ]
+
+    def test_prs_happy_path_returns_correct_count(
         self, config: HydraFlowConfig, event_bus: EventBus, state
     ) -> None:
         from fastapi.testclient import TestClient
@@ -450,32 +469,32 @@ class TestPRsRoute:
         dashboard = HydraFlowDashboard(config, event_bus, state)
         app = dashboard.create_app()
 
-        mock_prs = [
-            PRListItem(
-                pr=10,
-                issue=42,
-                branch="agent/issue-42",
-                url="https://github.com/org/repo/pull/10",
-                draft=False,
-                title="Fix widget",
-            ),
-            PRListItem(
-                pr=11,
-                issue=55,
-                branch="agent/issue-55",
-                url="https://github.com/org/repo/pull/11",
-                draft=True,
-                title="Add feature",
-            ),
-        ]
-
         client = TestClient(app)
-        with patch("pr_manager.PRManager.list_open_prs", return_value=mock_prs):
+        with patch(
+            "pr_manager.PRManager.list_open_prs", return_value=self._TWO_MOCK_PRS
+        ):
             response = client.get("/api/prs")
 
         body = response.json()
         assert len(body) == 2
 
+    def test_prs_happy_path_pr_fields_match(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        dashboard = HydraFlowDashboard(config, event_bus, state)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with patch(
+            "pr_manager.PRManager.list_open_prs", return_value=self._TWO_MOCK_PRS
+        ):
+            response = client.get("/api/prs")
+
+        body = response.json()
         assert body[0]["pr"] == 10
         assert body[0]["issue"] == 42
         assert body[0]["branch"] == "agent/issue-42"
@@ -1068,8 +1087,27 @@ class TestControlStatusEndpoint:
         assert response.status_code == 200
         assert response.json()["status"] == "running"
 
+    _STATUS_CONFIG_FIELDS = [
+        "repo",
+        "ready_label",
+        "find_label",
+        "planner_label",
+        "review_label",
+        "hitl_label",
+        "hitl_active_label",
+        "fixed_label",
+        "max_planners",
+        "max_reviewers",
+        "max_hitl_workers",
+    ]
+
+    @pytest.mark.parametrize("config_field", _STATUS_CONFIG_FIELDS)
     def test_status_includes_config_info(
-        self, config: HydraFlowConfig, event_bus: EventBus, state
+        self,
+        config: HydraFlowConfig,
+        event_bus: EventBus,
+        state,
+        config_field: str,
     ) -> None:
         from fastapi.testclient import TestClient
 
@@ -1082,17 +1120,7 @@ class TestControlStatusEndpoint:
         response = client.get("/api/control/status")
 
         body = response.json()
-        assert body["config"]["repo"] == config.repo
-        assert body["config"]["ready_label"] == config.ready_label
-        assert body["config"]["find_label"] == config.find_label
-        assert body["config"]["planner_label"] == config.planner_label
-        assert body["config"]["review_label"] == config.review_label
-        assert body["config"]["hitl_label"] == config.hitl_label
-        assert body["config"]["hitl_active_label"] == config.hitl_active_label
-        assert body["config"]["fixed_label"] == config.fixed_label
-        assert body["config"]["max_planners"] == config.max_planners
-        assert body["config"]["max_reviewers"] == config.max_reviewers
-        assert body["config"]["max_hitl_workers"] == config.max_hitl_workers
+        assert body["config"][config_field] == getattr(config, config_field)
 
 
 # ---------------------------------------------------------------------------
