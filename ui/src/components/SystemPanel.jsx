@@ -54,7 +54,7 @@ function statusColor(status) {
   return theme.textInactive
 }
 
-function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssues, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval }) {
+function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssues, orchestratorStatus, onToggleBgWorker, onViewLog, onUpdateInterval, extraContent }) {
   const [showIntervalEditor, setShowIntervalEditor] = useState(false)
   const isPipelinePoller = def.key === 'pipeline_poller'
   const isSystem = def.system === true
@@ -194,6 +194,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
           ))}
         </div>
       )}
+      {extraContent}
       {hasDetails && (
         <div style={isError ? (onViewLog ? styles.detailsErrorCompact : styles.detailsError) : styles.details}>
           {Object.entries(details).map(([k, v]) => (
@@ -303,7 +304,6 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, on
               })}
             </div>
             <h3 style={styles.sectionHeading}>System</h3>
-            <MemoryAutoApproveToggle />
             <div style={styles.grid}>
               {SYSTEM_WORKERS.map((def) => {
                 const state = backgroundWorkers.find(w => w.name === def.key)
@@ -318,6 +318,7 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onViewLog, on
                     onToggleBgWorker={onToggleBgWorker}
                     onViewLog={onViewLog}
                     onUpdateInterval={onUpdateInterval}
+                    extraContent={def.key === 'memory_sync' ? <MemoryAutoApproveToggle /> : undefined}
                   />
                 )
               })}
@@ -593,11 +594,9 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '8px 16px',
-    marginBottom: 12,
-    border: `1px solid ${theme.border}`,
-    borderRadius: 8,
-    background: theme.surface,
+    borderTop: `1px solid ${theme.border}`,
+    paddingTop: 8,
+    marginTop: 8,
   },
   autoApproveLabel: {
     display: 'flex',

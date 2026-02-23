@@ -183,7 +183,7 @@ describe('SystemPanel', () => {
       expect(screen.getByText('Pipeline Poller')).toBeInTheDocument()
       expect(screen.getByText('Memory Manager')).toBeInTheDocument()
       expect(screen.getByText('Metrics Munger')).toBeInTheDocument()
-      // Count On/Off buttons — should be non-system bg workers + memory auto-approve toggle
+      // Count On/Off buttons — should be non-system bg workers + memory auto-approve toggle (inside memory_sync card)
       const allToggleButtons = [...screen.getAllByText('On'), ...screen.getAllByText('Off')]
       const nonSystemBgCount = BACKGROUND_WORKERS.filter(w => !w.system).length
       expect(allToggleButtons.length).toBe(nonSystemBgCount + 1)
@@ -244,8 +244,47 @@ describe('SystemPanel', () => {
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ backgroundWorkers: disabledWorkers }))
       render(<SystemPanel backgroundWorkers={disabledWorkers} onToggleBgWorker={onToggle} />)
       const offButtons = screen.getAllByText('Off')
-      // 2 disabled background workers + 1 memory auto-approve toggle (default off)
+      // 2 disabled background workers + 1 memory auto-approve toggle (default off, inside memory_sync card)
       expect(offButtons.length).toBe(3)
+    })
+  })
+
+  describe('Memory Auto-Approve toggle location', () => {
+    it('renders the auto-approve toggle inside the Memory Manager card', () => {
+      render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
+      const toggle = screen.getByTestId('memory-auto-approve-toggle')
+      // Walk up the DOM to find the card container, then verify it contains "Memory Manager"
+      const card = toggle.closest('[style]')
+      // Find the card that contains both the toggle and the "Memory Manager" label
+      const memoryManagerLabel = screen.getByText('Memory Manager')
+      const toggleCard = toggle.closest('div')
+      // Both should share a common card ancestor
+      let ancestor = toggle.parentElement
+      let foundCard = false
+      while (ancestor) {
+        if (ancestor.contains(memoryManagerLabel)) {
+          foundCard = true
+          break
+        }
+        ancestor = ancestor.parentElement
+      }
+      expect(foundCard).toBe(true)
+    })
+
+    it('does not render the auto-approve toggle as a standalone element outside worker cards', () => {
+      render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
+      const toggle = screen.getByTestId('memory-auto-approve-toggle')
+      // Verify the toggle is inside a card (element with border and borderRadius styles)
+      let parent = toggle.parentElement
+      let insideCard = false
+      while (parent) {
+        if (parent.style?.borderRadius === '8px' && parent.style?.border) {
+          insideCard = true
+          break
+        }
+        parent = parent.parentElement
+      }
+      expect(insideCard).toBe(true)
     })
   })
 
