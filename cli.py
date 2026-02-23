@@ -68,6 +68,11 @@ async def _await_with_prep_heartbeat(
             )
         except TimeoutError:
             elapsed = int(asyncio.get_running_loop().time() - start)
+            if tail_provider is not None:
+                tail = [line for line in tail_provider() if line.strip()]
+                if tail:
+                    # Live tail already has meaningful output; avoid extra heartbeat noise.
+                    continue
             print(  # noqa: T201
                 _prep_stage_line(
                     stage,
@@ -76,19 +81,6 @@ async def _await_with_prep_heartbeat(
                     color,
                 )
             )
-            if tail_provider is not None:
-                tail = [line for line in tail_provider() if line.strip()]
-                if tail:
-                    print(  # noqa: T201
-                        _prep_stage_line(
-                            stage,
-                            "latest output (rolling 3 lines):",
-                            "start",
-                            color,
-                        )
-                    )
-                    for line in tail[-3:]:
-                        print(f"  {line}")  # noqa: T201
 
 
 def _make_prep_output_tracker(
@@ -102,10 +94,24 @@ def _make_prep_output_tracker(
         "tail": [],
         "last_emitted_tail": "",
         "last_emit_at": 0.0,
+        "rendered_lines": 0,
+        "start_time": time.monotonic(),
     }
+    force_in_place = os.environ.get("HYDRAFLOW_PREP_INPLACE")
+    use_in_place = (
+        force_in_place != "0"
+        and (force_in_place == "1" or sys.stdout.isatty())
+        and os.environ.get("TERM", "").lower() != "dumb"
+    )
 
     def on_output(accumulated_text: str) -> bool:
-        lines = [ln for ln in accumulated_text.splitlines() if ln.strip()]
+        lines = [
+            ln
+            for ln in accumulated_text.splitlines()
+            if ln.strip()
+            and not ln.startswith('{"type":"system"')
+            and '"type":"rate_limit_event"' not in ln
+        ]
         tail = lines[-3:]
         state["tail"] = tail
         if not tail:
@@ -117,16 +123,32 @@ def _make_prep_output_tracker(
             tail_text != state["last_emitted_tail"]
             and now - state["last_emit_at"] >= min_emit_interval_seconds
         ):
-            print(  # noqa: T201
+            elapsed = int(now - state["start_time"])
+            lines_to_render = [
                 _prep_stage_line(
                     "hardening",
-                    f"{stream_label}: live output (rolling 3 lines)",
+                    f"{stream_label}: live output (rolling 3 lines, {elapsed}s)",
                     "start",
                     color,
-                )
-            )
-            for line in tail:
-                print(f"  {line}")  # noqa: T201
+                ),
+                *[f"  {line}" for line in tail],
+            ]
+            if use_in_place:
+                rendered_lines = state["rendered_lines"]
+                if rendered_lines:
+                    # Move cursor to the start of the previously rendered block.
+                    sys.stdout.write(f"\x1b[{rendered_lines}A")
+                clear_count = max(rendered_lines, len(lines_to_render))
+                for i in range(clear_count):
+                    sys.stdout.write("\x1b[2K\r")
+                    if i < len(lines_to_render):
+                        sys.stdout.write(lines_to_render[i])
+                    sys.stdout.write("\n")
+                sys.stdout.flush()
+                state["rendered_lines"] = len(lines_to_render)
+            else:
+                for line in lines_to_render:
+                    print(line)  # noqa: T201
             state["last_emitted_tail"] = tail_text
             state["last_emit_at"] = now
         return False
