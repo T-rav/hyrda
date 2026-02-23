@@ -73,12 +73,22 @@ jobs:
         run: |
           pip install ruff pyright pytest
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-      - name: Lint
-        run: ruff check . || true
-      - name: Test
-        run: pytest -q || true
-      - name: Build
-        run: python -m compileall -q .
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            ruff check .
+            pyright
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            pytest -q
+            python -m compileall -q .
+          fi
 """
 
 _NODE_WORKFLOW = """\
@@ -103,12 +113,21 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Lint
-        run: npm run lint --if-present
-      - name: Test
-        run: npm test --if-present
-      - name: Build
-        run: npm run build --if-present
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            npm run lint --if-present
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            npm test --if-present
+            npm run build --if-present
+          fi
 """
 
 _MIXED_WORKFLOW = """\
@@ -141,18 +160,25 @@ jobs:
       - name: Install Node dependencies
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Lint
+      - name: Quality Lite
         run: |
-          ruff check . || true
-          npm run lint --if-present
-      - name: Test
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            ruff check .
+            pyright
+            npm run lint --if-present
+          fi
+      - name: Quality Full
         run: |
-          pytest -q || true
-          npm test --if-present
-      - name: Build
-        run: |
-          python -m compileall -q .
-          npm run build --if-present
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            pytest -q
+            python -m compileall -q .
+            npm test --if-present
+            npm run build --if-present
+          fi
 """
 
 _JAVA_WORKFLOW = """\
@@ -177,7 +203,10 @@ jobs:
           java-version: '21'
       - name: Build and test (Maven/Gradle)
         run: |
-          if [ -f pom.xml ]; then
+          if [ -f Makefile ]; then
+            make quality-lite;
+            make quality;
+          elif [ -f pom.xml ]; then
             mvn -B verify;
           elif [ -f gradlew ]; then
             ./gradlew check build;
@@ -205,12 +234,21 @@ jobs:
         uses: ruby/setup-ruby@v1
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
-      - name: Lint
-        run: bundle exec rubocop || true
-      - name: Test
-        run: bundle exec rspec || bundle exec rake test || true
-      - name: Build
-        run: bundle exec rake -T > /dev/null
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            bundle exec rubocop
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            bundle exec rspec || bundle exec rake test
+            bundle exec rake -T > /dev/null
+          fi
 """
 
 _RAILS_WORKFLOW = """\
@@ -232,12 +270,21 @@ jobs:
         uses: ruby/setup-ruby@v1
       - name: Install dependencies
         run: bundle install --jobs 4 --retry 3
-      - name: Lint
-        run: bundle exec rubocop || true
-      - name: Test
-        run: bundle exec rails test || bundle exec rspec || true
-      - name: Build
-        run: bundle exec rails runner "puts Rails.env"
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            bundle exec rubocop
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            bundle exec rails test || bundle exec rspec
+            bundle exec rails runner "puts Rails.env"
+          fi
 """
 
 _CSHARP_WORKFLOW = """\
@@ -261,10 +308,20 @@ jobs:
           dotnet-version: '8.0.x'
       - name: Restore
         run: dotnet restore
-      - name: Build
-        run: dotnet build --configuration Release --no-restore
-      - name: Test
-        run: dotnet test --configuration Release --no-build
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            dotnet build --configuration Release --no-restore
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            dotnet test --configuration Release --no-build
+          fi
 """
 
 _GO_WORKFLOW = """\
@@ -286,12 +343,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-      - name: Lint
-        run: go vet ./...
-      - name: Test
-        run: go test ./...
-      - name: Build
-        run: go build ./...
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            go vet ./...
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            go test ./...
+            go build ./...
+          fi
 """
 
 _RUST_WORKFLOW = """\
@@ -309,12 +375,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Lint
-        run: cargo fmt --check || true
-      - name: Build
-        run: cargo build --all-targets
-      - name: Test
-        run: cargo test --all-targets
+      - name: Quality Lite
+        run: |
+          if [ -f Makefile ]; then
+            make quality-lite;
+          else
+            cargo fmt --check
+            cargo clippy --all-targets -- -D warnings
+          fi
+      - name: Quality Full
+        run: |
+          if [ -f Makefile ]; then
+            make quality;
+          else
+            cargo build --all-targets
+            cargo test --all-targets
+          fi
 """
 
 _CPP_WORKFLOW = """\
@@ -332,17 +408,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Configure
+      - name: Quality Lite
         run: |
-          if [ -f CMakeLists.txt ]; then
+          if [ -f Makefile ]; then
+            make quality-lite;
+          elif [ -f CMakeLists.txt ]; then
             cmake -S . -B build;
+          else
+            echo "No Makefile or CMakeLists.txt found for C++ project" >&2
+            exit 1
           fi
-      - name: Build
+      - name: Quality Full
         run: |
-          if [ -d build ]; then cmake --build build; fi
-      - name: Test
-        run: |
-          if [ -d build ]; then ctest --test-dir build --output-on-failure || true; fi
+          if [ -f Makefile ]; then
+            make quality;
+          elif [ -d build ]; then
+            cmake --build build
+            ctest --test-dir build --output-on-failure
+          else
+            echo "Build directory missing for C++ project" >&2
+            exit 1
+          fi
 """
 
 _UNKNOWN_WORKFLOW = """\
@@ -360,7 +446,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run quality checks
+      - name: Quality Lite
+        run: make quality-lite
+      - name: Quality Full
         run: make quality
 """
 

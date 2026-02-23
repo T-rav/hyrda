@@ -73,9 +73,13 @@ class TestGenerateWorkflow:
         wf = generate_workflow(lang)
         assert expected in wf
         assert "prep-managed: quality-workflow" in wf
+        assert "make quality-lite" in wf
+        assert "make quality" in wf
+        assert "|| true" not in wf
 
     def test_unknown_workflow_fallback(self) -> None:
         wf = generate_workflow("some-new-lang")
+        assert "make quality-lite" in wf
         assert "make quality" in wf
 
 
