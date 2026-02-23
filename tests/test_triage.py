@@ -310,6 +310,14 @@ class TestParseVerdict:
         result = TriageRunner._parse_verdict(transcript, 1)
         assert result is None
 
+    def test_reasons_as_string_returns_empty_list(self) -> None:
+        """LLM returns reasons as a plain string instead of an array — must not explode."""
+        transcript = '{"ready": false, "reasons": "Missing specificity"}'
+        result = TriageRunner._parse_verdict(transcript, 1)
+        assert result is not None
+        assert result.ready is False
+        assert result.reasons == []  # non-list reasons silently dropped
+
 
 # ---------------------------------------------------------------------------
 # Command and prompt building

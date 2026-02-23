@@ -242,10 +242,11 @@ or
         try:
             data = json.loads(transcript.strip())
             if isinstance(data, dict) and "ready" in data:
+                raw = data.get("reasons", [])
                 return TriageResult(
                     issue_number=issue_number,
                     ready=bool(data["ready"]),
-                    reasons=list(data.get("reasons", [])),
+                    reasons=list(raw) if isinstance(raw, list) else [],
                 )
         except (json.JSONDecodeError, TypeError, ValueError):
             pass
@@ -256,10 +257,11 @@ or
             try:
                 data = json.loads(fence_match.group(1).strip())
                 if isinstance(data, dict) and "ready" in data:
+                    raw = data.get("reasons", [])
                     return TriageResult(
                         issue_number=issue_number,
                         ready=bool(data["ready"]),
-                        reasons=list(data.get("reasons", [])),
+                        reasons=list(raw) if isinstance(raw, list) else [],
                     )
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
@@ -270,10 +272,11 @@ or
             try:
                 data = json.loads(json_match.group(0))
                 if isinstance(data, dict) and "ready" in data:
+                    raw = data.get("reasons", [])
                     return TriageResult(
                         issue_number=issue_number,
                         ready=bool(data["ready"]),
-                        reasons=list(data.get("reasons", [])),
+                        reasons=list(raw) if isinstance(raw, list) else [],
                     )
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
