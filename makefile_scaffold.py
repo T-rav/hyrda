@@ -1,8 +1,8 @@
 """Makefile scaffolding for target repos.
 
-Generates or merges Makefile targets (lint, lint-check, lint-fix, typecheck,
-security, test, quality-lite, quality) based on detected repo language
-(Python or JS/TS).
+Generates or merges Makefile targets (help, lint, lint-check, lint-fix,
+typecheck, security, test, quality-lite, quality) based on detected repo
+language (Python or JS/TS).
 """
 
 from __future__ import annotations
@@ -34,8 +34,22 @@ _JS_TARGETS: dict[str, str] = {
 # quality targets are prerequisite-only targets
 _QUALITY_LITE_LINE = "quality-lite: lint-check typecheck security\n"
 _QUALITY_LINE = "quality: quality-lite test\n"
+_DEFAULT_GOAL_LINE = ".DEFAULT_GOAL := help"
+_HELP_RECIPE = (
+    '\t@echo "Available targets:"\n'
+    '\t@echo "  help         Show this help"\n'
+    '\t@echo "  lint         Run lint auto-fixes"\n'
+    '\t@echo "  lint-check   Run lint checks"\n'
+    '\t@echo "  lint-fix     Alias for lint"\n'
+    '\t@echo "  typecheck    Run type checks"\n'
+    '\t@echo "  security     Run security checks"\n'
+    '\t@echo "  test         Run tests"\n'
+    '\t@echo "  quality-lite Run lint/type/security"\n'
+    '\t@echo "  quality      Run quality-lite + tests"\n'
+)
 
 _ALL_TARGET_NAMES = [
+    "help",
     "lint",
     "lint-check",
     "lint-fix",
@@ -119,8 +133,12 @@ def generate_makefile(language: str) -> str:
         return ""
 
     lines: list[str] = []
+    lines.append(_DEFAULT_GOAL_LINE)
+    lines.append("")
     lines.append(f".PHONY: {' '.join(_ALL_TARGET_NAMES)}")
     lines.append("")
+    lines.append("help:")
+    lines.append(_HELP_RECIPE)
 
     for name, recipe in targets.items():
         lines.append(f"{name}:")
@@ -144,6 +162,7 @@ def merge_makefile(existing_content: str, language: str) -> tuple[str, list[str]
 
     # Include prerequisite-only quality targets in the full set to check.
     all_template: dict[str, str | None] = dict(template_targets)
+    all_template["help"] = _HELP_RECIPE
     all_template["quality-lite"] = None
     all_template["quality"] = None  # prerequisite-only, no recipe body
 
@@ -210,6 +229,9 @@ def merge_makefile(existing_content: str, language: str) -> tuple[str, list[str]
     for name in targets_to_add:
         if name in ("quality-lite", "quality"):
             continue  # Add prerequisite-only targets last.
+        if name == "help":
+            new_lines += f"\nhelp:\n{_HELP_RECIPE}"
+            continue
         new_lines += f"\n{name}:\n{template_targets[name]}"
 
     if "quality-lite" in targets_to_add:
@@ -241,6 +263,9 @@ def merge_makefile(existing_content: str, language: str) -> tuple[str, list[str]
     else:
         # Prepend .PHONY
         new_lines = f".PHONY: {phony_names}\n\n{new_lines}"
+
+    if not re.search(r"^\.DEFAULT_GOAL\s*:?=", existing_content, re.MULTILINE):
+        new_lines = f"{_DEFAULT_GOAL_LINE}\n\n{new_lines}"
 
     # Ensure trailing newline
     if not new_lines.endswith("\n"):
@@ -290,7 +315,7 @@ def scaffold_makefile(repo_root: Path, dry_run: bool = False) -> ScaffoldResult:
 
         # Determine which targets were added
         template_targets = _targets_for_language(language)
-        all_names = list(template_targets.keys()) + ["quality-lite", "quality"]
+        all_names = ["help", *template_targets.keys(), "quality-lite", "quality"]
         result.targets_added = [n for n in all_names if n not in existing_targets]
         result.skipped = [n for n in all_names if n in existing_targets]
 

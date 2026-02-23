@@ -98,6 +98,7 @@ class TestGenerateMakefile:
     def test_includes_phony_declaration(self) -> None:
         content = generate_makefile("python")
         assert ".PHONY:" in content
+        assert "help" in content
         assert "lint" in content
         assert "lint-check" in content
         assert "lint-fix" in content
@@ -106,6 +107,12 @@ class TestGenerateMakefile:
         assert "test" in content
         assert "quality-lite" in content
         assert "quality" in content
+
+    def test_sets_help_as_default_goal(self) -> None:
+        content = generate_makefile("python")
+        assert ".DEFAULT_GOAL := help" in content
+        assert "help:" in content
+        assert "Available targets:" in content
 
     def test_unknown_language_returns_empty(self) -> None:
         content = generate_makefile("unknown")
@@ -162,6 +169,7 @@ class TestMergeMakefile:
         existing = ".PHONY: clean build\n\nclean:\n\trm -rf dist\n"
         new_content, _ = merge_makefile(existing, "python")
         # .PHONY should include new targets and preserve original entries
+        assert "help" in new_content
         assert "lint" in new_content
         assert "test" in new_content
         # build is in .PHONY but has no target definition — must be preserved
@@ -207,6 +215,17 @@ class TestMergeMakefile:
         existing = "clean:\n\trm -rf dist\n"
         new_content, _ = merge_makefile(existing, "python")
         assert ".PHONY:" in new_content
+
+    def test_merge_adds_default_goal_when_missing(self) -> None:
+        existing = "clean:\n\trm -rf dist\n"
+        new_content, _ = merge_makefile(existing, "python")
+        assert ".DEFAULT_GOAL := help" in new_content
+
+    def test_merge_preserves_existing_default_goal(self) -> None:
+        existing = ".DEFAULT_GOAL := quality\n\nclean:\n\trm -rf dist\n"
+        new_content, _ = merge_makefile(existing, "python")
+        assert ".DEFAULT_GOAL := quality" in new_content
+        assert new_content.count(".DEFAULT_GOAL") == 1
 
 
 class TestScaffoldMakefile:
