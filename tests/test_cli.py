@@ -121,48 +121,58 @@ class TestParseArgs:
 # ---------------------------------------------------------------------------
 
 
+_CLI_DEFAULT_EXPECTATIONS: list[tuple[str, object]] = [
+    ("ready_label", ["hydraflow-ready"]),
+    ("batch_size", 15),
+    ("max_workers", 3),
+    ("max_planners", 1),
+    ("max_reviewers", 5),
+    ("max_hitl_workers", 1),
+    ("hitl_active_label", ["hydraflow-hitl-active"]),
+    ("max_budget_usd", pytest.approx(0)),
+    ("implementation_tool", "claude"),
+    ("model", "opus"),
+    ("review_tool", "claude"),
+    ("review_model", "sonnet"),
+    ("review_budget_usd", pytest.approx(0)),
+    ("ci_check_timeout", 600),
+    ("ci_poll_interval", 30),
+    ("max_ci_fix_attempts", 2),
+    ("max_pre_quality_review_attempts", 1),
+    ("review_label", ["hydraflow-review"]),
+    ("hitl_label", ["hydraflow-hitl"]),
+    ("fixed_label", ["hydraflow-fixed"]),
+    ("find_label", ["hydraflow-find"]),
+    ("planner_label", ["hydraflow-plan"]),
+    ("improve_label", ["hydraflow-improve"]),
+    ("triage_tool", "claude"),
+    ("planner_tool", "claude"),
+    ("planner_model", "opus"),
+    ("planner_budget_usd", pytest.approx(0)),
+    ("ac_tool", "claude"),
+    ("verification_judge_tool", "claude"),
+    ("main_branch", "main"),
+    ("dashboard_port", 5555),
+    ("dashboard_enabled", True),
+    ("dry_run", False),
+]
+
+
 class TestBuildConfig:
     """Tests for build_config() converting CLI args → HydraFlowConfig."""
 
-    def test_no_cli_args_uses_hydraflow_config_defaults(self) -> None:
+    @pytest.mark.parametrize(
+        ("field", "expected"),
+        _CLI_DEFAULT_EXPECTATIONS,
+        ids=[e[0] for e in _CLI_DEFAULT_EXPECTATIONS],
+    )
+    def test_no_cli_args_uses_hydraflow_config_defaults(
+        self, field: str, expected: object
+    ) -> None:
         """With no CLI args, build_config should produce HydraFlowConfig defaults."""
         args = parse_args([])
         cfg = build_config(args)
-
-        # Check key defaults match HydraFlowConfig
-        assert cfg.ready_label == ["hydraflow-ready"]
-        assert cfg.batch_size == 15
-        assert cfg.max_workers == 3
-        assert cfg.max_planners == 1
-        assert cfg.max_reviewers == 5
-        assert cfg.max_hitl_workers == 1
-        assert cfg.hitl_active_label == ["hydraflow-hitl-active"]
-        assert cfg.max_budget_usd == pytest.approx(0)
-        assert cfg.implementation_tool == "claude"
-        assert cfg.model == "opus"
-        assert cfg.review_tool == "claude"
-        assert cfg.review_model == "sonnet"
-        assert cfg.review_budget_usd == pytest.approx(0)
-        assert cfg.ci_check_timeout == 600
-        assert cfg.ci_poll_interval == 30
-        assert cfg.max_ci_fix_attempts == 2
-        assert cfg.max_pre_quality_review_attempts == 1
-        assert cfg.review_label == ["hydraflow-review"]
-        assert cfg.hitl_label == ["hydraflow-hitl"]
-        assert cfg.fixed_label == ["hydraflow-fixed"]
-        assert cfg.find_label == ["hydraflow-find"]
-        assert cfg.planner_label == ["hydraflow-plan"]
-        assert cfg.improve_label == ["hydraflow-improve"]
-        assert cfg.triage_tool == "claude"
-        assert cfg.planner_tool == "claude"
-        assert cfg.planner_model == "opus"
-        assert cfg.planner_budget_usd == pytest.approx(0)
-        assert cfg.ac_tool == "claude"
-        assert cfg.verification_judge_tool == "claude"
-        assert cfg.main_branch == "main"
-        assert cfg.dashboard_port == 5555
-        assert cfg.dashboard_enabled is True
-        assert cfg.dry_run is False
+        assert getattr(cfg, field) == expected
 
     def test_explicit_cli_arg_overrides_default(self) -> None:
         """An explicit CLI arg should override the HydraFlowConfig default."""

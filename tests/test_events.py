@@ -50,21 +50,41 @@ class TestEventTypeEnum:
         actual = {member.name for member in EventType}
         assert expected == actual
 
-    def test_string_values(self) -> None:
-        assert EventType.BATCH_START == "batch_start"
-        assert EventType.PHASE_CHANGE == "phase_change"
-        assert EventType.WORKER_UPDATE == "worker_update"
-        assert EventType.TRANSCRIPT_LINE == "transcript_line"
-        assert EventType.PR_CREATED == "pr_created"
-        assert EventType.REVIEW_UPDATE == "review_update"
-        assert EventType.TRIAGE_UPDATE == "triage_update"
-        assert EventType.PLANNER_UPDATE == "planner_update"
-        assert EventType.MERGE_UPDATE == "merge_update"
-        assert EventType.ISSUE_CREATED == "issue_created"
-        assert EventType.BATCH_COMPLETE == "batch_complete"
-        assert EventType.HITL_UPDATE == "hitl_update"
-        assert EventType.ORCHESTRATOR_STATUS == "orchestrator_status"
-        assert EventType.ERROR == "error"
+    @pytest.mark.parametrize(
+        ("member", "expected_value"),
+        [
+            (EventType.BATCH_START, "batch_start"),
+            (EventType.PHASE_CHANGE, "phase_change"),
+            (EventType.WORKER_UPDATE, "worker_update"),
+            (EventType.TRANSCRIPT_LINE, "transcript_line"),
+            (EventType.PR_CREATED, "pr_created"),
+            (EventType.REVIEW_UPDATE, "review_update"),
+            (EventType.TRIAGE_UPDATE, "triage_update"),
+            (EventType.PLANNER_UPDATE, "planner_update"),
+            (EventType.MERGE_UPDATE, "merge_update"),
+            (EventType.CI_CHECK, "ci_check"),
+            (EventType.HITL_ESCALATION, "hitl_escalation"),
+            (EventType.ISSUE_CREATED, "issue_created"),
+            (EventType.BATCH_COMPLETE, "batch_complete"),
+            (EventType.HITL_UPDATE, "hitl_update"),
+            (EventType.ORCHESTRATOR_STATUS, "orchestrator_status"),
+            (EventType.ERROR, "error"),
+            (EventType.MEMORY_SYNC, "memory_sync"),
+            (EventType.RETROSPECTIVE, "retrospective"),
+            (EventType.METRICS_UPDATE, "metrics_update"),
+            (EventType.REVIEW_INSIGHT, "review_insight"),
+            (EventType.BACKGROUND_WORKER_STATUS, "background_worker_status"),
+            (EventType.QUEUE_UPDATE, "queue_update"),
+            (EventType.SYSTEM_ALERT, "system_alert"),
+            (EventType.VERIFICATION_JUDGE, "verification_judge"),
+            (EventType.TRANSCRIPT_SUMMARY, "transcript_summary"),
+            (EventType.SESSION_START, "session_start"),
+            (EventType.SESSION_END, "session_end"),
+        ],
+        ids=[m.name for m in EventType],
+    )
+    def test_string_values(self, member: EventType, expected_value: str) -> None:
+        assert member == expected_value
 
     def test_is_str_enum(self) -> None:
         """EventType values should be strings (subclass of str)."""
