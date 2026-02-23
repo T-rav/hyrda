@@ -72,6 +72,9 @@ async def stream_claude_process(
         cmd,
         cwd=str(cwd),
         env=env,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
         limit=1024 * 1024,  # 1 MB — stream-json lines can exceed 64 KB default
         start_new_session=True,  # Own process group for reliable cleanup
     )
