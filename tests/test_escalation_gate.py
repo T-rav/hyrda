@@ -170,7 +170,7 @@ def test_no_escalation_when_retries_below_max() -> None:
     assert decision.reasons == []
 
 
-def test_all_signals_active_simultaneously_escalates_with_all_reasons() -> None:
+def test_all_signals_active_simultaneously_escalates_with_all_five_reasons() -> None:
     decision = should_escalate_debug(
         enabled=True,
         confidence=0.3,
