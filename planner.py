@@ -307,7 +307,8 @@ class PlannerRunner(BaseRunner):
         """Return a formatted bullet list of required sections for *scale*.
 
         Filters :data:`_PLAN_SECTION_DESCRIPTIONS` to only include sections
-        present in :attr:`REQUIRED_SECTIONS` or :attr:`LITE_REQUIRED_SECTIONS`.
+        present in :attr:`LITE_REQUIRED_SECTIONS` when *scale* is ``"lite"``,
+        or :attr:`REQUIRED_SECTIONS` for any other value (including ``"full"``).
         """
         required = (
             cls.LITE_REQUIRED_SECTIONS if scale == "lite" else cls.REQUIRED_SECTIONS
