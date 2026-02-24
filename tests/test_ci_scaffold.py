@@ -65,8 +65,8 @@ class TestGenerateWorkflow:
             ("rails", "setup-ruby"),
             ("csharp", "setup-dotnet"),
             ("go", "setup-go"),
-            ("rust", "cargo test"),
-            ("cpp", "cmake --build"),
+            ("rust", "discover-projects"),
+            ("cpp", "discover-projects"),
         ],
     )
     def test_language_specific_templates(self, lang: str, expected: str) -> None:
@@ -102,7 +102,8 @@ class TestScaffoldCI:
         assert result.created is True
         assert result.language == "csharp"
         content = (tmp_path / ".github" / "workflows" / "quality.yml").read_text()
-        assert "dotnet test" in content
+        assert "make quality-lite" in content
+        assert "make quality" in content
 
     def test_creates_workflow_for_go_repo(self, tmp_path: Path) -> None:
         (tmp_path / "go.mod").touch()
@@ -112,7 +113,8 @@ class TestScaffoldCI:
         assert result.created is True
         assert result.language == "go"
         content = (tmp_path / ".github" / "workflows" / "quality.yml").read_text()
-        assert "go test ./..." in content
+        assert "make quality-lite" in content
+        assert "make quality" in content
 
     def test_creates_workflow_for_rust_repo(self, tmp_path: Path) -> None:
         (tmp_path / "Cargo.toml").touch()
@@ -122,7 +124,8 @@ class TestScaffoldCI:
         assert result.created is True
         assert result.language == "rust"
         content = (tmp_path / ".github" / "workflows" / "quality.yml").read_text()
-        assert "cargo test" in content
+        assert "make quality-lite" in content
+        assert "make quality" in content
 
     def test_skips_when_quality_workflow_exists(self, tmp_path: Path) -> None:
         wf_dir = tmp_path / ".github" / "workflows"

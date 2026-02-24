@@ -157,31 +157,7 @@ jobs:
             make quality-lite
             exit 0
           fi
-          if [ -f package.json ]; then
-            if [ -f package-lock.json ]; then npm ci; else npm install; fi
-            npm run lint --if-present
-            npm run typecheck --if-present
-            npm audit --audit-level=moderate --omit=dev
-            exit 0
-          fi
-          if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f setup.py ]; then
-            python -m pip install --upgrade pip
-            pip install ruff pyright bandit pytest
-            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-            ruff check .
-            pyright
-            bandit -r . --severity-level medium
-            exit 0
-          fi
-          if [ -f go.mod ]; then go vet ./...; exit 0; fi
-          if [ -f Cargo.toml ]; then cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo audit; exit 0; fi
-          if ls *.sln *.csproj >/dev/null 2>&1; then dotnet restore && dotnet build --configuration Release --no-restore; exit 0; fi
-          if [ -f pom.xml ]; then mvn -B -DskipTests compile; exit 0; fi
-          if [ -f gradlew ]; then ./gradlew classes; exit 0; fi
-          if [ -f build.gradle ] || [ -f build.gradle.kts ]; then gradle classes; exit 0; fi
-          if [ -f Gemfile ]; then bundle install --jobs 4 --retry 3 && bundle exec rubocop && bundle exec brakeman -q; exit 0; fi
-          if [ -f CMakeLists.txt ]; then cmake -S . -B build && cmake --build build; exit 0; fi
-          echo "No supported quality-lite command for ${{ matrix.project_dir }}" >&2
+          echo "Missing Makefile in ${{ matrix.project_dir }}. Run 'make prep' to scaffold make targets." >&2
           exit 1
       - name: Quality Full
         shell: bash
@@ -192,17 +168,7 @@ jobs:
             make quality
             exit 0
           fi
-          if [ -f package.json ]; then npm test --if-present && npm run build --if-present; exit 0; fi
-          if [ -f pyproject.toml ] || [ -f requirements.txt ] || [ -f setup.py ]; then pytest -q && python -m compileall -q .; exit 0; fi
-          if [ -f go.mod ]; then go test ./... && go build ./...; exit 0; fi
-          if [ -f Cargo.toml ]; then cargo build --all-targets && cargo test --all-targets; exit 0; fi
-          if ls *.sln *.csproj >/dev/null 2>&1; then dotnet test --configuration Release --no-build; exit 0; fi
-          if [ -f pom.xml ]; then mvn -B test; exit 0; fi
-          if [ -f gradlew ]; then ./gradlew test; exit 0; fi
-          if [ -f build.gradle ] || [ -f build.gradle.kts ]; then gradle test; exit 0; fi
-          if [ -f Gemfile ]; then bundle exec rails test || bundle exec rspec || bundle exec rake test; exit 0; fi
-          if [ -f CMakeLists.txt ]; then [ -d build ] || cmake -S . -B build; ctest --test-dir build --output-on-failure; exit 0; fi
-          echo "No supported quality command for ${{ matrix.project_dir }}" >&2
+          echo "Missing Makefile in ${{ matrix.project_dir }}. Run 'make prep' to scaffold make targets." >&2
           exit 1
 """
 
