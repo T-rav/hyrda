@@ -172,12 +172,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hf.gate-stop-agents.sh",
-            "timeout": 10,
-            "statusMessage": "Checking if cleanup agent should run..."
-          },
-          {
-            "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/hf.cleanup-code-change-marker.sh",
             "timeout": 5
           }
