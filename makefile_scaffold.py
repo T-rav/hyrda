@@ -11,6 +11,7 @@ import dataclasses
 import re
 from pathlib import Path
 
+from manifest import detect_language  # noqa: F401 - compatibility re-export
 from polyglot_prep import detect_prep_stack
 
 _PYTHON_TARGETS: dict[str, str] = {
