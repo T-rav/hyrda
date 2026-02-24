@@ -37,7 +37,7 @@ RESET := \033[0m
 # Docker agent image
 DOCKER_IMAGE ?= ghcr.io/t-rav/hydraflow-agent:latest
 
-.PHONY: help run dev dry-run clean coverage cover test test-fast test-cov lint lint-check lint-fix typecheck security quality quality-lite install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test deps
+.PHONY: help run dev dry-run clean coverage cover test test-fast test-cov lint lint-check lint-fix typecheck security quality quality-lite install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test deps bundle-assets
 
 help:
 	@echo "$(BLUE)HydraFlow — Intent in. Software out.$(RESET)"
@@ -56,6 +56,7 @@ help:
 	@echo "  make lint-fix       Auto-repair formatting/lint issues"
 	@echo "  make typecheck      Run Pyright type checks"
 	@echo "  make security       Run Bandit security scan"
+	@echo "  make bundle-assets  Regenerate hf init asset bundle (.claude/.codex/.githooks)"
 	@echo "  make quality-lite   Lint + typecheck + security (parallel)"
 	@echo "  make quality        quality-lite + test (parallel)"
 	@echo "  make ensure-labels  Create HydraFlow labels in GitHub repo"
@@ -123,6 +124,11 @@ status:
 	else \
 		echo "$(YELLOW)No state file found (HydraFlow has not run yet)$(RESET)"; \
 	fi
+
+bundle-assets:
+	@echo "$(BLUE)Bundling HydraFlow assets for hf init...$(RESET)"
+	@cd $(HYDRAFLOW_DIR) && $(UV) python scripts/bundle_assets.py --output hf_cli/assets.tar.gz --root $(PROJECT_ROOT)
+	@echo "$(GREEN)Updated hf_cli/assets.tar.gz$(RESET)"
 
 $(DEPS_STAMP): pyproject.toml
 	@echo "$(BLUE)Syncing dependencies...$(RESET)"
