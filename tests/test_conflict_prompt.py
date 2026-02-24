@@ -105,6 +105,10 @@ class TestBuildConflictPrompt:
         prompt = build_conflict_prompt(ISSUE_URL, PR_URL, None, 1, config=config)
         assert "## Project Context" not in prompt
 
+    def test_memory_suggestion_uses_conflict_resolution_context(self) -> None:
+        prompt = build_conflict_prompt(ISSUE_URL, PR_URL, None, 1)
+        assert "during this conflict resolution" in prompt
+
     def test_truncates_long_error_using_config_max_chars(self, tmp_path: Path) -> None:
         """When config is provided, config.error_output_max_chars is used for truncation."""
         config = ConfigFactory.create(
@@ -117,58 +121,132 @@ class TestBuildConflictPrompt:
         assert error_section.count("Z") <= 500
 
 
+PR_DIFF = (
+    "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new"
+)
+
+
 class TestBuildRebuildPrompt:
-    """Tests for build_rebuild_prompt function."""
-
-    def test_includes_issue_url(self) -> None:
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
+    def test_includes_issue_and_pr_urls(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
         assert ISSUE_URL in prompt
-
-    def test_includes_pr_url(self) -> None:
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
         assert PR_URL in prompt
 
     def test_includes_fresh_branch_instructions(self) -> None:
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
         assert "fresh branch" in prompt.lower()
         assert "re-applying" in prompt.lower()
 
     def test_includes_pr_diff(self) -> None:
         prompt = build_rebuild_prompt(
-            ISSUE_URL, PR_URL, 42, "--- a/file.py\n+++ b/file.py"
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
         )
-        assert "--- a/file.py" in prompt
-        assert "+++ b/file.py" in prompt
+        assert "## Original PR Diff" in prompt
+        assert "-old" in prompt
+        assert "+new" in prompt
+
+    def test_includes_instructions_section(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Instructions" in prompt
+        assert "make quality" in prompt
+
+    def test_includes_commit_message_with_issue_number(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "Fixes #42" in prompt
+
+    def test_includes_rules_section(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Rules" in prompt
+        assert "Do NOT push" in prompt
 
     def test_truncates_long_diff(self) -> None:
-        long_diff = "\u00e6" * 20_000
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, long_diff)
-        # Default max_review_diff_chars is 15000
-        assert prompt.count("\u00e6") <= 15_000
+        long_diff = "+" + "x" * 20_000
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=long_diff
+        )
+        diff_section = prompt.split("## Original PR Diff")[1].split("## Instructions")[
+            0
+        ]
+        assert diff_section.count("x") <= 15_000
 
-    def test_includes_memory_suggestion_block(self) -> None:
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff")
-        assert "MEMORY_SUGGESTION_START" in prompt
-        assert "MEMORY_SUGGESTION_END" in prompt
+    def test_truncates_diff_using_config_max_chars(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo", max_review_diff_chars=100
+        )
+        long_diff = "+" + "y" * 5000
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=long_diff, config=config
+        )
+        diff_section = prompt.split("## Original PR Diff")[1].split("## Instructions")[
+            0
+        ]
+        assert diff_section.count("y") <= 100
 
-    def test_project_context_with_config(self, tmp_path: Path) -> None:
+    def test_includes_project_context_when_config_provided(
+        self, tmp_path: Path
+    ) -> None:
         config = ConfigFactory.create(repo_root=tmp_path / "repo")
         config.repo_root.mkdir(parents=True, exist_ok=True)
         manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text("## Project Manifest\npython, make, pytest")
 
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff", config=config)
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF, config=config
+        )
         assert "## Project Context" in prompt
         assert "python, make, pytest" in prompt
 
-    def test_accumulated_learnings_with_config(self, tmp_path: Path) -> None:
+    def test_omits_project_context_when_no_config(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Project Context" not in prompt
+
+    def test_omits_project_context_when_config_but_no_manifest(
+        self, tmp_path: Path
+    ) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path / "repo")
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF, config=config
+        )
+        assert "## Project Context" not in prompt
+
+    def test_includes_accumulated_learnings_when_config_provided(
+        self, tmp_path: Path
+    ) -> None:
         config = ConfigFactory.create(repo_root=tmp_path / "repo")
         config.repo_root.mkdir(parents=True, exist_ok=True)
         digest_path = config.repo_root / ".hydraflow" / "memory" / "digest.md"
         digest_path.parent.mkdir(parents=True, exist_ok=True)
         digest_path.write_text("## Memory Digest\nAlways check edge cases")
-
-        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff", config=config)
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF, config=config
+        )
         assert "## Accumulated Learnings" in prompt
         assert "Always check edge cases" in prompt
+
+    def test_includes_memory_suggestion_instructions(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "MEMORY_SUGGESTION_START" in prompt
+        assert "MEMORY_SUGGESTION_END" in prompt
+        assert "## Optional: Memory Suggestion" in prompt
+
+    def test_memory_suggestion_uses_rebuild_context(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "during this rebuild" in prompt

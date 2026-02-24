@@ -2954,15 +2954,15 @@ class TestBgWorkerInterval:
     def test_set_bg_worker_interval_stores_value(self, config: HydraFlowConfig) -> None:
         orch = HydraFlowOrchestrator(config)
         orch.set_bg_worker_interval("memory_sync", 300)
-        assert orch._bg_worker_intervals["memory_sync"] == 300
+        assert orch.get_bg_worker_interval("memory_sync") == 300
 
     def test_set_bg_worker_interval_persists_to_state(
         self, config: HydraFlowConfig
     ) -> None:
         orch = HydraFlowOrchestrator(config)
         orch.set_bg_worker_interval("metrics", 600)
-        # Verify state was updated
-        intervals = orch._state._data.worker_intervals
+        # Verify state was persisted via public StateTracker method
+        intervals = orch._state.get_worker_intervals()
         assert intervals.get("metrics") == 600
 
 
