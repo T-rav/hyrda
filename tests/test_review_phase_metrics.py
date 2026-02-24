@@ -1717,6 +1717,8 @@ class TestRecordReviewInsight:
         self, config: HydraFlowConfig
     ) -> None:
         """When a recurring pattern is detected, a GitHub improvement issue is created."""
+        from review_insights import ReviewRecord
+
         phase = make_review_phase(config)
         result = ReviewResultFactory.create(verdict=ReviewVerdict.REQUEST_CHANGES)
         phase._prs.create_issue = AsyncMock(return_value=123)
@@ -1726,9 +1728,21 @@ class TestRecordReviewInsight:
         mock_insights.get_proposed_categories.return_value = set()
         phase._insights = mock_insights
 
+        evidence = [
+            ReviewRecord(
+                pr_number=90 + i,
+                issue_number=30 + i,
+                timestamp="2026-02-20T10:00:00Z",
+                verdict="request-changes",
+                summary="Missing test coverage",
+                fixes_made=False,
+                categories=["test_coverage"],
+            )
+            for i in range(2)
+        ]
         with patch(
             "review_phase.analyze_patterns",
-            return_value=[("test_coverage", 4, ["pr1", "pr2"])],
+            return_value=[("test_coverage", 4, evidence)],
         ):
             await phase._record_review_insight(result)
 
@@ -1740,6 +1754,8 @@ class TestRecordReviewInsight:
         self, config: HydraFlowConfig
     ) -> None:
         """Should not create a duplicate issue for an already-proposed category."""
+        from review_insights import ReviewRecord
+
         phase = make_review_phase(config)
         result = ReviewResultFactory.create(verdict=ReviewVerdict.REQUEST_CHANGES)
         phase._prs.create_issue = AsyncMock(return_value=None)
@@ -1749,9 +1765,21 @@ class TestRecordReviewInsight:
         mock_insights.get_proposed_categories.return_value = {"test_coverage"}
         phase._insights = mock_insights
 
+        evidence = [
+            ReviewRecord(
+                pr_number=90 + i,
+                issue_number=30 + i,
+                timestamp="2026-02-20T10:00:00Z",
+                verdict="request-changes",
+                summary="Missing test coverage",
+                fixes_made=False,
+                categories=["test_coverage"],
+            )
+            for i in range(2)
+        ]
         with patch(
             "review_phase.analyze_patterns",
-            return_value=[("test_coverage", 4, ["pr1", "pr2"])],
+            return_value=[("test_coverage", 4, evidence)],
         ):
             await phase._record_review_insight(result)
 
@@ -1762,6 +1790,8 @@ class TestRecordReviewInsight:
         self, config: HydraFlowConfig
     ) -> None:
         """When an insight issue is created, HITL origin and cause are recorded in state."""
+        from review_insights import ReviewRecord
+
         phase = make_review_phase(config)
         result = ReviewResultFactory.create(
             issue_number=42, verdict=ReviewVerdict.REQUEST_CHANGES
@@ -1773,9 +1803,20 @@ class TestRecordReviewInsight:
         mock_insights.get_proposed_categories.return_value = set()
         phase._insights = mock_insights
 
+        evidence = [
+            ReviewRecord(
+                pr_number=10,
+                issue_number=5,
+                timestamp="2026-02-20T10:00:00Z",
+                verdict="request-changes",
+                summary="Type errors in module",
+                fixes_made=False,
+                categories=["type_errors"],
+            )
+        ]
         with patch(
             "review_phase.analyze_patterns",
-            return_value=[("type_errors", 3, ["pr10"])],
+            return_value=[("type_errors", 3, evidence)],
         ):
             await phase._record_review_insight(result)
 
