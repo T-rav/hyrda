@@ -127,6 +127,85 @@ PR_DIFF = (
 
 
 class TestBuildRebuildPrompt:
+    def test_includes_issue_and_pr_urls(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert ISSUE_URL in prompt
+        assert PR_URL in prompt
+
+    def test_includes_pr_diff(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Original PR Diff" in prompt
+        assert "-old" in prompt
+        assert "+new" in prompt
+
+    def test_includes_instructions_section(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Instructions" in prompt
+        assert "make quality" in prompt
+
+    def test_includes_commit_message_with_issue_number(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "Fixes #42" in prompt
+
+    def test_includes_rules_section(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Rules" in prompt
+        assert "Do NOT push" in prompt
+
+    def test_truncates_long_diff(self) -> None:
+        long_diff = "+" + "x" * 20_000
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=long_diff
+        )
+        diff_section = prompt.split("## Original PR Diff")[1].split("## Instructions")[
+            0
+        ]
+        assert diff_section.count("x") <= 15_000
+
+    def test_truncates_diff_using_config_max_chars(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(
+            repo_root=tmp_path / "repo", max_review_diff_chars=100
+        )
+        long_diff = "+" + "y" * 5000
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=long_diff, config=config
+        )
+        diff_section = prompt.split("## Original PR Diff")[1].split("## Instructions")[
+            0
+        ]
+        assert diff_section.count("y") <= 100
+
+    def test_includes_project_context_when_config_provided(
+        self, tmp_path: Path
+    ) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path / "repo")
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text("## Project Manifest\npython, make, pytest")
+
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF, config=config
+        )
+        assert "## Project Context" in prompt
+        assert "python, make, pytest" in prompt
+
+    def test_omits_project_context_when_no_config(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "## Project Context" not in prompt
+
     def test_includes_memory_suggestion_instructions(self) -> None:
         prompt = build_rebuild_prompt(
             ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
