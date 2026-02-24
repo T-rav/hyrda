@@ -417,7 +417,7 @@ class TestBuildConfig:
 
         assert cfg.batch_size == 10
         # Other fields remain at defaults
-        assert cfg.max_workers == 3
+        assert cfg.max_workers == 2
         assert cfg.model == "opus"
 
     def test_label_arg_parsed_to_list(self) -> None:
