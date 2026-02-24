@@ -646,7 +646,7 @@ class ThresholdProposal(TypedDict):
 # --- Structured Return Types ---
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrecheckResult:
     """Result of parsing a precheck transcript."""
 
@@ -657,7 +657,7 @@ class PrecheckResult:
     parse_failed: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class ConflictResolutionResult:
     """Result of a merge conflict resolution attempt."""
 

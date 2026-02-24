@@ -1428,6 +1428,15 @@ class TestPrecheckResult:
         with pytest.raises(TypeError):
             list(result)  # type: ignore[call-overload]
 
+    def test_is_immutable(self) -> None:
+        from dataclasses import FrozenInstanceError
+
+        result = PrecheckResult(
+            risk="low", confidence=0.5, escalate=False, summary="", parse_failed=False
+        )
+        with pytest.raises(FrozenInstanceError):
+            result.risk = "high"  # type: ignore[misc]
+
 
 class TestConflictResolutionResult:
     """Tests for the ConflictResolutionResult dataclass."""
@@ -1451,6 +1460,13 @@ class TestConflictResolutionResult:
         result = ConflictResolutionResult(success=True, used_rebuild=False)
         with pytest.raises(TypeError):
             list(result)  # type: ignore[call-overload]
+
+    def test_is_immutable(self) -> None:
+        from dataclasses import FrozenInstanceError
+
+        result = ConflictResolutionResult(success=True, used_rebuild=False)
+        with pytest.raises(FrozenInstanceError):
+            result.success = False  # type: ignore[misc]
 
 
 class TestPlanAccuracyResult:

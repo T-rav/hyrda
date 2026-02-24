@@ -230,8 +230,8 @@ class TestResolveMergeConflicts:
         )
 
         log_dir = config.repo_root / ".hydraflow" / "logs"
-        assert (log_dir / "conflict-pr-101-attempt-1.txt").exists()
-        assert (log_dir / "conflict-pr-101-attempt-2.txt").exists()
+        assert (log_dir / "merge_conflict-pr-101-attempt-1.txt").exists()
+        assert (log_dir / "merge_conflict-pr-101-attempt-2.txt").exists()
 
     @pytest.mark.asyncio
     async def test_respects_config_max_attempts(self, config: HydraFlowConfig) -> None:
@@ -295,7 +295,7 @@ class TestResolveMergeConflicts:
     async def test_conflict_resolution_calls_file_memory_suggestion(
         self, config: HydraFlowConfig
     ) -> None:
-        """file_memory_suggestion should be called with the conflict transcript."""
+        """safe_file_memory_suggestion should be called with the conflict transcript."""
         mock_agents = AsyncMock()
         mock_agents._execute = AsyncMock(return_value="transcript with suggestion")
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
@@ -306,7 +306,8 @@ class TestResolveMergeConflicts:
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
 
         with patch(
-            "merge_conflict_resolver.file_memory_suggestion", new_callable=AsyncMock
+            "merge_conflict_resolver.safe_file_memory_suggestion",
+            new_callable=AsyncMock,
         ) as mock_fms:
             await phase._resolve_merge_conflicts(
                 pr, issue, config.worktree_base / "issue-42", worker_id=0
@@ -314,7 +315,7 @@ class TestResolveMergeConflicts:
 
             mock_fms.assert_awaited_once_with(
                 "transcript with suggestion",
-                "conflict_resolver",
+                "merge_conflict",
                 f"PR #{pr.number}",
                 phase._config,
                 phase._prs,
@@ -336,7 +337,7 @@ class TestResolveMergeConflicts:
         phase._worktrees.start_merge_main = AsyncMock(return_value=False)
 
         with patch(
-            "merge_conflict_resolver.file_memory_suggestion",
+            "phase_utils.file_memory_suggestion",
             new_callable=AsyncMock,
             side_effect=RuntimeError("network error"),
         ):
