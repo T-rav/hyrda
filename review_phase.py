@@ -67,6 +67,7 @@ class ReviewPhase:
         transcript_summarizer: TranscriptSummarizer | None = None,
         epic_checker: EpicCompletionChecker | None = None,
         harness_insights: HarnessInsightStore | None = None,
+        conflict_resolver: MergeConflictResolver | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -85,7 +86,7 @@ class ReviewPhase:
         self._harness_insights = harness_insights
         self._insights = ReviewInsightStore(config.memory_dir)
         self._active_issues: set[int] = set()
-        self._conflict_resolver = MergeConflictResolver(
+        self._conflict_resolver = conflict_resolver or MergeConflictResolver(
             config=config,
             worktrees=worktrees,
             agents=agents,
