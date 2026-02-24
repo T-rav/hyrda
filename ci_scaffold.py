@@ -89,7 +89,7 @@ jobs:
               "CMakeLists.txt"
           }
 
-          paths = {"."}
+          paths = set()
           for path in root.rglob("*"):
               if any(part in ignored for part in path.parts):
                   continue

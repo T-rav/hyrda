@@ -6,10 +6,12 @@ from pathlib import Path
 
 from makefile_scaffold import (
     ScaffoldResult,
+    discover_project_paths,
     generate_makefile,
     merge_makefile,
     parse_makefile,
     scaffold_makefile,
+    scaffold_makefiles,
 )
 
 
@@ -355,3 +357,26 @@ class TestScaffoldMakefile:
         assert isinstance(result.warnings, list)
         assert isinstance(result.skipped, list)
         assert isinstance(result.language, str)
+
+
+class TestScaffoldMakefiles:
+    def test_discovers_multiple_project_paths(self, tmp_path: Path) -> None:
+        (tmp_path / "backend").mkdir()
+        (tmp_path / "backend" / "pyproject.toml").touch()
+        (tmp_path / "frontend").mkdir()
+        (tmp_path / "frontend" / "package.json").write_text("{}\n")
+        paths = discover_project_paths(tmp_path)
+        rels = {str(p.relative_to(tmp_path)) for p in paths}
+        assert "backend" in rels
+        assert "frontend" in rels
+
+    def test_scaffolds_makefiles_for_multiple_projects(self, tmp_path: Path) -> None:
+        (tmp_path / "backend").mkdir()
+        (tmp_path / "backend" / "pyproject.toml").touch()
+        (tmp_path / "frontend").mkdir()
+        (tmp_path / "frontend" / "package.json").write_text("{}\n")
+        result = scaffold_makefiles(tmp_path)
+        assert "backend" in result.results
+        assert "frontend" in result.results
+        assert (tmp_path / "backend" / "Makefile").exists()
+        assert (tmp_path / "frontend" / "Makefile").exists()

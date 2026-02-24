@@ -157,6 +157,59 @@ class ScaffoldResult:
     language: str = "unknown"
 
 
+@dataclasses.dataclass
+class MultiScaffoldResult:
+    """Result of scaffolding Makefiles across discovered project paths."""
+
+    results: dict[str, ScaffoldResult] = dataclasses.field(default_factory=dict)
+
+
+_PROJECT_MARKERS: tuple[str, ...] = (
+    "Makefile",
+    "makefile",
+    "GNUmakefile",
+    "pyproject.toml",
+    "requirements.txt",
+    "setup.py",
+    "package.json",
+    "go.mod",
+    "Cargo.toml",
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "Gemfile",
+    "CMakeLists.txt",
+)
+_IGNORED_DIRS: set[str] = {
+    ".git",
+    ".github",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    ".turbo",
+    ".idea",
+    "__pycache__",
+    ".pytest_cache",
+}
+
+
+def discover_project_paths(repo_root: Path) -> list[Path]:
+    """Discover project directories that should get Makefile scaffolding."""
+    paths: set[Path] = set()
+    for path in repo_root.rglob("*"):
+        if any(part in _IGNORED_DIRS for part in path.parts):
+            continue
+        if not path.is_file():
+            continue
+        if path.name in _PROJECT_MARKERS or path.name.endswith((".sln", ".csproj")):
+            paths.add(path.parent)
+    return sorted(paths)
+
+
 def parse_makefile(content: str) -> dict[str, str]:
     """Extract target-name -> recipe-text mappings from Makefile content.
 
@@ -421,3 +474,15 @@ def scaffold_makefile(repo_root: Path, dry_run: bool = False) -> ScaffoldResult:
             makefile_path.write_text(content)
 
     return result
+
+
+def scaffold_makefiles(repo_root: Path, dry_run: bool = False) -> MultiScaffoldResult:
+    """Scaffold Makefiles for each discovered project path in a repository."""
+    out = MultiScaffoldResult()
+    for project_path in discover_project_paths(repo_root):
+        result = scaffold_makefile(project_path, dry_run=dry_run)
+        if result.language == "unknown":
+            continue
+        rel = str(project_path.relative_to(repo_root)) or "."
+        out.results[rel] = result
+    return out
