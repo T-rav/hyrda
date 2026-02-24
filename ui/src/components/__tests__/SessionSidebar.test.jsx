@@ -16,6 +16,8 @@ function defaultContext(overrides = {}) {
     selectedSessionId: null,
     selectSession: vi.fn(),
     deleteSession: vi.fn(),
+    addRepoShortcut: vi.fn(),
+    removeRepoShortcut: vi.fn(),
     ...overrides,
   }
 }
@@ -140,6 +142,26 @@ describe('SessionSidebar with multiple repos', () => {
     render(<SessionSidebar />)
     expect(screen.getByText('org/repo')).toBeDefined()
     expect(screen.getByText('other-org/other-repo')).toBeDefined()
+  })
+
+  it('fires addRepoShortcut when clicking the add button', () => {
+    const addRepoShortcut = vi.fn()
+    mockUseHydraFlow.mockReturnValue(
+      defaultContext({ sessions: [SESSION_A], addRepoShortcut })
+    )
+    render(<SessionSidebar />)
+    fireEvent.click(screen.getByLabelText('Add repo org/repo'))
+    expect(addRepoShortcut).toHaveBeenCalledWith('org/repo')
+  })
+
+  it('fires removeRepoShortcut when clicking the remove button', () => {
+    const removeRepoShortcut = vi.fn()
+    mockUseHydraFlow.mockReturnValue(
+      defaultContext({ sessions: [SESSION_A], removeRepoShortcut })
+    )
+    render(<SessionSidebar />)
+    fireEvent.click(screen.getByLabelText('Remove repo org/repo'))
+    expect(removeRepoShortcut).toHaveBeenCalledWith('org/repo')
   })
 })
 

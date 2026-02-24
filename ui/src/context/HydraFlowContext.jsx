@@ -690,6 +690,14 @@ export function HydraFlowProvider({ children }) {
     }
   }, [fetchSessions])
 
+  const addRepoShortcut = useCallback((repoSlug) => {
+    console.warn("[hf] add repo action isn't wired yet", repoSlug)
+  }, [])
+
+  const removeRepoShortcut = useCallback((repoSlug) => {
+    console.warn("[hf] remove repo action isn't wired yet", repoSlug)
+  }, [])
+
   const submitIntent = useCallback(async (text) => {
     dispatch({ type: 'INTENT_SUBMITTED', data: { text } })
     try {
@@ -955,6 +963,8 @@ export function HydraFlowProvider({ children }) {
     refreshHitl: fetchHitlItems,
     selectSession,
     deleteSession,
+    addRepoShortcut,
+    removeRepoShortcut,
   }
 
   return (

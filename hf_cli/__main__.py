@@ -46,6 +46,8 @@ def _dispatch_flag_command(flag: str, rest: Iterable[str]) -> None:
 def _handle_run(rest: Sequence[str]) -> None:
     ensure_running()
     repo_path, _ = _parse_repo_argument(rest, require_path=True, allow_slug=False)
+    if repo_path is None:
+        raise SystemExit("Repository path is required")
     info = add_repo(repo_path)
     url = info.get("dashboard_url")
     print(f"Registered repo {repo_path} with hf supervisor")

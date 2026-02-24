@@ -3,7 +3,15 @@ import { useHydraFlow } from '../context/HydraFlowContext'
 import { theme } from '../theme'
 
 export function SessionSidebar() {
-  const { sessions, currentSessionId, selectedSessionId, selectSession, deleteSession } = useHydraFlow()
+  const {
+    sessions,
+    currentSessionId,
+    selectedSessionId,
+    selectSession,
+    deleteSession,
+    addRepoShortcut,
+    removeRepoShortcut,
+  } = useHydraFlow()
   const [expandedRepos, setExpandedRepos] = useState({})
   const [hoveredSession, setHoveredSession] = useState(null)
   const [hoveredDeleteId, setHoveredDeleteId] = useState(null)
@@ -23,6 +31,16 @@ export function SessionSidebar() {
   const handleDelete = (e, sessionId) => {
     e.stopPropagation()
     deleteSession(sessionId)
+  }
+
+  const handleAddRepo = (e, repo) => {
+    e.stopPropagation()
+    addRepoShortcut?.(repo)
+  }
+
+  const handleRemoveRepo = (e, repo) => {
+    e.stopPropagation()
+    removeRepoShortcut?.(repo)
   }
 
   const repos = Object.keys(repoGroups)
@@ -63,6 +81,26 @@ export function SessionSidebar() {
                 <span style={styles.arrow}>{isExpanded ? '▾' : '▸'}</span>
                 <span style={styles.repoName}>{repo}</span>
                 <span style={styles.repoCount}>{repoSessions.length}</span>
+                <div style={styles.repoActions}>
+                  <button
+                    type="button"
+                    aria-label={`Add repo ${repo}`}
+                    title="Add repo"
+                    onClick={(e) => handleAddRepo(e, repo)}
+                    style={styles.repoActionButton}
+                  >
+                    +
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove repo ${repo}`}
+                    title="Remove repo"
+                    onClick={(e) => handleRemoveRepo(e, repo)}
+                    style={styles.repoActionButton}
+                  >
+                    −
+                  </button>
+                </div>
               </div>
 
               {isExpanded && repoSessions.map(session => {
@@ -196,6 +234,22 @@ const styles = {
     fontWeight: 600,
     color: theme.text,
   },
+  repoActions: {
+    marginLeft: 6,
+    display: 'flex',
+    gap: 4,
+  },
+  repoActionButton: {
+    border: `1px solid ${theme.border}`,
+    borderRadius: 4,
+    width: 20,
+    height: 20,
+    fontSize: 12,
+    fontWeight: 700,
+    background: theme.surfaceAlt ?? theme.surface,
+    color: theme.text,
+    cursor: 'pointer',
+  },
   arrow: {
     fontSize: 9,
     color: theme.textMuted,
@@ -209,6 +263,7 @@ const styles = {
     whiteSpace: 'nowrap',
   },
   repoCount: {
+    marginLeft: 'auto',
     fontSize: 9,
     fontWeight: 700,
     borderRadius: 8,
