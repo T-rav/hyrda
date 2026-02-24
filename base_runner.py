@@ -102,14 +102,14 @@ class BaseRunner:
 
         return manifest_section, memory_section
 
-    def _build_command(self, _worktree_path: Path) -> list[str]:
+    def _build_command(self, _worktree_path: Path | None = None) -> list[str]:
         """Construct the default implementation CLI invocation.
 
         Used by runners that call the implementation tool (``agent.py`` and
         ``hitl_runner.py``).  Runners that use a different tool (planner,
-        reviewer) override this method.  The ``_worktree_path`` argument is
-        accepted for API compatibility with overriding runners (e.g.
-        ``ReviewRunner``) that need the path to build their command.
+        reviewer) override this method.  The ``_worktree_path`` parameter is
+        optional — some runners (e.g. ``PlannerRunner``) operate against the
+        repo root and don't need a worktree path.
         """
         return build_agent_command(
             tool=self._config.implementation_tool,
