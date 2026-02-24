@@ -1068,6 +1068,14 @@ def _evaluate_coverage_validation_projects(
     return True, any_warn, " | ".join(ok_details)
 
 
+def _coverage_below_target_from_detail(detail: str, target: float) -> bool:
+    """Return True if any rendered coverage percentage is below target."""
+    for match in re.finditer(r"(\d+(?:\.\d+)?)% from ", detail):
+        if float(match.group(1)) < target:
+            return True
+    return False
+
+
 def _slugify_issue_name(step_name: str) -> str:
     """Convert a step name to a safe `.hydraflow/prep` issue slug."""
     slug = re.sub(r"[^a-z0-9]+", "-", step_name.lower()).strip("-")
@@ -1442,6 +1450,7 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
     failure_count = 0
     agent_runs = 0
     agent_successes = 0
+    coverage_below_target = False
     stage_line = _prep_stage_line(
         "hardening",
         f"starting hardening loop ({max_attempts} max attempts)",
@@ -1535,6 +1544,10 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                     allow_missing_artifact=_PREP_COVERAGE_ALLOW_MISSING,
                 )
             )
+            if _coverage_below_target_from_detail(
+                coverage_detail, _PREP_COVERAGE_TARGET
+            ):
+                coverage_below_target = True
             coverage_lines = [
                 line.strip() for line in coverage_detail.split(" | ") if line.strip()
             ]
@@ -1779,6 +1792,14 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
     print(  # noqa: T201
         f"- Local issues closed this run: {len(issues_to_close) if hardening_ok else 0}"
     )
+    if coverage_below_target:
+        print(  # noqa: T201
+            "- Coverage is below 70% for one or more projects. "
+            "Run `make cover` (or `make cover 70`) to increase and verify coverage."
+        )
+        run_log_lines.append(
+            "- Coverage follow-up: below 70%; run `make cover` or `make cover 70` to improve coverage."
+        )
     stage_line = _prep_stage_line(
         "hardening",
         "hardening loop complete" if hardening_ok else "hardening loop failed",
