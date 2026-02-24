@@ -567,6 +567,16 @@ class HydraFlowOrchestrator:
                             name, exc, tasks, loop_factories
                         )
                         break
+                    else:
+                        # Loop completed without error — should never happen;
+                        # restart to maintain supervision.
+                        logger.warning(
+                            "Loop %r completed unexpectedly — restarting", name
+                        )
+                        factory_fn = dict(loop_factories)[name]
+                        tasks[name] = asyncio.create_task(
+                            factory_fn(), name=f"hydraflow-{name}"
+                        )
         finally:
             for task in tasks.values():
                 task.cancel()
