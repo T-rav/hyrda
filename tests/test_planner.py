@@ -1431,12 +1431,13 @@ def test_build_retry_prompt_includes_issue_and_errors(config, event_bus, issue):
 
 
 def test_build_prompt_includes_required_schema_headers(config, event_bus, issue):
-    """The updated prompt should mention all 6 required section headers."""
+    """The updated prompt should mention all 7 required section headers."""
     runner = _make_runner(config, event_bus)
     prompt = runner._build_prompt(issue)
 
     assert "## Files to Modify" in prompt
     assert "## New Files" in prompt
+    assert "## File Delta" in prompt
     assert "## Implementation Steps" in prompt
     assert "## Testing Strategy" in prompt
     assert "## Acceptance Criteria" in prompt
@@ -1755,7 +1756,7 @@ def test_build_retry_prompt_lite_has_fewer_sections(config, event_bus, issue):
 
 
 def test_build_retry_prompt_full_has_all_sections(config, event_bus, issue):
-    """Retry prompt for full plan lists all 6 required sections."""
+    """Retry prompt for full plan lists all 7 required sections."""
     runner = _make_runner(config, event_bus)
     prompt = runner._build_retry_prompt(
         issue, "failed plan", ["some error"], scale="full"
@@ -1793,7 +1794,7 @@ def test_section_descriptions_cover_all_lite_sections():
 
 
 def test_format_sections_list_full_has_all_sections():
-    """_format_sections_list('full') includes all 7 required section headers."""
+    """_format_sections_list('full') includes all required section headers."""
     result = PlannerRunner._format_sections_list("full")
     for header in PlannerRunner.REQUIRED_SECTIONS:
         assert header in result, f"{header} missing from full sections list"
