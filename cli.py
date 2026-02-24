@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from config import HydraFlowConfig, load_config_file
+from file_util import atomic_write
 from log import setup_logging
 from orchestrator import HydraFlowOrchestrator
 
@@ -27,6 +28,11 @@ _T = TypeVar("_T")
 _PREP_COVERAGE_MIN_REQUIRED = 20.0
 _PREP_COVERAGE_TARGET = 70.0
 _PREP_COVERAGE_ALLOW_MISSING = True
+_SEEDED_DIGEST_PLACEHOLDER = (
+    "## Accumulated Learnings\n"
+    "*Seeded during prep; no learnings yet.*\n\n"
+    "HydraFlow will update this digest after the first memory sync.\n"
+)
 
 
 def _supports_color_output() -> bool:
@@ -271,6 +277,61 @@ def _prep_failure_signature(error_message: str) -> str:
     """Return a short stable signature for a prep failure payload."""
     digest = hashlib.sha256(error_message.encode("utf-8")).hexdigest()
     return digest[:10]
+
+
+def _seed_context_assets(config: HydraFlowConfig) -> list[str]:
+    """Ensure manifest, memory digest, and metrics cache exist after prep."""
+    from manifest import ProjectManifestManager  # noqa: PLC0415
+    from metrics_manager import get_metrics_cache_dir  # noqa: PLC0415
+
+    log_lines: list[str] = []
+
+    def _rel(path: Path) -> str:
+        try:
+            return str(path.relative_to(config.repo_root))
+        except ValueError:
+            return str(path)
+
+    if config.dry_run:
+        print("Context seed: skipped (dry-run)")  # noqa: T201
+        log_lines.append("- Context seed skipped: dry-run mode")
+        return log_lines
+
+    manifest_manager = ProjectManifestManager(config)
+    manifest_result = manifest_manager.refresh()
+    manifest_rel = _rel(manifest_manager.manifest_path)
+    print(  # noqa: T201
+        f"Manifest seed: wrote {manifest_rel} "
+        f"(hash={manifest_result.digest_hash}, chars={len(manifest_result.content)})"
+    )
+    log_lines.append(
+        f"- Manifest seed: {manifest_rel} "
+        f"(hash={manifest_result.digest_hash}, chars={len(manifest_result.content)})"
+    )
+
+    digest_path = config.repo_root / ".hydraflow" / "memory" / "digest.md"
+    digest_rel = _rel(digest_path)
+    if digest_path.exists():
+        print(f"Memory digest already exists: {digest_rel}")  # noqa: T201
+        log_lines.append(f"- Memory digest already existed: {digest_rel}")
+    else:
+        atomic_write(digest_path, _SEEDED_DIGEST_PLACEHOLDER)
+        print(f"Memory digest seeded: {digest_rel}")  # noqa: T201
+        log_lines.append(f"- Memory digest seeded: {digest_rel}")
+
+    cache_dir = get_metrics_cache_dir(config)
+    snapshots_file = cache_dir / "snapshots.jsonl"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    snapshots_rel = _rel(snapshots_file)
+    if snapshots_file.exists():
+        print(f"Metrics cache already exists: {snapshots_rel}")  # noqa: T201
+        log_lines.append(f"- Metrics cache already existed: {snapshots_rel}")
+    else:
+        snapshots_file.touch()
+        print(f"Metrics cache initialized: {snapshots_rel}")  # noqa: T201
+        log_lines.append(f"- Metrics cache initialized: {snapshots_rel}")
+
+    return log_lines
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -1415,6 +1476,8 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
             f"- Test scaffold {action.lower()}: dirs [{created_dirs}] "
             f"files [{created_files}] modified [{modified_files}]"
         )
+
+    run_log_lines.extend(_seed_context_assets(config))
 
     if config.dry_run:
         print("Hardening pass: skipped in dry-run mode")  # noqa: T201
