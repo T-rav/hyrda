@@ -70,7 +70,7 @@ def _make_stub(
         default_interval=default_interval,
         worker_name="test_worker",
         config=config,
-        bus=bus,
+        event_bus=bus,
         stop_event=stop_event,
         status_cb=MagicMock(),
         enabled_cb=lambda _name: enabled,

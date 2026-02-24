@@ -36,7 +36,7 @@ class MetricsSyncLoop(BaseBackgroundLoop):
         super().__init__(
             worker_name="metrics",
             config=config,
-            bus=event_bus,
+            event_bus=event_bus,
             stop_event=stop_event,
             status_cb=status_cb,
             enabled_cb=enabled_cb,

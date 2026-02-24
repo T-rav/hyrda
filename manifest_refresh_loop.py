@@ -43,7 +43,7 @@ class ManifestRefreshLoop(BaseBackgroundLoop):
         super().__init__(
             worker_name="manifest_refresh",
             config=config,
-            bus=event_bus,
+            event_bus=event_bus,
             stop_event=stop_event,
             status_cb=status_cb,
             enabled_cb=enabled_cb,

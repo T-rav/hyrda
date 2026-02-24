@@ -39,7 +39,7 @@ def _make_loop(
         config=deps.config,
         store=store,
         metrics_manager=metrics_manager,
-        event_bus=deps.bus,
+        event_bus=deps.event_bus,
         stop_event=deps.stop_event,
         status_cb=deps.status_cb,
         enabled_cb=deps.enabled_cb,

@@ -92,7 +92,7 @@ class BgLoopDeps(NamedTuple):
     """Common dependencies for background worker loop tests."""
 
     config: Any  # HydraFlowConfig
-    bus: Any  # EventBus
+    event_bus: Any  # EventBus
     stop_event: asyncio.Event
     status_cb: MagicMock
     enabled_cb: Callable[[str], bool]
@@ -107,7 +107,7 @@ def make_bg_loop_deps(
 ) -> BgLoopDeps:
     """Create common dependencies for background worker loop tests.
 
-    Returns a BgLoopDeps NamedTuple with config, bus, stop_event,
+    Returns a BgLoopDeps NamedTuple with config, event_bus, stop_event,
     status_cb, enabled_cb, and sleep_fn — the 6 constructor args
     shared by all background loop classes.
 
@@ -120,13 +120,13 @@ def make_bg_loop_deps(
         repo_root=tmp_path / "repo",
         **config_overrides,
     )
-    bus = EventBus()
+    event_bus = EventBus()
     stop_event = asyncio.Event()
     sleep_fn = instant_sleep_factory(stop_event)
 
     return BgLoopDeps(
         config=config,
-        bus=bus,
+        event_bus=event_bus,
         stop_event=stop_event,
         status_cb=MagicMock(),
         enabled_cb=lambda _name: enabled,

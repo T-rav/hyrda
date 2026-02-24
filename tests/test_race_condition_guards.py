@@ -241,9 +241,9 @@ class TestPRManagerLabelCachePerInstance:
 
     def test_cache_is_instance_variable(self) -> None:
         config = ConfigFactory.create()
-        bus = EventBus()
-        pm1 = _make_pr_manager(config, bus)
-        pm2 = _make_pr_manager(config, bus)
+        event_bus = EventBus()
+        pm1 = _make_pr_manager(config, event_bus)
+        pm2 = _make_pr_manager(config, event_bus)
 
         pm1._label_counts_cache["key"] = "value"
         pm1._label_counts_ts = 99.0
@@ -367,13 +367,13 @@ class TestIssueStoreTakeFromQueueSafety:
 # ---------------------------------------------------------------------------
 
 
-def _make_pr_manager(config=None, bus=None):
+def _make_pr_manager(config=None, event_bus=None):
     """Create a PRManager with test defaults."""
     from pr_manager import PRManager
 
     config = config or ConfigFactory.create()
-    bus = bus or EventBus()
-    return PRManager(config, bus)
+    event_bus = event_bus or EventBus()
+    return PRManager(config, event_bus)
 
 
 def _make_orchestrator(tmp_path):
