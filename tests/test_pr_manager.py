@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -2731,7 +2732,9 @@ class TestCountHelpers:
         assert result == {"hydraflow-plan": 5, "hydraflow-ready": 5}
 
     @pytest.mark.asyncio
-    async def test_count_open_issues_by_label_handles_errors(self, event_bus, tmp_path):
+    async def test_count_open_issues_by_label_handles_errors(
+        self, event_bus, tmp_path, caplog
+    ):
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2743,10 +2746,12 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_open_issues_by_label(
-            {"hydraflow-plan": ["hydraflow-plan"]}
-        )
+        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
+            result = await mgr._count_open_issues_by_label(
+                {"hydraflow-plan": ["hydraflow-plan"]}
+            )
         assert result == {"hydraflow-plan": 0}
+        assert "Could not count open issues for label" in caplog.text
 
     @pytest.mark.asyncio
     async def test_count_closed_issues(self, event_bus, tmp_path):
@@ -2765,7 +2770,9 @@ class TestCountHelpers:
         assert result == 7
 
     @pytest.mark.asyncio
-    async def test_count_closed_issues_handles_errors(self, event_bus, tmp_path):
+    async def test_count_closed_issues_handles_errors(
+        self, event_bus, tmp_path, caplog
+    ):
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2777,8 +2784,10 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_closed_issues(["hydraflow-fixed"])
+        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
+            result = await mgr._count_closed_issues(["hydraflow-fixed"])
         assert result == 0
+        assert "Could not count closed issues for label" in caplog.text
 
     @pytest.mark.asyncio
     async def test_count_merged_prs(self, event_bus, tmp_path):
@@ -2797,7 +2806,7 @@ class TestCountHelpers:
         assert result == 12
 
     @pytest.mark.asyncio
-    async def test_count_merged_prs_handles_errors(self, event_bus, tmp_path):
+    async def test_count_merged_prs_handles_errors(self, event_bus, tmp_path, caplog):
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2809,8 +2818,10 @@ class TestCountHelpers:
             raise RuntimeError("network error")
 
         mgr._run_gh = mock_run_gh
-        result = await mgr._count_merged_prs("hydraflow-fixed")
+        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
+            result = await mgr._count_merged_prs("hydraflow-fixed")
         assert result == 0
+        assert "Could not count merged PRs for label" in caplog.text
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label_uses_search_api(
