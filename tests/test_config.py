@@ -2748,7 +2748,7 @@ class TestEnvVarOverrideTable:
         non_default = next(v for v in allowed if v != default)
         monkeypatch.setenv(env_key, non_default)
         # execution_mode="docker" triggers _validate_docker which needs shutil.which
-        if field == "execution_mode" and non_default == "docker":
+        if field == "execution_mode":
             import shutil
 
             monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
@@ -2778,7 +2778,7 @@ class TestEnvVarOverrideTable:
         # Pass non-default explicitly, set env var to default
         monkeypatch.setenv(env_key, default)
         # execution_mode="docker" triggers _validate_docker which needs shutil.which
-        if field == "execution_mode" and non_default == "docker":
+        if field == "execution_mode":
             import shutil
 
             monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
@@ -2837,6 +2837,16 @@ class TestEnvVarOverrideTable:
                 f"Field '{field}' in _ENV_LITERAL_OVERRIDES has no Literal args "
                 f"(annotation={field_info.annotation!r}); "
                 "all env var overrides for this field would be silently rejected"
+            )
+            # Every field must have at least one non-default allowed value so that
+            # next(v for v in allowed if v != default) in the parametrized tests
+            # never raises StopIteration.
+            default = field_info.default
+            non_defaults = [v for v in args if v != default]
+            assert non_defaults, (
+                f"Field '{field}' in _ENV_LITERAL_OVERRIDES has no non-default Literal "
+                f"value (default={default!r}, allowed={args}); "
+                "test_env_literal_override_applies_when_at_default would raise StopIteration"
             )
 
     def test_override_table_defaults_match_field_defaults(self) -> None:
