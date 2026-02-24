@@ -879,7 +879,7 @@ def _extract_coverage_percent(repo_root: Path) -> tuple[float | None, str]:
 def _evaluate_coverage_validation(
     repo_root: Path,
     *,
-    min_required: float = 50.0,
+    min_required: float = 70.0,
     target: float = 70.0,
 ) -> tuple[bool, bool, str]:
     """Evaluate coverage result.
@@ -981,7 +981,7 @@ def _evaluate_coverage_validation_projects(
     repo_root: Path,
     project_roots: list[Path],
     *,
-    min_required: float = 50.0,
+    min_required: float = 70.0,
     target: float = 70.0,
 ) -> tuple[bool, bool, str]:
     """Evaluate coverage thresholds across all test-bearing project roots."""
@@ -1195,8 +1195,8 @@ async def _run_prep_agent_workflow(
         "package manager files, lint/type config, test scaffold, hooks). Avoid refactoring "
         "existing app source files for pre-existing lint debt.\n"
         "12) Never batch or parallelize edits. Work one file at a time and verify each step.\n"
-        "13) Coverage policy for all stacks: enforce at least 50% meaningful coverage and "
-        "recommend teams target 70%+; coverage should prioritize critical paths, not filler "
+        "13) Coverage policy for all stacks: enforce at least 70% meaningful coverage; "
+        "coverage should prioritize critical paths, not filler "
         "tests (for example, property-only inflation).\n"
         "14) If remaining failures are in existing app source, create/update `.hydraflow/prep` issues "
         "with command output + affected files, then end with PREP_STATUS: FAILED.\n\n"

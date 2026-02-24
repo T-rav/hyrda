@@ -107,21 +107,21 @@ class TestCoverageValidation:
         assert "no coverage report artifact found" in detail
 
     def test_validation_fails_below_minimum(self, tmp_path: Path) -> None:
-        (tmp_path / "lcov.info").write_text("LF:20\nLH:6\n")
+        (tmp_path / "lcov.info").write_text("LF:100\nLH:60\n")
         ok, warn, detail = _evaluate_coverage_validation(tmp_path)
         assert ok is False
         assert warn is False
-        assert "below minimum 50%" in detail
+        assert "below minimum 70%" in detail
 
-    def test_validation_warns_between_min_and_target(self, tmp_path: Path) -> None:
-        (tmp_path / "lcov.info").write_text("LF:100\nLH:60\n")
+    def test_validation_passes_at_minimum_floor(self, tmp_path: Path) -> None:
+        (tmp_path / "lcov.info").write_text("LF:100\nLH:70\n")
         ok, warn, detail = _evaluate_coverage_validation(tmp_path)
         assert ok is True
-        assert warn is True
-        assert "target is 70%+" in detail
+        assert warn is False
+        assert "passed" in detail
 
     def test_validation_passes_at_target(self, tmp_path: Path) -> None:
-        (tmp_path / "lcov.info").write_text("LF:100\nLH:70\n")
+        (tmp_path / "lcov.info").write_text("LF:100\nLH:85\n")
         ok, warn, detail = _evaluate_coverage_validation(tmp_path)
         assert ok is True
         assert warn is False
@@ -157,7 +157,7 @@ class TestCoverageValidation:
         assert ok is False
         assert warn is False
         assert "packages/a:" in detail
-        assert "below minimum 50%" in detail
+        assert "below minimum 70%" in detail
 
 
 # ---------------------------------------------------------------------------
