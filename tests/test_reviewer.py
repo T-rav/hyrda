@@ -62,6 +62,13 @@ def test_build_command_does_not_include_cwd(config, tmp_path):
     assert "--cwd" not in cmd
 
 
+def test_build_command_accepts_none_worktree_path(config):
+    """ReviewRunner._build_command accepts None since it doesn't use the path."""
+    runner = _make_runner(config, None)
+    cmd = runner._build_command(None)
+    assert cmd[0] == "claude"
+
+
 def test_build_command_includes_output_format(config, tmp_path):
     runner = _make_runner(config, None)
     cmd = runner._build_command(tmp_path)
@@ -1286,11 +1293,6 @@ async def test_has_changes_timeout_returns_false(config, event_bus, tmp_path):
         result = await runner._has_changes(tmp_path, before_sha="abc123")
 
     assert result is False
-
-
-# ---------------------------------------------------------------------------
-# _parse_precheck_transcript
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------

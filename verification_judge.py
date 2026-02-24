@@ -15,7 +15,9 @@ from models import (
     CriterionResult,
     CriterionVerdict,
     InstructionsQuality,
+    InstructionsQualityResult,
     JudgeVerdict,
+    ParsedCriteria,
 )
 from precheck_pipeline import run_precheck_pipeline
 from runner_utils import stream_claude_process, terminate_processes
@@ -204,11 +206,8 @@ class VerificationJudge:
             logger.warning("Could not read criteria file %s", path, exc_info=True)
             return None
 
-    def _parse_criteria(self, criteria_text: str) -> tuple[list[str], str]:
-        """Extract acceptance criteria items and instructions from the markdown.
-
-        Returns (list of criteria strings, instructions text).
-        """
+    def _parse_criteria(self, criteria_text: str) -> ParsedCriteria:
+        """Extract acceptance criteria items and instructions from the markdown."""
         criteria: list[str] = []
         instructions = ""
 
@@ -241,7 +240,7 @@ class VerificationJudge:
             else:
                 instructions = raw.strip()
 
-        return criteria, instructions
+        return ParsedCriteria(criteria_list=criteria, instructions_text=instructions)
 
     def _build_code_validation_prompt(
         self,
@@ -423,9 +422,7 @@ Diff excerpt:
 
         return results
 
-    def _parse_instructions_quality(
-        self, transcript: str
-    ) -> tuple[InstructionsQuality, str]:
+    def _parse_instructions_quality(self, transcript: str) -> InstructionsQualityResult:
         """Parse instructions quality verdict and feedback from the transcript."""
         quality_match = re.search(
             r"INSTRUCTIONS_QUALITY:\s*(READY|NEEDS_REFINEMENT)",
@@ -449,7 +446,7 @@ Diff excerpt:
         )
         feedback = feedback_match.group(1).strip() if feedback_match else ""
 
-        return quality, feedback
+        return InstructionsQualityResult(quality=quality, feedback=feedback)
 
     def _extract_refined_instructions(self, transcript: str) -> str:
         """Extract refined instructions from between markers."""
