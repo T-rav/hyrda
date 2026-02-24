@@ -120,6 +120,10 @@ _DEPRECATED_ENV_ALIASES: dict[str, str] = {
     "HYDRA_DOCKER_NETWORK": "HYDRAFLOW_DOCKER_NETWORK",
     "HYDRA_DOCKER_SPAWN_DELAY": "HYDRAFLOW_DOCKER_SPAWN_DELAY",
 }
+# Reverse lookup: canonical key → deprecated key (built once at import time).
+_DEPRECATED_ENV_REVERSE: dict[str, str] = {
+    v: k for k, v in _DEPRECATED_ENV_ALIASES.items()
+}
 
 # Label env var overrides — maps env key → (field_name, default_value)
 _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
@@ -884,23 +888,22 @@ def _resolve_repo_and_identity(config: HydraFlowConfig) -> None:
             object.__setattr__(config, "git_user_email", env_email)
 
 
+def _get_env(key: str) -> str | None:
+    """Return the env var value for *key*, falling back to any deprecated alias."""
+    val = os.environ.get(key)
+    if val is not None:
+        return val
+    old_key = _DEPRECATED_ENV_REVERSE.get(key)
+    if old_key is not None:
+        val = os.environ.get(old_key)
+        if val is not None:
+            logger.warning("Deprecated env var %s; use %s instead", old_key, key)
+            return val
+    return None
+
+
 def _apply_env_overrides(config: HydraFlowConfig) -> None:
     """Apply all data-driven and special-case env var overrides."""
-    # Build a shadow dict from deprecated HYDRA_ env vars so we can fall
-    # back to them without mutating os.environ (which would leak in tests).
-    _deprecated_reverse = {v: k for k, v in _DEPRECATED_ENV_ALIASES.items()}
-
-    def _get_env(key: str) -> str | None:
-        val = os.environ.get(key)
-        if val is not None:
-            return val
-        old_key = _deprecated_reverse.get(key)
-        if old_key is not None:
-            val = os.environ.get(old_key)
-            if val is not None:
-                logger.warning("Deprecated env var %s; use %s instead", old_key, key)
-                return val
-        return None
 
     # Data-driven env var overrides (int fields)
     for field, env_key, default in _ENV_INT_OVERRIDES:
