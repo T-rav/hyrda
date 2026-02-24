@@ -122,6 +122,7 @@ class TaskFactory:
         tags: list[str] | None = None,
         comments: list[str] | None = None,
         source_url: str = "",
+        links: list[Any] | None = None,
     ):
         from models import Task
 
@@ -133,6 +134,7 @@ class TaskFactory:
             comments=comments or [],
             source_url=source_url
             or f"https://github.com/test-org/test-repo/issues/{id}",
+            links=links if links is not None else [],
         )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import StrEnum
 from typing import Any, NotRequired
 
@@ -9,6 +10,59 @@ from pydantic import AliasChoices, BaseModel, Field, field_validator
 from typing_extensions import TypedDict
 
 # --- Task (source-agnostic task abstraction) ---
+
+
+class TaskLinkKind(StrEnum):
+    """Relationship kind between two tasks."""
+
+    RELATES_TO = "relates_to"
+    DUPLICATES = "duplicates"
+    SUPERSEDES = "supersedes"
+    REPLIES_TO = "replies_to"
+
+
+class TaskLink(BaseModel):
+    """A directed relationship from one task to another."""
+
+    kind: TaskLinkKind
+    target_id: int
+    target_url: str = ""
+
+
+# Compiled patterns: (pattern, kind). Order matters — first match per target_id wins.
+_LINK_PATTERNS: list[tuple[re.Pattern[str], TaskLinkKind]] = [
+    (re.compile(r"\brelates?\s+to\s+#(\d+)", re.IGNORECASE), TaskLinkKind.RELATES_TO),
+    (re.compile(r"\brelated:?\s+#(\d+)", re.IGNORECASE), TaskLinkKind.RELATES_TO),
+    (re.compile(r"\bduplicates?\s+#(\d+)", re.IGNORECASE), TaskLinkKind.DUPLICATES),
+    (re.compile(r"\bduplicate\s+of\s+#(\d+)", re.IGNORECASE), TaskLinkKind.DUPLICATES),
+    (re.compile(r"\bsupersedes?\s+#(\d+)", re.IGNORECASE), TaskLinkKind.SUPERSEDES),
+    (re.compile(r"\breplaces?\s+#(\d+)", re.IGNORECASE), TaskLinkKind.SUPERSEDES),
+    (
+        re.compile(r"\brepl(?:ies|y)\s+to\s+#(\d+)", re.IGNORECASE),
+        TaskLinkKind.REPLIES_TO,
+    ),
+    (
+        re.compile(r"\bin\s+response\s+to\s+#(\d+)", re.IGNORECASE),
+        TaskLinkKind.REPLIES_TO,
+    ),
+]
+
+
+def parse_task_links(body: str) -> list[TaskLink]:
+    """Extract structured cross-task links from a task body.
+
+    Scans *body* for Markdown prose patterns (e.g. "relates to #12",
+    "duplicate of #5") and returns a deduplicated list of
+    :class:`TaskLink` objects.  First match wins per *target_id*.
+    """
+    seen: dict[int, TaskLink] = {}
+    for pattern, kind in _LINK_PATTERNS:
+        for match in pattern.finditer(body):
+            target_id = int(match.group(1))
+            if target_id not in seen:
+                seen[target_id] = TaskLink(kind=kind, target_id=target_id)
+    # Preserve discovery order (Python 3.7+ dict maintains insertion order).
+    return list(seen.values())
 
 
 class Task(BaseModel):
@@ -25,6 +79,7 @@ class Task(BaseModel):
     source_url: str = ""
     created_at: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
+    links: list[TaskLink] = Field(default_factory=list)
 
 
 # --- GitHub ---
@@ -70,6 +125,7 @@ class GitHubIssue(BaseModel):
             comments=list(self.comments),
             source_url=self.url,
             created_at=self.created_at,
+            links=parse_task_links(self.body),
         )
 
     @classmethod
