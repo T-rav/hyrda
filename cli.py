@@ -1493,9 +1493,26 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                     coverage_roots,
                 )
             )
-            run_log_lines.append(f"- {coverage_detail}")
+            coverage_lines = [
+                line.strip() for line in coverage_detail.split(" | ") if line.strip()
+            ]
+            if coverage_lines:
+                run_log_lines.append("- Coverage validation details:")
+                for line in coverage_lines:
+                    run_log_lines.append(f"  - {line}")
+            else:
+                run_log_lines.append(f"- {coverage_detail}")
             if coverage_ok:
                 hardening_ok = True
+                for line in coverage_lines:
+                    stage_line = _prep_stage_line(
+                        "coverage",
+                        f"attempt {attempt}/{max_attempts}: {line}",
+                        "warn" if coverage_warn else "ok",
+                        use_color,
+                    )
+                    print(stage_line)  # noqa: T201
+                    _append_full_run_log_line(config.repo_root, stage_line)
                 stage_line = _prep_stage_line(
                     "hardening",
                     (
@@ -1514,6 +1531,15 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
             attempt_failures.append(
                 ("coverage-validation", ["coverage-analyzer"], coverage_detail)
             )
+            for line in coverage_lines:
+                stage_line = _prep_stage_line(
+                    "coverage",
+                    f"attempt {attempt}/{max_attempts}: {line}",
+                    "warn",
+                    use_color,
+                )
+                print(stage_line)  # noqa: T201
+                _append_full_run_log_line(config.repo_root, stage_line)
             stage_line = _prep_stage_line(
                 "hardening",
                 (
