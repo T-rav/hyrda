@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conflict_prompt import build_conflict_prompt
+from conflict_prompt import build_conflict_prompt, build_rebuild_prompt
 from tests.helpers import ConfigFactory
 
 ISSUE_URL = "https://github.com/test-org/test-repo/issues/42"
@@ -105,6 +105,10 @@ class TestBuildConflictPrompt:
         prompt = build_conflict_prompt(ISSUE_URL, PR_URL, None, 1, config=config)
         assert "## Project Context" not in prompt
 
+    def test_memory_suggestion_uses_conflict_resolution_context(self) -> None:
+        prompt = build_conflict_prompt(ISSUE_URL, PR_URL, None, 1)
+        assert "during this conflict resolution" in prompt
+
     def test_truncates_long_error_using_config_max_chars(self, tmp_path: Path) -> None:
         """When config is provided, config.error_output_max_chars is used for truncation."""
         config = ConfigFactory.create(
@@ -115,3 +119,24 @@ class TestBuildConflictPrompt:
         assert "## Previous Attempt Failed" in prompt
         error_section = prompt.split("## Previous Attempt Failed")[1].split("##")[0]
         assert error_section.count("Z") <= 500
+
+
+PR_DIFF = (
+    "diff --git a/foo.py b/foo.py\n--- a/foo.py\n+++ b/foo.py\n@@ -1 +1 @@\n-old\n+new"
+)
+
+
+class TestBuildRebuildPrompt:
+    def test_includes_memory_suggestion_instructions(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "MEMORY_SUGGESTION_START" in prompt
+        assert "MEMORY_SUGGESTION_END" in prompt
+        assert "## Optional: Memory Suggestion" in prompt
+
+    def test_memory_suggestion_uses_rebuild_context(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, issue_number=42, pr_diff=PR_DIFF
+        )
+        assert "during this rebuild" in prompt
