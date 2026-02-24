@@ -122,10 +122,9 @@ make quality
 ## Contributing
 
 - Fork it.
-- Run HydraFlow on HydraFlow.
+- Run HydraFlow on HydraFlow. (via `make run` in the repo)
 - Use the tool to extend the tool.
 - Commit the agent-produced output.
-- Validate with `make quality`.
 - PR it back.
 - See `CLAUDE.md` for project conventions and lifecycle labels.
 
