@@ -919,7 +919,9 @@ class TestCheckCoveragePolicy:
         assert "below minimum 50%" in check.detail
 
     def test_threshold_between_minimum_and_target_warns(self, tmp_path: Path) -> None:
-        (tmp_path / "Makefile").write_text("COVERAGE_MIN ?= 60\nCOVERAGE_TARGET ?= 70\n")
+        (tmp_path / "Makefile").write_text(
+            "COVERAGE_MIN ?= 60\nCOVERAGE_TARGET ?= 70\n"
+        )
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
 
@@ -929,7 +931,9 @@ class TestCheckCoveragePolicy:
         assert "target 70%+" in check.detail
 
     def test_threshold_at_target_reports_present(self, tmp_path: Path) -> None:
-        (tmp_path / "Makefile").write_text("COVERAGE_MIN ?= 70\nCOVERAGE_TARGET ?= 70\n")
+        (tmp_path / "Makefile").write_text(
+            "COVERAGE_MIN ?= 70\nCOVERAGE_TARGET ?= 70\n"
+        )
         config = ConfigFactory.create(repo_root=tmp_path)
         from prep import RepoAuditor
 

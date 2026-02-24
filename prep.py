@@ -556,7 +556,9 @@ class RepoAuditor:
                     .get("fail_under")
                 )
                 if isinstance(fail_under, (int, float)):
-                    thresholds.append(("pyproject:coverage.fail_under", float(fail_under)))
+                    thresholds.append(
+                        ("pyproject:coverage.fail_under", float(fail_under))
+                    )
             except (OSError, tomllib.TOMLDecodeError):
                 pass
 
@@ -611,7 +613,9 @@ class RepoAuditor:
                     .get("lines")
                 )
                 if isinstance(threshold, (int, float)):
-                    thresholds.append(("package.json:jest.global.lines", float(threshold)))
+                    thresholds.append(
+                        ("package.json:jest.global.lines", float(threshold))
+                    )
             except (OSError, json.JSONDecodeError):
                 pass
 

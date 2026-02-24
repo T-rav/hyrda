@@ -456,7 +456,6 @@ async def test_submit_review_returns_false_on_generic_error(event_bus, tmp_path)
 
 @pytest.mark.asyncio
 async def test_create_issue_calls_gh_issue_create(event_bus, tmp_path):
-
     cfg = ConfigFactory.create(
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -502,7 +501,6 @@ async def test_create_issue_passes_correct_gh_args(config, event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_create_issue_publishes_event(event_bus, tmp_path):
-
     cfg = ConfigFactory.create(
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -538,7 +536,6 @@ async def test_create_issue_dry_run(dry_config, event_bus):
 
 @pytest.mark.asyncio
 async def test_create_issue_failure_returns_zero(event_bus, tmp_path):
-
     cfg = ConfigFactory.create(
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -560,7 +557,6 @@ async def test_create_issue_failure_returns_zero(event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_create_issue_no_labels(event_bus, tmp_path):
-
     cfg = ConfigFactory.create(
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1147,7 +1143,6 @@ async def test_get_pr_checks_returns_parsed_json(event_bus, tmp_path):
 
 @pytest.mark.asyncio
 async def test_get_pr_checks_returns_empty_on_failure(event_bus, tmp_path):
-
     cfg = ConfigFactory.create(
         repo_root=tmp_path,
         worktree_base=tmp_path / "worktrees",
@@ -1846,7 +1841,6 @@ class TestListOpenPrs:
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_subprocess_failure(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -1884,7 +1878,6 @@ class TestListHitlItems:
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_issues(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2015,7 +2008,6 @@ class TestListHitlItems:
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_subprocess_failure(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2169,7 +2161,6 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_returns_label_counts(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2206,7 +2197,6 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_caches_results_for_30_seconds(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2235,7 +2225,6 @@ class TestGetLabelCounts:
 
     @pytest.mark.asyncio
     async def test_handles_errors_gracefully(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2467,7 +2456,6 @@ class TestCommentHelper:
 
     @pytest.mark.asyncio
     async def test_comment_issue_target(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2486,7 +2474,6 @@ class TestCommentHelper:
 
     @pytest.mark.asyncio
     async def test_comment_pr_target(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2677,7 +2664,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2699,7 +2685,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_open_issues_by_label_handles_errors(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2718,7 +2703,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_closed_issues(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2735,7 +2719,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_closed_issues_handles_errors(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2752,7 +2735,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_merged_prs(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2769,7 +2751,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_merged_prs_handles_errors(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2788,7 +2769,6 @@ class TestCountHelpers:
     async def test_count_open_issues_by_label_uses_search_api(
         self, event_bus, tmp_path
     ):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2818,7 +2798,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_closed_issues_uses_search_api(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
@@ -2846,7 +2825,6 @@ class TestCountHelpers:
 
     @pytest.mark.asyncio
     async def test_count_merged_prs_uses_search_api(self, event_bus, tmp_path):
-
         cfg = ConfigFactory.create(
             repo_root=tmp_path,
             worktree_base=tmp_path / "worktrees",
