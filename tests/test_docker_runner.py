@@ -887,8 +887,8 @@ class TestCheckDockerAvailable:
 class TestGetDockerRunner:
     """Tests for get_docker_runner factory."""
 
-    def test_returns_subprocess_runner_protocol(self) -> None:
-        """get_docker_runner always returns a SubprocessRunner regardless of Docker availability."""
+    def test_returns_subprocess_runner_protocol_when_disabled(self) -> None:
+        """get_docker_runner returns a SubprocessRunner when docker_enabled=False."""
         from tests.helpers import ConfigFactory
 
         config = ConfigFactory.create(docker_enabled=False)
