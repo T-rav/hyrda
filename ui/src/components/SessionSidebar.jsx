@@ -11,21 +11,67 @@ export function SessionSidebar() {
     deleteSession,
     addRepoShortcut,
     removeRepoShortcut,
+    supervisedRepos = [],
   } = useHydraFlow()
   const [expandedRepos, setExpandedRepos] = useState({})
   const [hoveredSession, setHoveredSession] = useState(null)
   const [hoveredDeleteId, setHoveredDeleteId] = useState(null)
 
-  const repoGroups = useMemo(() => {
-    const groups = {}
-    for (const s of sessions) {
-      ;(groups[s.repo] ??= []).push(s)
-    }
-    return groups
-  }, [sessions])
+  const shortRepo = (repo) => {
+    const parts = (repo || '').split('/')
+    return parts.length > 1 ? parts[parts.length - 1] : repo
+  }
 
-  const toggleRepo = (repo) => {
-    setExpandedRepos(prev => ({ ...prev, [repo]: prev[repo] === false }))
+  const repoEntries = useMemo(() => {
+    const entries = new Map()
+    const slugIndex = new Map()
+
+    const ensureEntry = (key, slug, displayName) => {
+      if (!entries.has(key)) {
+        entries.set(key, {
+          key,
+          slug,
+          displayName,
+          sessions: [],
+          info: null,
+        })
+        if (slug) slugIndex.set(slug, key)
+      }
+      return entries.get(key)
+    }
+
+    for (const session of sessions) {
+      const slug = shortRepo(session.repo)
+      const key = slug || session.repo
+      const entry = ensureEntry(key, slug, session.repo)
+      entry.sessions.push(session)
+    }
+
+    for (const repo of supervisedRepos || []) {
+      if (!repo) continue
+      const slug = repo.slug || shortRepo(repo.path || '')
+      let entryKey = (slug && slugIndex.get(slug)) || slug
+      let entry = entryKey ? entries.get(entryKey) : undefined
+      if (!entry) {
+        entryKey = slug || repo.path || repo.slug || `repo-${entries.size + 1}`
+        entry = ensureEntry(entryKey, slug, repo.slug || slug || repo.path || entryKey)
+      }
+      entry.info = repo
+      if (slug && !slugIndex.has(slug)) {
+        slugIndex.set(slug, entry.key)
+      }
+      if (!entry.displayName && (repo.slug || repo.path)) {
+        entry.displayName = repo.slug || repo.path
+      }
+    }
+
+    return Array.from(entries.values()).sort((a, b) =>
+      (a.displayName || '').localeCompare(b.displayName || '')
+    )
+  }, [sessions, supervisedRepos])
+
+  const toggleRepo = (repoKey) => {
+    setExpandedRepos(prev => ({ ...prev, [repoKey]: prev[repoKey] === false }))
   }
 
   const handleDelete = (e, sessionId) => {
@@ -33,22 +79,19 @@ export function SessionSidebar() {
     deleteSession(sessionId)
   }
 
-  const handleAddRepo = (e, repo) => {
-    e.stopPropagation()
-    addRepoShortcut?.(repo)
+  const repoIdentifier = (entry) => {
+    if (entry.sessions.length > 0) return entry.displayName
+    return entry.slug || entry.displayName
   }
 
-  const handleRemoveRepo = (e, repo) => {
+  const handleAddRepo = (e, entry) => {
     e.stopPropagation()
-    removeRepoShortcut?.(repo)
+    addRepoShortcut?.(repoIdentifier(entry))
   }
 
-  const repos = Object.keys(repoGroups)
-
-  // Extract short repo slug (e.g. "org/repo" → "repo")
-  const shortRepo = (repo) => {
-    const parts = repo.split('/')
-    return parts.length > 1 ? parts[parts.length - 1] : repo
+  const handleRemoveRepo = (e, entry) => {
+    e.stopPropagation()
+    removeRepoShortcut?.(repoIdentifier(entry))
   }
 
   return (
@@ -68,34 +111,51 @@ export function SessionSidebar() {
       </div>
 
       <div style={styles.list}>
-        {repos.map(repo => {
-          const repoSessions = repoGroups[repo]
-          const isExpanded = expandedRepos[repo] !== false
+        {repoEntries.map(entry => {
+          const repoSessions = entry.sessions
+          const isExpanded = expandedRepos[entry.key] !== false
 
           return (
-            <div key={repo}>
+            <div key={entry.key}>
               <div
-                onClick={() => toggleRepo(repo)}
+                onClick={() => toggleRepo(entry.key)}
                 style={styles.repoHeader}
               >
-                <span style={styles.arrow}>{isExpanded ? '▾' : '▸'}</span>
-                <span style={styles.repoName}>{repo}</span>
-                <span style={styles.repoCount}>{repoSessions.length}</span>
+                <div style={styles.repoTitle}>
+                  <span style={styles.arrow}>{isExpanded ? '▾' : '▸'}</span>
+                  <div style={styles.repoText}>
+                    <span style={styles.repoName}>{entry.displayName}</span>
+                    {entry.info?.path && entry.info.path !== entry.displayName && (
+                      <span style={styles.repoSubLabel}>{entry.info.path}</span>
+                    )}
+                  </div>
+                </div>
+                <div style={styles.repoMeta}>
+                  {entry.info && (
+                    <span
+                      style={entry.info.running ? styles.repoStatusRunning : styles.repoStatusStopped}
+                      title={entry.info.running ? 'Repo is running under hf supervisor' : 'Repo is registered but not running'}
+                    >
+                      {entry.info.running ? 'RUNNING' : 'STOPPED'}
+                    </span>
+                  )}
+                  <span style={styles.repoCount}>{repoSessions.length}</span>
+                </div>
                 <div style={styles.repoActions}>
                   <button
                     type="button"
-                    aria-label={`Add repo ${repo}`}
+                    aria-label={`Add repo ${entry.displayName}`}
                     title="Add repo"
-                    onClick={(e) => handleAddRepo(e, repo)}
+                    onClick={(e) => handleAddRepo(e, entry)}
                     style={styles.repoActionButton}
                   >
                     +
                   </button>
                   <button
                     type="button"
-                    aria-label={`Remove repo ${repo}`}
+                    aria-label={`Remove repo ${entry.displayName}`}
                     title="Remove repo"
-                    onClick={(e) => handleRemoveRepo(e, repo)}
+                    onClick={(e) => handleRemoveRepo(e, entry)}
                     style={styles.repoActionButton}
                   >
                     −
@@ -160,7 +220,7 @@ export function SessionSidebar() {
           )
         })}
 
-        {repos.length === 0 && (
+        {repoEntries.length === 0 && (
           <div style={styles.empty}>No sessions yet</div>
         )}
       </div>
@@ -225,19 +285,31 @@ const styles = {
     padding: '4px 0',
   },
   repoHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+    alignItems: 'flex-start',
+    gap: 6,
     padding: '8px 12px',
     cursor: 'pointer',
     fontSize: 11,
     fontWeight: 600,
     color: theme.text,
   },
+  repoTitle: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 6,
+    minWidth: 0,
+  },
+  repoText: {
+    display: 'flex',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
   repoActions: {
-    marginLeft: 6,
     display: 'flex',
     gap: 4,
+    justifyContent: 'flex-end',
   },
   repoActionButton: {
     border: `1px solid ${theme.border}`,
@@ -257,19 +329,46 @@ const styles = {
     textAlign: 'center',
   },
   repoName: {
-    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  repoSubLabel: {
+    fontSize: 10,
+    fontWeight: 500,
+    color: theme.textMuted,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
   repoCount: {
-    marginLeft: 'auto',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: 700,
     borderRadius: 8,
-    padding: '1px 6px',
-    background: theme.mutedSubtle,
+    padding: '0 6px',
+    background: theme.surfaceAlt ?? theme.surface,
+    border: `1px solid ${theme.border}`,
+  },
+  repoMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  repoStatusRunning: {
+    fontSize: 9,
+    fontWeight: 700,
+    color: theme.success ?? theme.accent,
+    background: theme.successSubtle ?? theme.accentSubtle,
+    borderRadius: 6,
+    padding: '0 6px',
+  },
+  repoStatusStopped: {
+    fontSize: 9,
+    fontWeight: 700,
     color: theme.textMuted,
+    background: theme.surfaceAlt ?? theme.surface,
+    borderRadius: 6,
+    padding: '0 6px',
   },
   sessionRow: {
     display: 'flex',

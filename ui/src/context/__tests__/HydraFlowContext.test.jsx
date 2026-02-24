@@ -42,6 +42,7 @@ const initialState = {
   sessions: [],
   currentSessionId: null,
   selectedSessionId: null,
+  supervisedRepos: [],
 }
 
 const originalFetch = global.fetch
@@ -67,6 +68,12 @@ afterEach(() => {
 })
 
 describe('HydraFlowContext reducer', () => {
+  it('SET_REPOS replaces supervised repo list', () => {
+    const repos = [{ slug: 'demo', path: '/tmp/demo' }]
+    const next = reducer(initialState, { type: 'SET_REPOS', data: { repos } })
+    expect(next.supervisedRepos).toEqual(repos)
+  })
+
   it('GITHUB_METRICS action sets githubMetrics state', () => {
     const data = {
       open_by_label: { 'hydraflow-plan': 3, 'hydraflow-ready': 1 },

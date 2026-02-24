@@ -44,6 +44,7 @@ export const initialState = {
   sessions: [],
   currentSessionId: null,
   selectedSessionId: null,
+  supervisedRepos: [],
 }
 
 function isDuplicate(state, action) {
@@ -601,6 +602,14 @@ export function reducer(state, action) {
       return { ...state, sessions: [...preserved, ...fetched] }
     }
 
+    case 'SET_REPOS':
+      return {
+        ...state,
+        supervisedRepos: Array.isArray(action.data?.repos)
+          ? action.data.repos
+          : [],
+      }
+
     case 'SELECT_SESSION':
       return { ...state, selectedSessionId: action.data.sessionId }
 
@@ -690,13 +699,56 @@ export function HydraFlowProvider({ children }) {
     }
   }, [fetchSessions])
 
-  const addRepoShortcut = useCallback((repoSlug) => {
-    console.warn("[hf] add repo action isn't wired yet", repoSlug)
+  const fetchRepos = useCallback(async () => {
+    try {
+      const res = await fetch('/api/repos')
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      const payload = await res.json()
+      const repos = Array.isArray(payload.repos) ? payload.repos : []
+      dispatch({ type: 'SET_REPOS', data: { repos } })
+    } catch (err) {
+      console.warn('Failed to fetch supervised repos', err)
+      dispatch({ type: 'SET_REPOS', data: { repos: [] } })
+    }
   }, [])
 
+  const ensureRepoRunning = useCallback(async (repoSlug) => {
+    const short = (repoSlug || '').split('/').pop()
+    if (!short) return
+    try {
+      const res = await fetch('/api/repos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: short }),
+      })
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      await fetchRepos()
+    } catch (err) {
+      console.warn('Failed to start repo', err)
+    }
+  }, [fetchRepos])
+
+  const removeRepo = useCallback(async (repoSlug) => {
+    const short = (repoSlug || '').split('/').pop()
+    if (!short) return
+    try {
+      const res = await fetch(`/api/repos/${encodeURIComponent(short)}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error(`status ${res.status}`)
+      await fetchRepos()
+    } catch (err) {
+      console.warn('Failed to remove repo', err)
+    }
+  }, [fetchRepos])
+
+  const addRepoShortcut = useCallback((repoSlug) => {
+    ensureRepoRunning(repoSlug)
+  }, [ensureRepoRunning])
+
   const removeRepoShortcut = useCallback((repoSlug) => {
-    console.warn("[hf] remove repo action isn't wired yet", repoSlug)
-  }, [])
+    removeRepo(repoSlug)
+  }, [removeRepo])
 
   const submitIntent = useCallback(async (text) => {
     dispatch({ type: 'INTENT_SUBMITTED', data: { text } })
@@ -831,6 +883,7 @@ export function HydraFlowProvider({ children }) {
       fetchMetricsHistory()
       fetchPipeline()
       fetchSessions()
+      fetchRepos()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
           .then(r => r.json())
@@ -838,7 +891,6 @@ export function HydraFlowProvider({ children }) {
           .catch(() => {})
       }
     }
-
     ws.onmessage = (e) => {
       try {
         const event = JSON.parse(e.data)
@@ -887,7 +939,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions, fetchRepos])
 
   useEffect(() => {
     const poll = () => {
@@ -920,6 +972,12 @@ export function HydraFlowProvider({ children }) {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current)
     }
   }, [connect])
+
+  useEffect(() => {
+    fetchRepos()
+    const interval = setInterval(fetchRepos, 15000)
+    return () => clearInterval(interval)
+  }, [fetchRepos])
 
   const stageStatus = useMemo(
     () => deriveStageStatus(
