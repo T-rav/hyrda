@@ -649,6 +649,9 @@ class HITLEscalationPayload(TypedDict, total=False):
     cause: str
     origin: str
     ci_fix_attempts: int
+    pr: int
+    status: str
+    role: str
 
 
 class IssueCreatedPayload(TypedDict):
