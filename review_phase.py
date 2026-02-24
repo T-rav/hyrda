@@ -799,7 +799,9 @@ class ReviewPhase:
 
     # Delegate properties for backward compatibility in tests
     @property
-    def _resolve_merge_conflicts(self) -> Callable[..., Coroutine[Any, Any, bool]]:
+    def _resolve_merge_conflicts(
+        self,
+    ) -> Callable[..., Coroutine[Any, Any, tuple[bool, bool]]]:
         """Backward-compatible access to conflict resolver."""
         return self._conflict_resolver.resolve_merge_conflicts
 

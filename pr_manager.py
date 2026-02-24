@@ -88,6 +88,34 @@ class PRManager:
             logger.error("Push failed for %s: %s", branch, exc)
             return False
 
+    async def force_push_branch(self, worktree_path: Path, branch: str) -> bool:
+        """Force-push *branch* to origin using ``--force-with-lease``.
+
+        Safer than ``--force`` — prevents clobbering concurrent pushes.
+        Used after fresh-branch rebuilds where branch history is rewritten.
+        Returns *True* on success.
+        """
+        if self._config.dry_run:
+            logger.info("[dry-run] Would force-push branch %s", branch)
+            return True
+
+        try:
+            await run_subprocess(
+                "git",
+                "push",
+                "--no-verify",
+                "--force-with-lease",
+                "-u",
+                "origin",
+                branch,
+                cwd=worktree_path,
+                gh_token=self._config.gh_token,
+            )
+            return True
+        except RuntimeError as exc:
+            logger.error("Force-push failed for %s: %s", branch, exc)
+            return False
+
     async def create_pr(
         self,
         issue: GitHubIssue,

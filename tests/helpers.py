@@ -251,6 +251,7 @@ class ConfigFactory:
         error_output_max_chars: int = 3000,
         unstick_auto_merge: bool = True,
         unstick_all_causes: bool = True,
+        enable_fresh_branch_rebuild: bool = True,
     ):
         """Create a HydraFlowConfig with test-friendly defaults."""
         from config import HydraFlowConfig
@@ -384,6 +385,7 @@ class ConfigFactory:
             error_output_max_chars=error_output_max_chars,
             unstick_auto_merge=unstick_auto_merge,
             unstick_all_causes=unstick_all_causes,
+            enable_fresh_branch_rebuild=enable_fresh_branch_rebuild,
         )
 
 

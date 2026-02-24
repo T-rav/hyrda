@@ -86,6 +86,11 @@ _ENV_BOOL_OVERRIDES: list[tuple[str, str, bool]] = [
     ("inject_runtime_logs", "HYDRAFLOW_INJECT_RUNTIME_LOGS", False),
     ("unstick_auto_merge", "HYDRAFLOW_UNSTICK_AUTO_MERGE", True),
     ("unstick_all_causes", "HYDRAFLOW_UNSTICK_ALL_CAUSES", True),
+    (
+        "enable_fresh_branch_rebuild",
+        "HYDRAFLOW_ENABLE_FRESH_BRANCH_REBUILD",
+        True,
+    ),
 ]
 
 # Label env var overrides — maps env key → (field_name, default_value)
@@ -569,6 +574,11 @@ class HydraFlowConfig(BaseModel):
     unstick_all_causes: bool = Field(
         default=True,
         description="Process all HITL causes (not just merge conflicts)",
+    )
+    enable_fresh_branch_rebuild: bool = Field(
+        default=True,
+        description="After merge conflict resolution exhausts all attempts, "
+        "try rebuilding on a fresh branch from main before escalating to HITL",
     )
 
     # Session retention

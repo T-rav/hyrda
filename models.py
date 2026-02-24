@@ -193,6 +193,7 @@ class WorkerStatus(StrEnum):
     COMMITTING = "committing"
     QUALITY_FIX = "quality_fix"
     MERGE_FIX = "merge_fix"
+    FRESH_REBUILD = "fresh_rebuild"
     DONE = "done"
     FAILED = "failed"
 

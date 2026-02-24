@@ -618,6 +618,53 @@ async def test_push_branch_failure_returns_false(config, event_bus, tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# force_push_branch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_force_push_branch_success(config, event_bus, tmp_path):
+    manager = _make_manager(config, event_bus)
+    mock_create = SubprocessMockBuilder().with_stdout("").build()
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.force_push_branch(tmp_path, "agent/issue-42")
+
+    assert result is True
+    args = mock_create.call_args[0]
+    assert args[0] == "git"
+    assert args[1] == "push"
+    assert "--force-with-lease" in args
+    assert "--no-verify" in args
+    assert "-u" in args
+    assert "origin" in args
+    assert "agent/issue-42" in args
+
+
+@pytest.mark.asyncio
+async def test_force_push_branch_failure(config, event_bus, tmp_path):
+    manager = _make_manager(config, event_bus)
+    mock_create = (
+        SubprocessMockBuilder()
+        .with_returncode(1)
+        .with_stderr("error: failed to push")
+        .build()
+    )
+
+    with patch("asyncio.create_subprocess_exec", mock_create):
+        result = await manager.force_push_branch(tmp_path, "agent/issue-99")
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_force_push_branch_dry_run(dry_config, event_bus, tmp_path):
+    manager = _make_manager(dry_config, event_bus)
+    result = await manager.force_push_branch(tmp_path, "agent/issue-42")
+    assert result is True
+
+
+# ---------------------------------------------------------------------------
 # create_pr
 # ---------------------------------------------------------------------------
 

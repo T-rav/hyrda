@@ -834,3 +834,135 @@ class TestMemorySuggestionExtraction:
             stats = await unsticker.unstick([_make_hitl_item(42)])
 
             assert stats["resolved"] == 1
+
+
+class TestFreshBranchRebuild:
+    """Tests for the fresh branch rebuild fallback in the unsticker."""
+
+    @pytest.mark.asyncio
+    async def test_conflict_falls_back_to_fresh_rebuild(self, tmp_path: Path) -> None:
+        """Merge exhaustion → fresh rebuild is attempted and succeeds."""
+        issue = GitHubIssue(
+            number=42,
+            title="Test issue",
+            body="body",
+            labels=["hydraflow-hitl"],
+            url="https://github.com/test-org/test-repo/issues/42",
+        )
+        unsticker, state, prs, agents, wt, fetcher, bus, _ = _make_unsticker(
+            tmp_path,
+            max_merge_conflict_fix_attempts=1,
+            enable_fresh_branch_rebuild=True,
+            unstick_auto_merge=False,
+        )
+        state.set_hitl_cause(42, "Merge conflict")
+        state.set_hitl_origin(42, "hydraflow-review")
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        wt.start_merge_main = AsyncMock(return_value=False)
+        wt.abort_merge = AsyncMock()
+        wt.destroy = AsyncMock()
+        new_wt = tmp_path / "worktrees" / "issue-42"
+        wt.create = AsyncMock(return_value=new_wt)
+
+        # First call (merge attempt) fails, second (rebuild) succeeds
+        agents._build_command = MagicMock(return_value=["claude", "-p"])
+        agents._execute = AsyncMock(return_value="transcript")
+        agents._verify_result = AsyncMock(
+            side_effect=[(False, "quality failed"), (True, "OK")]
+        )
+
+        prs.get_pr_diff = AsyncMock(return_value="diff --git a/foo.py\n+bar")
+        prs.force_push_branch = AsyncMock(return_value=True)
+        prs.push_branch = AsyncMock(return_value=True)
+
+        new_wt.mkdir(parents=True)
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
+
+        pr_url = "https://github.com/test-org/test-repo/pull/100"
+        stats = await unsticker.unstick([_make_hitl_item(42, pr=100, prUrl=pr_url)])
+
+        assert stats["resolved"] == 1
+        wt.destroy.assert_awaited_once()
+        prs.get_pr_diff.assert_awaited_once_with(100)
+        # Should use force_push, not regular push
+        prs.force_push_branch.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_fresh_rebuild_disabled_skips(self, tmp_path: Path) -> None:
+        """Config flag off → goes straight to HITL without rebuild."""
+        issue = GitHubIssue(
+            number=42,
+            title="Test issue",
+            body="body",
+            labels=["hydraflow-hitl"],
+        )
+        unsticker, state, prs, agents, wt, fetcher, bus, _ = _make_unsticker(
+            tmp_path,
+            max_merge_conflict_fix_attempts=1,
+            enable_fresh_branch_rebuild=False,
+            unstick_auto_merge=False,
+        )
+        state.set_hitl_cause(42, "Merge conflict")
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        wt.start_merge_main = AsyncMock(return_value=False)
+        wt.abort_merge = AsyncMock()
+
+        agents._build_command = MagicMock(return_value=["claude", "-p"])
+        agents._execute = AsyncMock(return_value="transcript")
+        agents._verify_result = AsyncMock(return_value=(False, "quality failed"))
+
+        (tmp_path / "worktrees" / "issue-42").mkdir(parents=True)
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
+
+        stats = await unsticker.unstick([_make_hitl_item(42)])
+
+        assert stats["failed"] == 1
+        assert stats["resolved"] == 0
+        # destroy should not have been called (no rebuild)
+        wt.destroy.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_pr_number_threaded_to_resolve_conflicts(
+        self, tmp_path: Path
+    ) -> None:
+        """pr_number from HITLItem flows through to _resolve_conflicts."""
+        issue = GitHubIssue(
+            number=42,
+            title="Test issue",
+            body="body",
+            labels=["hydraflow-hitl"],
+            url="https://github.com/test-org/test-repo/issues/42",
+        )
+        unsticker, state, prs, agents, wt, fetcher, bus, _ = _make_unsticker(
+            tmp_path,
+            max_merge_conflict_fix_attempts=1,
+            enable_fresh_branch_rebuild=True,
+            unstick_auto_merge=False,
+        )
+        state.set_hitl_cause(42, "Merge conflict")
+        state.set_hitl_origin(42, "hydraflow-review")
+
+        fetcher.fetch_issue_by_number = AsyncMock(return_value=issue)
+        wt.start_merge_main = AsyncMock(return_value=False)
+        wt.abort_merge = AsyncMock()
+        wt.destroy = AsyncMock()
+        wt.create = AsyncMock(return_value=tmp_path / "worktrees" / "issue-42")
+
+        agents._build_command = MagicMock(return_value=["claude", "-p"])
+        agents._execute = AsyncMock(return_value="transcript")
+        # Merge fails, rebuild also fails
+        agents._verify_result = AsyncMock(return_value=(False, "failed"))
+
+        prs.get_pr_diff = AsyncMock(return_value="diff content")
+        prs.push_branch = AsyncMock(return_value=True)
+
+        (tmp_path / "worktrees" / "issue-42").mkdir(parents=True)
+        (tmp_path / "repo" / ".hydraflow" / "logs").mkdir(parents=True)
+
+        pr_url = "https://github.com/test-org/test-repo/pull/200"
+        await unsticker.unstick([_make_hitl_item(42, pr=200, prUrl=pr_url)])
+
+        # get_pr_diff should have been called with the PR number
+        prs.get_pr_diff.assert_awaited_once_with(200)
