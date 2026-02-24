@@ -8,10 +8,15 @@ from pathlib import Path
 
 from agent import AgentRunner
 from config import HydraFlowConfig
-from harness_insights import FailureCategory, FailureRecord, HarnessInsightStore
+from harness_insights import FailureCategory, HarnessInsightStore
 from issue_store import IssueStore
 from models import GitHubIssue, WorkerResult
-from phase_utils import escalate_to_hitl, run_concurrent_batch, store_lifecycle
+from phase_utils import (
+    escalate_to_hitl,
+    record_harness_failure,
+    run_concurrent_batch,
+    store_lifecycle,
+)
 from pr_manager import PRManager
 from run_recorder import RunRecorder
 from state import StateTracker
@@ -111,10 +116,12 @@ class ImplementPhase:
                     except Exception:
                         logger.exception("Worker failed for issue #%d", issue.number)
                         self._state.mark_issue(issue.number, "failed")
-                        self._record_harness_failure(
+                        record_harness_failure(
+                            self._harness_insights,
                             issue.number,
                             FailureCategory.IMPLEMENTATION_ERROR,
                             f"Worker exception for issue #{issue.number}",
+                            stage="implement",
                         )
                         return WorkerResult(
                             issue_number=issue.number,
@@ -203,10 +210,12 @@ class ImplementPhase:
             origin_label=self._config.ready_label[0],
             hitl_label=self._config.hitl_label[0],
         )
-        self._record_harness_failure(
+        record_harness_failure(
+            self._harness_insights,
             issue.number,
             FailureCategory.HITL_ESCALATION,
             f"Implementation attempt cap exceeded after {attempts - 1} attempt(s): {last_error}",
+            stage="implement",
         )
         self._state.mark_issue(issue.number, "failed")
         return WorkerResult(
@@ -255,11 +264,13 @@ class ImplementPhase:
             self._state.record_quality_fix_rounds(result.quality_fix_attempts)
             for _ in range(result.quality_fix_attempts):
                 self._state.record_stage_retry(issue.number, "quality_fix")
-            self._record_harness_failure(
+            record_harness_failure(
+                self._harness_insights,
                 issue.number,
                 FailureCategory.QUALITY_GATE,
                 f"Quality fix needed: {result.quality_fix_attempts} round(s). "
                 f"Error: {result.error or 'none'}",
+                stage="implement",
             )
 
         self._state.set_worker_result_meta(
@@ -310,30 +321,3 @@ class ImplementPhase:
         status = "success" if result.success else "failed"
         self._state.mark_issue(issue.number, status)
         return result
-
-    def _record_harness_failure(
-        self,
-        issue_number: int,
-        category: FailureCategory,
-        details: str,
-    ) -> None:
-        """Record a failure to the harness insight store (non-blocking)."""
-        if self._harness_insights is None:
-            return
-        try:
-            from harness_insights import extract_subcategories
-
-            record = FailureRecord(
-                issue_number=issue_number,
-                category=category,
-                subcategories=extract_subcategories(details),
-                details=details,
-                stage="implement",
-            )
-            self._harness_insights.append_failure(record)
-        except Exception:  # noqa: BLE001
-            logger.warning(
-                "Failed to record harness failure for issue #%d",
-                issue_number,
-                exc_info=True,
-            )
