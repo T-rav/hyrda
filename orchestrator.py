@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
-from models import BackgroundWorkerState, Phase, SessionLog
+from models import BackgroundWorkerState, Phase, SessionLog, WorkFn
 from phase_utils import safe_file_memory_suggestion
 from service_registry import OrchestratorCallbacks, build_services
 from state import StateTracker
@@ -592,7 +592,7 @@ class HydraFlowOrchestrator:
     async def _polling_loop(
         self,
         name: str,
-        work_fn: Callable[[], Coroutine[Any, Any, Any]],
+        work_fn: WorkFn,
         interval: int,
         enabled_name: str | None = None,
     ) -> None:

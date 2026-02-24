@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, NotRequired
+from typing import TYPE_CHECKING, Any, NotRequired, Protocol
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 from typing_extensions import TypedDict
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # --- GitHub ---
 
@@ -821,3 +824,80 @@ class AuditResult(BaseModel):
             )
 
         return "\n".join(lines)
+
+
+# --- Callback Protocols ---
+# These replace Callable[..., None] and Callable[..., Coroutine[Any, Any, ...]]
+# with explicit signatures for full type-safety at call sites.
+
+
+class EscalateFn(Protocol):
+    """Async callback for HITL escalation.
+
+    Matches ``ReviewPhase._escalate_to_hitl``.
+    """
+
+    async def __call__(
+        self,
+        issue_number: int,
+        pr_number: int,
+        cause: str,
+        origin_label: str,
+        *,
+        comment: str,
+        post_on_pr: bool = ...,
+        event_cause: str = ...,
+        extra_event_data: dict[str, object] | None = ...,
+    ) -> None: ...
+
+
+class PublishFn(Protocol):
+    """Async callback for publishing review status.
+
+    Matches ``ReviewPhase._publish_review_status``.
+    """
+
+    async def __call__(self, pr: PRInfo, worker_id: int, status: str) -> None: ...
+
+
+class CiGateFn(Protocol):
+    """Async callback for CI gate checks.
+
+    Matches ``ReviewPhase.wait_and_fix_ci``.
+    """
+
+    async def __call__(
+        self,
+        pr: PRInfo,
+        issue: GitHubIssue,
+        wt_path: Path,
+        result: ReviewResult,
+        worker_id: int,
+    ) -> bool: ...
+
+
+class StatusCallback(Protocol):
+    """Sync callback for background worker status updates.
+
+    Matches ``HydraFlowOrchestrator.update_bg_worker_status``.
+    """
+
+    def __call__(
+        self,
+        name: str,
+        status: str,
+        details: dict[str, Any] | None = ...,
+    ) -> None: ...
+
+
+class WorkFn(Protocol):
+    """Async zero-arg callback for polling loop work functions.
+
+    Matches the work functions passed to ``_polling_loop``
+    (e.g. ``triage_issues``, ``plan_issues``).  Uses ``object``
+    return type because some work functions return values
+    (e.g. ``plan_issues`` returns ``list[PlanResult]``) even
+    though the return value is always discarded by the caller.
+    """
+
+    async def __call__(self) -> object: ...

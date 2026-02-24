@@ -24,6 +24,7 @@ from manifest_refresh_loop import ManifestRefreshLoop
 from memory import MemorySyncWorker
 from memory_sync_loop import MemorySyncLoop
 from metrics_sync_loop import MetricsSyncLoop
+from models import StatusCallback
 from plan_phase import PlanPhase
 from planner import PlannerRunner
 from pr_manager import PRManager
@@ -92,7 +93,7 @@ class OrchestratorCallbacks:
     """Callbacks from the orchestrator needed during service construction."""
 
     sync_active_issue_numbers: Callable[[], None]
-    update_bg_worker_status: Callable[..., None]
+    update_bg_worker_status: StatusCallback
     is_bg_worker_enabled: Callable[[str], bool]
     sleep_or_stop: Callable[[int | float], Coroutine[Any, Any, None]]
     get_bg_worker_interval: Callable[[str], int]

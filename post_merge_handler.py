@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Any
 
 from acceptance_criteria import AcceptanceCriteriaGenerator
 from config import HydraFlowConfig
 from epic import EpicCompletionChecker
 from events import EventBus, EventType, HydraFlowEvent
 from models import (
+    CiGateFn,
     CriterionVerdict,
+    EscalateFn,
     GitHubIssue,
     JudgeResult,
     JudgeVerdict,
     PRInfo,
+    PublishFn,
     ReviewResult,
     VerificationCriterion,
 )
@@ -59,9 +60,9 @@ class PostMergeHandler:
         result: ReviewResult,
         diff: str,
         worker_id: int,
-        ci_gate_fn: Callable[..., Coroutine[Any, Any, bool]],
-        escalate_fn: Callable[..., Coroutine[Any, Any, None]],
-        publish_fn: Callable[..., Coroutine[Any, Any, None]],
+        ci_gate_fn: CiGateFn,
+        escalate_fn: EscalateFn,
+        publish_fn: PublishFn,
     ) -> None:
         """Attempt merge for an approved PR (with optional CI gate)."""
         should_merge = True

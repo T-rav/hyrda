@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any
 
 from agent import AgentRunner
 from config import HydraFlowConfig
 from events import EventBus
 from memory import file_memory_suggestion
-from models import GitHubIssue, PRInfo, WorkerStatus
+from models import EscalateFn, GitHubIssue, PRInfo, PublishFn, WorkerStatus
 from phase_utils import publish_review_status
 from pr_manager import PRManager
 from state import StateTracker
@@ -48,8 +46,8 @@ class MergeConflictResolver:
         issue: GitHubIssue,
         wt_path: Path,
         worker_id: int,
-        escalate_fn: Callable[..., Coroutine[Any, Any, None]],
-        publish_fn: Callable[..., Coroutine[Any, Any, None]],
+        escalate_fn: EscalateFn,
+        publish_fn: PublishFn,
     ) -> bool:
         """Merge main into the PR branch, resolving conflicts if needed.
 
