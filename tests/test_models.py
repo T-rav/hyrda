@@ -46,28 +46,28 @@ class TestGitHubIssue:
         assert issue.number == 1
         assert issue.title == "Fix the bug"
 
-    def test_body_defaults_to_empty_string(self) -> None:
+    def test_body_is_optional(self) -> None:
         # Arrange / Act
         issue = GitHubIssue(number=1, title="t")
 
         # Assert
         assert issue.body == ""
 
-    def test_labels_defaults_to_empty_list(self) -> None:
+    def test_labels_are_optional(self) -> None:
         # Arrange / Act
         issue = GitHubIssue(number=1, title="t")
 
         # Assert
         assert issue.labels == []
 
-    def test_comments_defaults_to_empty_list(self) -> None:
+    def test_comments_are_optional(self) -> None:
         # Arrange / Act
         issue = GitHubIssue(number=1, title="t")
 
         # Assert
         assert issue.comments == []
 
-    def test_url_defaults_to_empty_string(self) -> None:
+    def test_url_is_optional(self) -> None:
         # Arrange / Act
         issue = GitHubIssue(number=1, title="t")
 
@@ -287,31 +287,31 @@ class TestPlanResult:
         result = PlanResult(issue_number=10)
         assert result.issue_number == 10
 
-    def test_success_defaults_to_false(self) -> None:
+    def test_not_successful_initially(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.success is False
 
-    def test_plan_defaults_to_empty_string(self) -> None:
+    def test_plan_is_optional(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.plan == ""
 
-    def test_summary_defaults_to_empty_string(self) -> None:
+    def test_summary_is_optional(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.summary == ""
 
-    def test_error_defaults_to_none(self) -> None:
+    def test_error_is_absent_initially(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.error is None
 
-    def test_transcript_defaults_to_empty_string(self) -> None:
+    def test_transcript_is_optional(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.transcript == ""
 
-    def test_duration_seconds_defaults_to_zero(self) -> None:
+    def test_duration_starts_at_zero(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.duration_seconds == pytest.approx(0.0)
 
-    def test_new_issues_defaults_to_empty_list(self) -> None:
+    def test_new_issues_are_optional(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.new_issues == []
 
@@ -321,7 +321,7 @@ class TestPlanResult:
         assert len(result.new_issues) == 1
         assert result.new_issues[0].title == "Bug"
 
-    def test_validation_errors_defaults_to_empty_list(self) -> None:
+    def test_validation_errors_are_optional(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.validation_errors == []
 
@@ -332,7 +332,7 @@ class TestPlanResult:
         )
         assert len(result.validation_errors) == 2
 
-    def test_retry_attempted_defaults_to_false(self) -> None:
+    def test_retry_not_attempted_initially(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.retry_attempted is False
 
@@ -340,7 +340,7 @@ class TestPlanResult:
         result = PlanResult(issue_number=1, retry_attempted=True)
         assert result.retry_attempted is True
 
-    def test_already_satisfied_defaults_to_false(self) -> None:
+    def test_not_already_satisfied_initially(self) -> None:
         result = PlanResult(issue_number=1)
         assert result.already_satisfied is False
 
@@ -440,35 +440,35 @@ class TestWorkerResult:
         assert result.issue_number == 10
         assert result.branch == "agent/issue-10"
 
-    def test_worktree_path_defaults_to_empty_string(self) -> None:
+    def test_worktree_path_is_optional(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.worktree_path == ""
 
-    def test_success_defaults_to_false(self) -> None:
+    def test_not_successful_initially(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.success is False
 
-    def test_error_defaults_to_none(self) -> None:
+    def test_error_is_absent_initially(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.error is None
 
-    def test_transcript_defaults_to_empty_string(self) -> None:
+    def test_transcript_is_optional(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.transcript == ""
 
-    def test_commits_defaults_to_zero(self) -> None:
+    def test_no_commits_initially(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.commits == 0
 
-    def test_duration_seconds_defaults_to_zero(self) -> None:
+    def test_duration_starts_at_zero(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.duration_seconds == pytest.approx(0.0)
 
-    def test_pre_quality_review_attempts_defaults_to_zero(self) -> None:
+    def test_no_quality_review_attempts_initially(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.pre_quality_review_attempts == 0
 
-    def test_pr_info_defaults_to_none(self) -> None:
+    def test_pr_info_is_absent_initially(self) -> None:
         result = WorkerResult(issue_number=1, branch="b")
         assert result.pr_info is None
 
@@ -547,11 +547,11 @@ class TestPRInfo:
         assert pr.issue_number == 42
         assert pr.branch == "agent/issue-42"
 
-    def test_url_defaults_to_empty_string(self) -> None:
+    def test_url_is_optional(self) -> None:
         pr = PRInfo(number=1, issue_number=1, branch="b")
         assert pr.url == ""
 
-    def test_draft_defaults_to_false(self) -> None:
+    def test_not_draft_initially(self) -> None:
         pr = PRInfo(number=1, issue_number=1, branch="b")
         assert pr.draft is False
 
@@ -675,19 +675,19 @@ class TestReviewResult:
         assert review.pr_number == 10
         assert review.issue_number == 5
 
-    def test_verdict_defaults_to_comment(self) -> None:
+    def test_verdict_is_comment_initially(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.verdict is ReviewVerdict.COMMENT
 
-    def test_summary_defaults_to_empty_string(self) -> None:
+    def test_summary_is_optional(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.summary == ""
 
-    def test_fixes_made_defaults_to_false(self) -> None:
+    def test_no_fixes_made_initially(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.fixes_made is False
 
-    def test_merged_defaults_to_false(self) -> None:
+    def test_not_merged_initially(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.merged is False
 
@@ -695,7 +695,7 @@ class TestReviewResult:
         review = ReviewResult(pr_number=1, issue_number=1, merged=True)
         assert review.merged is True
 
-    def test_transcript_defaults_to_empty_string(self) -> None:
+    def test_transcript_is_optional(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.transcript == ""
 
@@ -720,7 +720,7 @@ class TestReviewResult:
         assert review.transcript == "Reviewed 5 files."
         assert review.duration_seconds == pytest.approx(12.3)
 
-    def test_duration_seconds_defaults_to_zero(self) -> None:
+    def test_duration_starts_at_zero(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.duration_seconds == pytest.approx(0.0)
 
@@ -728,21 +728,13 @@ class TestReviewResult:
         review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=42.5)
         assert review.duration_seconds == pytest.approx(42.5)
 
-    def test_ci_passed_defaults_to_none(self) -> None:
+    def test_ci_status_unknown_initially(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.ci_passed is None
 
-    def test_ci_fix_attempts_defaults_to_zero(self) -> None:
+    def test_no_ci_fix_attempts_initially(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1)
         assert review.ci_fix_attempts == 0
-
-    def test_duration_seconds_defaults_to_zero(self) -> None:
-        review = ReviewResult(pr_number=1, issue_number=1)
-        assert review.duration_seconds == pytest.approx(0.0)
-
-    def test_duration_seconds_can_be_set(self) -> None:
-        review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=45.5)
-        assert review.duration_seconds == pytest.approx(45.5)
 
     def test_duration_seconds_in_serialization(self) -> None:
         review = ReviewResult(pr_number=1, issue_number=1, duration_seconds=30.0)
@@ -795,27 +787,27 @@ class TestBatchResult:
         # Assert
         assert batch.batch_number == 1
 
-    def test_issues_defaults_to_empty_list(self) -> None:
+    def test_issues_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.issues == []
 
-    def test_plan_results_defaults_to_empty_list(self) -> None:
+    def test_plan_results_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.plan_results == []
 
-    def test_worker_results_defaults_to_empty_list(self) -> None:
+    def test_worker_results_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.worker_results == []
 
-    def test_pr_infos_defaults_to_empty_list(self) -> None:
+    def test_pr_infos_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.pr_infos == []
 
-    def test_review_results_defaults_to_empty_list(self) -> None:
+    def test_review_results_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.review_results == []
 
-    def test_merged_prs_defaults_to_empty_list(self) -> None:
+    def test_merged_prs_are_optional(self) -> None:
         batch = BatchResult(batch_number=1)
         assert batch.merged_prs == []
 
@@ -988,7 +980,7 @@ class TestPRListItem:
         item = PRListItem(pr=42)
         assert item.pr == 42
 
-    def test_pr_list_item_defaults_to_empty_branch_and_no_draft(self) -> None:
+    def test_optional_fields_absent_when_only_pr_provided(self) -> None:
         item = PRListItem(pr=1)
         assert item.issue == 0
         assert item.branch == ""
@@ -1038,7 +1030,7 @@ class TestHITLItem:
         item = HITLItem(issue=42)
         assert item.issue == 42
 
-    def test_hitl_item_defaults_to_empty_title_and_pending_status(self) -> None:
+    def test_optional_fields_absent_and_status_pending_initially(self) -> None:
         item = HITLItem(issue=1)
         assert item.title == ""
         assert item.issueUrl == ""
@@ -1068,11 +1060,11 @@ class TestHITLItem:
         assert item.cause == "CI failure"
         assert item.status == "processing"
 
-    def test_cause_defaults_to_empty_string(self) -> None:
+    def test_cause_is_optional(self) -> None:
         item = HITLItem(issue=1)
         assert item.cause == ""
 
-    def test_status_defaults_to_pending(self) -> None:
+    def test_status_is_pending_initially(self) -> None:
         item = HITLItem(issue=1)
         assert item.status == "pending"
 
@@ -1101,7 +1093,7 @@ class TestHITLItem:
             "isMemorySuggestion": False,
         }
 
-    def test_serialization_defaults_include_new_fields(self) -> None:
+    def test_serialization_includes_cause_status_and_memory_suggestion(self) -> None:
         """model_dump includes cause, status, and isMemorySuggestion even with defaults."""
         item = HITLItem(issue=1)
         data = item.model_dump()
@@ -1208,7 +1200,7 @@ class TestControlStatusResponse:
 class TestLifetimeStats:
     """Tests for the LifetimeStats model."""
 
-    def test_new_volume_counter_defaults(self) -> None:
+    def test_volume_counters_start_at_zero(self) -> None:
         stats = LifetimeStats()
         assert stats.total_quality_fix_rounds == 0
         assert stats.total_ci_fix_rounds == 0
@@ -1217,12 +1209,12 @@ class TestLifetimeStats:
         assert stats.total_review_approvals == 0
         assert stats.total_reviewer_fixes == 0
 
-    def test_new_timing_defaults(self) -> None:
+    def test_timing_counters_start_at_zero(self) -> None:
         stats = LifetimeStats()
         assert stats.total_implementation_seconds == pytest.approx(0.0)
         assert stats.total_review_seconds == pytest.approx(0.0)
 
-    def test_fired_thresholds_default(self) -> None:
+    def test_no_fired_thresholds_initially(self) -> None:
         stats = LifetimeStats()
         assert stats.fired_thresholds == []
 
@@ -1269,7 +1261,7 @@ class TestVerificationCriterion:
         assert cr.passed is True
         assert cr.details == "All 10 pass"
 
-    def test_details_defaults_to_empty(self) -> None:
+    def test_details_is_optional(self) -> None:
         cr = VerificationCriterion(description="Lint", passed=False)
         assert cr.details == ""
 
@@ -1333,7 +1325,7 @@ class TestJudgeResult:
         assert len(failed) == 2
         assert {c.description for c in failed} == {"A", "C"}
 
-    def test_judge_result_defaults_to_empty_criteria_instructions_and_summary(
+    def test_optional_fields_absent_when_only_ids_provided(
         self,
     ) -> None:
         judge = JudgeResult(issue_number=1, pr_number=2)
@@ -1364,7 +1356,7 @@ class TestJudgeResult:
 class TestStateDataVerificationIssues:
     """Tests for the verification_issues field on StateData."""
 
-    def test_defaults_to_empty_dict(self) -> None:
+    def test_verification_issues_are_optional(self) -> None:
         data = StateData()
         assert data.verification_issues == {}
 

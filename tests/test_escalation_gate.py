@@ -222,7 +222,7 @@ def test_no_escalation_on_medium_risk() -> None:
     assert decision.reasons == []
 
 
-def test_escalation_when_max_attempts_is_zero() -> None:
+def test_escalation_when_no_retries_configured() -> None:
     # max_subskill_attempts=0 is the config default, but all production callers
     # guard with `if max_subskill_attempts <= 0: return` before reaching this
     # function.  This test exercises the gate's own boundary arithmetic directly:
