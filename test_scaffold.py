@@ -35,6 +35,21 @@ _JS_CONFIG_FILES = (
     "jest.config.cjs",
 )
 
+_IGNORED_SOURCE_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".hydraflow",
+}
+_DUMMY_TEST_LIMIT = 6
+
 # --- Templates ---
 
 _CONFTEST_TEMPLATE = (
@@ -73,6 +88,69 @@ describe('prep smoke', () => {
   });
 });
 """
+
+
+def _is_ignored_source_path(path: Path) -> bool:
+    return any(part in _IGNORED_SOURCE_DIRS for part in path.parts)
+
+
+def _sanitize_test_name(rel_path: str) -> str:
+    return "".join(ch if ch.isalnum() else "_" for ch in rel_path).strip("_").lower()
+
+
+def _discover_python_sources(repo_root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in repo_root.rglob("*.py"):
+        if _is_ignored_source_path(path.relative_to(repo_root)):
+            continue
+        if "tests" in path.relative_to(repo_root).parts:
+            continue
+        if path.name.startswith("test_") or path.name.endswith("_test.py"):
+            continue
+        files.append(path)
+    return sorted(files)[:_DUMMY_TEST_LIMIT]
+
+
+def _discover_js_sources(repo_root: Path) -> list[Path]:
+    globs = ("*.js", "*.jsx", "*.ts", "*.tsx")
+    files: list[Path] = []
+    for pattern in globs:
+        for path in repo_root.rglob(pattern):
+            rel = path.relative_to(repo_root)
+            if _is_ignored_source_path(rel):
+                continue
+            if "__tests__" in rel.parts:
+                continue
+            if ".test." in path.name or ".spec." in path.name:
+                continue
+            files.append(path)
+    unique = sorted(set(files))
+    return unique[:_DUMMY_TEST_LIMIT]
+
+
+def _python_placeholder_test(rel_path: str, test_name: str) -> str:
+    return (
+        f'"""Prep placeholder coverage scaffold for {rel_path}."""\n\n'
+        "from pathlib import Path\n\n"
+        f"def test_placeholder_{test_name}_exists() -> None:\n"
+        f'    target = Path("{rel_path}")\n'
+        "    assert target.is_file()\n"
+        "    assert target.read_text(encoding='utf-8').strip() != ''\n"
+    )
+
+
+def _js_placeholder_test(rel_path: str) -> str:
+    return (
+        "import { describe, expect, it } from 'vitest';\n"
+        "import { existsSync, readFileSync } from 'node:fs';\n\n"
+        f"describe('prep placeholder {rel_path}', () => {{\n"
+        "  it('has non-empty source file', () => {\n"
+        f"    const target = '{rel_path}';\n"
+        "    expect(existsSync(target)).toBe(true);\n"
+        "    expect(readFileSync(target, 'utf8').trim().length).toBeGreaterThan(0);\n"
+        "  });\n"
+        "});\n"
+    )
 
 
 @dataclass
@@ -194,6 +272,15 @@ def _scaffold_python_tests(repo_root: Path) -> TestScaffoldResult:
         smoke_test.write_text(_PYTHON_SMOKE_TEST_TEMPLATE)
         result.created_files.append("tests/test_prep_smoke.py")
 
+    for src in _discover_python_sources(repo_root):
+        rel = src.relative_to(repo_root).as_posix()
+        test_name = _sanitize_test_name(rel)
+        placeholder = tests_dir / f"test_prep_{test_name}.py"
+        if placeholder.exists():
+            continue
+        placeholder.write_text(_python_placeholder_test(rel, test_name))
+        result.created_files.append(f"tests/{placeholder.name}")
+
     # Handle pyproject.toml
     pyproject = repo_root / "pyproject.toml"
     if not pyproject.is_file():
@@ -231,6 +318,15 @@ def _scaffold_js_tests(repo_root: Path) -> TestScaffoldResult:
     if not smoke_test.exists():
         smoke_test.write_text(_JS_SMOKE_TEST_TEMPLATE)
         result.created_files.append("__tests__/prep.smoke.test.js")
+
+    for src in _discover_js_sources(repo_root):
+        rel = src.relative_to(repo_root).as_posix()
+        test_name = _sanitize_test_name(rel)
+        placeholder = tests_dir / f"prep.{test_name}.test.js"
+        if placeholder.exists():
+            continue
+        placeholder.write_text(_js_placeholder_test(rel))
+        result.created_files.append(f"__tests__/{placeholder.name}")
 
     # Modify package.json if it exists
     pkg_path = repo_root / "package.json"
@@ -339,6 +435,12 @@ def _dry_run_scaffold(repo_root: Path, language: str) -> TestScaffoldResult:
             result.created_files.append("tests/conftest.py")
         if not (tests_dir / "test_prep_smoke.py").exists():
             result.created_files.append("tests/test_prep_smoke.py")
+        for src in _discover_python_sources(repo_root):
+            rel = src.relative_to(repo_root).as_posix()
+            test_name = _sanitize_test_name(rel)
+            placeholder = tests_dir / f"test_prep_{test_name}.py"
+            if not placeholder.exists():
+                result.created_files.append(f"tests/{placeholder.name}")
         pyproject = repo_root / "pyproject.toml"
         if not pyproject.is_file():
             result.created_files.append("pyproject.toml")
@@ -352,6 +454,12 @@ def _dry_run_scaffold(repo_root: Path, language: str) -> TestScaffoldResult:
             result.created_files.append("vitest.config.js")
         if not (repo_root / "__tests__" / "prep.smoke.test.js").exists():
             result.created_files.append("__tests__/prep.smoke.test.js")
+        for src in _discover_js_sources(repo_root):
+            rel = src.relative_to(repo_root).as_posix()
+            test_name = _sanitize_test_name(rel)
+            placeholder = repo_root / "__tests__" / f"prep.{test_name}.test.js"
+            if not placeholder.exists():
+                result.created_files.append(f"__tests__/{placeholder.name}")
         pkg_path = repo_root / "package.json"
         if pkg_path.is_file():
             try:

@@ -2,11 +2,74 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
 from manifest import detect_language, detect_languages
 from test_scaffold import TestScaffoldResult, scaffold_tests
+
+_IGNORED_DIR_NAMES = {
+    ".git",
+    ".venv",
+    "venv",
+    "node_modules",
+    "dist",
+    "build",
+    "target",
+    "__pycache__",
+    ".hydraflow",
+}
+_PLACEHOLDER_LIMIT = 12
+
+
+def _is_ignored_rel_path(path: Path) -> bool:
+    return any(part in _IGNORED_DIR_NAMES for part in path.parts)
+
+
+def _sanitize_ident(text: str) -> str:
+    token = re.sub(r"[^0-9A-Za-z_]+", "_", text).strip("_")
+    if not token:
+        return "file"
+    if token[0].isdigit():
+        return f"f_{token}"
+    return token
+
+
+def _discover_go_sources(repo_root: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in repo_root.rglob("*.go"):
+        rel = path.relative_to(repo_root)
+        if _is_ignored_rel_path(rel):
+            continue
+        if path.name.endswith("_test.go"):
+            continue
+        files.append(path)
+    return sorted(files)[:_PLACEHOLDER_LIMIT]
+
+
+def _go_package_name(source_file: Path) -> str:
+    try:
+        for line in source_file.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^\s*package\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", line)
+            if match:
+                return match.group(1)
+    except OSError:
+        pass
+    return "main"
+
+
+def _discover_rust_sources(repo_root: Path) -> list[Path]:
+    files: list[Path] = []
+    src_dir = repo_root / "src"
+    if not src_dir.is_dir():
+        return files
+    for path in src_dir.rglob("*.rs"):
+        rel = path.relative_to(repo_root)
+        if _is_ignored_rel_path(rel):
+            continue
+        files.append(path)
+    return sorted(files)[:_PLACEHOLDER_LIMIT]
 
 
 def detect_prep_stack(repo_root: Path) -> str:
@@ -135,14 +198,39 @@ def _scaffold_csharp_tests(repo_root: Path, dry_run: bool) -> TestScaffoldResult
 
 def _scaffold_go_tests(repo_root: Path, dry_run: bool) -> TestScaffoldResult:
     result = TestScaffoldResult(language="go")
-    smoke = repo_root / "prep_smoke_test.go"
-    content = (
-        'package main\n\nimport "testing"\n\nfunc TestPrepSmoke(t *testing.T) {}\n'
-    )
-    if not smoke.is_file():
-        result.created_files.append("prep_smoke_test.go")
+    sources = _discover_go_sources(repo_root)
+    for source in sources:
+        test_path = source.with_name(f"{source.stem}_test.go")
+        if test_path.is_file():
+            continue
+        package_name = _go_package_name(source)
+        fn_name = _sanitize_ident(source.stem)
+        rel = source.relative_to(repo_root).as_posix()
+        content = (
+            f"package {package_name}\n\n"
+            "import (\n"
+            '\t"os"\n'
+            '\t"testing"\n'
+            ")\n\n"
+            f"func TestPrepPlaceholder_{fn_name}(t *testing.T) {{\n"
+            f'\tif _, err := os.Stat("{source.name}"); err != nil {{\n'
+            f'\t\tt.Fatalf("expected source file {rel} to exist: %v", err)\n'
+            "\t}\n"
+            "}\n"
+        )
+        result.created_files.append(str(test_path.relative_to(repo_root)))
         if not dry_run:
-            smoke.write_text(content, encoding="utf-8")
+            test_path.write_text(content, encoding="utf-8")
+
+    if not sources:
+        smoke = repo_root / "prep_smoke_test.go"
+        content = (
+            'package main\n\nimport "testing"\n\nfunc TestPrepSmoke(t *testing.T) {}\n'
+        )
+        if not smoke.is_file():
+            result.created_files.append("prep_smoke_test.go")
+            if not dry_run:
+                smoke.write_text(content, encoding="utf-8")
     if not result.created_files:
         result.skipped = True
         result.skip_reason = "Go test infrastructure already exists"
@@ -152,16 +240,36 @@ def _scaffold_go_tests(repo_root: Path, dry_run: bool) -> TestScaffoldResult:
 def _scaffold_rust_tests(repo_root: Path, dry_run: bool) -> TestScaffoldResult:
     result = TestScaffoldResult(language="rust")
     tests_dir = repo_root / "tests"
-    smoke = tests_dir / "prep_smoke.rs"
-    content = "#[test]\nfn prep_smoke() { assert!(true); }\n"
+    sources = _discover_rust_sources(repo_root)
     if not tests_dir.is_dir():
         result.created_dirs.append("tests")
         if not dry_run:
             tests_dir.mkdir(parents=True, exist_ok=True)
-    if not smoke.is_file():
-        result.created_files.append("tests/prep_smoke.rs")
+
+    for source in sources:
+        rel = source.relative_to(repo_root).as_posix()
+        test_name = _sanitize_ident(rel)
+        test_file = tests_dir / f"prep_{test_name}.rs"
+        if test_file.is_file():
+            continue
+        content = (
+            "use std::path::Path;\n\n"
+            "#[test]\n"
+            f"fn prep_placeholder_{test_name}() {{\n"
+            f'    assert!(Path::new("{rel}").exists());\n'
+            "}\n"
+        )
+        result.created_files.append(str(test_file.relative_to(repo_root)))
         if not dry_run:
-            smoke.write_text(content, encoding="utf-8")
+            test_file.write_text(content, encoding="utf-8")
+
+    if not sources:
+        smoke = tests_dir / "prep_smoke.rs"
+        content = "#[test]\nfn prep_smoke() { assert!(true); }\n"
+        if not smoke.is_file():
+            result.created_files.append("tests/prep_smoke.rs")
+            if not dry_run:
+                smoke.write_text(content, encoding="utf-8")
     if not result.created_dirs and not result.created_files:
         result.skipped = True
         result.skip_reason = "Rust test infrastructure already exists"
