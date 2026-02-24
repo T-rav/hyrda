@@ -428,9 +428,8 @@ class TestStreamClaudeProcessLifecycle:
         ):
             await stream_claude_process(**_default_kwargs(event_bus))
 
-        # Give the event loop a tick to process cancellation
-        await asyncio.sleep(0)
-
+        # The finally block in stream_claude_process already cancelled and awaited
+        # stderr_task before raising, so stderr_read_started is set before we get here.
         # Verify the stderr task actually started before the CancelledError fired
         assert stderr_read_started.is_set(), (
             "stderr task should have started before cancellation"
