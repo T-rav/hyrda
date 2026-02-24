@@ -128,9 +128,9 @@ class MetricsManager:
     def _save_to_local_cache(self, snapshot: MetricsSnapshot) -> None:
         """Append a snapshot to the local JSONL cache file."""
         cache_dir = self._cache_dir
-        cache_dir.mkdir(parents=True, exist_ok=True)
         snapshots_file = cache_dir / "snapshots.jsonl"
         try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
             with open(snapshots_file, "a") as f:
                 f.write(snapshot.model_dump_json() + "\n")
                 f.flush()

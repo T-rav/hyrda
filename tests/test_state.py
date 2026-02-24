@@ -1838,3 +1838,29 @@ class TestPruneSessionsCorruptLines:
         # Valid session should survive pruning
         result = tracker.load_sessions()
         assert any(s.id == "sess-4" for s in result)
+
+
+# ---------------------------------------------------------------------------
+# UnicodeDecodeError handling in load() (issue #1038)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadUnicodeDecodeError:
+    """Verify load() catches UnicodeDecodeError from binary-corrupted state files."""
+
+    def test_load_recovers_from_binary_corrupted_state_file(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Binary data in state file should reset to defaults with a warning."""
+        import logging
+
+        state_file = tmp_path / "state.json"
+        state_file.write_bytes(b"\x80\x81\x82\xff\xfe")
+
+        with caplog.at_level(logging.WARNING, logger="hydraflow.state"):
+            tracker = make_tracker(tmp_path)
+
+        assert "Corrupt state file, resetting" in caplog.text
+        # Should have default state
+        assert tracker.get_active_worktrees() == {}
+        assert tracker.to_dict()["processed_issues"] == {}

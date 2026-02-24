@@ -109,10 +109,17 @@ class EventLog:
 
     def _append_sync(self, line: str) -> None:
         """Synchronous append — called via ``asyncio.to_thread``."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._path, "a") as f:
-            f.write(line + "\n")
-            f.flush()
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._path, "a") as f:
+                f.write(line + "\n")
+                f.flush()
+        except OSError:
+            logger.warning(
+                "Could not append to event log %s",
+                self._path,
+                exc_info=True,
+            )
 
     async def append(self, event: HydraFlowEvent) -> None:
         """Serialize *event* to JSON and append a line to the log file."""
