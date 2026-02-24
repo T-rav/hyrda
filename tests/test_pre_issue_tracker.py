@@ -1,4 +1,4 @@
-"""Tests for local .pre markdown issue tracking."""
+"""Tests for local .hydraflow/prep markdown issue tracking."""
 
 from __future__ import annotations
 
@@ -15,6 +15,14 @@ def test_ensure_pre_dirs_creates_dirs(tmp_path):
     pre_dir, runs_dir = ensure_pre_dirs(tmp_path)
     assert pre_dir.is_dir()
     assert runs_dir.is_dir()
+    assert pre_dir == tmp_path / ".hydraflow" / "prep"
+    assert runs_dir.parent == pre_dir / "runs"
+
+
+def test_ensure_pre_dirs_uses_locked_run_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("HYDRAFLOW_PREP_RUN_ID", "20260224-010203-000001")
+    _pre_dir, runs_dir = ensure_pre_dirs(tmp_path)
+    assert runs_dir.name == "20260224-010203-000001"
 
 
 def test_load_open_issues_skips_done(tmp_path):

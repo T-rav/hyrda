@@ -1,16 +1,18 @@
 """Local markdown issue tracking for prep workflows.
 
-Issues are stored as ``.pre/*.md`` files. A file is considered done when it
-contains the marker ``<!-- status: done -->``.
+Issues are stored as ``.hydraflow/prep/*.md`` files. A file is considered done
+when it contains the marker ``<!-- status: done -->``.
 """
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
 _DONE_MARKER = "<!-- status: done -->"
+_RUN_ID_ENV = "HYDRAFLOW_PREP_RUN_ID"
 
 
 @dataclass(frozen=True)
@@ -23,9 +25,12 @@ class LocalPrepIssue:
 
 
 def ensure_pre_dirs(repo_root: Path) -> tuple[Path, Path]:
-    """Create and return ``(.pre, .pre/runs)`` directories."""
-    pre_dir = repo_root / ".pre"
-    runs_dir = pre_dir / "runs"
+    """Create and return ``(.hydraflow/prep, .hydraflow/prep/runs/<run-id>)``."""
+    pre_dir = repo_root / ".hydraflow" / "prep"
+    run_id = os.environ.get(_RUN_ID_ENV) or datetime.now(tz=UTC).strftime(
+        "%Y%m%d-%H%M%S-%f"
+    )
+    runs_dir = pre_dir / "runs" / run_id
     pre_dir.mkdir(parents=True, exist_ok=True)
     runs_dir.mkdir(parents=True, exist_ok=True)
     return pre_dir, runs_dir
@@ -40,8 +45,8 @@ def _parse_title(path: Path, body: str) -> str:
 
 
 def load_open_issues(repo_root: Path) -> list[LocalPrepIssue]:
-    """Load open issues from ``.pre/*.md`` (excluding ``.pre/runs``)."""
-    pre_dir = repo_root / ".pre"
+    """Load open issues from ``.hydraflow/prep/*.md``."""
+    pre_dir = repo_root / ".hydraflow" / "prep"
     if not pre_dir.is_dir():
         return []
 
@@ -75,7 +80,7 @@ def mark_done(issue: LocalPrepIssue) -> None:
 
 
 def write_run_log(repo_root: Path, *, title: str, lines: list[str]) -> Path:
-    """Write a markdown run log under ``.pre/runs`` and return its path."""
+    """Write a markdown run log under ``.hydraflow/prep/runs/<run-id>``."""
     _, runs_dir = ensure_pre_dirs(repo_root)
     ts = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
     path = runs_dir / f"{ts}-prep-run.md"
@@ -91,7 +96,7 @@ def upsert_issue(
     title: str,
     body_lines: list[str],
 ) -> LocalPrepIssue:
-    """Create or update a local `.pre` markdown issue file."""
+    """Create or update a local `.hydraflow/prep` markdown issue file."""
     pre_dir, _ = ensure_pre_dirs(repo_root)
     path = pre_dir / filename
     body = "\n".join([f"# {title}", "", *body_lines, ""])
