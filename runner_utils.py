@@ -176,8 +176,7 @@ async def stream_claude_process(
     finally:
         if stderr_task is not None and not stderr_task.done():
             stderr_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await stderr_task
+            await asyncio.gather(stderr_task, return_exceptions=True)
         active_procs.discard(proc)
 
 
