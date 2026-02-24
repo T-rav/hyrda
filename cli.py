@@ -958,6 +958,8 @@ async def _run_prep_agent_workflow(
         "7) End response with EXACTLY one final line: PREP_STATUS: SUCCESS or PREP_STATUS: FAILED.\n\n"
         "8) Prefer Make targets for checks/fixes (lint-fix, lint-check, typecheck, test, "
         "quality-lite, quality) instead of ad-hoc commands.\n"
+        "8a) If running Vitest directly, always exclude the hydraflow submodule path "
+        "(`--exclude='hydraflow/**'`) unless vitest config already excludes it.\n"
         "9) Before each Edit, Read that file first. If a tool error says the file was not "
         "read yet, read it and retry the edit.\n"
         "10) Continue until `make quality` passes or you can provide a concrete failing "
