@@ -1331,46 +1331,40 @@ class TestBuildPrecheckPrompt:
 
 
 # ---------------------------------------------------------------------------
-# _run_precheck_context
+# _run_precheck_context (wiring tests — shared logic tested in test_precheck.py)
 # ---------------------------------------------------------------------------
 
 
 class TestRunPrecheckContext:
-    """Tests that _run_precheck_context delegates to run_precheck_pipeline."""
+    """Tests for ReviewRunner._run_precheck_context wiring."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_run_precheck_pipeline(
-        self, event_bus, pr_info, issue, tmp_path
+    async def test_delegates_to_shared_run_precheck_context(
+        self, config, event_bus, pr_info, issue, tmp_path
     ) -> None:
-        cfg = ConfigFactory.create(
-            max_subskill_attempts=1,
-            repo_root=tmp_path / "repo",
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        runner = _make_runner(cfg, event_bus)
+        """Verify ReviewRunner delegates to the shared precheck module."""
+        runner = _make_runner(config, event_bus)
 
         with patch(
-            "reviewer.run_precheck_pipeline",
+            "reviewer.run_precheck_context",
             new_callable=AsyncMock,
-            return_value="pipeline result",
-        ) as mock_pipeline:
+            return_value="Precheck risk: low",
+        ) as mock_rpc:
             result = await runner._run_precheck_context(
-                pr_info, issue, "diff text", tmp_path
+                pr_info, issue, "diff", tmp_path
             )
 
-        assert result == "pipeline result"
-        mock_pipeline.assert_called_once()
-        args, kwargs = mock_pipeline.call_args
-        assert args[0] is cfg
-        assert f"#{pr_info.number}" in args[1]  # prompt contains PR number
-        assert args[2] == "diff text"
-        assert "DEBUG MODE" in kwargs["debug_suffix"]
+        mock_rpc.assert_awaited_once()
+        assert result == "Precheck risk: low"
+        call_kwargs = mock_rpc.call_args[1]
+        assert call_kwargs["config"] is runner._config
+        assert "root causes" in call_kwargs["debug_message"]
 
     @pytest.mark.asyncio
     async def test_execute_closure_calls_self_execute(
         self, event_bus, pr_info, issue, tmp_path
     ) -> None:
+        """Verify the execute closure wires through to self._execute."""
         cfg = ConfigFactory.create(
             max_subskill_attempts=1,
             repo_root=tmp_path / "repo",
@@ -1378,24 +1372,26 @@ class TestRunPrecheckContext:
             state_file=tmp_path / "s.json",
         )
         runner = _make_runner(cfg, event_bus)
-        mock_execute = AsyncMock(return_value="transcript")
 
-        captured_execute = None
+        captured_execute = {}
 
-        async def capture_pipeline(config, prompt, diff, execute, debug_suffix):
-            nonlocal captured_execute
-            captured_execute = execute
-            return "ok"
+        async def capture_rpc(**kwargs):
+            captured_execute["fn"] = kwargs["execute"]
+            return "Precheck risk: low"
 
-        with (
-            patch("reviewer.run_precheck_pipeline", side_effect=capture_pipeline),
-            patch.object(runner, "_execute", mock_execute),
+        with patch(
+            "reviewer.run_precheck_context",
+            side_effect=capture_rpc,
         ):
             await runner._run_precheck_context(pr_info, issue, "diff", tmp_path)
-            assert captured_execute is not None
-            await captured_execute(["cmd"], "prompt")
 
-        mock_execute.assert_called_once_with(
+        # Call the captured execute closure
+        mock_self_execute = AsyncMock(return_value="transcript")
+        with patch.object(runner, "_execute", mock_self_execute):
+            result = await captured_execute["fn"](["cmd"], "prompt")
+
+        assert result == "transcript"
+        mock_self_execute.assert_called_once_with(
             ["cmd"], "prompt", tmp_path, {"pr": pr_info.number, "source": "reviewer"}
         )
 

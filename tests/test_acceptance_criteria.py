@@ -22,7 +22,6 @@ from acceptance_criteria import (
     _VERIFY_START,
     AcceptanceCriteriaGenerator,
 )
-from escalation_gate import EscalationDecision
 from models import VerificationCriteria
 from tests.conftest import IssueFactory
 from tests.helpers import ConfigFactory
@@ -668,49 +667,51 @@ class TestBuildPrecheckPrompt:
 
 
 # ---------------------------------------------------------------------------
-# _run_precheck_context
+# _run_precheck_context (wiring tests — shared logic tested in test_precheck.py)
 # ---------------------------------------------------------------------------
 
 
 class TestRunPrecheckContext:
-    """Tests that _run_precheck_context delegates to run_precheck_pipeline."""
+    """Tests for AcceptanceCriteriaGenerator._run_precheck_context wiring."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_run_precheck_pipeline(
+    async def test_delegates_to_shared_run_precheck_context(
         self, event_bus, tmp_path
     ) -> None:
+        """Verify AC generator delegates to the shared precheck module."""
         cfg = ConfigFactory.create(
             max_subskill_attempts=1,
+            subskill_confidence_threshold=0.7,
+            debug_escalation_enabled=False,
             repo_root=tmp_path / "repo",
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
         gen, _ = _make_generator(cfg, event_bus)
-        issue = IssueFactory.create(number=42, title="Fix widget")
+        issue = IssueFactory.create()
 
         with patch(
-            "acceptance_criteria.run_precheck_pipeline",
+            "acceptance_criteria.run_precheck_context",
             new_callable=AsyncMock,
-            return_value="pipeline result",
-        ) as mock_pipeline:
-            result = await gen._run_precheck_context(
-                issue, 42, 101, "diff summary", "full diff"
-            )
+            return_value="Precheck risk: low",
+        ) as mock_rpc:
+            result = await gen._run_precheck_context(issue, 42, 101, "diff", "")
 
-        assert result == "pipeline result"
-        mock_pipeline.assert_called_once()
-        args, kwargs = mock_pipeline.call_args
-        assert args[0] is cfg
-        assert "#42" in args[1]  # prompt contains issue number
-        assert args[2] == "full diff"
-        assert "DEBUG MODE" in kwargs["debug_suffix"]
+        mock_rpc.assert_awaited_once()
+        assert result == "Precheck risk: low"
+        # Verify correct config and debug_message are passed
+        call_kwargs = mock_rpc.call_args[1]
+        assert call_kwargs["config"] is cfg
+        assert "ambiguity" in call_kwargs["debug_message"]
 
     @pytest.mark.asyncio
     async def test_execute_closure_calls_stream_claude_process(
         self, event_bus, tmp_path
     ) -> None:
+        """Verify the execute closure wires through to stream_claude_process."""
         cfg = ConfigFactory.create(
             max_subskill_attempts=1,
+            debug_escalation_enabled=False,
             repo_root=tmp_path / "repo",
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
@@ -718,116 +719,68 @@ class TestRunPrecheckContext:
         gen, _ = _make_generator(cfg, event_bus)
         issue = IssueFactory.create()
 
-        captured_execute = None
+        captured_execute = {}
 
-        async def capture_pipeline(config, prompt, diff, execute, debug_suffix):
-            nonlocal captured_execute
-            captured_execute = execute
-            return "ok"
+        async def capture_rpc(**kwargs):
+            captured_execute["fn"] = kwargs["execute"]
+            return "Precheck risk: low"
 
-        with (
-            patch(
-                "acceptance_criteria.run_precheck_pipeline",
-                side_effect=capture_pipeline,
-            ),
-            patch(
-                "acceptance_criteria.stream_claude_process",
-                new_callable=AsyncMock,
-                return_value="transcript",
-            ) as mock_stream,
+        with patch(
+            "acceptance_criteria.run_precheck_context",
+            side_effect=capture_rpc,
         ):
-            await gen._run_precheck_context(issue, 42, 101, "diff summary", "diff")
-            assert captured_execute is not None
-            await captured_execute(["cmd"], "prompt")
+            await gen._run_precheck_context(issue, 42, 101, "diff", "")
+
+        # Call the captured execute closure
+        with patch(
+            "acceptance_criteria.stream_claude_process",
+            new_callable=AsyncMock,
+            return_value="transcript",
+        ) as mock_stream:
+            result = await captured_execute["fn"](["cmd"], "prompt")
+
+        assert result == "transcript"
+        mock_stream.assert_called_once()
+        call_kwargs = mock_stream.call_args[1]
+        assert call_kwargs["cmd"] == ["cmd"]
+        assert call_kwargs["prompt"] == "prompt"
+        assert call_kwargs["event_data"]["source"] == "ac_precheck"
+
+    @pytest.mark.asyncio
+    async def test_execute_debug_closure_uses_ac_precheck_debug_source(
+        self, event_bus, tmp_path
+    ) -> None:
+        """Verify the execute_debug closure uses source='ac_precheck_debug'."""
+        cfg = ConfigFactory.create(
+            max_subskill_attempts=1,
+            debug_escalation_enabled=False,
+            repo_root=tmp_path / "repo",
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        gen, _ = _make_generator(cfg, event_bus)
+        issue = IssueFactory.create()
+
+        captured_debug = {}
+
+        async def capture_rpc(**kwargs):
+            captured_debug["fn"] = kwargs.get("execute_debug")
+            return "Precheck risk: low"
+
+        with patch(
+            "acceptance_criteria.run_precheck_context",
+            side_effect=capture_rpc,
+        ):
+            await gen._run_precheck_context(issue, 42, 101, "diff", "")
+
+        assert captured_debug["fn"] is not None, "execute_debug must be passed"
+
+        with patch(
+            "acceptance_criteria.stream_claude_process",
+            new_callable=AsyncMock,
+            return_value="debug transcript",
+        ) as mock_stream:
+            await captured_debug["fn"](["cmd"], "prompt")
 
         mock_stream.assert_called_once()
-        assert mock_stream.call_args[1]["cmd"] == ["cmd"]
-        assert mock_stream.call_args[1]["prompt"] == "prompt"
-
-
-# ---------------------------------------------------------------------------
-# TestPrecheckHighRiskFiles
-# ---------------------------------------------------------------------------
-
-
-HIGH_RISK_DIFF = """\
-diff --git a/src/auth/login.py b/src/auth/login.py
-index abc123..def456 100644
---- a/src/auth/login.py
-+++ b/src/auth/login.py
-@@ -1,3 +1,8 @@
-+def new_login():
-+    pass
-"""
-
-SAFE_DIFF = """\
-diff --git a/src/utils.py b/src/utils.py
-index abc123..def456 100644
---- a/src/utils.py
-+++ b/src/utils.py
-@@ -1,3 +1,8 @@
-+def helper():
-+    pass
-"""
-
-
-class TestPrecheckHighRiskFiles:
-    """Verify _run_precheck_context passes high_risk_files_touched correctly."""
-
-    @pytest.mark.asyncio
-    async def test_high_risk_diff_passes_true(self, event_bus) -> None:
-        cfg = ConfigFactory.create(max_subskill_attempts=1)
-        gen, _ = _make_generator(cfg, event_bus)
-        issue = IssueFactory.create()
-
-        precheck_transcript = (
-            "PRECHECK_RISK: high\n"
-            "PRECHECK_CONFIDENCE: 0.5\n"
-            "PRECHECK_ESCALATE: no\n"
-            "PRECHECK_SUMMARY: risky auth change\n"
-        )
-
-        with (
-            patch(
-                "acceptance_criteria.stream_claude_process",
-                new_callable=AsyncMock,
-                return_value=precheck_transcript,
-            ),
-            patch(
-                "precheck_pipeline.should_escalate_debug",
-                return_value=EscalationDecision(escalate=False, reasons=[]),
-            ) as mock_escalate,
-        ):
-            await gen._run_precheck_context(issue, 42, 101, "summary", HIGH_RISK_DIFF)
-
-        mock_escalate.assert_called_once()
-        assert mock_escalate.call_args[1]["high_risk_files_touched"] is True
-
-    @pytest.mark.asyncio
-    async def test_safe_diff_passes_false(self, event_bus) -> None:
-        cfg = ConfigFactory.create(max_subskill_attempts=1)
-        gen, _ = _make_generator(cfg, event_bus)
-        issue = IssueFactory.create()
-
-        precheck_transcript = (
-            "PRECHECK_RISK: low\n"
-            "PRECHECK_CONFIDENCE: 0.9\n"
-            "PRECHECK_ESCALATE: no\n"
-            "PRECHECK_SUMMARY: safe change\n"
-        )
-
-        with (
-            patch(
-                "acceptance_criteria.stream_claude_process",
-                new_callable=AsyncMock,
-                return_value=precheck_transcript,
-            ),
-            patch(
-                "precheck_pipeline.should_escalate_debug",
-                return_value=EscalationDecision(escalate=False, reasons=[]),
-            ) as mock_escalate,
-        ):
-            await gen._run_precheck_context(issue, 42, 101, "summary", SAFE_DIFF)
-
-        mock_escalate.assert_called_once()
-        assert mock_escalate.call_args[1]["high_risk_files_touched"] is False
+        assert mock_stream.call_args[1]["event_data"]["source"] == "ac_precheck_debug"

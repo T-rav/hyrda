@@ -1,20 +1,43 @@
-"""Shared precheck pipeline for low-tier subskill and debug escalation."""
+"""Shared precheck utilities for low-tier subskill and debug escalation.
+
+Consolidates ``parse_precheck_transcript``, ``build_subskill_command``,
+``build_debug_command``, and ``run_precheck_context`` which were
+previously duplicated across acceptance_criteria.py, verification_judge.py,
+and reviewer.py.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from agent_cli import build_agent_command
-from config import HydraFlowConfig
 from escalation_gate import high_risk_diff_touched, should_escalate_debug
-from models import PrecheckResult
+
+if TYPE_CHECKING:
+    from config import HydraFlowConfig
+
+#: Callback signature for executing a Claude subprocess.
+#: Takes (command, prompt) and returns the transcript string.
+ExecuteCallback = Callable[[list[str], str], Awaitable[str]]
 
 
-def parse_precheck_transcript(
-    transcript: str,
-) -> PrecheckResult:
-    """Extract PRECHECK_* fields from a precheck transcript."""
+@dataclass(frozen=True, slots=True)
+class PrecheckResult:
+    """Parsed result of a low-tier precheck transcript."""
+
+    risk: str = "medium"
+    confidence: float = 0.0
+    escalate: bool = False
+    summary: str = ""
+    parse_failed: bool = True
+
+
+def parse_precheck_transcript(transcript: str) -> PrecheckResult:
+    """Parse structured PRECHECK_* fields from a transcript string."""
     risk_match = re.search(
         r"PRECHECK_RISK:\s*(low|medium|high)",
         transcript,
@@ -52,7 +75,7 @@ def parse_precheck_transcript(
 
 
 def build_subskill_command(config: HydraFlowConfig) -> list[str]:
-    """Build the CLI command for a subskill precheck invocation."""
+    """Build a CLI command for the low-tier subskill agent."""
     return build_agent_command(
         tool=config.subskill_tool,
         model=config.subskill_model,
@@ -60,44 +83,29 @@ def build_subskill_command(config: HydraFlowConfig) -> list[str]:
 
 
 def build_debug_command(config: HydraFlowConfig) -> list[str]:
-    """Build the CLI command for a debug escalation invocation."""
+    """Build a CLI command for the debug escalation agent."""
     return build_agent_command(
         tool=config.debug_tool,
         model=config.debug_model,
     )
 
 
-async def run_precheck_pipeline(
+async def run_precheck_context(
+    *,
     config: HydraFlowConfig,
     prompt: str,
     diff: str,
-    execute: Callable[[list[str], str], Awaitable[str]],
-    debug_suffix: str,
-    execute_debug: Callable[[list[str], str], Awaitable[str]] | None = None,
+    execute: ExecuteCallback,
+    debug_message: str,
+    logger: logging.Logger,
+    execute_debug: ExecuteCallback | None = None,
 ) -> str:
-    """Run the shared precheck pipeline: subskill retry loop + optional debug escalation.
+    """Run the shared precheck orchestration loop.
 
-    Parameters
-    ----------
-    config:
-        HydraFlow configuration.
-    prompt:
-        The precheck prompt to send to the subskill agent.
-    diff:
-        The diff text, used for high-risk file detection.
-    execute:
-        Async callback ``(cmd, prompt) -> transcript`` that runs a subprocess.
-    debug_suffix:
-        Text appended to *prompt* when running the debug escalation call.
-    execute_debug:
-        Optional separate callback for the debug escalation call.  When
-        omitted, *execute* is reused.  Pass a distinct callback when the
-        caller wants a different event source or routing for debug runs.
-
-    Returns
-    -------
-    str
-        Joined context lines suitable for injection into a parent prompt.
+    1. If disabled (``max_subskill_attempts <= 0``), return immediately.
+    2. Retry up to ``max_subskill_attempts`` times, breaking on successful parse.
+    3. Evaluate escalation gate; optionally run debug agent.
+    4. Return formatted context string.
     """
     if config.max_subskill_attempts <= 0:
         return "Low-tier precheck disabled."
@@ -109,12 +117,15 @@ async def run_precheck_pipeline(
 
     try:
         for _attempt in range(config.max_subskill_attempts):
-            transcript = await execute(build_subskill_command(config), prompt)
-            precheck = parse_precheck_transcript(transcript)
-            risk = precheck.risk
-            confidence = precheck.confidence
-            summary = precheck.summary
-            parse_failed = precheck.parse_failed
+            transcript = await execute(
+                build_subskill_command(config),
+                prompt,
+            )
+            result = parse_precheck_transcript(transcript)
+            risk = result.risk
+            confidence = result.confidence
+            summary = result.summary
+            parse_failed = result.parse_failed
             if not parse_failed:
                 break
     except Exception:  # noqa: BLE001
@@ -139,10 +150,10 @@ async def run_precheck_pipeline(
     ]
 
     if decision.escalate and config.max_debug_attempts > 0:
-        _execute_debug = execute_debug or execute
-        debug_transcript = await _execute_debug(
+        _debug_execute = execute_debug if execute_debug is not None else execute
+        debug_transcript = await _debug_execute(
             build_debug_command(config),
-            prompt + debug_suffix,
+            prompt + f"\n\n{debug_message}",
         )
         context.append("Debug precheck transcript:")
         context.append(debug_transcript[:1000])

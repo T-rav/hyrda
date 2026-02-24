@@ -19,7 +19,7 @@ from models import (
     JudgeVerdict,
     ParsedCriteria,
 )
-from precheck_pipeline import run_precheck_pipeline
+from precheck import run_precheck_context
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
 
@@ -379,12 +379,13 @@ Diff excerpt:
         async def execute(cmd: list[str], p: str) -> str:
             return await self._execute(cmd, p, issue_number)
 
-        return await run_precheck_pipeline(
-            self._config,
-            prompt,
-            diff,
-            execute,
-            debug_suffix="\n\nDEBUG MODE: focus on failure and ambiguity hotspots.",
+        return await run_precheck_context(
+            config=self._config,
+            prompt=prompt,
+            diff=diff,
+            execute=execute,
+            debug_message="DEBUG MODE: focus on failure and ambiguity hotspots.",
+            logger=logger,
         )
 
     def _parse_criteria_results(self, transcript: str) -> list[CriterionResult]:

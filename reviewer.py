@@ -11,7 +11,7 @@ from agent_cli import build_agent_command
 from base_runner import BaseRunner
 from events import EventType, HydraFlowEvent
 from models import GitHubIssue, PRInfo, ReviewerStatus, ReviewResult, ReviewVerdict
-from precheck_pipeline import run_precheck_pipeline
+from precheck import run_precheck_context
 from runner_constants import MEMORY_SUGGESTION_PROMPT
 from subprocess_util import CreditExhaustedError
 
@@ -428,12 +428,13 @@ Diff snippet:
                 cmd, p, worktree_path, {"pr": pr.number, "source": "reviewer"}
             )
 
-        return await run_precheck_pipeline(
-            self._config,
-            prompt,
-            diff,
-            execute,
-            debug_suffix="\n\nDEBUG MODE: Focus on root causes and concrete risky files.",
+        return await run_precheck_context(
+            config=self._config,
+            prompt=prompt,
+            diff=diff,
+            execute=execute,
+            debug_message="DEBUG MODE: Focus on root causes and concrete risky files.",
+            logger=logger,
         )
 
     def _parse_verdict(self, transcript: str) -> ReviewVerdict:

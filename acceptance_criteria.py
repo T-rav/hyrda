@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from agent_cli import build_agent_command
 from execution import get_default_runner
 from models import VerificationCriteria
-from precheck_pipeline import run_precheck_pipeline
+from precheck import run_precheck_context
 from runner_utils import stream_claude_process
 
 if TYPE_CHECKING:
@@ -240,12 +240,13 @@ Diff summary:
                 runner=self._runner,
             )
 
-        return await run_precheck_pipeline(
-            self._config,
-            prompt,
-            diff,
-            execute,
-            debug_suffix="\n\nDEBUG MODE: focus on ambiguity and failure modes.",
+        return await run_precheck_context(
+            config=self._config,
+            prompt=prompt,
+            diff=diff,
+            execute=execute,
+            debug_message="DEBUG MODE: focus on ambiguity and failure modes.",
+            logger=logger,
             execute_debug=execute_debug,
         )
 

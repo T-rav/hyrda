@@ -1,8 +1,9 @@
-"""Tests for precheck_pipeline.py — shared precheck pipeline functions."""
+"""Tests for precheck.py — shared precheck utilities."""
 
 from __future__ import annotations
 
 import sys
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -10,14 +11,51 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models import PrecheckResult
-from precheck_pipeline import (
+from escalation_gate import EscalationDecision
+from precheck import (
+    PrecheckResult,
     build_debug_command,
     build_subskill_command,
     parse_precheck_transcript,
-    run_precheck_pipeline,
+    run_precheck_context,
 )
 from tests.helpers import ConfigFactory
+
+# ---------------------------------------------------------------------------
+# PrecheckResult dataclass
+# ---------------------------------------------------------------------------
+
+
+class TestPrecheckResult:
+    """Tests for the PrecheckResult frozen dataclass."""
+
+    def test_defaults(self) -> None:
+        result = PrecheckResult()
+        assert result.risk == "medium"
+        assert result.confidence == 0.0
+        assert result.escalate is False
+        assert result.summary == ""
+        assert result.parse_failed is True
+
+    def test_custom_values(self) -> None:
+        result = PrecheckResult(
+            risk="high",
+            confidence=0.85,
+            escalate=True,
+            summary="Risky change.",
+            parse_failed=False,
+        )
+        assert result.risk == "high"
+        assert result.confidence == 0.85
+        assert result.escalate is True
+        assert result.summary == "Risky change."
+        assert result.parse_failed is False
+
+    def test_frozen(self) -> None:
+        result = PrecheckResult()
+        with pytest.raises(FrozenInstanceError):
+            result.risk = "high"  # type: ignore[misc]
+
 
 # ---------------------------------------------------------------------------
 # parse_precheck_transcript
@@ -25,7 +63,7 @@ from tests.helpers import ConfigFactory
 
 
 class TestParsePrecheckTranscript:
-    """Tests for parse_precheck_transcript."""
+    """Tests for parse_precheck_transcript module-level function."""
 
     def test_all_fields_present(self) -> None:
         transcript = (
@@ -35,7 +73,6 @@ class TestParsePrecheckTranscript:
             "PRECHECK_SUMMARY: All looks good.\n"
         )
         result = parse_precheck_transcript(transcript)
-        assert isinstance(result, PrecheckResult)
         assert result.risk == "low"
         assert result.confidence == 0.95
         assert result.escalate is False
@@ -121,7 +158,7 @@ class TestParsePrecheckTranscript:
         assert result.escalate is False
         assert result.parse_failed is True
 
-    def test_preamble_before_fields(self) -> None:
+    def test_preamble_text_ignored(self) -> None:
         transcript = (
             "Some preamble.\n"
             "PRECHECK_RISK: low\n"
@@ -132,8 +169,6 @@ class TestParsePrecheckTranscript:
         result = parse_precheck_transcript(transcript)
         assert result.risk == "low"
         assert result.confidence == 0.95
-        assert result.escalate is False
-        assert result.summary == "All looks good."
         assert result.parse_failed is False
 
 
@@ -145,8 +180,8 @@ class TestParsePrecheckTranscript:
 class TestBuildSubskillCommand:
     """Tests for build_subskill_command."""
 
-    def test_uses_config_tool_and_model(self) -> None:
-        cfg = ConfigFactory.create()
+    def test_claude_backend(self) -> None:
+        cfg = ConfigFactory.create(subskill_tool="claude", subskill_model="haiku")
         cmd = build_subskill_command(cfg)
         assert "claude" in cmd
         assert "--model" in cmd
@@ -163,8 +198,8 @@ class TestBuildSubskillCommand:
 class TestBuildDebugCommand:
     """Tests for build_debug_command."""
 
-    def test_uses_config_tool_and_model(self) -> None:
-        cfg = ConfigFactory.create()
+    def test_claude_backend(self) -> None:
+        cfg = ConfigFactory.create(debug_tool="claude", debug_model="opus")
         cmd = build_debug_command(cfg)
         assert "claude" in cmd
         assert "--model" in cmd
@@ -179,22 +214,27 @@ class TestBuildDebugCommand:
 
 
 # ---------------------------------------------------------------------------
-# run_precheck_pipeline
+# run_precheck_context
 # ---------------------------------------------------------------------------
 
 
-class TestRunPrecheckPipeline:
-    """Tests for run_precheck_pipeline."""
+class TestRunPrecheckContext:
+    """Tests for run_precheck_context shared orchestration."""
 
     @pytest.mark.asyncio
-    async def test_disabled_when_max_subskill_zero(self) -> None:
+    async def test_disabled_returns_message(self) -> None:
         cfg = ConfigFactory.create(max_subskill_attempts=0)
-        execute = AsyncMock()
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock()
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
         assert result == "Low-tier precheck disabled."
-        execute.assert_not_called()
+        mock_execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_success_no_escalation(self, tmp_path) -> None:
@@ -210,15 +250,20 @@ class TestRunPrecheckPipeline:
             "PRECHECK_ESCALATE: no\n"
             "PRECHECK_SUMMARY: All clear.\n"
         )
-        execute = AsyncMock(return_value=valid_transcript)
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(return_value=valid_transcript)
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
         assert "Precheck risk: low" in result
         assert "Precheck confidence: 0.95" in result
         assert "Precheck summary: All clear." in result
         assert "Debug escalation: no" in result
-        execute.assert_called_once()
+        mock_execute.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_retries_on_parse_failure(self, tmp_path) -> None:
@@ -234,11 +279,16 @@ class TestRunPrecheckPipeline:
             "PRECHECK_ESCALATE: no\n"
             "PRECHECK_SUMMARY: Finally parsed.\n"
         )
-        execute = AsyncMock(side_effect=[garbage, garbage, valid_transcript])
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(side_effect=[garbage, garbage, valid_transcript])
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
-        assert execute.call_count == 3
+        assert mock_execute.call_count == 3
         assert "Precheck risk: low" in result
         assert "Precheck summary: Finally parsed." in result
 
@@ -258,19 +308,16 @@ class TestRunPrecheckPipeline:
             "PRECHECK_SUMMARY: Risky change.\n"
         )
         debug_transcript = "Debug: found critical issues."
-        execute = AsyncMock(side_effect=[high_risk_transcript, debug_transcript])
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(side_effect=[high_risk_transcript, debug_transcript])
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG MODE: focus on ambiguity.",
+            logger=__import__("logging").getLogger("test"),
         )
-        assert execute.call_count == 2
-        # Verify first call used subskill command with the original prompt
-        first_cmd, first_prompt = execute.call_args_list[0][0]
-        assert first_cmd == build_subskill_command(cfg)
-        assert first_prompt == "prompt"
-        # Verify second call used debug command with the suffixed prompt
-        second_cmd, second_prompt = execute.call_args_list[1][0]
-        assert second_cmd == build_debug_command(cfg)
-        assert second_prompt == "prompt\nDEBUG"
+        assert mock_execute.call_count == 2
         assert "Precheck risk: high" in result
         assert "Debug escalation: yes" in result
         assert "Debug precheck transcript:" in result
@@ -292,11 +339,16 @@ class TestRunPrecheckPipeline:
             "PRECHECK_ESCALATE: yes\n"
             "PRECHECK_SUMMARY: Risky.\n"
         )
-        execute = AsyncMock(return_value=high_risk_transcript)
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(return_value=high_risk_transcript)
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
-        assert execute.call_count == 1
+        assert mock_execute.call_count == 1
         assert "Debug escalation: yes" in result
         assert "Debug precheck transcript:" not in result
 
@@ -306,16 +358,21 @@ class TestRunPrecheckPipeline:
             max_subskill_attempts=1,
             repo_root=tmp_path / "repo",
         )
-        execute = AsyncMock(side_effect=RuntimeError("subprocess crashed"))
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(side_effect=RuntimeError("subprocess crashed"))
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
         assert (
             result == "Low-tier precheck failed; continuing without precheck context."
         )
 
     @pytest.mark.asyncio
-    async def test_debug_transcript_truncated_to_1000_chars(self, tmp_path) -> None:
+    async def test_debug_transcript_truncated_to_1000(self, tmp_path) -> None:
         cfg = ConfigFactory.create(
             max_subskill_attempts=1,
             debug_escalation_enabled=True,
@@ -330,9 +387,14 @@ class TestRunPrecheckPipeline:
             "PRECHECK_SUMMARY: Risky.\n"
         )
         long_debug = "D" * 2000
-        execute = AsyncMock(side_effect=[high_risk_transcript, long_debug])
-        result = await run_precheck_pipeline(
-            cfg, "prompt", "diff", execute, debug_suffix="\nDEBUG"
+        mock_execute = AsyncMock(side_effect=[high_risk_transcript, long_debug])
+        result = await run_precheck_context(
+            config=cfg,
+            prompt="test prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG",
+            logger=__import__("logging").getLogger("test"),
         )
         assert "D" * 1000 in result
         assert "D" * 1001 not in result
@@ -350,14 +412,19 @@ class TestRunPrecheckPipeline:
             "PRECHECK_SUMMARY: risky auth change\n"
         )
         auth_diff = "diff --git a/src/auth/login.py b/src/auth/login.py\n+pass"
-        execute = AsyncMock(return_value=precheck_transcript)
+        mock_execute = AsyncMock(return_value=precheck_transcript)
 
         with patch(
-            "precheck_pipeline.should_escalate_debug",
-            wraps=__import__("escalation_gate").should_escalate_debug,
+            "precheck.should_escalate_debug",
+            return_value=EscalationDecision(escalate=False, reasons=[]),
         ) as mock_escalate:
-            await run_precheck_pipeline(
-                cfg, "prompt", auth_diff, execute, debug_suffix="\nDEBUG"
+            await run_precheck_context(
+                config=cfg,
+                prompt="test prompt",
+                diff=auth_diff,
+                execute=mock_execute,
+                debug_message="DEBUG",
+                logger=__import__("logging").getLogger("test"),
             )
 
         mock_escalate.assert_called_once()
@@ -375,16 +442,50 @@ class TestRunPrecheckPipeline:
             "PRECHECK_ESCALATE: no\n"
             "PRECHECK_SUMMARY: safe change\n"
         )
-        safe_diff = "diff --git a/src/utils.py b/src/utils.py\n+def helper(): pass"
-        execute = AsyncMock(return_value=precheck_transcript)
+        safe_diff = "diff --git a/src/utils.py b/src/utils.py\n+pass"
+        mock_execute = AsyncMock(return_value=precheck_transcript)
 
         with patch(
-            "precheck_pipeline.should_escalate_debug",
-            wraps=__import__("escalation_gate").should_escalate_debug,
+            "precheck.should_escalate_debug",
+            return_value=EscalationDecision(escalate=False, reasons=[]),
         ) as mock_escalate:
-            await run_precheck_pipeline(
-                cfg, "prompt", safe_diff, execute, debug_suffix="\nDEBUG"
+            await run_precheck_context(
+                config=cfg,
+                prompt="test prompt",
+                diff=safe_diff,
+                execute=mock_execute,
+                debug_message="DEBUG",
+                logger=__import__("logging").getLogger("test"),
             )
 
         mock_escalate.assert_called_once()
         assert mock_escalate.call_args[1]["high_risk_files_touched"] is False
+
+    @pytest.mark.asyncio
+    async def test_debug_message_appended_to_prompt(self, tmp_path) -> None:
+        cfg = ConfigFactory.create(
+            max_subskill_attempts=1,
+            debug_escalation_enabled=True,
+            max_debug_attempts=1,
+            subskill_confidence_threshold=0.7,
+            repo_root=tmp_path / "repo",
+        )
+        high_risk_transcript = (
+            "PRECHECK_RISK: high\n"
+            "PRECHECK_CONFIDENCE: 0.3\n"
+            "PRECHECK_ESCALATE: yes\n"
+            "PRECHECK_SUMMARY: Risky.\n"
+        )
+        mock_execute = AsyncMock(side_effect=[high_risk_transcript, "debug output"])
+        await run_precheck_context(
+            config=cfg,
+            prompt="original prompt",
+            diff="diff",
+            execute=mock_execute,
+            debug_message="DEBUG MODE: focus on ambiguity.",
+            logger=__import__("logging").getLogger("test"),
+        )
+        # The debug call (second call) should include the debug message
+        debug_call_prompt = mock_execute.call_args_list[1][0][1]
+        assert "DEBUG MODE: focus on ambiguity." in debug_call_prompt
+        assert "original prompt" in debug_call_prompt

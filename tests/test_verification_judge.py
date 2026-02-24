@@ -11,7 +11,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from escalation_gate import EscalationDecision
 from events import EventBus, EventType
 from models import (
     CriterionResult,
@@ -1081,66 +1080,22 @@ class TestTerminate:
 # ---------------------------------------------------------------------------
 
 
-HIGH_RISK_DIFF = (
-    "diff --git a/src/auth/login.py b/src/auth/login.py\n+def login(): pass\n"
-)
-SAFE_DIFF = "diff --git a/src/utils.py b/src/utils.py\n+def helper(): pass\n"
-
-
-class TestPrecheckHighRiskFiles:
-    """Verify _run_precheck_context passes high_risk_files_touched correctly."""
+class TestPrecheckDiffPassthrough:
+    """Verify _run_precheck_context passes diff to the shared precheck module."""
 
     @pytest.mark.asyncio
-    async def test_high_risk_diff_passes_true(self, tmp_path) -> None:
+    async def test_passes_diff_to_shared_module(self, tmp_path) -> None:
         cfg = ConfigFactory.create(max_subskill_attempts=1, repo_root=tmp_path)
         judge = VerificationJudge(cfg, EventBus())
 
-        precheck_transcript = (
-            "PRECHECK_RISK: high\n"
-            "PRECHECK_CONFIDENCE: 0.5\n"
-            "PRECHECK_ESCALATE: no\n"
-            "PRECHECK_SUMMARY: risky auth change\n"
-        )
+        with patch(
+            "verification_judge.run_precheck_context",
+            new_callable=AsyncMock,
+            return_value="Precheck risk: low",
+        ) as mock_rpc:
+            await judge._run_precheck_context(42, "criteria text", "some diff")
 
-        with (
-            patch.object(
-                judge, "_execute", AsyncMock(return_value=precheck_transcript)
-            ),
-            patch(
-                "precheck_pipeline.should_escalate_debug",
-                return_value=EscalationDecision(escalate=False, reasons=[]),
-            ) as mock_escalate,
-        ):
-            await judge._run_precheck_context(42, "criteria text", HIGH_RISK_DIFF)
-
-        mock_escalate.assert_called_once()
-        assert mock_escalate.call_args[1]["high_risk_files_touched"] is True
-
-    @pytest.mark.asyncio
-    async def test_safe_diff_passes_false(self, tmp_path) -> None:
-        cfg = ConfigFactory.create(max_subskill_attempts=1, repo_root=tmp_path)
-        judge = VerificationJudge(cfg, EventBus())
-
-        precheck_transcript = (
-            "PRECHECK_RISK: low\n"
-            "PRECHECK_CONFIDENCE: 0.9\n"
-            "PRECHECK_ESCALATE: no\n"
-            "PRECHECK_SUMMARY: safe change\n"
-        )
-
-        with (
-            patch.object(
-                judge, "_execute", AsyncMock(return_value=precheck_transcript)
-            ),
-            patch(
-                "precheck_pipeline.should_escalate_debug",
-                return_value=EscalationDecision(escalate=False, reasons=[]),
-            ) as mock_escalate,
-        ):
-            await judge._run_precheck_context(42, "criteria text", SAFE_DIFF)
-
-        mock_escalate.assert_called_once()
-        assert mock_escalate.call_args[1]["high_risk_files_touched"] is False
+        assert mock_rpc.call_args[1]["diff"] == "some diff"
 
 
 # ---------------------------------------------------------------------------
@@ -1197,8 +1152,8 @@ class TestReviewPhaseWiring:
             stop_event=stop_event,
             store=MagicMock(),
             event_bus=event_bus,
-            verification_judge=mock_judge,
         )
+        phase._post_merge._verification_judge = mock_judge
 
         pr = PRInfo(
             number=101,
@@ -1317,60 +1272,56 @@ class TestBuildPrecheckPrompt:
 
 
 # ---------------------------------------------------------------------------
-# _run_precheck_context
+# _run_precheck_context (wiring tests — shared logic tested in test_precheck.py)
 # ---------------------------------------------------------------------------
 
 
 class TestRunPrecheckContext:
-    """Tests that _run_precheck_context delegates to run_precheck_pipeline."""
+    """Tests for VerificationJudge._run_precheck_context wiring."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_run_precheck_pipeline(self, tmp_path) -> None:
-        cfg = ConfigFactory.create(
-            max_subskill_attempts=1,
-            repo_root=tmp_path / "repo",
-        )
-        judge = _make_judge(cfg)
+    async def test_delegates_to_shared_run_precheck_context(self, config) -> None:
+        """Verify VJ delegates to the shared precheck module."""
+        judge = _make_judge(config)
 
         with patch(
-            "verification_judge.run_precheck_pipeline",
+            "verification_judge.run_precheck_context",
             new_callable=AsyncMock,
-            return_value="pipeline result",
-        ) as mock_pipeline:
-            result = await judge._run_precheck_context(42, "criteria text", "diff text")
+            return_value="Precheck risk: low",
+        ) as mock_rpc:
+            result = await judge._run_precheck_context(42, "criteria", "diff")
 
-        assert result == "pipeline result"
-        mock_pipeline.assert_called_once()
-        args, kwargs = mock_pipeline.call_args
-        assert args[0] is cfg
-        assert "criteria text" in args[1]  # prompt contains criteria
-        assert args[2] == "diff text"
-        assert "DEBUG MODE" in kwargs["debug_suffix"]
+        mock_rpc.assert_awaited_once()
+        assert result == "Precheck risk: low"
+        call_kwargs = mock_rpc.call_args[1]
+        assert call_kwargs["config"] is judge._config
+        assert "ambiguity" in call_kwargs["debug_message"]
 
     @pytest.mark.asyncio
     async def test_execute_closure_calls_self_execute(self, tmp_path) -> None:
+        """Verify the execute closure wires through to self._execute."""
         cfg = ConfigFactory.create(
             max_subskill_attempts=1,
             repo_root=tmp_path / "repo",
         )
         judge = _make_judge(cfg)
-        mock_execute = AsyncMock(return_value="transcript")
 
-        captured_execute = None
+        captured_execute = {}
 
-        async def capture_pipeline(config, prompt, diff, execute, debug_suffix):
-            nonlocal captured_execute
-            captured_execute = execute
-            return "ok"
+        async def capture_rpc(**kwargs):
+            captured_execute["fn"] = kwargs["execute"]
+            return "Precheck risk: low"
 
-        with (
-            patch(
-                "verification_judge.run_precheck_pipeline", side_effect=capture_pipeline
-            ),
-            patch.object(judge, "_execute", mock_execute),
+        with patch(
+            "verification_judge.run_precheck_context",
+            side_effect=capture_rpc,
         ):
             await judge._run_precheck_context(42, "criteria", "diff")
-            assert captured_execute is not None
-            await captured_execute(["cmd"], "prompt")
 
-        mock_execute.assert_called_once_with(["cmd"], "prompt", 42)
+        # Call the captured execute closure
+        mock_self_execute = AsyncMock(return_value="transcript")
+        with patch.object(judge, "_execute", mock_self_execute):
+            result = await captured_execute["fn"](["cmd"], "prompt")
+
+        assert result == "transcript"
+        mock_self_execute.assert_called_once_with(["cmd"], "prompt", 42)
