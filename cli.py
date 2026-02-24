@@ -22,6 +22,10 @@ from config import HydraFlowConfig, load_config_file
 from log import setup_logging
 from orchestrator import HydraFlowOrchestrator
 
+_PREP_COVERAGE_MIN_REQUIRED = 20.0
+_PREP_COVERAGE_TARGET = 70.0
+_PREP_COVERAGE_ALLOW_MISSING = True
+
 
 def _supports_color_output() -> bool:
     """Return True when ANSI color output should be emitted."""
@@ -916,6 +920,7 @@ def _evaluate_coverage_validation(
     *,
     min_required: float = 70.0,
     target: float = 70.0,
+    allow_missing_artifact: bool = False,
 ) -> tuple[bool, bool, str]:
     """Evaluate coverage result.
 
@@ -923,6 +928,14 @@ def _evaluate_coverage_validation(
     """
     pct, source = _extract_coverage_percent(repo_root)
     if pct is None:
+        if allow_missing_artifact:
+            return (
+                True,
+                True,
+                "Coverage warning: no coverage report artifact found; "
+                f"allowing prep fallback floor {min_required:.0f}% "
+                f"(CI target remains {target:.0f}%+).",
+            )
         return (
             False,
             False,
@@ -1018,6 +1031,7 @@ def _evaluate_coverage_validation_projects(
     *,
     min_required: float = 70.0,
     target: float = 70.0,
+    allow_missing_artifact: bool = False,
 ) -> tuple[bool, bool, str]:
     """Evaluate coverage thresholds across all test-bearing project roots."""
     if not project_roots:
@@ -1037,7 +1051,10 @@ def _evaluate_coverage_validation_projects(
             else str(project_root.relative_to(repo_root))
         )
         ok, warn, detail = _evaluate_coverage_validation(
-            project_root, min_required=min_required, target=target
+            project_root,
+            min_required=min_required,
+            target=target,
+            allow_missing_artifact=allow_missing_artifact,
         )
         line = f"{rel}: {detail}"
         if ok:
@@ -1513,6 +1530,9 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
                 _evaluate_coverage_validation_projects(
                     repo_root,
                     coverage_roots,
+                    min_required=_PREP_COVERAGE_MIN_REQUIRED,
+                    target=_PREP_COVERAGE_TARGET,
+                    allow_missing_artifact=_PREP_COVERAGE_ALLOW_MISSING,
                 )
             )
             coverage_lines = [

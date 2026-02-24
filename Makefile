@@ -37,7 +37,7 @@ RESET := \033[0m
 # Docker agent image
 DOCKER_IMAGE ?= ghcr.io/t-rav/hydraflow-agent:latest
 
-.PHONY: help run dev dry-run clean test test-fast test-cov lint lint-check lint-fix typecheck security quality quality-lite install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test deps
+.PHONY: help run dev dry-run clean test tests test-fast test-cov lint lint-check lint-fix typecheck security quality quality-lite install setup status ui ui-dev ui-clean ensure-labels prep hot docker-build docker-test deps
 
 help:
 	@echo "$(BLUE)HydraFlow — Intent in. Software out.$(RESET)"
@@ -48,7 +48,8 @@ help:
 	@echo "  make dry-run        Dry run (log actions without executing)"
 	@echo "  make clean          Remove all worktrees and state"
 	@echo "  make status         Show current HydraFlow state"
-	@echo "  make test           Run unit tests (parallel)"
+	@echo "  make test [MIN]     Run tests with coverage floor (default 70; e.g. make test 80)"
+	@echo "  make tests [MIN]    Alias for make test [MIN]"
 	@echo "  make test-cov       Run tests with coverage report"
 	@echo "  make lint           Auto-fix linting"
 	@echo "  make lint-check     Check linting (no fix)"
@@ -130,10 +131,28 @@ $(DEPS_STAMP): pyproject.toml
 
 deps: $(DEPS_STAMP)
 
+TEST_COVERAGE := $(word 2,$(MAKECMDGOALS))
+TEST_COVERAGE_IS_NUM := $(shell printf '%s' "$(TEST_COVERAGE)" | grep -Eq '^[0-9]+$$' && echo 1 || echo 0)
+TEST_COVERAGE_DEFAULT ?= 70
+TEST_COVERAGE_EFFECTIVE := $(if $(TEST_COVERAGE),$(TEST_COVERAGE),$(TEST_COVERAGE_DEFAULT))
+
+ifneq ($(filter test tests,$(firstword $(MAKECMDGOALS))),)
+ifneq ($(TEST_COVERAGE),)
+ifneq ($(TEST_COVERAGE_IS_NUM),1)
+$(error Usage: make test [0-100] or make tests [0-100])
+endif
+.PHONY: $(TEST_COVERAGE)
+$(TEST_COVERAGE):
+	@:
+endif
+endif
+
 test: deps
 	@echo "$(BLUE)Running HydraFlow unit tests...$(RESET)"
-	@cd $(HYDRAFLOW_DIR) && PYTHONPATH=. $(UV) pytest tests/
+	@cd $(HYDRAFLOW_DIR) && PYTHONPATH=. $(UV) pytest tests/ --cov=. --cov-fail-under=$(TEST_COVERAGE_EFFECTIVE) --cov-report=term-missing --cov-report=xml:coverage.xml -p no:xdist
 	@echo "$(GREEN)All tests passed$(RESET)"
+
+tests: test
 
 test-fast: deps
 	@cd $(HYDRAFLOW_DIR) && PYTHONPATH=. $(UV) pytest tests/ -x --tb=short
