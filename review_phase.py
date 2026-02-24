@@ -365,7 +365,7 @@ class ReviewPhase:
                 re_result.verdict.value,
             )
             return result, updated_diff
-        except (AuthenticationError, CreditExhaustedError):
+        except (AuthenticationError, CreditExhaustedError, MemoryError):
             raise
         except Exception:
             logger.warning(

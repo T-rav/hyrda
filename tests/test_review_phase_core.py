@@ -2148,6 +2148,32 @@ class TestCriticalExceptionPropagation:
             )
 
     @pytest.mark.asyncio
+    async def test_memory_error_propagates_through_self_fix_re_review(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """MemoryError in _handle_self_fix_re_review should propagate."""
+        phase = make_review_phase(config)
+        issue = IssueFactory.create()
+        pr = PRInfoFactory.create()
+
+        phase._prs.get_pr_diff = AsyncMock(side_effect=MemoryError("OOM"))
+
+        original_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        with pytest.raises(MemoryError, match="OOM"):
+            await phase._handle_self_fix_re_review(
+                pr,
+                issue,
+                config.worktree_base / "issue-42",
+                original_result,
+                "diff",
+                worker_id=0,
+            )
+
+    @pytest.mark.asyncio
     async def test_review_one_cleans_active_issues_on_critical_error(
         self, config: HydraFlowConfig
     ) -> None:
