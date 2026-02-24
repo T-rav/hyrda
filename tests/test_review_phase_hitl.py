@@ -28,7 +28,7 @@ from tests.conftest import (
     PRInfoFactory,
     ReviewResultFactory,
 )
-from tests.helpers import make_review_phase
+from tests.helpers import ConfigFactory, make_review_phase
 
 
 class TestHITLEscalationEvents:
@@ -112,8 +112,6 @@ class TestHITLEscalationEvents:
         self, config: HydraFlowConfig, event_bus
     ) -> None:
         """CI failure escalation should emit HITL_ESCALATION with cause ci_failed."""
-        from tests.helpers import ConfigFactory
-
         cfg = ConfigFactory.create(
             max_ci_fix_attempts=1,
             repo_root=config.repo_root,
@@ -556,8 +554,6 @@ class TestAdversarialReview:
         self, config: HydraFlowConfig
     ) -> None:
         """min_review_findings=0 should disable adversarial re-review entirely."""
-        from tests.helpers import ConfigFactory
-
         cfg = ConfigFactory.create(
             min_review_findings=0,
             repo_root=config.repo_root,
@@ -632,8 +628,8 @@ class TestAdversarialReview:
 
         # Should call review exactly twice (initial + one re-review), then accept
         assert phase._reviewers.review.await_count == 2
-        # PR should still be merged (accepted anyway)
-        assert phase._prs.merge_pr.await_count >= 1
+        # PR should still be merged exactly once (accepted anyway)
+        assert phase._prs.merge_pr.await_count == 1
 
     @pytest.mark.asyncio
     async def test_re_review_pushes_fixes(self, config: HydraFlowConfig) -> None:

@@ -97,5 +97,4 @@ class TestBuildAgentCommand:
         cmd = build_agent_command(tool="claude", model="sonnet", max_turns=42)
 
         idx = cmd.index("--max-turns")
-        assert isinstance(cmd[idx + 1], str)
         assert cmd[idx + 1] == "42"
