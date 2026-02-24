@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from conflict_prompt import build_conflict_prompt
+from conflict_prompt import build_conflict_prompt, build_rebuild_prompt
 from tests.helpers import ConfigFactory
 
 ISSUE_URL = "https://github.com/test-org/test-repo/issues/42"
@@ -115,3 +115,60 @@ class TestBuildConflictPrompt:
         assert "## Previous Attempt Failed" in prompt
         error_section = prompt.split("## Previous Attempt Failed")[1].split("##")[0]
         assert error_section.count("Z") <= 500
+
+
+class TestBuildRebuildPrompt:
+    """Tests for build_rebuild_prompt function."""
+
+    def test_includes_issue_url(self) -> None:
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
+        assert ISSUE_URL in prompt
+
+    def test_includes_pr_url(self) -> None:
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
+        assert PR_URL in prompt
+
+    def test_includes_fresh_branch_instructions(self) -> None:
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff content")
+        assert "fresh branch" in prompt.lower()
+        assert "re-applying" in prompt.lower()
+
+    def test_includes_pr_diff(self) -> None:
+        prompt = build_rebuild_prompt(
+            ISSUE_URL, PR_URL, 42, "--- a/file.py\n+++ b/file.py"
+        )
+        assert "--- a/file.py" in prompt
+        assert "+++ b/file.py" in prompt
+
+    def test_truncates_long_diff(self) -> None:
+        long_diff = "\u00e6" * 20_000
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, long_diff)
+        # Default max_review_diff_chars is 15000
+        assert prompt.count("\u00e6") <= 15_000
+
+    def test_includes_memory_suggestion_block(self) -> None:
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff")
+        assert "MEMORY_SUGGESTION_START" in prompt
+        assert "MEMORY_SUGGESTION_END" in prompt
+
+    def test_project_context_with_config(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path / "repo")
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text("## Project Manifest\npython, make, pytest")
+
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff", config=config)
+        assert "## Project Context" in prompt
+        assert "python, make, pytest" in prompt
+
+    def test_accumulated_learnings_with_config(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path / "repo")
+        config.repo_root.mkdir(parents=True, exist_ok=True)
+        digest_path = config.repo_root / ".hydraflow" / "memory" / "digest.md"
+        digest_path.parent.mkdir(parents=True, exist_ok=True)
+        digest_path.write_text("## Memory Digest\nAlways check edge cases")
+
+        prompt = build_rebuild_prompt(ISSUE_URL, PR_URL, 42, "diff", config=config)
+        assert "## Accumulated Learnings" in prompt
+        assert "Always check edge cases" in prompt
