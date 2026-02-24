@@ -933,6 +933,7 @@ class TestGetDockerRunner:
         ):
             runner = get_docker_runner(config)
         assert isinstance(runner, DockerRunner)
+        assert isinstance(runner, SubprocessRunner)
 
     def test_logs_warning_when_no_image(self, caplog: pytest.LogCaptureFixture) -> None:
         from tests.helpers import ConfigFactory

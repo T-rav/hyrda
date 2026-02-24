@@ -19,6 +19,7 @@ from harness_insights import FailureCategory, HarnessInsightStore
 from issue_store import IssueStore
 from merge_conflict_resolver import MergeConflictResolver
 from models import (
+    ConflictResolutionResult,
     GitHubIssue,
     JudgeResult,
     PRInfo,
@@ -72,6 +73,7 @@ class ReviewPhase:
         transcript_summarizer: TranscriptSummarizer | None = None,
         epic_checker: EpicCompletionChecker | None = None,
         harness_insights: HarnessInsightStore | None = None,
+        conflict_resolver: MergeConflictResolver | None = None,
     ) -> None:
         self._config = config
         self._state = state
@@ -91,7 +93,7 @@ class ReviewPhase:
         self._insights = ReviewInsightStore(config.memory_dir)
         self._active_issues: set[int] = set()
         self._active_issues_lock = asyncio.Lock()
-        self._conflict_resolver = MergeConflictResolver(
+        self._conflict_resolver = conflict_resolver or MergeConflictResolver(
             config=config,
             worktrees=worktrees,
             agents=agents,
@@ -781,7 +783,7 @@ class ReviewPhase:
     @property
     def _resolve_merge_conflicts(
         self,
-    ) -> Callable[..., Coroutine[Any, Any, tuple[bool, bool]]]:
+    ) -> Callable[..., Coroutine[Any, Any, ConflictResolutionResult]]:
         """Backward-compatible access to conflict resolver."""
         return self._conflict_resolver.resolve_merge_conflicts
 
@@ -803,7 +805,7 @@ class ReviewPhase:
     @property
     def _save_conflict_transcript(self) -> Callable[..., None]:
         """Backward-compatible access to conflict transcript saving."""
-        return self._conflict_resolver._save_conflict_transcript
+        return self._conflict_resolver.save_conflict_transcript
 
     @property
     def _maybe_summarize_conflict(self) -> Callable[..., Coroutine[Any, Any, None]]:
