@@ -443,7 +443,7 @@ class TestRetrospectiveIntegration:
     ) -> None:
         """When no retrospective is set, merge should work normally."""
         phase = make_review_phase(config)
-        # phase._retrospective is None by default
+        # phase._post_merge._retrospective is None by default
 
         issue = IssueFactory.create()
         pr = PRInfoFactory.create()

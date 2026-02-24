@@ -2311,6 +2311,22 @@ class TestRecordReviewOutcome:
             await phase._record_review_outcome(pr, result)
             mock_record.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_skips_duration_recording_when_zero(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """Should not record duration when duration_seconds is 0."""
+        from unittest.mock import patch
+
+        phase = make_review_phase(config)
+        pr = PRInfoFactory.create()
+        result = ReviewResultFactory.create(duration_seconds=0.0)
+        phase._prs.get_pr_head_sha = AsyncMock(return_value="sha")
+
+        with patch.object(phase._state, "record_review_duration") as mock_duration:
+            await phase._record_review_outcome(pr, result)
+            mock_duration.assert_not_called()
+
 
 class TestCleanupWorktree:
     """Tests for the _cleanup_worktree extracted helper."""
@@ -2380,9 +2396,15 @@ class TestConstructorDefaultHelpers:
         assert isinstance(phase._conflict_resolver, MergeConflictResolver)
 
     def test_builds_default_post_merge_handler(self, config: HydraFlowConfig) -> None:
-        """ReviewPhase should build a PostMergeHandler when not provided."""
+        """ReviewPhase should build a PostMergeHandler with all optional deps None."""
         from post_merge_handler import PostMergeHandler
 
         phase = make_review_phase(config)
 
         assert isinstance(phase._post_merge, PostMergeHandler)
+        # Verify all optional post-merge dependencies default to None, not to
+        # values carried over from removed ReviewPhase constructor parameters.
+        assert phase._post_merge._ac_generator is None
+        assert phase._post_merge._retrospective is None
+        assert phase._post_merge._verification_judge is None
+        assert phase._post_merge._epic_checker is None
