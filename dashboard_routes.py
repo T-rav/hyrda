@@ -862,33 +862,35 @@ def create_router(
         error_payload: tuple[str, int] | None = None
         if supervisor_client is None:
             error_payload = ("supervisor unavailable", 503)
-        elif not req.slug:
-            error_payload = ("slug required", 400)
         else:
-            try:
-                repos = await _call_supervisor(supervisor_client.list_repos)
-            except Exception as exc:  # noqa: BLE001
-                error_payload = (str(exc), 503)
+            slug = (req.slug or "").strip()
+            if not slug:
+                error_payload = ("slug required", 400)
             else:
-                match = next((r for r in repos if r.get("slug") == req.slug), None)
-                if not match:
-                    error_payload = (f"slug '{req.slug}' not registered", 404)
+                try:
+                    repos = await _call_supervisor(supervisor_client.list_repos)
+                except Exception as exc:  # noqa: BLE001
+                    error_payload = (str(exc), 503)
                 else:
-                    path = match.get("path")
-                    if not path:
-                        error_payload = (f"slug '{req.slug}' missing path", 500)
+                    match = next((r for r in repos if r.get("slug") == slug), None)
+                    if not match:
+                        error_payload = (f"slug '{slug}' not registered", 404)
                     else:
-                        try:
-                            info = await _call_supervisor(
-                                supervisor_client.add_repo,
-                                Path(path).expanduser(),
-                                req.slug,
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            logger.warning("Supervisor add_repo failed: %s", exc)
-                            error_payload = (str(exc), 500)
+                        path = match.get("path")
+                        if not path:
+                            error_payload = (f"slug '{slug}' missing path", 500)
                         else:
-                            return JSONResponse(info)
+                            try:
+                                info = await _call_supervisor(
+                                    supervisor_client.add_repo,
+                                    Path(path),
+                                    slug,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                logger.warning("Supervisor add_repo failed: %s", exc)
+                                error_payload = (str(exc), 500)
+                            else:
+                                return JSONResponse(info)
 
         if error_payload:
             message, status_code = error_payload
