@@ -65,14 +65,14 @@ class IssueStore:
         self._bus = event_bus
 
         # Per-stage queues (FIFO)
-        self._queues: dict[str, deque[GitHubIssue]] = {
+        self._queues: dict[IssueStoreStage, deque[GitHubIssue]] = {
             STAGE_FIND: deque(),
             STAGE_PLAN: deque(),
             STAGE_READY: deque(),
             STAGE_REVIEW: deque(),
         }
         # Companion sets for O(1) membership checks (issue numbers in each queue)
-        self._queue_members: dict[str, set[int]] = {
+        self._queue_members: dict[IssueStoreStage, set[int]] = {
             STAGE_FIND: set(),
             STAGE_PLAN: set(),
             STAGE_READY: set(),
@@ -236,14 +236,14 @@ class IssueStore:
             m[lbl] = STAGE_HITL
         return m
 
-    def _find_queue_stage(self, issue_number: int) -> str | None:
+    def _find_queue_stage(self, issue_number: int) -> IssueStoreStage | None:
         """Return the stage name if the issue is in any queue, else None."""
         for stage, members in self._queue_members.items():
             if issue_number in members:
                 return stage
         return None
 
-    def _remove_from_queue(self, stage: str, issue_number: int) -> None:
+    def _remove_from_queue(self, stage: IssueStoreStage, issue_number: int) -> None:
         """Remove an issue from a specific queue."""
         if issue_number in self._queue_members[stage]:
             self._queues[stage] = deque(
@@ -280,7 +280,9 @@ class IssueStore:
         """Return the set of HITL issue numbers."""
         return set(self._hitl_numbers)
 
-    def _take_from_queue(self, stage: str, max_count: int) -> list[GitHubIssue]:
+    def _take_from_queue(
+        self, stage: IssueStoreStage, max_count: int
+    ) -> list[GitHubIssue]:
         """Pop up to *max_count* issues from *stage* queue, skipping active.
 
         Safety note: This method is synchronous with no ``await`` points, so

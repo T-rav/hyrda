@@ -593,7 +593,9 @@ def create_router(
                     BackgroundWorkerStatus(
                         name=name,
                         label=label,
-                        status=BGWorkerHealth(entry["status"]),
+                        status=BGWorkerHealth(
+                            entry.get("status", BGWorkerHealth.DISABLED)
+                        ),
                         enabled=enabled,
                         last_run=last_run,
                         interval_seconds=interval,
