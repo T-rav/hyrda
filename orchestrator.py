@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from memory import file_memory_suggestion
-from models import BackgroundWorkerState, Phase, SessionLog
+from models import BackgroundWorkerState, GitHubIssue, Phase, SessionLog
 from service_registry import OrchestratorCallbacks, build_services
 from state import StateTracker
 from subprocess_util import AuthenticationError, CreditExhaustedError
@@ -734,12 +734,15 @@ class HydraFlowOrchestrator:
         if not review_issues:
             return
         active_in_store = set(self._store.get_active_issues().keys())
-        prs, issues = await self._fetcher.fetch_reviewable_prs(
-            active_in_store, prefetched_issues=review_issues
+        gh_review_issues = [GitHubIssue.from_task(t) for t in review_issues]
+        prs, gh_issues = await self._fetcher.fetch_reviewable_prs(
+            active_in_store, prefetched_issues=gh_review_issues
         )
         if not prs:
             return
-        review_results = await self._reviewer.review_prs(prs, issues)
+        review_results = await self._reviewer.review_prs(
+            prs, [i.to_task() for i in gh_issues]
+        )
         for result in review_results:
             if result.transcript:
                 if result.merged:

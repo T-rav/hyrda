@@ -180,7 +180,7 @@ class TestQueueAccessors:
 
         result = store.get_triageable(10)
         assert len(result) == 1
-        assert result[0].number == 1
+        assert result[0].id == 1
 
     def test_get_plannable_returns_plan_queue_issues(self) -> None:
         store = _make_store()
@@ -188,7 +188,7 @@ class TestQueueAccessors:
 
         result = store.get_plannable(10)
         assert len(result) == 1
-        assert result[0].number == 2
+        assert result[0].id == 2
 
     def test_get_implementable_returns_ready_queue_issues(self) -> None:
         store = _make_store()
@@ -196,7 +196,7 @@ class TestQueueAccessors:
 
         result = store.get_implementable(10)
         assert len(result) == 1
-        assert result[0].number == 3
+        assert result[0].id == 3
 
     def test_get_reviewable_returns_review_queue_issues(self) -> None:
         store = _make_store()
@@ -206,7 +206,7 @@ class TestQueueAccessors:
 
         result = store.get_reviewable(10)
         assert len(result) == 1
-        assert result[0].number == 4
+        assert result[0].id == 4
 
     def test_get_implementable_excludes_active_issues(self) -> None:
         store = _make_store()
@@ -220,7 +220,7 @@ class TestQueueAccessors:
 
         result = store.get_implementable(10)
         assert len(result) == 1
-        assert result[0].number == 11
+        assert result[0].id == 11
 
     def test_get_implementable_respects_limit(self) -> None:
         store = _make_store()
@@ -269,7 +269,7 @@ class TestQueueAccessors:
         )
 
         result = store.get_triageable(10)
-        assert [i.number for i in result] == [1, 2, 3]
+        assert [i.id for i in result] == [1, 2, 3]
 
 
 # ── Active Tracking ──────────────────────────────────────────────────

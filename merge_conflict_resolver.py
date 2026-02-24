@@ -11,7 +11,7 @@ from agent import AgentRunner
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from memory import file_memory_suggestion
-from models import GitHubIssue, PRInfo, WorkerStatus
+from models import PRInfo, Task, WorkerStatus
 from pr_manager import PRManager
 from state import StateTracker
 from transcript_summarizer import TranscriptSummarizer
@@ -44,7 +44,7 @@ class MergeConflictResolver:
     async def merge_with_main(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         worker_id: int,
         escalate_fn: Callable[..., Coroutine[Any, Any, None]],
@@ -93,7 +93,7 @@ class MergeConflictResolver:
     async def resolve_merge_conflicts(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         worker_id: int,
     ) -> bool:
@@ -138,19 +138,17 @@ class MergeConflictResolver:
 
             try:
                 prompt = build_conflict_prompt(
-                    issue.url, pr.url, last_error, attempt, config=self._config
+                    issue.source_url, pr.url, last_error, attempt, config=self._config
                 )
                 cmd = self._agents._build_command(wt_path)
                 transcript = await self._agents._execute(
                     cmd,
                     prompt,
                     wt_path,
-                    {"issue": issue.number, "source": "merge_conflict"},
+                    {"issue": issue.id, "source": "merge_conflict"},
                 )
 
-                self._save_conflict_transcript(
-                    pr.number, issue.number, attempt, transcript
-                )
+                self._save_conflict_transcript(pr.number, issue.id, attempt, transcript)
 
                 try:
                     await file_memory_suggestion(
@@ -172,7 +170,7 @@ class MergeConflictResolver:
                 )
                 if success:
                     await self._maybe_summarize_conflict(
-                        transcript, issue.number, pr.number
+                        transcript, issue.id, pr.number
                     )
                     return True
 
@@ -187,7 +185,7 @@ class MergeConflictResolver:
                 # Summarize final failed attempt
                 if attempt == max_attempts:
                     await self._maybe_summarize_conflict(
-                        transcript, issue.number, pr.number
+                        transcript, issue.id, pr.number
                     )
             except Exception as exc:
                 logger.error(

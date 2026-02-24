@@ -8,6 +8,25 @@ from typing import Any, NotRequired
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 from typing_extensions import TypedDict
 
+# --- Task (source-agnostic task abstraction) ---
+
+
+class Task(BaseModel):
+    """Source-agnostic task representation.
+
+    Maps to a GitHub issue or any other task backend.
+    """
+
+    id: int
+    title: str
+    body: str = ""
+    tags: list[str] = Field(default_factory=list)
+    comments: list[str] = Field(default_factory=list)
+    source_url: str = ""
+    created_at: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 # --- GitHub ---
 
 
@@ -40,6 +59,31 @@ class GitHubIssue(BaseModel):
         if isinstance(v, list):
             return [c.get("body", "") if isinstance(c, dict) else str(c) for c in v]
         return v  # type: ignore[return-value]
+
+    def to_task(self) -> Task:
+        """Convert to a source-agnostic :class:`Task`."""
+        return Task(
+            id=self.number,
+            title=self.title,
+            body=self.body,
+            tags=list(self.labels),
+            comments=list(self.comments),
+            source_url=self.url,
+            created_at=self.created_at,
+        )
+
+    @classmethod
+    def from_task(cls, task: Task) -> GitHubIssue:
+        """Reconstruct a :class:`GitHubIssue` from a :class:`Task`."""
+        return cls(
+            number=task.id,
+            title=task.title,
+            body=task.body,
+            labels=list(task.tags),
+            comments=list(task.comments),
+            url=task.source_url,
+            created_at=task.created_at,
+        )
 
 
 # --- Triage ---
@@ -358,7 +402,7 @@ class BatchResult(BaseModel):
     """Summary of a full batch cycle."""
 
     batch_number: int
-    issues: list[GitHubIssue] = Field(default_factory=list)
+    issues: list[Task] = Field(default_factory=list)
     plan_results: list[PlanResult] = Field(default_factory=list)
     worker_results: list[WorkerResult] = Field(default_factory=list)
     pr_infos: list[PRInfo] = Field(default_factory=list)

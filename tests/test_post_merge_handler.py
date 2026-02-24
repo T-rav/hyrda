@@ -23,7 +23,7 @@ from models import (
 )
 from post_merge_handler import PostMergeHandler
 from state import StateTracker
-from tests.conftest import IssueFactory, PRInfoFactory, ReviewResultFactory
+from tests.conftest import PRInfoFactory, ReviewResultFactory, TaskFactory
 
 
 def _make_handler(
@@ -58,7 +58,7 @@ class TestPostMergeHandler:
         """On successful merge, should mark issue and swap labels."""
         handler = _make_handler(config)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         result = ReviewResultFactory.create()
 
         handler._prs.merge_pr = AsyncMock(return_value=True)
@@ -87,7 +87,7 @@ class TestPostMergeHandler:
         """When merge fails, should escalate to HITL."""
         handler = _make_handler(config)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         result = ReviewResultFactory.create()
 
         handler._prs.merge_pr = AsyncMock(return_value=False)
@@ -112,7 +112,7 @@ class TestPostMergeHandler:
     async def test_get_judge_result_none(self, config: HydraFlowConfig) -> None:
         """When verdict is None, should return None."""
         handler = _make_handler(config)
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         pr = PRInfoFactory.create()
 
         result = handler._get_judge_result(issue, pr, None)
@@ -124,7 +124,7 @@ class TestPostMergeHandler:
     ) -> None:
         """Should convert JudgeVerdict into JudgeResult."""
         handler = _make_handler(config)
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         pr = PRInfoFactory.create()
         verdict = JudgeVerdict(
             issue_number=42,
@@ -154,7 +154,7 @@ class TestPostMergeHandler:
         mock_retro = AsyncMock()
         handler = _make_handler(config, retrospective=mock_retro)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         result = ReviewResultFactory.create()
 
         handler._prs.merge_pr = AsyncMock(return_value=True)
@@ -185,7 +185,7 @@ class TestPostMergeHandler:
         mock_retro = AsyncMock()
         handler = _make_handler(config, ac_generator=mock_ac, retrospective=mock_retro)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
         result = ReviewResultFactory.create()
 
         handler._prs.merge_pr = AsyncMock(return_value=True)

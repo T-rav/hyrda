@@ -193,6 +193,12 @@ class HydraFlowConfig(BaseModel):
         description="Max retry attempts for gh CLI calls",
     )
 
+    # Task source
+    task_source_type: Literal["github"] = Field(
+        default="github",
+        description="Task source backend. Only 'github' supported today.",
+    )
+
     # Label lifecycle
     review_label: list[str] = Field(
         default=["hydraflow-review"],

@@ -17,10 +17,10 @@ from harness_insights import FailureCategory, FailureRecord, HarnessInsightStore
 from issue_store import IssueStore
 from merge_conflict_resolver import MergeConflictResolver
 from models import (
-    GitHubIssue,
     PRInfo,
     ReviewResult,
     ReviewVerdict,
+    Task,
 )
 from post_merge_handler import PostMergeHandler
 from pr_manager import PRManager, SelfReviewError
@@ -103,13 +103,13 @@ class ReviewPhase:
     async def review_prs(
         self,
         prs: list[PRInfo],
-        issues: list[GitHubIssue],
+        issues: list[Task],
     ) -> list[ReviewResult]:
         """Run reviewer agents on non-draft PRs, merging approved ones inline."""
         if not prs:
             return []
 
-        issue_map = {i.number: i for i in issues}
+        issue_map = {i.id: i for i in issues}
         semaphore = asyncio.Semaphore(self._config.max_reviewers)
         results: list[ReviewResult] = []
 
@@ -170,25 +170,24 @@ class ReviewPhase:
         self,
         idx: int,
         pr: PRInfo,
-        issue_map: dict[int, GitHubIssue],
+        issue_map: dict[int, Task],
     ) -> ReviewResult:
         """Core review logic for a single PR — called inside the semaphore."""
         await self._publish_review_status(pr, idx, "start")
 
-        issue = issue_map.get(pr.issue_number)
-        if issue is None:
+        task = issue_map.get(pr.issue_number)
+        if task is None:
             return ReviewResult(
                 pr_number=pr.number,
                 issue_number=pr.issue_number,
                 summary="Issue not found",
             )
-
         wt_path = self._config.worktree_base / f"issue-{pr.issue_number}"
         if not wt_path.exists():
             wt_path = await self._worktrees.create(pr.issue_number, pr.branch)
 
         # Merge main and push — returns False on unresolvable conflicts
-        merged = await self._merge_with_main(pr, issue, wt_path, idx)
+        merged = await self._merge_with_main(pr, task, wt_path, idx)
         if not merged:
             return ReviewResult(
                 pr_number=pr.number,
@@ -201,7 +200,7 @@ class ReviewPhase:
         # Delta verification: compare planned vs actual files
         await self._run_delta_verification(pr, diff)
 
-        result = await self._run_and_post_review(pr, issue, wt_path, diff, idx)
+        result = await self._run_and_post_review(pr, task, wt_path, diff, idx)
 
         # If reviewer fixed its own findings, re-review the updated code
         if result.fixes_made and result.verdict in (
@@ -209,7 +208,7 @@ class ReviewPhase:
             ReviewVerdict.COMMENT,
         ):
             result, diff = await self._handle_self_fix_re_review(
-                pr, issue, wt_path, result, diff, idx
+                pr, task, wt_path, result, diff, idx
             )
 
         self._state.mark_pr(pr.number, result.verdict.value)
@@ -229,7 +228,7 @@ class ReviewPhase:
         # Verdict-specific handling
         skip_worktree_cleanup = False
         if result.verdict == ReviewVerdict.APPROVE and pr.number > 0:
-            await self._handle_approved_merge(pr, issue, result, diff, idx)
+            await self._handle_approved_merge(pr, task, result, diff, idx)
         elif result.verdict in (
             ReviewVerdict.REQUEST_CHANGES,
             ReviewVerdict.COMMENT,
@@ -257,7 +256,7 @@ class ReviewPhase:
     async def _merge_with_main(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         worker_id: int,
     ) -> bool:
@@ -277,7 +276,7 @@ class ReviewPhase:
     async def _run_and_post_review(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         diff: str,
         worker_id: int,
@@ -314,7 +313,7 @@ class ReviewPhase:
     async def _handle_self_fix_re_review(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         result: ReviewResult,
         diff: str,
@@ -400,7 +399,7 @@ class ReviewPhase:
     async def _handle_approved_merge(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         result: ReviewResult,
         diff: str,
         worker_id: int,
@@ -420,7 +419,7 @@ class ReviewPhase:
     async def wait_and_fix_ci(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         result: ReviewResult,
         worker_id: int,
@@ -475,7 +474,7 @@ class ReviewPhase:
         result.ci_passed = False
         self._state.record_ci_fix_rounds(result.ci_fix_attempts)
         self._record_harness_failure(
-            issue.number,
+            issue.id,
             FailureCategory.CI_FAILURE,
             f"CI failed after {result.ci_fix_attempts} fix attempt(s): {summary[:200]}",
             pr_number=pr.number,
@@ -483,7 +482,7 @@ class ReviewPhase:
         await self._publish_review_status(pr, worker_id, "escalating")
         cause = f"CI failed after {result.ci_fix_attempts} fix attempt(s)"
         await self._escalate_to_hitl(
-            issue.number,
+            issue.id,
             pr.number,
             cause=cause,
             origin_label=self._config.review_label[0],
@@ -618,7 +617,7 @@ class ReviewPhase:
     async def _check_adversarial_threshold(
         self,
         pr: PRInfo,
-        issue: GitHubIssue,
+        issue: Task,
         wt_path: Path,
         diff: str,
         result: ReviewResult,

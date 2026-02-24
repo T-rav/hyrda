@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 from events import EventBus
 from issue_store import IssueStore
 from state import StateTracker
-from tests.conftest import IssueFactory
+from tests.conftest import TaskFactory
 from triage_phase import TriagePhase
 
 if TYPE_CHECKING:
@@ -64,9 +64,7 @@ class TestTriagePhase:
         from models import TriageResult
 
         phase, _state, triage, prs, store, _stop = _make_phase(config)
-        issue = IssueFactory.create(
-            number=1, title="Implement feature X", body="A" * 100
-        )
+        issue = TaskFactory.create(id=1, title="Implement feature X", body="A" * 100)
 
         triage.evaluate = AsyncMock(
             return_value=TriageResult(issue_number=1, ready=True)
@@ -86,7 +84,7 @@ class TestTriagePhase:
         from models import TriageResult
 
         phase, _state, triage, prs, store, _stop = _make_phase(config)
-        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
+        issue = TaskFactory.create(id=2, title="Fix the bug please", body="")
 
         triage.evaluate = AsyncMock(
             return_value=TriageResult(
@@ -113,7 +111,7 @@ class TestTriagePhase:
         from models import TriageResult
 
         phase, state, triage, _prs, store, _stop = _make_phase(config)
-        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
+        issue = TaskFactory.create(id=2, title="Fix the bug please", body="")
 
         triage.evaluate = AsyncMock(
             return_value=TriageResult(
@@ -136,7 +134,7 @@ class TestTriagePhase:
         from models import TriageResult
 
         phase, state, triage, _prs, store, _stop = _make_phase(config)
-        issue = IssueFactory.create(number=2, title="Fix the bug please", body="")
+        issue = TaskFactory.create(id=2, title="Fix the bug please", body="")
 
         triage.evaluate = AsyncMock(
             return_value=TriageResult(
@@ -170,12 +168,8 @@ class TestTriagePhase:
 
         phase, _state, triage, prs, store, _stop = _make_phase(config)
         issues = [
-            IssueFactory.create(
-                number=1, title="Issue one long enough", body="A" * 100
-            ),
-            IssueFactory.create(
-                number=2, title="Issue two long enough", body="B" * 100
-            ),
+            TaskFactory.create(id=1, title="Issue one long enough", body="A" * 100),
+            TaskFactory.create(id=2, title="Issue two long enough", body="B" * 100),
         ]
 
         call_count = 0
@@ -214,7 +208,7 @@ class TestTriagePhase:
         from models import TriageResult
 
         phase, _state, triage, prs, store, _stop = _make_phase(config)
-        issue = IssueFactory.create(number=1, title="Triage test", body="A" * 100)
+        issue = TaskFactory.create(id=1, title="Triage test", body="A" * 100)
 
         was_active_during_evaluate = False
 

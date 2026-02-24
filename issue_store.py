@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from issue_fetcher import IssueFetcher
-from models import GitHubIssue, QueueStats
+from models import GitHubIssue, QueueStats, Task
 from subprocess_util import AuthenticationError
 
 logger = logging.getLogger("hydraflow.issue_store")
@@ -248,19 +248,19 @@ class IssueStore:
     # Queue accessors (non-blocking, return available issues)
     # ------------------------------------------------------------------
 
-    def get_triageable(self, max_count: int) -> list[GitHubIssue]:
+    def get_triageable(self, max_count: int) -> list[Task]:
         """Return up to *max_count* issues from the find queue."""
         return self._take_from_queue(STAGE_FIND, max_count)
 
-    def get_plannable(self, max_count: int) -> list[GitHubIssue]:
+    def get_plannable(self, max_count: int) -> list[Task]:
         """Return up to *max_count* issues from the plan queue."""
         return self._take_from_queue(STAGE_PLAN, max_count)
 
-    def get_implementable(self, max_count: int) -> list[GitHubIssue]:
+    def get_implementable(self, max_count: int) -> list[Task]:
         """Return up to *max_count* issues from the ready queue."""
         return self._take_from_queue(STAGE_READY, max_count)
 
-    def get_reviewable(self, max_count: int) -> list[GitHubIssue]:
+    def get_reviewable(self, max_count: int) -> list[Task]:
         """Return up to *max_count* issues from the review queue."""
         return self._take_from_queue(STAGE_REVIEW, max_count)
 
@@ -268,9 +268,9 @@ class IssueStore:
         """Return the set of HITL issue numbers."""
         return set(self._hitl_numbers)
 
-    def _take_from_queue(self, stage: str, max_count: int) -> list[GitHubIssue]:
+    def _take_from_queue(self, stage: str, max_count: int) -> list[Task]:
         """Pop up to *max_count* issues from *stage* queue, skipping active."""
-        result: list[GitHubIssue] = []
+        result: list[Task] = []
         skipped: list[GitHubIssue] = []
         q = self._queues[stage]
 
@@ -280,7 +280,7 @@ class IssueStore:
             if issue.number in self._active:
                 skipped.append(issue)
             else:
-                result.append(issue)
+                result.append(issue.to_task())
 
         # Put skipped issues back at the front
         for issue in reversed(skipped):
@@ -293,19 +293,19 @@ class IssueStore:
     # Active issue tracking
     # ------------------------------------------------------------------
 
-    def mark_active(self, issue_number: int, stage: str) -> None:
-        """Mark an issue as actively being processed in *stage*."""
-        self._active[issue_number] = stage
+    def mark_active(self, task_id: int, stage: str) -> None:
+        """Mark a task as actively being processed in *stage*."""
+        self._active[task_id] = stage
 
-    def mark_complete(self, issue_number: int) -> None:
-        """Mark an issue as done processing; increment throughput counter."""
-        stage = self._active.pop(issue_number, None)
+    def mark_complete(self, task_id: int) -> None:
+        """Mark a task as done processing; increment throughput counter."""
+        stage = self._active.pop(task_id, None)
         if stage and stage in self._processed_count:
             self._processed_count[stage] += 1
 
-    def is_active(self, issue_number: int) -> bool:
-        """Return True if the issue is currently being processed."""
-        return issue_number in self._active
+    def is_active(self, task_id: int) -> bool:
+        """Return True if the task is currently being processed."""
+        return task_id in self._active
 
     def get_active_issues(self) -> dict[int, str]:
         """Return a copy of the active issue tracking dict."""

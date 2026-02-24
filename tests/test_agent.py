@@ -15,7 +15,7 @@ import pytest
 from agent import AgentRunner
 from base_runner import BaseRunner
 from events import EventBus, EventType
-from models import WorkerStatus
+from models import Task, WorkerStatus
 from tests.helpers import ConfigFactory, make_streaming_proc
 
 # ---------------------------------------------------------------------------
@@ -50,6 +50,23 @@ def _make_proc(
     proc.returncode = returncode
     proc.communicate = AsyncMock(return_value=(stdout, stderr))
     return proc
+
+
+# ---------------------------------------------------------------------------
+# issue fixture override — returns Task instead of GitHubIssue
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def issue() -> Task:
+    return Task(
+        id=42,
+        title="Fix the frobnicator",
+        body="The frobnicator is broken. Please fix it.",
+        tags=["ready"],
+        comments=[],
+        source_url="https://github.com/test-org/test-repo/issues/42",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +187,7 @@ class TestBuildPrompt:
         """Prompt should reference the issue number."""
         runner = AgentRunner(config, event_bus)
         prompt = runner._build_prompt(issue)
-        assert str(issue.number) in prompt
+        assert str(issue.id) in prompt
 
     def test_prompt_includes_title(self, config, event_bus: EventBus, issue) -> None:
         """Prompt should include the issue title."""
@@ -210,10 +227,8 @@ class TestBuildPrompt:
         self, config, event_bus: EventBus
     ) -> None:
         """Prompt should include a Discussion section when the issue has comments."""
-        from models import GitHubIssue
-
-        issue_with_comments = GitHubIssue(
-            number=10,
+        issue_with_comments = Task(
+            id=10,
             title="Add feature X",
             body="We need feature X",
             comments=["Please also handle edge case Y", "What about Z?"],
@@ -239,10 +254,8 @@ class TestBuildPrompt:
     ) -> None:
         """When a comment contains '## Implementation Plan', it should be rendered
         as a dedicated plan section with follow-this-plan instruction."""
-        from models import GitHubIssue
-
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Add feature X",
             body="We need feature X",
             comments=[
@@ -267,10 +280,8 @@ class TestBuildPrompt:
         self, config, event_bus: EventBus
     ) -> None:
         """The plan comment should NOT appear in the Discussion section."""
-        from models import GitHubIssue
-
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Add feature X",
             body="We need feature X",
             comments=[
@@ -373,10 +384,8 @@ class TestBuildPrompt:
         self, config, event_bus: EventBus
     ) -> None:
         """Review feedback should appear after the plan section."""
-        from models import GitHubIssue
-
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Add feature X",
             body="We need feature X",
             comments=[
@@ -430,7 +439,7 @@ class TestRunSuccess:
             result = await runner.run(issue, tmp_path, "agent/issue-42")
 
         assert result.success is True
-        assert result.issue_number == issue.number
+        assert result.issue_number == issue.id
         assert result.branch == "agent/issue-42"
         assert result.commits == 2
         assert result.transcript == "transcript"
@@ -964,7 +973,7 @@ class TestBuildQualityFixPrompt:
         """Fix prompt should reference the issue number."""
         runner = AgentRunner(config, event_bus)
         prompt = runner._build_quality_fix_prompt(issue, "error", 1)
-        assert str(issue.number) in prompt
+        assert str(issue.id) in prompt
 
     def test_prompt_instructs_make_quality(
         self, config, event_bus: EventBus, issue
@@ -1270,7 +1279,7 @@ class TestRunSaveTranscriptOSError:
             result = await runner.run(issue, tmp_path, "agent/issue-42")
 
         assert result.success is True
-        assert result.issue_number == issue.number
+        assert result.issue_number == issue.id
         assert result.branch == "agent/issue-42"
         assert result.commits == 2
         assert "Failed to save transcript" in caplog.text
@@ -1468,7 +1477,7 @@ class TestEventPublishing:
 
         worker_updates = [e for e in events if e.type == EventType.WORKER_UPDATE]
         for event in worker_updates:
-            assert event.data.get("issue") == issue.number
+            assert event.data.get("issue") == issue.id
             assert event.data.get("worker") == 3
 
     @pytest.mark.asyncio
@@ -1598,7 +1607,7 @@ class TestExecuteStreaming:
 
         with patch("asyncio.create_subprocess_exec", mock_create):
             transcript = await runner._execute(
-                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.number}
+                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.id}
             )
 
         assert transcript == output
@@ -1614,7 +1623,7 @@ class TestExecuteStreaming:
 
         with patch("asyncio.create_subprocess_exec", mock_create):
             await runner._execute(
-                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.number}
+                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.id}
             )
 
         events = event_bus.get_history()
@@ -1625,7 +1634,7 @@ class TestExecuteStreaming:
         assert "Line two" in lines
         assert "Line three" in lines
         for ev in transcript_events:
-            assert ev.data["issue"] == issue.number
+            assert ev.data["issue"] == issue.id
 
     @pytest.mark.asyncio
     async def test_execute_skips_empty_lines_for_events(
@@ -1638,7 +1647,7 @@ class TestExecuteStreaming:
 
         with patch("asyncio.create_subprocess_exec", mock_create):
             await runner._execute(
-                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.number}
+                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.id}
             )
 
         events = event_bus.get_history()
@@ -1661,7 +1670,7 @@ class TestExecuteStreaming:
             patch.object(runner, "_log", mock_logger),
         ):
             await runner._execute(
-                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.number}
+                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.id}
             )
 
         mock_logger.warning.assert_called_once()
@@ -1676,7 +1685,7 @@ class TestExecuteStreaming:
 
         with patch("asyncio.create_subprocess_exec", mock_create) as mock_exec:
             await runner._execute(
-                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.number}
+                ["claude", "-p"], "prompt", tmp_path, {"issue": issue.id}
             )
 
         kwargs = mock_exec.call_args[1]
@@ -1831,16 +1840,14 @@ class TestBuildPromptFallbackAndTruncation:
 
     def test_falls_back_to_plan_file(self, config, event_bus: EventBus) -> None:
         """When no plan comment exists, should fall back to .hydraflow/plans/."""
-        from models import GitHubIssue
-
         plan_dir = config.repo_root / ".hydraflow" / "plans"
         plan_dir.mkdir(parents=True, exist_ok=True)
         (plan_dir / "issue-10.md").write_text(
             "# Plan for Issue #10\n\nStep 1: saved plan\n"
         )
 
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Feature X",
             body="Body text",
             comments=[],
@@ -1852,11 +1859,9 @@ class TestBuildPromptFallbackAndTruncation:
 
     def test_logs_error_when_no_plan_found(self, config, event_bus: EventBus) -> None:
         """Should log error when neither comment nor file has a plan."""
-        from models import GitHubIssue
-
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Feature X",
             body="Body text",
             comments=[],
@@ -1871,12 +1876,10 @@ class TestBuildPromptFallbackAndTruncation:
 
     def test_truncates_long_body(self, config, event_bus: EventBus) -> None:
         """Body exceeding max_issue_body_chars should be truncated with a note."""
-        from models import GitHubIssue
-
         config.repo_root.mkdir(parents=True, exist_ok=True)
         long_body = "x" * 15_000
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Feature X",
             body=long_body,
             comments=[],
@@ -1889,12 +1892,10 @@ class TestBuildPromptFallbackAndTruncation:
 
     def test_preserves_short_body(self, config, event_bus: EventBus) -> None:
         """Body under max_issue_body_chars should pass through unchanged."""
-        from models import GitHubIssue
-
         config.repo_root.mkdir(parents=True, exist_ok=True)
         short_body = "This is a short body."
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Feature X",
             body=short_body,
             comments=[],
@@ -1908,8 +1909,6 @@ class TestBuildPromptFallbackAndTruncation:
         self, event_bus: EventBus, tmp_path: Path
     ) -> None:
         """Prompt should use test_command from config."""
-        from models import GitHubIssue
-
         cfg = ConfigFactory.create(
             test_command="npm test",
             repo_root=tmp_path / "repo",
@@ -1917,8 +1916,8 @@ class TestBuildPromptFallbackAndTruncation:
             state_file=tmp_path / "s.json",
         )
         (tmp_path / "repo").mkdir(parents=True, exist_ok=True)
-        issue = GitHubIssue(
-            number=10,
+        issue = Task(
+            id=10,
             title="Feature X",
             body="Body text",
             comments=[],

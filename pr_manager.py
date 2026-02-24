@@ -962,3 +962,23 @@ class PRManager:
             )
         finally:
             Path(tmp_path).unlink(missing_ok=True)
+
+    # ------------------------------------------------------------------
+    # TaskTransitioner protocol implementation
+    # ------------------------------------------------------------------
+
+    async def transition(
+        self, task_id: int, new_stage: str, *, pr_number: int | None = None
+    ) -> None:
+        """Implement :class:`task_source.TaskTransitioner` — swap pipeline labels."""
+        await self.swap_pipeline_labels(task_id, new_stage, pr_number=pr_number)
+
+    async def close_task(self, task_id: int) -> None:
+        """Implement :class:`task_source.TaskTransitioner` — close the issue."""
+        await self.close_issue(task_id)
+
+    async def create_task(
+        self, title: str, body: str, labels: list[str] | None = None
+    ) -> int:
+        """Implement :class:`task_source.TaskTransitioner` — create a new issue."""
+        return await self.create_issue(title, body, labels)

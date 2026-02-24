@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from events import EventBus
 from merge_conflict_resolver import MergeConflictResolver
 from state import StateTracker
-from tests.conftest import IssueFactory, PRInfoFactory
+from tests.conftest import PRInfoFactory, TaskFactory
 
 
 def _make_resolver(config: HydraFlowConfig, *, agents=None) -> MergeConflictResolver:
@@ -43,7 +43,7 @@ class TestMergeConflictResolver:
         """When merge_main succeeds, should push and return True."""
         resolver = _make_resolver(config)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         resolver._worktrees.merge_main = AsyncMock(return_value=True)
         resolver._prs.push_branch = AsyncMock(return_value=True)
@@ -69,7 +69,7 @@ class TestMergeConflictResolver:
         """When conflict resolution fails, should escalate and return False."""
         resolver = _make_resolver(config)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         resolver._worktrees.merge_main = AsyncMock(return_value=False)
         publish_fn = AsyncMock()
@@ -94,7 +94,7 @@ class TestMergeConflictResolver:
         """Without an agent runner, should return False immediately."""
         resolver = _make_resolver(config)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         result = await resolver.resolve_merge_conflicts(
             pr, issue, config.worktree_base / "issue-42", worker_id=0
@@ -110,7 +110,7 @@ class TestMergeConflictResolver:
         mock_agents = AsyncMock()
         resolver = _make_resolver(config, agents=mock_agents)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         resolver._worktrees.start_merge_main = AsyncMock(return_value=True)
 
@@ -131,7 +131,7 @@ class TestMergeConflictResolver:
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         resolver = _make_resolver(config, agents=mock_agents)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         resolver._worktrees.start_merge_main = AsyncMock(return_value=False)
 
@@ -151,7 +151,7 @@ class TestMergeConflictResolver:
         mock_agents._verify_result = AsyncMock(return_value=(True, ""))
         resolver = _make_resolver(config, agents=mock_agents)
         pr = PRInfoFactory.create()
-        issue = IssueFactory.create()
+        issue = TaskFactory.create()
 
         resolver._worktrees.start_merge_main = AsyncMock(return_value=False)
 

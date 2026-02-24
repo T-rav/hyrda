@@ -12,7 +12,7 @@ from agent_cli import build_agent_command
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from execution import get_default_runner
-from models import GitHubIssue, TriageResult, TriageStatus
+from models import Task, TriageResult, TriageStatus
 from runner_utils import stream_claude_process, terminate_processes
 from subprocess_util import CreditExhaustedError
 
@@ -79,7 +79,7 @@ class TriageRunner:
 
     async def evaluate(
         self,
-        issue: GitHubIssue,
+        issue: Task,
         worker_id: int = 0,
     ) -> TriageResult:
         """Evaluate *issue* for readiness.
@@ -87,23 +87,23 @@ class TriageRunner:
         Returns a :class:`TriageResult` indicating whether the issue
         has enough information to proceed to planning.
         """
-        await self._emit_status(issue.number, worker_id, TriageStatus.EVALUATING)
+        await self._emit_status(issue.id, worker_id, TriageStatus.EVALUATING)
         await self._emit_transcript(
-            issue.number, f"Evaluating issue #{issue.number}: {issue.title}"
+            issue.id, f"Evaluating issue #{issue.id}: {issue.title}"
         )
 
         if self._config.dry_run:
-            logger.info("[dry-run] Would evaluate issue #%d", issue.number)
-            await self._emit_transcript(issue.number, "[dry-run] Skipping evaluation")
-            await self._emit_status(issue.number, worker_id, TriageStatus.DONE)
-            return TriageResult(issue_number=issue.number, ready=True)
+            logger.info("[dry-run] Would evaluate issue #%d", issue.id)
+            await self._emit_transcript(issue.id, "[dry-run] Skipping evaluation")
+            await self._emit_status(issue.id, worker_id, TriageStatus.DONE)
+            return TriageResult(issue_number=issue.id, ready=True)
 
         # --- Fast pre-filter: basic length checks ---
         reasons: list[str] = []
         title_len = len(issue.title.strip()) if issue.title else 0
         body_len = len(issue.body.strip()) if issue.body else 0
         await self._emit_transcript(
-            issue.number,
+            issue.id,
             f"Title length: {title_len} chars (min {_MIN_TITLE_LENGTH}) | "
             f"Body length: {body_len} chars (min {_MIN_BODY_LENGTH})",
         )
@@ -119,25 +119,23 @@ class TriageRunner:
             )
 
         if reasons:
-            result = TriageResult(
-                issue_number=issue.number, ready=False, reasons=reasons
-            )
+            result = TriageResult(issue_number=issue.id, ready=False, reasons=reasons)
             await self._emit_transcript(
-                issue.number,
+                issue.id,
                 "Issue needs more information:\n"
                 + "\n".join(f"- {r}" for r in reasons),
             )
-            await self._emit_status(issue.number, worker_id, TriageStatus.DONE)
+            await self._emit_status(issue.id, worker_id, TriageStatus.DONE)
             logger.info(
                 "Issue #%d failed pre-filter: reasons=%s",
-                issue.number,
+                issue.id,
                 reasons,
             )
             return result
 
         # --- LLM evaluation ---
         await self._emit_transcript(
-            issue.number,
+            issue.id,
             "Issue passes pre-filter, running LLM quality evaluation...",
         )
 
@@ -148,30 +146,30 @@ class TriageRunner:
         except Exception as exc:
             logger.warning(
                 "LLM evaluation failed for issue #%d: %s",
-                issue.number,
+                issue.id,
                 exc,
             )
             result = TriageResult(
-                issue_number=issue.number,
+                issue_number=issue.id,
                 ready=False,
                 reasons=[f"LLM evaluation error: {exc}"],
             )
 
         if result.ready:
             await self._emit_transcript(
-                issue.number, "Issue is ready — promoting to planning"
+                issue.id, "Issue is ready — promoting to planning"
             )
         else:
             await self._emit_transcript(
-                issue.number,
+                issue.id,
                 "Issue needs more information:\n"
                 + "\n".join(f"- {r}" for r in result.reasons),
             )
 
-        await self._emit_status(issue.number, worker_id, TriageStatus.DONE)
+        await self._emit_status(issue.id, worker_id, TriageStatus.DONE)
         logger.info(
             "Issue #%d evaluated: ready=%s reasons=%s",
-            issue.number,
+            issue.id,
             result.ready,
             result.reasons or "none",
         )
@@ -186,12 +184,12 @@ class TriageRunner:
         )
 
     @staticmethod
-    def _build_prompt(issue: GitHubIssue) -> str:
+    def _build_prompt(issue: Task) -> str:
         """Build the triage evaluation prompt."""
         body = (issue.body or "")[:5000]
         return f"""You are a triage agent evaluating whether a GitHub issue has enough detail for an implementation planning agent to succeed.
 
-## Issue #{issue.number}
+## Issue #{issue.id}
 
 **Title:** {issue.title}
 
@@ -227,7 +225,7 @@ or
 ```
 """
 
-    async def _evaluate_with_llm(self, issue: GitHubIssue) -> TriageResult:
+    async def _evaluate_with_llm(self, issue: Task) -> TriageResult:
         """Run LLM evaluation and parse the verdict."""
         cmd = self._build_command()
         prompt = self._build_prompt(issue)
@@ -238,18 +236,18 @@ or
             cwd=self._config.repo_root,
             active_procs=self._active_procs,
             event_bus=self._bus,
-            event_data={"issue": issue.number, "source": "triage"},
+            event_data={"issue": issue.id, "source": "triage"},
             logger=logger,
             runner=self._runner,
         )
 
-        result = self._parse_verdict(transcript, issue.number)
+        result = self._parse_verdict(transcript, issue.id)
         if result is not None:
             return result
 
         # Fallback: could not parse LLM response
         return TriageResult(
-            issue_number=issue.number,
+            issue_number=issue.id,
             ready=False,
             reasons=["Could not parse LLM evaluation response"],
         )

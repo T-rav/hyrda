@@ -23,6 +23,7 @@ from models import (
     ReviewResult,
     ReviewVerdict,
     StateData,
+    Task,
     VerificationCriterion,
     WorkerResult,
     WorkerStatus,
@@ -214,6 +215,62 @@ class TestGitHubIssue:
         assert issue.labels == ["hydraflow-ready", "perf"]
         assert issue.comments == ["LGTM", "Needs tests"]
         assert issue.url == "https://github.com/org/repo/issues/42"
+
+
+# ---------------------------------------------------------------------------
+# Task
+# ---------------------------------------------------------------------------
+
+
+class TestTask:
+    """Tests for the Task model and GitHubIssue conversion helpers."""
+
+    def test_defaults(self) -> None:
+        """Task should accept only id and title with sensible defaults."""
+        task = Task(id=1, title="Fix it")
+        assert task.id == 1
+        assert task.title == "Fix it"
+        assert task.body == ""
+        assert task.tags == []
+        assert task.comments == []
+        assert task.source_url == ""
+        assert task.created_at == ""
+        assert task.metadata == {}
+
+    def test_round_trip_to_task(self) -> None:
+        """GitHubIssue.to_task() followed by from_task() should reproduce the original."""
+        issue = GitHubIssue(
+            number=7,
+            title="Round trip",
+            body="Body text",
+            labels=["hydraflow-ready", "bug"],
+            comments=["LGTM"],
+            url="https://github.com/org/repo/issues/7",
+            created_at="2024-01-01T00:00:00Z",
+        )
+        task = issue.to_task()
+        assert task.id == 7
+        assert task.title == "Round trip"
+        assert task.body == "Body text"
+        assert task.tags == ["hydraflow-ready", "bug"]
+        assert task.comments == ["LGTM"]
+        assert task.source_url == "https://github.com/org/repo/issues/7"
+        assert task.created_at == "2024-01-01T00:00:00Z"
+
+        restored = GitHubIssue.from_task(task)
+        assert restored.number == 7
+        assert restored.title == "Round trip"
+        assert restored.body == "Body text"
+        assert restored.labels == ["hydraflow-ready", "bug"]
+        assert restored.comments == ["LGTM"]
+        assert restored.url == "https://github.com/org/repo/issues/7"
+        assert restored.created_at == "2024-01-01T00:00:00Z"
+
+    def test_label_preservation(self) -> None:
+        """Labels survive the GitHubIssue → Task → GitHubIssue trip."""
+        labels = ["hydraflow-plan", "enhancement", "priority-high"]
+        issue = GitHubIssue(number=99, title="t", labels=labels)
+        assert GitHubIssue.from_task(issue.to_task()).labels == labels
 
 
 # ---------------------------------------------------------------------------
@@ -835,8 +892,8 @@ class TestBatchResult:
         """Should hold multiple issues, worker results, PRs, reviews, and merged PR numbers."""
         # Arrange
         issues = [
-            GitHubIssue(number=1, title="Issue 1"),
-            GitHubIssue(number=2, title="Issue 2"),
+            Task(id=1, title="Issue 1"),
+            Task(id=2, title="Issue 2"),
         ]
         worker_results = [
             WorkerResult(
@@ -869,8 +926,8 @@ class TestBatchResult:
         # Assert
         assert batch.batch_number == 3
         assert len(batch.issues) == 2
-        assert batch.issues[0].number == 1
-        assert batch.issues[1].number == 2
+        assert batch.issues[0].id == 1
+        assert batch.issues[1].id == 2
         assert len(batch.worker_results) == 2
         assert batch.worker_results[0].success is True
         assert batch.worker_results[1].success is False
@@ -884,7 +941,7 @@ class TestBatchResult:
         # Arrange
         batch = BatchResult(
             batch_number=2,
-            issues=[GitHubIssue(number=10, title="T")],
+            issues=[Task(id=10, title="T")],
             merged_prs=[200, 201],
         )
 
@@ -894,7 +951,7 @@ class TestBatchResult:
         # Assert
         assert data["batch_number"] == 2
         assert len(data["issues"]) == 1
-        assert data["issues"][0]["number"] == 10
+        assert data["issues"][0]["id"] == 10
         assert data["merged_prs"] == [200, 201]
         assert data["worker_results"] == []
         assert data["pr_infos"] == []
