@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -290,8 +289,8 @@ class TestEventBusWithPersistence:
         event = _make_event(data={"bus": True})
         await bus.publish(event)
 
-        # Give the fire-and-forget task a moment to complete
-        await asyncio.sleep(0.05)
+        # Drain fire-and-forget persist tasks deterministically
+        await bus.flush_persists()
 
         loaded = await log.load()
         assert len(loaded) == 1
@@ -427,10 +426,10 @@ class TestEventBusWithPersistence:
         try:
             event = _make_event(data={"fail": True})
             await bus.publish(event)
-            # Give the fire-and-forget task a moment to complete
-            await asyncio.sleep(0.1)
+            # Drain fire-and-forget persist tasks deterministically
+            await bus.flush_persists()
 
-            assert "Failed to persist event to disk" in caplog.text
+            assert "Could not append to event log" in caplog.text
         finally:
             log.path.chmod(0o644)
 

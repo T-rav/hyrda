@@ -14,6 +14,7 @@ from file_util import atomic_write
 from models import (
     LifetimeStats,
     SessionLog,
+    SessionStatus,
     StateData,
     ThresholdProposal,
     WorkerResultMeta,
@@ -44,8 +45,13 @@ class StateTracker:
                     raise ValueError("State file must contain a JSON object")
                 self._data = StateData.model_validate(loaded)
                 logger.info("State loaded from %s", self._path)
-            except (json.JSONDecodeError, OSError, ValueError) as exc:
-                logger.warning("Corrupt state file, resetting: %s", exc)
+            except (
+                json.JSONDecodeError,
+                OSError,
+                ValueError,
+                UnicodeDecodeError,
+            ) as exc:
+                logger.warning("Corrupt state file, resetting: %s", exc, exc_info=True)
                 self._data = StateData()
         return self._data.model_dump()
 
@@ -69,25 +75,30 @@ class StateTracker:
         return {int(k): v for k, v in self._data.active_worktrees.items()}
 
     def set_worktree(self, issue_number: int, path: str) -> None:
+        """Record the worktree filesystem *path* for *issue_number*."""
         self._data.active_worktrees[str(issue_number)] = path
         self.save()
 
     def remove_worktree(self, issue_number: int) -> None:
+        """Remove the worktree mapping for *issue_number* (no-op if absent)."""
         self._data.active_worktrees.pop(str(issue_number), None)
         self.save()
 
     # --- branch tracking ---
 
     def set_branch(self, issue_number: int, branch: str) -> None:
+        """Record the active *branch* name for *issue_number*."""
         self._data.active_branches[str(issue_number)] = branch
         self.save()
 
     def get_branch(self, issue_number: int) -> str | None:
+        """Return the active branch for *issue_number*, or *None*."""
         return self._data.active_branches.get(str(issue_number))
 
     # --- PR tracking ---
 
     def mark_pr(self, pr_number: int, status: str) -> None:
+        """Record the review *status* for *pr_number*."""
         self._data.reviewed_prs[str(pr_number)] = status
         self.save()
 
@@ -455,22 +466,30 @@ class StateTracker:
         if not self._sessions_path.exists():
             return {}
         seen: dict[str, SessionLog] = {}
-        with open(self._sessions_path) as f:
-            for line_num, raw_line in enumerate(f, 1):
-                stripped = raw_line.strip()
-                if not stripped:
-                    continue
-                try:
-                    session = SessionLog.model_validate_json(stripped)
-                except ValidationError:
-                    logger.warning(
-                        "Skipping corrupt session line %d in %s",
-                        line_num,
-                        self._sessions_path,
-                        exc_info=True,
-                    )
-                    continue
-                seen[session.id] = session
+        try:
+            with open(self._sessions_path) as f:
+                for line_num, raw_line in enumerate(f, 1):
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        session = SessionLog.model_validate_json(stripped)
+                    except ValidationError:
+                        logger.warning(
+                            "Skipping corrupt session line %d in %s",
+                            line_num,
+                            self._sessions_path,
+                            exc_info=True,
+                        )
+                        continue
+                    seen[session.id] = session
+        except (OSError, UnicodeDecodeError):
+            logger.warning(
+                "Could not open sessions file %s",
+                self._sessions_path,
+                exc_info=True,
+            )
+            return {}
         return seen
 
     def _write_sessions(self, sessions: list[SessionLog]) -> None:
@@ -486,10 +505,17 @@ class StateTracker:
 
     def save_session(self, session: SessionLog) -> None:
         """Append a session log entry to sessions.jsonl."""
-        self._sessions_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._sessions_path, "a") as f:
-            f.write(session.model_dump_json() + "\n")
-            f.flush()
+        try:
+            self._sessions_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._sessions_path, "a") as f:
+                f.write(session.model_dump_json() + "\n")
+                f.flush()
+        except OSError:
+            logger.warning(
+                "Could not save session to %s",
+                self._sessions_path,
+                exc_info=True,
+            )
 
     def load_sessions(
         self, repo: str | None = None, limit: int = 50
@@ -528,7 +554,7 @@ class StateTracker:
         target = seen.get(session_id)
         if target is None:
             return False
-        if target.status == "active":
+        if target.status == SessionStatus.ACTIVE:
             msg = f"Cannot delete active session {session_id}"
             raise ValueError(msg)
 

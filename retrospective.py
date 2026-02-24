@@ -7,9 +7,11 @@ import logging
 import re
 from collections import Counter
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
+
+from models import IsoTimestamp, PlanAccuracyResult, ReviewVerdict
 
 if TYPE_CHECKING:
     from config import HydraFlowConfig
@@ -25,14 +27,14 @@ class RetrospectiveEntry(BaseModel):
 
     issue_number: int
     pr_number: int
-    timestamp: str
+    timestamp: IsoTimestamp
     plan_accuracy_pct: float = 0.0
     planned_files: list[str] = Field(default_factory=list)
     actual_files: list[str] = Field(default_factory=list)
     unplanned_files: list[str] = Field(default_factory=list)
     missed_files: list[str] = Field(default_factory=list)
     quality_fix_rounds: int = 0
-    review_verdict: str = ""
+    review_verdict: ReviewVerdict | Literal[""] = ""
     reviewer_fixes_made: bool = False
     ci_fix_rounds: int = 0
     duration_seconds: float = 0.0
@@ -108,7 +110,7 @@ class RetrospectiveCollector:
             unplanned_files=unplanned,
             missed_files=missed,
             quality_fix_rounds=quality_fix_rounds,
-            review_verdict=review_result.verdict.value,
+            review_verdict=review_result.verdict,
             reviewer_fixes_made=review_result.fixes_made,
             ci_fix_rounds=review_result.ci_fix_attempts,
             duration_seconds=impl_duration,
@@ -191,9 +193,7 @@ class RetrospectiveCollector:
         return await self._prs.get_pr_diff_names(pr_number)
 
     @staticmethod
-    def _compute_accuracy(
-        planned: list[str], actual: list[str]
-    ) -> tuple[float, list[str], list[str]]:
+    def _compute_accuracy(planned: list[str], actual: list[str]) -> PlanAccuracyResult:
         """Compute plan accuracy percentage, unplanned files, and missed files."""
         planned_set = set(planned)
         actual_set = set(actual)
@@ -206,13 +206,20 @@ class RetrospectiveCollector:
         else:
             accuracy = round(len(intersection) / len(planned_set) * 100, 1)
 
-        return accuracy, unplanned, missed
+        return PlanAccuracyResult(accuracy=accuracy, unplanned=unplanned, missed=missed)
 
     def _append_entry(self, entry: RetrospectiveEntry) -> None:
         """Append a JSON line to the retrospective log."""
-        self._retro_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._retro_path.open("a") as f:
-            f.write(entry.model_dump_json() + "\n")
+        try:
+            self._retro_path.parent.mkdir(parents=True, exist_ok=True)
+            with self._retro_path.open("a") as f:
+                f.write(entry.model_dump_json() + "\n")
+        except OSError:
+            logger.warning(
+                "Could not append to retrospective log %s",
+                self._retro_path,
+                exc_info=True,
+            )
 
     def _load_recent(self, n: int) -> list[RetrospectiveEntry]:
         """Load the last *n* entries from the retrospective log."""

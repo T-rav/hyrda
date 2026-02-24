@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from models import ReviewVerdict
 from review_insights import (
     CATEGORY_DESCRIPTIONS,
     CATEGORY_KEYWORDS,
@@ -27,7 +28,7 @@ def _make_record(
     *,
     pr_number: int = 101,
     issue_number: int = 42,
-    verdict: str = "request-changes",
+    verdict: ReviewVerdict = ReviewVerdict.REQUEST_CHANGES,
     summary: str = "Missing edge case tests",
     fixes_made: bool = False,
     categories: list[str] | None = None,
@@ -219,7 +220,7 @@ class TestAnalyzePatterns:
         records = [
             _make_record(
                 pr_number=i,
-                verdict="approve",
+                verdict=ReviewVerdict.APPROVE,
                 categories=["missing_tests"],
             )
             for i in range(5)
@@ -318,7 +319,9 @@ class TestGetCommonFeedbackSection:
 
     def test_returns_empty_for_all_approves(self) -> None:
         records = [
-            _make_record(pr_number=i, verdict="approve", categories=["missing_tests"])
+            _make_record(
+                pr_number=i, verdict=ReviewVerdict.APPROVE, categories=["missing_tests"]
+            )
             for i in range(3)
         ]
         assert get_common_feedback_section(records) == ""
@@ -378,3 +381,100 @@ class TestReviewRecord:
         """Every category in CATEGORY_KEYWORDS should have a description."""
         for cat in CATEGORY_KEYWORDS:
             assert cat in CATEGORY_DESCRIPTIONS, f"Missing description for {cat}"
+
+
+# ---------------------------------------------------------------------------
+# append_review OSError handling (issue #1038)
+# ---------------------------------------------------------------------------
+
+
+class TestAppendReviewOSError:
+    """Verify ReviewInsightStore.append_review catches OSError gracefully."""
+
+    def test_append_review_logs_warning_on_oserror(self, tmp_path, caplog) -> None:
+        """When the reviews file can't be written, log warning and don't raise."""
+        import logging
+        from pathlib import Path
+        from unittest.mock import patch
+
+        store = ReviewInsightStore(tmp_path / "memory")
+        record = _make_record(categories=["missing_tests"])
+
+        with (
+            patch.object(Path, "open", side_effect=OSError("disk full")),
+            caplog.at_level(logging.WARNING, logger="hydraflow.review_insights"),
+        ):
+            store.append_review(record)  # should not raise
+
+        assert "Could not append review" in caplog.text
+
+    def test_append_review_handles_mkdir_failure(self, tmp_path, caplog) -> None:
+        """When mkdir fails with PermissionError, log warning and don't raise."""
+        import logging
+        from pathlib import Path
+        from unittest.mock import patch
+
+        store = ReviewInsightStore(tmp_path / "memory")
+        record = _make_record(categories=["security"])
+
+        with (
+            patch.object(Path, "mkdir", side_effect=PermissionError("not allowed")),
+            caplog.at_level(logging.WARNING, logger="hydraflow.review_insights"),
+        ):
+            store.append_review(record)  # should not raise
+
+        assert "Could not append review" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# ReviewRecord timestamp validation (issue #1048)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewRecordTimestamp:
+    """Tests for ReviewRecord IsoTimestamp validation."""
+
+    def test_invalid_timestamp_rejected(self) -> None:
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError, match="Invalid ISO 8601 timestamp"):
+            ReviewRecord(
+                pr_number=1,
+                issue_number=42,
+                timestamp="not-a-timestamp",
+                verdict="approve",
+                summary="ok",
+                fixes_made=False,
+                categories=[],
+            )
+
+    def test_valid_iso_timestamp_accepted(self) -> None:
+        record = ReviewRecord(
+            pr_number=1,
+            issue_number=42,
+            timestamp="2026-02-20T10:30:00+00:00",
+            verdict="approve",
+            summary="ok",
+            fixes_made=False,
+            categories=[],
+        )
+        assert record.timestamp == "2026-02-20T10:30:00+00:00"
+
+
+# ---------------------------------------------------------------------------
+# ReviewRecord field descriptions (issue #1048)
+# ---------------------------------------------------------------------------
+
+
+class TestReviewRecordFieldDescriptions:
+    """Tests that field descriptions are present in ReviewRecord schema."""
+
+    def test_review_record_has_field_descriptions(self) -> None:
+        schema = ReviewRecord.model_json_schema()
+        props = schema["properties"]
+        # verdict is now a ReviewVerdict StrEnum — represented as $ref in schema
+        assert "verdict" in props
+        assert "summary" in props
+        assert "fixes_made" in props
+        assert "categories" in props

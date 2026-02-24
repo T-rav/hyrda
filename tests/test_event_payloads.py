@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from models import (
     LabelCounts,
-    ManifestRefreshResult,
+    ManifestRefreshSummary,
     PipelineIssue,
     PipelineSnapshotEntry,
     TranscriptEventData,
@@ -196,10 +196,10 @@ class TestWorkerResultMeta:
         assert loaded["error"] == "lint failed"
 
 
-class TestManifestRefreshResult:
-    """ManifestRefreshResult has two required keys."""
+class TestManifestRefreshSummary:
+    """ManifestRefreshSummary has two required keys."""
 
     def test_required_keys(self) -> None:
-        result: ManifestRefreshResult = {"hash": "abc123", "length": 500}
+        result: ManifestRefreshSummary = {"hash": "abc123", "length": 500}
         assert result["hash"] == "abc123"
         assert result["length"] == 500

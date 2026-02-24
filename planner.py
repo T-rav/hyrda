@@ -6,6 +6,7 @@ import logging
 import re
 import time
 from pathlib import Path
+from typing import Literal
 
 from agent_cli import build_agent_command
 from base_runner import BaseRunner
@@ -15,6 +16,50 @@ from runner_constants import MEMORY_SUGGESTION_PROMPT
 from subprocess_util import CreditExhaustedError
 
 logger = logging.getLogger("hydraflow.planner")
+
+PlanScale = Literal["lite", "full"]
+
+# Canonical section descriptions — single source of truth for prompt generation.
+# Each entry is (header, description).  Order matches the desired prompt order.
+_PLAN_SECTION_DESCRIPTIONS: tuple[tuple[str, str], ...] = (
+    (
+        "## Files to Modify",
+        "list each existing file and what changes are needed "
+        "(must reference at least one file path)",
+    ),
+    (
+        "## New Files",
+        'list new files to create, or state "None" if no new files needed',
+    ),
+    (
+        "## File Delta",
+        "structured list of all planned file changes using this exact format:\n"
+        "  ```\n"
+        "  MODIFIED: path/to/file.py\n"
+        "  ADDED: path/to/new_file.py\n"
+        "  REMOVED: path/to/old_file.py\n"
+        "  ```\n"
+        "  Each line must start with MODIFIED:, ADDED:, or REMOVED: "
+        "followed by the file path.",
+    ),
+    (
+        "## Implementation Steps",
+        "ordered numbered list of steps (must have at least 3 steps)",
+    ),
+    (
+        "## Testing Strategy",
+        "what tests to write and what to verify "
+        "(must reference specific test file paths or patterns; do NOT defer testing)",
+    ),
+    (
+        "## Acceptance Criteria",
+        "extracted or synthesized from the issue",
+    ),
+    (
+        "## Key Considerations",
+        "edge cases, backward compatibility, dependencies",
+    ),
+)
 
 
 class PlannerRunner(BaseRunner):
@@ -216,7 +261,7 @@ class PlannerRunner(BaseRunner):
                 )
         return result
 
-    def _build_command(self, _worktree_path: Path | None = None) -> list[str]:  # type: ignore[override]
+    def _build_command(self, _worktree_path: Path | None = None) -> list[str]:
         """Construct the CLI invocation for planning.
 
         The *_worktree_path* parameter is accepted for API compatibility with
@@ -260,7 +305,25 @@ class PlannerRunner(BaseRunner):
     # Patterns for detecting images in issue bodies (markdown and HTML).
     _IMAGE_RE = re.compile(r"!\[.*?\]\(.*?\)|<img\s[^>]*>", re.IGNORECASE)
 
-    def _build_prompt(self, issue: GitHubIssue, *, scale: str = "full") -> str:
+    @classmethod
+    def _format_sections_list(cls, scale: PlanScale = "full") -> str:
+        """Return a formatted bullet list of required sections for *scale*.
+
+        Filters :data:`_PLAN_SECTION_DESCRIPTIONS` to only include sections
+        present in :attr:`LITE_REQUIRED_SECTIONS` when *scale* is ``"lite"``,
+        or :attr:`REQUIRED_SECTIONS` for any other value (including ``"full"``).
+        """
+        required = (
+            cls.LITE_REQUIRED_SECTIONS if scale == "lite" else cls.REQUIRED_SECTIONS
+        )
+        required_set = set(required)
+        lines = []
+        for header, desc in _PLAN_SECTION_DESCRIPTIONS:
+            if header in required_set:
+                lines.append(f"- `{header}` \u2014 {desc}")
+        return "\n".join(lines)
+
+    def _build_prompt(self, issue: GitHubIssue, *, scale: PlanScale = "full") -> str:
         """Build the planning prompt for the agent.
 
         *scale* is ``"lite"`` or ``"full"``.  The prompt adjusts which
@@ -293,6 +356,7 @@ class PlannerRunner(BaseRunner):
         find_label = self._config.find_label[0]
 
         # --- Scale-adaptive schema section ---
+        sections_bullet_list = self._format_sections_list(scale)
         if scale == "lite":
             mode_note = (
                 "**Plan mode: LITE** — This is a small issue (bug fix, typo, or docs). "
@@ -302,12 +366,7 @@ class PlannerRunner(BaseRunner):
                 "## Plan Format — LITE SCHEMA\n\n"
                 "Your plan MUST include ALL of the following sections with these EXACT headers.\n"
                 "Plans missing any required section will be rejected and you will be asked to retry.\n\n"
-                "- `## Files to Modify` — list each existing file and what changes are needed "
-                "(must reference at least one file path)\n"
-                "- `## Implementation Steps` — ordered numbered list of steps "
-                "(must have at least 3 steps)\n"
-                "- `## Testing Strategy` — what tests to write and what to verify "
-                "(must reference specific test file paths or patterns; do NOT defer testing)"
+                f"{sections_bullet_list}"
             )
             pre_mortem_section = ""
         else:
@@ -319,22 +378,7 @@ class PlannerRunner(BaseRunner):
                 "## Plan Format — REQUIRED SCHEMA\n\n"
                 "Your plan MUST include ALL of the following sections with these EXACT headers.\n"
                 "Plans missing any required section will be rejected and you will be asked to retry.\n\n"
-                "- `## Files to Modify` — list each existing file and what changes are needed "
-                "(must reference at least one file path)\n"
-                '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
-                "- `## File Delta` — structured list of all planned file changes using this exact format:\n"
-                "  ```\n"
-                "  MODIFIED: path/to/file.py\n"
-                "  ADDED: path/to/new_file.py\n"
-                "  REMOVED: path/to/old_file.py\n"
-                "  ```\n"
-                "  Each line must start with MODIFIED:, ADDED:, or REMOVED: followed by the file path.\n"
-                "- `## Implementation Steps` — ordered numbered list of steps "
-                "(must have at least 3 steps)\n"
-                "- `## Testing Strategy` — what tests to write and what to verify "
-                "(must reference specific test file paths or patterns; do NOT defer testing)\n"
-                "- `## Acceptance Criteria` — extracted or synthesized from the issue\n"
-                "- `## Key Considerations` — edge cases, backward compatibility, dependencies"
+                f"{sections_bullet_list}"
             )
             pre_mortem_section = (
                 "\n\n## Pre-Mortem\n\n"
@@ -487,7 +531,7 @@ requirements are already implemented — not when the issue is unclear or you ar
         re.IGNORECASE,
     )
 
-    def _detect_plan_scale(self, issue: GitHubIssue) -> str:
+    def _detect_plan_scale(self, issue: GitHubIssue) -> PlanScale:
         """Determine whether *issue* needs a ``"lite"`` or ``"full"`` plan.
 
         Lite plans are used for small issues (bug fixes, typos, docs).
@@ -546,7 +590,7 @@ requirements are already implemented — not when the issue is unclear or you ar
         return words
 
     def _validate_plan(
-        self, issue: GitHubIssue, plan: str, scale: str = "full"
+        self, issue: GitHubIssue, plan: str, scale: PlanScale = "full"
     ) -> list[str]:
         """Validate that *plan* has all required sections and minimum content.
 
@@ -805,33 +849,11 @@ requirements are already implemented — not when the issue is unclear or you ar
         failed_plan: str,
         validation_errors: list[str],
         *,
-        scale: str = "full",
+        scale: PlanScale = "full",
     ) -> str:
         """Build a retry prompt that includes the original issue, the failed plan, and validation feedback."""
         error_list = "\n".join(f"- {e}" for e in validation_errors)
-
-        if scale == "lite":
-            sections_list = (
-                "- `## Files to Modify` — list each existing file and what changes are needed "
-                "(must reference at least one file path)\n"
-                "- `## Implementation Steps` — ordered numbered list of steps "
-                "(must have at least 3 steps)\n"
-                "- `## Testing Strategy` — what tests to write and what to verify "
-                "(must reference specific test file paths or patterns; do NOT defer testing)"
-            )
-        else:
-            sections_list = (
-                "- `## Files to Modify` — list each existing file and what changes are needed "
-                "(must reference at least one file path)\n"
-                '- `## New Files` — list new files to create, or state "None" if no new files needed\n'
-                "- `## File Delta` — structured file change list (MODIFIED:/ADDED:/REMOVED: per line)\n"
-                "- `## Implementation Steps` — ordered numbered list of steps "
-                "(must have at least 3 steps)\n"
-                "- `## Testing Strategy` — what tests to write and what to verify "
-                "(must reference specific test file paths or patterns; do NOT defer testing)\n"
-                "- `## Acceptance Criteria` — extracted or synthesized from the issue\n"
-                "- `## Key Considerations` — edge cases, backward compatibility, dependencies"
-            )
+        sections_list = self._format_sections_list(scale)
 
         return f"""You previously generated a plan for GitHub issue #{issue.number} but it failed validation.
 

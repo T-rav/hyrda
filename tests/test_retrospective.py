@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from config import HydraFlowConfig
 
+from models import ReviewVerdict
 from retrospective import RetrospectiveCollector, RetrospectiveEntry
 from state import StateTracker
 from tests.conftest import ReviewResultFactory
@@ -676,7 +677,7 @@ class TestRetrospectiveEntry:
             unplanned_files=["src/bar.py"],
             missed_files=[],
             quality_fix_rounds=1,
-            review_verdict="approve",
+            review_verdict=ReviewVerdict.APPROVE,
             reviewer_fixes_made=False,
             ci_fix_rounds=0,
             duration_seconds=340.5,
@@ -741,3 +742,54 @@ class TestFileImprovementIssueSetsOrigin:
         mock_prs.create_issue.assert_awaited_once()
         assert state.get_hitl_origin(77) == config.improve_label[0]
         assert state.get_hitl_cause(77) == "Retrospective pattern detected"
+
+
+# ---------------------------------------------------------------------------
+# _append_entry OSError handling (issue #1038)
+# ---------------------------------------------------------------------------
+
+
+class TestAppendEntryOSError:
+    """Verify RetrospectiveCollector._append_entry catches OSError gracefully."""
+
+    def test_append_entry_logs_warning_on_oserror(
+        self, config: HydraFlowConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When the retro log can't be written, log warning and don't raise."""
+        import logging
+
+        collector, _, _ = _make_collector(config)
+        entry = RetrospectiveEntry(
+            issue_number=42,
+            pr_number=100,
+            timestamp="2026-02-20T10:30:00Z",
+        )
+
+        with (
+            patch.object(Path, "open", side_effect=OSError("disk full")),
+            caplog.at_level(logging.WARNING, logger="hydraflow.retrospective"),
+        ):
+            collector._append_entry(entry)  # should not raise
+
+        assert "Could not append to retrospective log" in caplog.text
+
+    def test_append_entry_handles_mkdir_failure(
+        self, config: HydraFlowConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When mkdir fails with PermissionError, log warning and don't raise."""
+        import logging
+
+        collector, _, _ = _make_collector(config)
+        entry = RetrospectiveEntry(
+            issue_number=42,
+            pr_number=100,
+            timestamp="2026-02-20T10:30:00Z",
+        )
+
+        with (
+            patch.object(Path, "mkdir", side_effect=PermissionError("not allowed")),
+            caplog.at_level(logging.WARNING, logger="hydraflow.retrospective"),
+        ):
+            collector._append_entry(entry)  # should not raise
+
+        assert "Could not append to retrospective log" in caplog.text

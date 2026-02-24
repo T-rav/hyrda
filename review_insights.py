@@ -8,6 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from models import IsoTimestamp, ReviewVerdict
+
 logger = logging.getLogger("hydraflow.review_insights")
 
 # ---------------------------------------------------------------------------
@@ -46,8 +48,8 @@ class ReviewRecord(BaseModel):
 
     pr_number: int
     issue_number: int
-    timestamp: str
-    verdict: str
+    timestamp: IsoTimestamp
+    verdict: ReviewVerdict
     summary: str
     fixes_made: bool
     categories: list[str]
@@ -87,9 +89,16 @@ class ReviewInsightStore:
 
     def append_review(self, record: ReviewRecord) -> None:
         """Append *record* as a JSON line to ``reviews.jsonl``."""
-        self._memory_dir.mkdir(parents=True, exist_ok=True)
-        with self._reviews_path.open("a") as f:
-            f.write(record.model_dump_json() + "\n")
+        try:
+            self._memory_dir.mkdir(parents=True, exist_ok=True)
+            with self._reviews_path.open("a") as f:
+                f.write(record.model_dump_json() + "\n")
+        except OSError:
+            logger.warning(
+                "Could not append review to %s",
+                self._reviews_path,
+                exc_info=True,
+            )
 
     def load_recent(self, n: int = 10) -> list[ReviewRecord]:
         """Load the last *n* review records from disk."""
@@ -138,7 +147,7 @@ def analyze_patterns(
     ``(category, count, matching_records)`` tuples sorted by frequency
     (descending).
     """
-    non_approve = [r for r in records if r.verdict != "approve"]
+    non_approve = [r for r in records if r.verdict != ReviewVerdict.APPROVE]
     if not non_approve:
         return []
 
@@ -216,7 +225,7 @@ def get_common_feedback_section(
     listing the most frequent feedback categories. Returns an empty string
     if no patterns are found.
     """
-    non_approve = [r for r in records if r.verdict != "approve"]
+    non_approve = [r for r in records if r.verdict != ReviewVerdict.APPROVE]
     if not non_approve:
         return ""
 

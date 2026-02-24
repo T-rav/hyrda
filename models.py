@@ -2,11 +2,45 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
-from typing import Any, NotRequired
+from typing import Annotated, Any, Literal, NamedTuple, NotRequired
 
-from pydantic import AliasChoices, BaseModel, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
 from typing_extensions import TypedDict
+
+# --- Shared validated types ---
+
+
+def _check_url(v: str) -> str:
+    """Accept empty strings or valid http(s):// URLs."""
+    if v and not v.startswith(("http://", "https://")):
+        msg = f"URL must be empty or start with http(s)://, got: {v!r}"
+        raise ValueError(msg)
+    return v
+
+
+def _check_iso_timestamp(v: str) -> str:
+    """Accept empty strings or valid ISO 8601 timestamps."""
+    if v:
+        try:
+            datetime.fromisoformat(v)
+        except (ValueError, TypeError) as exc:
+            msg = f"Invalid ISO 8601 timestamp: {v!r}"
+            raise ValueError(msg) from exc
+    return v
+
+
+HttpUrl = Annotated[str, AfterValidator(_check_url)]
+IsoTimestamp = Annotated[str, AfterValidator(_check_iso_timestamp)]
 
 # --- GitHub ---
 
@@ -19,7 +53,7 @@ class GitHubIssue(BaseModel):
     body: str = ""
     labels: list[str] = Field(default_factory=list)
     comments: list[str] = Field(default_factory=list)
-    url: str = ""
+    url: HttpUrl = ""
     created_at: str = Field(
         default="",
         validation_alias=AliasChoices("createdAt", "created_at"),
@@ -223,7 +257,7 @@ class PRInfo(BaseModel):
     number: int
     issue_number: int
     branch: str
-    url: str = ""
+    url: HttpUrl = ""
     draft: bool = False
 
 
@@ -250,7 +284,7 @@ class VerificationCriteria(BaseModel):
     pr_number: int
     acceptance_criteria: str
     verification_instructions: str
-    timestamp: str
+    timestamp: IsoTimestamp
 
 
 class ReviewerStatus(StrEnum):
@@ -393,6 +427,13 @@ class QueueStats(BaseModel):
     last_poll_timestamp: str | None = None
 
 
+class SessionStatus(StrEnum):
+    """Lifecycle status of an orchestrator session."""
+
+    ACTIVE = "active"
+    COMPLETED = "completed"
+
+
 class SessionLog(BaseModel):
     """A single orchestrator session — one per run() invocation."""
 
@@ -403,7 +444,7 @@ class SessionLog(BaseModel):
     issues_processed: list[int] = Field(default_factory=list)
     issues_succeeded: int = 0
     issues_failed: int = 0
-    status: str = "active"
+    status: SessionStatus = SessionStatus.ACTIVE
 
 
 class LifetimeStats(BaseModel):
@@ -464,13 +505,23 @@ class StateData(BaseModel):
 # --- Dashboard API Responses ---
 
 
+class PipelineIssueStatus(StrEnum):
+    """Status of an issue in the pipeline snapshot."""
+
+    QUEUED = "queued"
+    ACTIVE = "active"
+    HITL = "hitl"
+
+
 class PipelineIssue(BaseModel):
     """A single issue in a pipeline stage snapshot."""
 
+    model_config = ConfigDict(frozen=True)
+
     issue_number: int
     title: str = ""
-    url: str = ""
-    status: str = "queued"  # "queued" | "active" | "hitl"
+    url: HttpUrl = ""
+    status: PipelineIssueStatus = PipelineIssueStatus.QUEUED
 
 
 class PipelineSnapshot(BaseModel):
@@ -490,7 +541,7 @@ class IntentResponse(BaseModel):
 
     issue_number: int
     title: str
-    url: str = ""
+    url: HttpUrl = ""
     status: str = "created"
 
 
@@ -500,7 +551,7 @@ class PRListItem(BaseModel):
     pr: int
     issue: int = 0
     branch: str = ""
-    url: str = ""
+    url: HttpUrl = ""
     draft: bool = False
     title: str = ""
 
@@ -510,9 +561,9 @@ class HITLItem(BaseModel):
 
     issue: int
     title: str = ""
-    issueUrl: str = ""  # camelCase to match existing frontend contract
+    issueUrl: HttpUrl = ""  # camelCase to match existing frontend contract
     pr: int = 0
-    prUrl: str = ""  # camelCase to match existing frontend contract
+    prUrl: HttpUrl = ""  # camelCase to match existing frontend contract
     branch: str = ""
     cause: str = ""  # escalation reason (populated by #113)
     status: str = "pending"  # pending | processing | resolved
@@ -738,7 +789,7 @@ class WorkerResultMeta(TypedDict, total=False):
     commits: int
 
 
-class ManifestRefreshResult(TypedDict):
+class ManifestRefreshSummary(TypedDict):
     """Return shape of ``ManifestRefreshLoop._do_work``."""
 
     hash: str
@@ -834,15 +885,84 @@ class ThresholdProposal(TypedDict):
     action: str
 
 
+# --- Structured Return Types ---
+
+
+@dataclass(frozen=True)
+class PrecheckResult:
+    """Result of parsing a precheck transcript."""
+
+    risk: str
+    confidence: float
+    escalate: bool
+    summary: str
+    parse_failed: bool
+
+
+@dataclass(frozen=True)
+class ConflictResolutionResult:
+    """Result of a merge conflict resolution attempt."""
+
+    success: bool
+    used_rebuild: bool
+
+
+class PlanAccuracyResult(NamedTuple):
+    """Result of computing plan accuracy."""
+
+    accuracy: float
+    unplanned: list[str]
+    missed: list[str]
+
+
+class PRInfoExtract(NamedTuple):
+    """Extracted PR info from timeline events."""
+
+    pr_number: int | None
+    url: str
+    branch: str
+
+
+class ManifestRefreshResult(NamedTuple):
+    """Result of a manifest refresh."""
+
+    content: str
+    digest_hash: str
+
+
+class InstructionsQualityResult(NamedTuple):
+    """Parsed instructions quality verdict and feedback."""
+
+    quality: InstructionsQuality
+    feedback: str
+
+
+class ParsedCriteria(NamedTuple):
+    """Parsed acceptance criteria and instructions."""
+
+    criteria_list: list[str]
+    instructions_text: str
+
+
 # --- Background Worker Status ---
+
+
+class BGWorkerHealth(StrEnum):
+    """Health status of a background worker."""
+
+    OK = "ok"
+    ERROR = "error"
+    DISABLED = "disabled"
 
 
 class BackgroundWorkerStatus(BaseModel):
     """Status of a single background worker."""
 
+    model_config = ConfigDict(frozen=True)
+
     name: str
     label: str
-    status: str = "disabled"  # ok | error | disabled
+    status: BGWorkerHealth = BGWorkerHealth.DISABLED
     enabled: bool = True
     last_run: str | None = None
     interval_seconds: int | None = None
@@ -868,7 +988,7 @@ class MetricsResponse(BaseModel):
 class MetricsSnapshot(BaseModel):
     """A single timestamped metrics snapshot for historical tracking."""
 
-    timestamp: str
+    timestamp: IsoTimestamp
     # Core counters (from LifetimeStats)
     issues_completed: int = 0
     prs_merged: int = 0
@@ -884,11 +1004,11 @@ class MetricsSnapshot(BaseModel):
     total_implementation_seconds: float = 0.0
     total_review_seconds: float = 0.0
     # Derived rates (computed at snapshot time)
-    merge_rate: float = 0.0
-    quality_fix_rate: float = 0.0
-    hitl_escalation_rate: float = 0.0
-    first_pass_approval_rate: float = 0.0
-    avg_implementation_seconds: float = 0.0
+    merge_rate: float = Field(default=0.0, ge=0.0)
+    quality_fix_rate: float = Field(default=0.0, ge=0.0)
+    hitl_escalation_rate: float = Field(default=0.0, ge=0.0)
+    first_pass_approval_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    avg_implementation_seconds: float = Field(default=0.0, ge=0.0)
     # Queue snapshot
     queue_depth: dict[str, int] = Field(default_factory=dict)
     # GitHub label counts
@@ -907,11 +1027,30 @@ class MetricsHistoryResponse(BaseModel):
 # --- Timeline ---
 
 
+class PipelineStage(StrEnum):
+    """Display pipeline stages for issue lifecycle."""
+
+    TRIAGE = "triage"
+    PLAN = "plan"
+    IMPLEMENT = "implement"
+    REVIEW = "review"
+    MERGE = "merge"
+
+
+class StageStatus(StrEnum):
+    """Status of a pipeline stage."""
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    FAILED = "failed"
+
+
 class TimelineStage(BaseModel):
     """A single stage in an issue's lifecycle timeline."""
 
-    stage: str  # "triage", "plan", "implement", "review", "merge"
-    status: str  # "pending", "in_progress", "done", "failed"
+    stage: PipelineStage
+    status: StageStatus
     started_at: str | None = None
     completed_at: str | None = None
     duration_seconds: float | None = None
@@ -924,11 +1063,11 @@ class IssueTimeline(BaseModel):
 
     issue_number: int
     title: str = ""
-    current_stage: str = ""
+    current_stage: PipelineStage | Literal[""] = ""
     stages: list[TimelineStage] = Field(default_factory=list)
     total_duration_seconds: float | None = None
     pr_number: int | None = None
-    pr_url: str = ""
+    pr_url: HttpUrl = ""
     branch: str = ""
 
 

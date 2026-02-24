@@ -12,9 +12,11 @@ from collections import Counter
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, Field
+
+from models import IsoTimestamp, PipelineStage
 
 if TYPE_CHECKING:
     from pr_manager import PRManager
@@ -72,24 +74,30 @@ class FailureRecord(BaseModel):
 
     issue_number: int
     pr_number: int = 0
-    timestamp: str = Field(
+    timestamp: IsoTimestamp = Field(
         default_factory=lambda: datetime.now(UTC).isoformat(),
     )
-    category: str
+    category: FailureCategory
     subcategories: list[str] = Field(default_factory=list)
     details: str = ""
-    stage: str = ""
+    stage: PipelineStage | Literal[""] = ""
 
 
 class ImprovementSuggestion(BaseModel):
     """An auto-generated improvement suggestion based on recurring patterns."""
 
-    category: str
-    subcategory: str = ""
-    occurrence_count: int
-    window_size: int
-    description: str
-    suggestion: str
+    category: str = Field(
+        description="Primary failure category this suggestion addresses"
+    )
+    subcategory: str = Field(
+        default="", description="Specific sub-pattern (e.g. lint_error)"
+    )
+    occurrence_count: int = Field(
+        description="Number of times this pattern was detected"
+    )
+    window_size: int = Field(description="Total records in the analysis window")
+    description: str = Field(description="Human-readable description of the pattern")
+    suggestion: str = Field(description="Suggested improvement action")
     evidence: list[FailureRecord] = Field(default_factory=list)
 
 
@@ -125,9 +133,16 @@ class HarnessInsightStore:
 
     def append_failure(self, record: FailureRecord) -> None:
         """Append *record* as a JSON line to ``harness_failures.jsonl``."""
-        self._memory_dir.mkdir(parents=True, exist_ok=True)
-        with self._failures_path.open("a") as f:
-            f.write(record.model_dump_json() + "\n")
+        try:
+            self._memory_dir.mkdir(parents=True, exist_ok=True)
+            with self._failures_path.open("a") as f:
+                f.write(record.model_dump_json() + "\n")
+        except OSError:
+            logger.warning(
+                "Could not append failure to %s",
+                self._failures_path,
+                exc_info=True,
+            )
 
     def load_recent(self, n: int = 20) -> list[FailureRecord]:
         """Load the last *n* failure records from disk."""
