@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +12,8 @@ import pytest
 from cli import (
     _build_prep_agent_prompt,
     _build_prep_failure_error_message,
+    _evaluate_coverage_validation,
+    _extract_coverage_percent,
     _parse_label_arg,
     _run_main,
     build_config,
@@ -71,6 +74,55 @@ class TestPrepAgentPrompt:
         )
         assert "Do not run parallel/batch edits" in prompt
         assert "Do not refactor unrelated application source" in prompt
+
+
+class TestCoverageValidation:
+    """Tests for coverage artifact extraction and validation."""
+
+    def test_extracts_lcov_percent(self, tmp_path: Path) -> None:
+        (tmp_path / "lcov.info").write_text(
+            "TN:\nSF:file.js\nLF:100\nLH:65\nend_of_record\n"
+        )
+        pct, source = _extract_coverage_percent(tmp_path)
+        assert pct == pytest.approx(65.0)
+        assert source == "lcov.info"
+
+    def test_extracts_coverage_summary_json_percent(self, tmp_path: Path) -> None:
+        cov_dir = tmp_path / "coverage"
+        cov_dir.mkdir()
+        (cov_dir / "coverage-summary.json").write_text(
+            '{"total":{"lines":{"pct":72.4}}}'
+        )
+        pct, source = _extract_coverage_percent(tmp_path)
+        assert pct == pytest.approx(72.4)
+        assert source == "coverage/coverage-summary.json"
+
+    def test_validation_fails_without_artifact(self, tmp_path: Path) -> None:
+        ok, warn, detail = _evaluate_coverage_validation(tmp_path)
+        assert ok is False
+        assert warn is False
+        assert "no coverage report artifact found" in detail
+
+    def test_validation_fails_below_minimum(self, tmp_path: Path) -> None:
+        (tmp_path / "lcov.info").write_text("LF:20\nLH:6\n")
+        ok, warn, detail = _evaluate_coverage_validation(tmp_path)
+        assert ok is False
+        assert warn is False
+        assert "below minimum 50%" in detail
+
+    def test_validation_warns_between_min_and_target(self, tmp_path: Path) -> None:
+        (tmp_path / "lcov.info").write_text("LF:100\nLH:60\n")
+        ok, warn, detail = _evaluate_coverage_validation(tmp_path)
+        assert ok is True
+        assert warn is True
+        assert "target is 70%+" in detail
+
+    def test_validation_passes_at_target(self, tmp_path: Path) -> None:
+        (tmp_path / "lcov.info").write_text("LF:100\nLH:70\n")
+        ok, warn, detail = _evaluate_coverage_validation(tmp_path)
+        assert ok is True
+        assert warn is False
+        assert "passed" in detail
 
 
 # ---------------------------------------------------------------------------

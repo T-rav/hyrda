@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
@@ -12,6 +13,7 @@ import shutil
 import signal
 import sys
 import time
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -787,6 +789,130 @@ async def _run_hardening_step(
         return False, str(exc)
 
 
+def _extract_coverage_percent(repo_root: Path) -> tuple[float | None, str]:
+    """Extract coverage percentage from common report artifacts."""
+    json_reports = [
+        repo_root / "coverage" / "coverage-summary.json",
+        repo_root / "coverage-summary.json",
+    ]
+    for path in json_reports:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text())
+            pct = data.get("total", {}).get("lines", {}).get("pct")
+            if isinstance(pct, int | float):
+                return float(pct), str(path.relative_to(repo_root))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+    xml_reports = [
+        repo_root / "coverage.xml",
+        repo_root / "cobertura.xml",
+        repo_root / "jacoco.xml",
+    ]
+    for path in xml_reports:
+        if not path.is_file():
+            continue
+        try:
+            root = ET.parse(path).getroot()
+            line_rate = root.attrib.get("line-rate")
+            if line_rate is not None:
+                return float(line_rate) * 100.0, str(path.relative_to(repo_root))
+            counters = root.findall(".//counter[@type='LINE']")
+            if counters:
+                missed = 0
+                covered = 0
+                for c in counters:
+                    missed += int(c.attrib.get("missed", "0"))
+                    covered += int(c.attrib.get("covered", "0"))
+                total = missed + covered
+                if total > 0:
+                    return (covered / total) * 100.0, str(path.relative_to(repo_root))
+        except (OSError, ET.ParseError, ValueError):
+            continue
+
+    lcov_reports = [repo_root / "coverage" / "lcov.info", repo_root / "lcov.info"]
+    for path in lcov_reports:
+        if not path.is_file():
+            continue
+        try:
+            lf_total = 0
+            lh_total = 0
+            for line in path.read_text().splitlines():
+                if line.startswith("LF:"):
+                    lf_total += int(line[3:])
+                elif line.startswith("LH:"):
+                    lh_total += int(line[3:])
+            if lf_total > 0:
+                return (lh_total / lf_total) * 100.0, str(path.relative_to(repo_root))
+        except (OSError, ValueError):
+            continue
+
+    go_cover = repo_root / "coverage.out"
+    if go_cover.is_file():
+        try:
+            total_stmts = 0
+            covered_stmts = 0
+            for line in go_cover.read_text().splitlines():
+                if line.startswith("mode:"):
+                    continue
+                parts = line.split()
+                if len(parts) != 3:
+                    continue
+                stmt_count = int(parts[1])
+                hit_count = int(parts[2])
+                total_stmts += stmt_count
+                if hit_count > 0:
+                    covered_stmts += stmt_count
+            if total_stmts > 0:
+                return (
+                    (covered_stmts / total_stmts) * 100.0,
+                    str(go_cover.relative_to(repo_root)),
+                )
+        except (OSError, ValueError):
+            pass
+
+    return None, "no coverage artifact found"
+
+
+def _evaluate_coverage_validation(
+    repo_root: Path,
+    *,
+    min_required: float = 50.0,
+    target: float = 70.0,
+) -> tuple[bool, bool, str]:
+    """Evaluate coverage result.
+
+    Returns ``(passes_loop, warning_only, detail)``.
+    """
+    pct, source = _extract_coverage_percent(repo_root)
+    if pct is None:
+        return (
+            False,
+            False,
+            "Coverage validation failed: no coverage report artifact found. "
+            "Generate one (coverage.xml, coverage-summary.json, lcov.info, or coverage.out).",
+        )
+    if pct < min_required:
+        return (
+            False,
+            False,
+            f"Coverage validation failed: {pct:.1f}% from {source} is below minimum {min_required:.0f}%.",
+        )
+    if pct < target:
+        return (
+            True,
+            True,
+            f"Coverage warning: {pct:.1f}% from {source}; minimum met, target is {target:.0f}%+.",
+        )
+    return (
+        True,
+        False,
+        f"Coverage validation passed: {pct:.1f}% from {source} (target {target:.0f}%+).",
+    )
+
+
 def _slugify_issue_name(step_name: str) -> str:
     """Convert a step name to a safe `.hydraflow/prep` issue slug."""
     slug = re.sub(r"[^a-z0-9]+", "-", step_name.lower()).strip("-")
@@ -1219,51 +1345,79 @@ async def _run_scaffold(config: HydraFlowConfig) -> bool:
         )
         if agent_ok:
             agent_successes += 1
-            hardening_ok = True
             run_log_lines.append("- Prep workflow agent: success")
+            coverage_ok, coverage_warn, coverage_detail = _evaluate_coverage_validation(
+                repo_root
+            )
+            run_log_lines.append(f"- {coverage_detail}")
+            if coverage_ok:
+                hardening_ok = True
+                stage_line = _prep_stage_line(
+                    "hardening",
+                    (
+                        f"attempt {attempt}/{max_attempts}: prep workflow agent "
+                        f"reported success ({coverage_detail})"
+                    ),
+                    "warn" if coverage_warn else "ok",
+                    use_color,
+                )
+                print(stage_line)  # noqa: T201
+                _append_full_run_log_line(config.repo_root, stage_line)
+                break
+
+            hardening_ok = False
+            failure_count += 1
+            attempt_failures.append(
+                ("coverage-validation", ["coverage-analyzer"], coverage_detail)
+            )
             stage_line = _prep_stage_line(
                 "hardening",
-                f"attempt {attempt}/{max_attempts}: prep workflow agent reported success",
-                "ok",
+                (
+                    f"attempt {attempt}/{max_attempts}: coverage validation failed "
+                    f"after workflow success ({coverage_detail})"
+                ),
+                "warn",
                 use_color,
             )
             print(stage_line)  # noqa: T201
             _append_full_run_log_line(config.repo_root, stage_line)
-            break
-        hardening_ok = False
-        failure_count += 1
-        transcript_path = _write_prep_task_transcript(
-            repo_root=repo_root,
-            task_slug=f"attempt-{attempt}-prep-workflow-agent",
-            transcript=transcript,
-        )
-        transcript_ref = (
-            str(transcript_path.relative_to(repo_root))
-            if transcript_path is not None
-            else "unavailable"
-        )
-        error_message = _build_prep_failure_error_message(transcript, transcript_ref)
-        attempt_failures.append(
-            (
-                "prep-workflow-agent",
-                [selected_tool, selected_model],
-                error_message,
+        else:
+            hardening_ok = False
+            failure_count += 1
+            transcript_path = _write_prep_task_transcript(
+                repo_root=repo_root,
+                task_slug=f"attempt-{attempt}-prep-workflow-agent",
+                transcript=transcript,
             )
-        )
-        run_log_lines.append("- Prep workflow agent: failed")
-        run_log_lines.append(f"- Agent transcript size: {len(transcript)} chars")
-        run_log_lines.append(f"- Agent transcript path: `{transcript_ref}`")
-        stage_line = _prep_stage_line(
-            "hardening",
-            (
-                f"attempt {attempt}/{max_attempts}: prep workflow agent failed "
-                f"(transcript {len(transcript)} chars, path {transcript_ref})"
-            ),
-            "warn",
-            use_color,
-        )
-        print(stage_line)  # noqa: T201
-        _append_full_run_log_line(config.repo_root, stage_line)
+            transcript_ref = (
+                str(transcript_path.relative_to(repo_root))
+                if transcript_path is not None
+                else "unavailable"
+            )
+            error_message = _build_prep_failure_error_message(
+                transcript, transcript_ref
+            )
+            attempt_failures.append(
+                (
+                    "prep-workflow-agent",
+                    [selected_tool, selected_model],
+                    error_message,
+                )
+            )
+            run_log_lines.append("- Prep workflow agent: failed")
+            run_log_lines.append(f"- Agent transcript size: {len(transcript)} chars")
+            run_log_lines.append(f"- Agent transcript path: `{transcript_ref}`")
+            stage_line = _prep_stage_line(
+                "hardening",
+                (
+                    f"attempt {attempt}/{max_attempts}: prep workflow agent failed "
+                    f"(transcript {len(transcript)} chars, path {transcript_ref})"
+                ),
+                "warn",
+                use_color,
+            )
+            print(stage_line)  # noqa: T201
+            _append_full_run_log_line(config.repo_root, stage_line)
 
         attempt_issue_names: list[str] = []
         for step_name, cmd, error_msg in attempt_failures:
