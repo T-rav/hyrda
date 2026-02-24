@@ -28,6 +28,7 @@ from metrics_sync_loop import MetricsSyncLoop
 from models import StatusCallback
 from plan_phase import PlanPhase
 from planner import PlannerRunner
+from post_merge_handler import PostMergeHandler
 from pr_manager import PRManager
 from pr_unsticker import PRUnsticker
 from pr_unsticker_loop import PRUnstickerLoop
@@ -200,6 +201,16 @@ def build_services(
     )
     verification_judge = VerificationJudge(config, event_bus, runner=subprocess_runner)
     epic_checker = EpicCompletionChecker(config, prs, fetcher)
+    post_merge_handler = PostMergeHandler(
+        config=config,
+        state=state,
+        prs=prs,
+        event_bus=event_bus,
+        ac_generator=ac_generator,
+        retrospective=retrospective,
+        verification_judge=verification_judge,
+        epic_checker=epic_checker,
+    )
     reviewer = ReviewPhase(
         config,
         state,
@@ -208,15 +219,10 @@ def build_services(
         prs,
         stop_event,
         store,
-        agents=agents,
         event_bus=event_bus,
-        retrospective=retrospective,
-        ac_generator=ac_generator,
-        verification_judge=verification_judge,
-        transcript_summarizer=summarizer,
-        epic_checker=epic_checker,
         harness_insights=harness_insights,
         conflict_resolver=conflict_resolver,
+        post_merge=post_merge_handler,
     )
 
     # Background loops

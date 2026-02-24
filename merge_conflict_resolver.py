@@ -8,7 +8,14 @@ from pathlib import Path
 from agent import AgentRunner
 from config import HydraFlowConfig
 from events import EventBus
-from models import EscalateFn, GitHubIssue, PRInfo, PublishFn, WorkerStatus
+from models import (
+    ConflictResolutionResult,
+    EscalateFn,
+    GitHubIssue,
+    PRInfo,
+    PublishFn,
+    WorkerStatus,
+)
 from phase_utils import publish_review_status, safe_file_memory_suggestion
 from pr_manager import PRManager
 from state import StateTracker
@@ -62,9 +69,11 @@ class MergeConflictResolver:
                 self._config.main_branch,
             )
             await publish_fn(pr, worker_id, WorkerStatus.MERGE_FIX.value)
-            merged, used_rebuild = await self.resolve_merge_conflicts(
+            resolution = await self.resolve_merge_conflicts(
                 pr, issue, wt_path, worker_id=worker_id
             )
+            merged = resolution.success
+            used_rebuild = resolution.used_rebuild
         if merged:
             if used_rebuild:
                 # Branch history was rewritten — need force-push
@@ -101,7 +110,7 @@ class MergeConflictResolver:
         wt_path: Path,
         worker_id: int | None = None,
         source: str = "merge_conflict",
-    ) -> tuple[bool, bool]:
+    ) -> ConflictResolutionResult:
         """Use the implementation agent to resolve merge conflicts.
 
         Retries up to ``config.max_merge_conflict_fix_attempts`` times.
@@ -112,8 +121,8 @@ class MergeConflictResolver:
         which destroys the worktree and re-applies the PR diff on a clean
         branch from main.
 
-        Returns ``(success, used_rebuild)`` — *used_rebuild* is True when
-        the fresh rebuild path was taken (caller should force-push).
+        Returns a :class:`ConflictResolutionResult` — *used_rebuild* is True
+        when the fresh rebuild path was taken (caller should force-push).
         """
         from conflict_prompt import build_conflict_prompt
 
@@ -122,7 +131,7 @@ class MergeConflictResolver:
                 "No agent runner available for conflict resolution on PR #%d",
                 pr.number,
             )
-            return False, False
+            return ConflictResolutionResult(success=False, used_rebuild=False)
 
         max_attempts = self._config.max_merge_conflict_fix_attempts
         last_error: str | None = None
@@ -135,7 +144,7 @@ class MergeConflictResolver:
             # Start merge leaving conflict markers in place
             clean = await self._worktrees.start_merge_main(wt_path, pr.branch)
             if clean:
-                return True, False
+                return ConflictResolutionResult(success=True, used_rebuild=False)
 
             logger.info(
                 "Conflict resolution attempt %d/%d for PR #%d",
@@ -179,7 +188,7 @@ class MergeConflictResolver:
                     await self._maybe_summarize_conflict(
                         transcript, issue.number, pr.number
                     )
-                    return True, False
+                    return ConflictResolutionResult(success=True, used_rebuild=False)
 
                 last_error = error_msg
                 logger.warning(
@@ -216,9 +225,9 @@ class MergeConflictResolver:
             pr, issue, worker_id=worker_id, source=source
         )
         if rebuilt:
-            return True, True
+            return ConflictResolutionResult(success=True, used_rebuild=True)
 
-        return False, False
+        return ConflictResolutionResult(success=False, used_rebuild=False)
 
     async def fresh_branch_rebuild(
         self,
