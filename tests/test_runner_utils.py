@@ -360,21 +360,21 @@ class TestStreamClaudeProcessLifecycle:
         ):
             await stream_claude_process(**_default_kwargs(event_bus), timeout=0.01)
 
-        # After the timeout, give the event loop a tick to process cancellation
-        await asyncio.sleep(0)
-
-        # Verify the stderr task actually started (so we know we exercised the leak path)
+        # The finally block in stream_claude_process already cancelled and awaited
+        # stderr_task before raising, so no sleep(0) is needed here.
         assert stderr_read_started.is_set(), (
             "stderr task should have started before timeout"
         )
 
         # The key assertion: no pending tasks should remain after the function returns
-        # If stderr_task was not cancelled+awaited, it would still be pending here
+        # If stderr_task was not cancelled+awaited in the finally block, it would
+        # still be pending here.
         current = asyncio.current_task()
         pending = [t for t in asyncio.all_tasks() if t is not current and not t.done()]
         assert not pending, f"stderr_task was not cleaned up: {pending}"
 
         mock_proc.kill.assert_called()
+        mock_proc.wait.assert_awaited()
 
     @pytest.mark.asyncio
     async def test_cancellation_cancels_stderr_task(self, event_bus) -> None:

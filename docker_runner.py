@@ -286,7 +286,7 @@ class DockerRunner:
     async def __aenter__(self) -> DockerRunner:
         return self
 
-    async def __aexit__(self, *exc_info: object) -> None:
+    async def __aexit__(self, *_: object) -> None:
         await self.cleanup()
 
     def _build_mounts(self, cwd: str | None) -> dict[str, dict[str, str]]:
