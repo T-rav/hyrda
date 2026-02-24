@@ -890,3 +890,29 @@ class TestAppendSyncOSError:
             event_log._append_sync("should fail")  # should not raise
 
         assert "Could not append to event log" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# _load_sync OSError handling (issue #1038)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadSyncOSError:
+    """Verify EventLog._load_sync catches OSError gracefully."""
+
+    def test_load_sync_returns_empty_on_oserror(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """When event log file can't be opened, return empty list with warning."""
+        event_log = EventLog(tmp_path / "events.jsonl")
+        # Create the file so exists() passes but open() fails
+        event_log._append_sync('{"type": "test"}')
+
+        with (
+            patch("builtins.open", side_effect=OSError("permission denied")),
+            caplog.at_level(logging.WARNING, logger="hydraflow.events"),
+        ):
+            result = event_log._load_sync()  # should not raise
+
+        assert result == []
+        assert "Could not read event log" in caplog.text

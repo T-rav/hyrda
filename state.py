@@ -44,7 +44,7 @@ class StateTracker:
                 ValueError,
                 UnicodeDecodeError,
             ) as exc:
-                logger.warning("Corrupt state file, resetting: %s", exc)
+                logger.warning("Corrupt state file, resetting: %s", exc, exc_info=True)
                 self._data = StateData()
         return self._data.model_dump()
 
