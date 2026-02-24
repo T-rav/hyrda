@@ -226,7 +226,6 @@ class PlannerRunner(BaseRunner):
         return build_agent_command(
             tool=self._config.planner_tool,
             model=self._config.planner_model,
-            budget_usd=self._config.planner_budget_usd,
             disallowed_tools="Write,Edit,NotebookEdit",
         )
 
@@ -886,7 +885,7 @@ SUMMARY: <brief one-line description of the plan>
 
     def _save_plan(self, issue_number: int, plan: str, summary: str) -> None:
         """Write the extracted plan to .hydraflow/plans/ for the implementation worker."""
-        plan_dir = self._config.repo_root / ".hydraflow" / "plans"
+        plan_dir = self._config.plans_dir
         try:
             plan_dir.mkdir(parents=True, exist_ok=True)
             path = plan_dir / f"issue-{issue_number}.md"

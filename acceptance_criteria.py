@@ -92,6 +92,7 @@ class AcceptanceCriteriaGenerator:
                 "source": "ac_generator",
             },
             logger=logger,
+            timeout=self._config.agent_timeout,
             runner=self._runner,
         )
 
@@ -112,7 +113,6 @@ class AcceptanceCriteriaGenerator:
         return build_agent_command(
             tool=self._config.ac_tool,
             model=self._config.ac_model,
-            budget_usd=self._config.ac_budget_usd,
             disallowed_tools="Write,Edit,NotebookEdit",
         )
 
@@ -271,6 +271,7 @@ Diff summary:
                         "source": "ac_precheck",
                     },
                     logger=logger,
+                    timeout=self._config.agent_timeout,
                     runner=self._runner,
                 )
                 risk, confidence, _escalate, summary, parse_failed = (
@@ -312,6 +313,7 @@ Diff summary:
                     "source": "ac_precheck_debug",
                 },
                 logger=logger,
+                timeout=self._config.agent_timeout,
                 runner=self._runner,
             )
             context.append("Debug precheck transcript:")
@@ -322,9 +324,7 @@ Diff summary:
 
     def _read_plan_file(self, issue_number: int) -> str:
         """Read the plan from ``.hydraflow/plans/issue-N.md``."""
-        plan_path = (
-            self._config.repo_root / ".hydraflow" / "plans" / f"issue-{issue_number}.md"
-        )
+        plan_path = self._config.plans_dir / f"issue-{issue_number}.md"
         try:
             return plan_path.read_text()
         except OSError:

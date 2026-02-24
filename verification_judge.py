@@ -351,7 +351,6 @@ REFINED_INSTRUCTIONS_END
         return build_agent_command(
             tool=self._config.verification_judge_tool,
             model=self._config.review_model,
-            budget_usd=self._config.review_budget_usd,
             disallowed_tools="Write,Edit,NotebookEdit",
         )
 
@@ -661,6 +660,7 @@ Diff excerpt:
             event_bus=self._bus,
             event_data={"issue": issue_number, "source": "verification_judge"},
             logger=logger,
+            timeout=self._config.agent_timeout,
             runner=self._runner,
         )
 

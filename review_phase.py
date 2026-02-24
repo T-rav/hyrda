@@ -82,7 +82,7 @@ class ReviewPhase:
         self._summarizer = transcript_summarizer
         self._epic_checker = epic_checker
         self._harness_insights = harness_insights
-        self._insights = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
+        self._insights = ReviewInsightStore(config.memory_dir)
         self._active_issues: set[int] = set()
         self._conflict_resolver = MergeConflictResolver(
             config=config,
@@ -353,12 +353,7 @@ class ReviewPhase:
         """
         from delta_verifier import parse_file_delta, verify_delta
 
-        plan_path = (
-            self._config.repo_root
-            / ".hydraflow"
-            / "plans"
-            / f"issue-{pr.issue_number}.md"
-        )
+        plan_path = self._config.plans_dir / f"issue-{pr.issue_number}.md"
         if not plan_path.exists():
             return ""
 
@@ -439,6 +434,22 @@ class ReviewPhase:
             if attempt >= max_attempts:
                 break
 
+            # Fetch full CI logs when observability injection is enabled
+            ci_logs = ""
+            if self._config.inject_runtime_logs:
+                try:
+                    raw = await self._prs.fetch_ci_failure_logs(pr.number)
+                    if raw:
+                        from log_context import truncate_log  # noqa: PLC0415
+
+                        ci_logs = truncate_log(raw, self._config.max_ci_log_chars)
+                except Exception:  # noqa: BLE001
+                    logger.debug(
+                        "Could not fetch CI failure logs for PR #%d",
+                        pr.number,
+                        exc_info=True,
+                    )
+
             # Run the CI fix agent
             await self._publish_review_status(pr, worker_id, "ci_fix")
             fix_result = await self._reviewers.fix_ci(
@@ -448,6 +459,7 @@ class ReviewPhase:
                 summary,
                 attempt=attempt + 1,
                 worker_id=worker_id,
+                ci_logs=ci_logs,
             )
             result.ci_fix_attempts += 1
 

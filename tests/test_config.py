@@ -380,14 +380,6 @@ class TestHydraFlowConfigDefaults:
         )
         assert cfg.hitl_active_label == ["hydraflow-hitl-active"]
 
-    def test_max_budget_usd_default(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_budget_usd == pytest.approx(0)
-
     def test_model_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
             repo_root=tmp_path,
@@ -403,14 +395,6 @@ class TestHydraFlowConfigDefaults:
             state_file=tmp_path / "s.json",
         )
         assert cfg.review_model == "sonnet"
-
-    def test_review_budget_usd_default(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.review_budget_usd == pytest.approx(0)
 
     def test_main_branch_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -443,6 +427,30 @@ class TestHydraFlowConfigDefaults:
             state_file=tmp_path / "s.json",
         )
         assert cfg.dry_run is False
+
+    def test_inject_runtime_logs_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.inject_runtime_logs is False
+
+    def test_max_runtime_log_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_runtime_log_chars == 8_000
+
+    def test_max_ci_log_chars_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.max_ci_log_chars == 12_000
 
 
 # ---------------------------------------------------------------------------
@@ -492,15 +500,6 @@ class TestHydraFlowConfigCustomValues:
         )
         assert cfg.max_workers == 3
 
-    def test_custom_max_budget_usd(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            max_budget_usd=20.0,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_budget_usd == pytest.approx(20.0)
-
     def test_custom_model(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
             model="haiku",
@@ -518,15 +517,6 @@ class TestHydraFlowConfigCustomValues:
             state_file=tmp_path / "s.json",
         )
         assert cfg.review_model == "sonnet"
-
-    def test_custom_review_budget_usd(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            review_budget_usd=10.0,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.review_budget_usd == pytest.approx(10.0)
 
     def test_custom_main_branch(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -918,55 +908,6 @@ class TestHydraFlowConfigValidationConstraints:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
             )
-
-    # max_budget_usd: gt=0
-
-    def test_max_budget_usd_positive_value_accepted(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            max_budget_usd=0.01,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_budget_usd == pytest.approx(0.01)
-
-    def test_max_budget_usd_zero_is_unlimited(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            max_budget_usd=0.0,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_budget_usd == pytest.approx(0)
-
-    def test_max_budget_usd_negative_raises(self, tmp_path: Path) -> None:
-        with pytest.raises(ValueError):
-            HydraFlowConfig(
-                max_budget_usd=-1.0,
-                repo_root=tmp_path,
-                worktree_base=tmp_path / "wt",
-                state_file=tmp_path / "s.json",
-            )
-
-    # review_budget_usd: gt=0
-
-    def test_review_budget_usd_positive_value_accepted(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            review_budget_usd=0.50,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.review_budget_usd == pytest.approx(0.50)
-
-    def test_review_budget_usd_zero_is_unlimited(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            review_budget_usd=0.0,
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.review_budget_usd == pytest.approx(0)
 
     # dashboard_port: ge=1024, le=65535
 
@@ -2822,6 +2763,927 @@ class TestEnvVarOverrideTable:
             )
 
 
+# ---------------------------------------------------------------------------
+# Docker config – defaults
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigDefaults:
+    """Tests that Docker config fields have correct default values."""
+
+    def test_execution_mode_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "host"
+
+    def test_docker_image_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "ghcr.io/t-rav/hydraflow-agent:latest"
+
+    def test_docker_cpu_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)
+
+    def test_docker_memory_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4g"
+
+    def test_docker_pids_limit_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 256
+
+    def test_docker_tmp_size_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "1g"
+
+    def test_docker_network_mode_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "bridge"
+
+    def test_docker_spawn_delay_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(2.0)
+
+    def test_docker_read_only_root_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is True
+
+    def test_docker_no_new_privileges_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is True
+
+
+# ---------------------------------------------------------------------------
+# Docker config – custom values override defaults
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigCustomValues:
+    """Tests that custom Docker config values take precedence over defaults."""
+
+    def test_custom_execution_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        cfg = HydraFlowConfig(
+            execution_mode="docker",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_custom_docker_image(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_image="my-registry/my-image:v1",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "my-registry/my-image:v1"
+
+    def test_custom_docker_cpu_limit(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_cpu_limit=4.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(4.0)
+
+    def test_custom_docker_memory_limit(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="8g",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "8g"
+
+    def test_custom_docker_network_mode(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_network_mode="none",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_custom_docker_spawn_delay(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_spawn_delay=5.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(5.0)
+
+    def test_custom_docker_read_only_root_false(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_read_only_root=False,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_custom_docker_no_new_privileges_false(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_no_new_privileges=False,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is False
+
+
+# ---------------------------------------------------------------------------
+# Docker config – validation constraints
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigValidation:
+    """Tests for Docker config validation constraints."""
+
+    def test_invalid_execution_mode_raises(self, tmp_path: Path) -> None:
+        """Invalid execution_mode Literal values should raise ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                execution_mode="kubernetes",  # type: ignore[arg-type]
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_docker_network_mode_raises(self, tmp_path: Path) -> None:
+        """Invalid docker_network_mode Literal values should raise ValidationError."""
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_network_mode="overlay",  # type: ignore[arg-type]
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_cpu_limit=0.1,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_cpu_limit=32.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_cpu_limit=0.5,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(0.5)
+
+    def test_docker_cpu_limit_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_cpu_limit=16.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(16.0)
+
+    def test_docker_spawn_delay_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_spawn_delay=-1.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_spawn_delay_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_spawn_delay=60.0,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_spawn_delay_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_spawn_delay=0.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(0.0)
+
+    def test_docker_spawn_delay_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_spawn_delay=30.0,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(30.0)
+
+    def test_docker_pids_limit_below_minimum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_pids_limit=15,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_above_maximum_raises(self, tmp_path: Path) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(
+                docker_pids_limit=4097,
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_pids_limit_minimum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_pids_limit=16,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 16
+
+    def test_docker_pids_limit_maximum_boundary(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_pids_limit=4096,
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 4096
+
+    def test_docker_memory_limit_invalid_suffix_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="4gb",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_memory_limit_invalid_text_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="lots",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_tmp_size_invalid_rejected(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_tmp_size="big",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_not_available_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """execution_mode='docker' with Docker not on PATH should raise ValueError."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        with pytest.raises(ValueError, match="docker.*not found on PATH"):
+            HydraFlowConfig(
+                execution_mode="docker",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_available_passes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """execution_mode='docker' with Docker on PATH should not raise."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        cfg = HydraFlowConfig(
+            execution_mode="docker",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_host_mode_skips_docker_check(self, tmp_path: Path) -> None:
+        """execution_mode='host' should not check for Docker availability."""
+        cfg = HydraFlowConfig(
+            execution_mode="host",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "host"
+
+
+# ---------------------------------------------------------------------------
+# Docker size notation validator – targeted tests for validate_docker_size_notation
+# ---------------------------------------------------------------------------
+
+
+class TestDockerSizeNotationValidator:
+    """Tests for the validate_docker_size_notation field validator."""
+
+    def test_valid_size_512m(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="512m",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "512m"
+
+    def test_valid_size_1024k(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="1024k",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "1024k"
+
+    def test_valid_size_100b(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="100b",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "100b"
+
+    def test_valid_size_uppercase_4G(self, tmp_path: Path) -> None:
+        """Validator uses re.IGNORECASE — uppercase units should be accepted."""
+        cfg = HydraFlowConfig(
+            docker_memory_limit="4G",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4G"
+
+    def test_valid_size_uppercase_512M(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="512M",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "512M"
+
+    def test_valid_docker_tmp_size(self, tmp_path: Path) -> None:
+        """Validator applies to docker_tmp_size as well."""
+        cfg = HydraFlowConfig(
+            docker_tmp_size="512m",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "512m"
+
+    def test_invalid_empty_string(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_digits_only(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="4",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_unit_only(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="g",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_valid_size_4g(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            docker_memory_limit="4g",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "4g"
+
+    def test_invalid_size_with_suffix_gb(self, tmp_path: Path) -> None:
+        """'4gb' should fail — only single-char unit suffix is valid."""
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="4gb",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_invalid_size_alpha_only(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="Invalid Docker size notation"):
+            HydraFlowConfig(
+                docker_memory_limit="abc",
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+
+# ---------------------------------------------------------------------------
+# Docker config – env var overrides
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfigEnvVarOverrides:
+    """Tests for Docker-specific env var overrides."""
+
+    def test_execution_mode_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        monkeypatch.setenv("HYDRAFLOW_EXECUTION_MODE", "docker")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+    def test_docker_image_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_IMAGE", "custom/image:v2")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "custom/image:v2"
+
+    def test_docker_memory_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_MEMORY_LIMIT", "16g")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_memory_limit == "16g"
+
+    def test_docker_network_mode_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_NETWORK_MODE", "none")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network_mode == "none"
+
+    def test_docker_cpu_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_CPU_LIMIT", "8.0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(8.0)
+
+    def test_docker_spawn_delay_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_SPAWN_DELAY", "5.0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(5.0)
+
+    def test_docker_read_only_root_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_READ_ONLY_ROOT", "false")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_read_only_root is False
+
+    def test_docker_no_new_privileges_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_NO_NEW_PRIVILEGES", "0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_no_new_privileges is False
+
+    def test_execution_mode_docker_via_env_raises_when_docker_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_EXECUTION_MODE=docker should trigger docker availability check."""
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: None)
+        monkeypatch.setenv("HYDRAFLOW_EXECUTION_MODE", "docker")
+        with pytest.raises(ValueError, match="docker.*not found on PATH"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_docker_cpu_limit_env_override_out_of_range_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_DOCKER_CPU_LIMIT outside ge/le bounds should be silently ignored."""
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_CPU_LIMIT", "50.0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_cpu_limit == pytest.approx(2.0)  # unchanged default
+
+    def test_docker_spawn_delay_env_override_out_of_range_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_DOCKER_SPAWN_DELAY outside ge/le bounds should be silently ignored."""
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_SPAWN_DELAY", "999.0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == pytest.approx(2.0)  # unchanged default
+
+    def test_pids_limit_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_PIDS_LIMIT", "512")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_pids_limit == 512
+
+    def test_pids_limit_env_override_below_minimum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_PIDS_LIMIT", "15")
+        with pytest.raises(ValueError, match="HYDRAFLOW_DOCKER_PIDS_LIMIT"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_pids_limit_env_override_above_maximum_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_PIDS_LIMIT", "4097")
+        with pytest.raises(ValueError, match="HYDRAFLOW_DOCKER_PIDS_LIMIT"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_env_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_TMP_SIZE", "2g")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_tmp_size == "2g"
+
+    def test_memory_limit_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_DOCKER_MEMORY_LIMIT with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_MEMORY_LIMIT", "invalid_val")
+        with pytest.raises(ValueError, match="Invalid HYDRAFLOW_DOCKER_MEMORY_LIMIT"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_tmp_size_env_override_invalid_value_rejected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_DOCKER_TMP_SIZE with invalid notation must be rejected."""
+        monkeypatch.setenv("HYDRAFLOW_DOCKER_TMP_SIZE", "4gb")
+        with pytest.raises(ValueError, match="Invalid HYDRAFLOW_DOCKER_TMP_SIZE"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+            )
+
+    def test_execution_mode_default_value_overridden_by_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When execution_mode equals the default ('host'), env var overrides it.
+
+        The override only applies when the value is still at the default. Because
+        'host' IS the default, explicitly passing execution_mode='host' is
+        indistinguishable from using the default, so the env var wins.
+        """
+        import shutil
+
+        monkeypatch.setattr(shutil, "which", lambda _: "/usr/bin/docker")
+        monkeypatch.setenv("HYDRAFLOW_EXECUTION_MODE", "docker")
+        cfg = HydraFlowConfig(
+            execution_mode="host",
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.execution_mode == "docker"
+
+
+# ---------------------------------------------------------------------------
+# Docker config fields
+# ---------------------------------------------------------------------------
+
+
+class TestDockerConfig:
+    """Tests for Docker-related configuration fields."""
+
+    def test_docker_disabled_by_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_enabled is False
+
+    def test_docker_image_has_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "ghcr.io/t-rav/hydraflow-agent:latest"
+
+    def test_docker_spawn_delay_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == 2.0
+
+    def test_docker_network_empty_by_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network == ""
+
+    def test_docker_extra_mounts_empty_by_default(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_extra_mounts == []
+
+    def test_docker_enabled_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_ENABLED", "true")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_enabled is True
+
+    def test_docker_enabled_env_var_false(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_ENABLED", "no")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_enabled is False
+
+    def test_docker_image_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_IMAGE", "hydra:v2")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_image == "hydra:v2"
+
+    def test_docker_spawn_delay_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_SPAWN_DELAY", "5.0")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == 5.0
+
+    def test_docker_spawn_delay_invalid_env_var(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_SPAWN_DELAY", "not-a-number")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_spawn_delay == 2.0  # default preserved
+
+    def test_docker_network_env_var_override(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK", "hydra-net")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.docker_network == "hydra-net"
+
+    def test_docker_network_env_var_not_applied_when_explicit(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_NETWORK", "from-env")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            docker_network="explicit-net",
+        )
+        assert cfg.docker_network == "explicit-net"
+
+    def test_docker_enabled_explicit_overrides_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRA_DOCKER_ENABLED", "true")
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            docker_enabled=True,
+        )
+        assert cfg.docker_enabled is True
+
+    def test_docker_custom_values(self, tmp_path: Path) -> None:
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            docker_enabled=True,
+            docker_image="hydra-agent:latest",
+            docker_spawn_delay=3.5,
+            docker_network="my-network",
+            docker_extra_mounts=["/host:/container:rw"],
+        )
+        assert cfg.docker_enabled is True
+        assert cfg.docker_image == "hydra-agent:latest"
+        assert cfg.docker_spawn_delay == 3.5
+        assert cfg.docker_network == "my-network"
+        assert cfg.docker_extra_mounts == ["/host:/container:rw"]
+
+    def test_docker_spawn_delay_too_low(self, tmp_path: Path) -> None:
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                docker_spawn_delay=-1.0,
+            )
+
+    def test_docker_spawn_delay_too_high(self, tmp_path: Path) -> None:
+        import pydantic
+
+        with pytest.raises(pydantic.ValidationError):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                docker_spawn_delay=31.0,
+            )
+
+
 class TestAgentToolFields:
     def test_tool_defaults(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -2927,3 +3789,298 @@ class TestLabelValidation:
             state_file=tmp_path / "s.json",
         )
         assert cfg.ready_label == ["hydraflow-ready"]
+
+
+class TestTimeoutConfigFields:
+    """Tests for agent_timeout, transcript_summary_timeout, memory_compaction_timeout."""
+
+    def test_agent_timeout_default(self) -> None:
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.agent_timeout == 3600
+
+    def test_transcript_summary_timeout_default(self) -> None:
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.transcript_summary_timeout == 120
+
+    def test_memory_compaction_timeout_default(self) -> None:
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.memory_compaction_timeout == 60
+
+    def test_agent_timeout_bounds_too_low(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", agent_timeout=10)
+
+    def test_agent_timeout_bounds_too_high(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", agent_timeout=20000)
+
+    def test_transcript_summary_timeout_bounds_too_low(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", transcript_summary_timeout=5)
+
+    def test_transcript_summary_timeout_bounds_too_high(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", transcript_summary_timeout=999)
+
+    def test_memory_compaction_timeout_bounds_too_low(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", memory_compaction_timeout=5)
+
+    def test_memory_compaction_timeout_bounds_too_high(self) -> None:
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            HydraFlowConfig(repo="test/repo", memory_compaction_timeout=999)
+
+    def test_agent_timeout_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HYDRAFLOW_AGENT_TIMEOUT", "7200")
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.agent_timeout == 7200
+
+    def test_transcript_summary_timeout_env_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_TRANSCRIPT_SUMMARY_TIMEOUT", "300")
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.transcript_summary_timeout == 300
+
+    def test_memory_compaction_timeout_env_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_MEMORY_COMPACTION_TIMEOUT", "90")
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.memory_compaction_timeout == 90
+
+
+# ---------------------------------------------------------------------------
+# Directory properties (log_dir, plans_dir, memory_dir)
+# ---------------------------------------------------------------------------
+
+
+class TestDirectoryProperties:
+    """Tests for the computed directory @property methods on HydraFlowConfig."""
+
+    def test_log_dir_returns_hydraflow_logs_under_repo_root(
+        self, tmp_path: Path
+    ) -> None:
+        """log_dir should return repo_root / .hydraflow / logs."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.log_dir == tmp_path / ".hydraflow" / "logs"
+
+    def test_plans_dir_returns_hydraflow_plans_under_repo_root(
+        self, tmp_path: Path
+    ) -> None:
+        """plans_dir should return repo_root / .hydraflow / plans."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.plans_dir == tmp_path / ".hydraflow" / "plans"
+
+    def test_memory_dir_returns_hydraflow_memory_under_repo_root(
+        self, tmp_path: Path
+    ) -> None:
+        """memory_dir should return repo_root / .hydraflow / memory."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.memory_dir == tmp_path / ".hydraflow" / "memory"
+
+    def test_directory_properties_follow_repo_root(self, tmp_path: Path) -> None:
+        """All directory properties should be anchored to whatever repo_root is."""
+        custom_root = tmp_path / "custom" / "root"
+        custom_root.mkdir(parents=True)
+        cfg = HydraFlowConfig(
+            repo_root=custom_root,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.log_dir.parent.parent == custom_root
+        assert cfg.plans_dir.parent.parent == custom_root
+        assert cfg.memory_dir.parent.parent == custom_root
+
+
+# ---------------------------------------------------------------------------
+# Timeout and limit fields
+# ---------------------------------------------------------------------------
+
+
+class TestTimeoutAndLimitFields:
+    """Tests for quality_timeout, git_command_timeout, summarizer_timeout, error_output_max_chars."""
+
+    def test_quality_timeout_default(self, tmp_path: Path) -> None:
+        """quality_timeout should default to 3600."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.quality_timeout == 3600
+
+    def test_git_command_timeout_default(self, tmp_path: Path) -> None:
+        """git_command_timeout should default to 30."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.git_command_timeout == 30
+
+    def test_summarizer_timeout_default(self, tmp_path: Path) -> None:
+        """summarizer_timeout should default to 120."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.summarizer_timeout == 120
+
+    def test_error_output_max_chars_default(self, tmp_path: Path) -> None:
+        """error_output_max_chars should default to 3000."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+        )
+        assert cfg.error_output_max_chars == 3000
+
+    def test_quality_timeout_custom(self, tmp_path: Path) -> None:
+        """quality_timeout should accept a custom value within range."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            quality_timeout=1800,
+        )
+        assert cfg.quality_timeout == 1800
+
+    def test_git_command_timeout_custom(self, tmp_path: Path) -> None:
+        """git_command_timeout should accept a custom value within range."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            git_command_timeout=60,
+        )
+        assert cfg.git_command_timeout == 60
+
+    def test_summarizer_timeout_custom(self, tmp_path: Path) -> None:
+        """summarizer_timeout should accept a custom value within range."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            summarizer_timeout=300,
+        )
+        assert cfg.summarizer_timeout == 300
+
+    def test_error_output_max_chars_custom(self, tmp_path: Path) -> None:
+        """error_output_max_chars should accept a custom value within range."""
+        cfg = HydraFlowConfig(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "wt",
+            state_file=tmp_path / "s.json",
+            error_output_max_chars=5000,
+        )
+        assert cfg.error_output_max_chars == 5000
+
+    def test_quality_timeout_below_minimum_rejected(self, tmp_path: Path) -> None:
+        """quality_timeout below ge=60 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="greater than or equal to 60"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                quality_timeout=10,
+            )
+
+    def test_quality_timeout_above_maximum_rejected(self, tmp_path: Path) -> None:
+        """quality_timeout above le=7200 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="less than or equal to 7200"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                quality_timeout=10000,
+            )
+
+    def test_git_command_timeout_below_minimum_rejected(self, tmp_path: Path) -> None:
+        """git_command_timeout below ge=5 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="greater than or equal to 5"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                git_command_timeout=1,
+            )
+
+    def test_summarizer_timeout_below_minimum_rejected(self, tmp_path: Path) -> None:
+        """summarizer_timeout below ge=30 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="greater than or equal to 30"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                summarizer_timeout=5,
+            )
+
+    def test_error_output_max_chars_below_minimum_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """error_output_max_chars below ge=500 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="greater than or equal to 500"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                error_output_max_chars=100,
+            )
+
+    def test_git_command_timeout_above_maximum_rejected(self, tmp_path: Path) -> None:
+        """git_command_timeout above le=120 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="less than or equal to 120"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                git_command_timeout=300,
+            )
+
+    def test_summarizer_timeout_above_maximum_rejected(self, tmp_path: Path) -> None:
+        """summarizer_timeout above le=600 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="less than or equal to 600"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                summarizer_timeout=1200,
+            )
+
+    def test_error_output_max_chars_above_maximum_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """error_output_max_chars above le=20_000 should be rejected by Pydantic."""
+        with pytest.raises(ValueError, match="less than or equal to 20000"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                error_output_max_chars=50_000,
+            )

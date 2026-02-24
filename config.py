@@ -43,6 +43,15 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("max_debug_attempts", "HYDRAFLOW_MAX_DEBUG_ATTEMPTS", 1),
     ("harness_insight_window", "HYDRAFLOW_HARNESS_INSIGHT_WINDOW", 20),
     ("harness_pattern_threshold", "HYDRAFLOW_HARNESS_PATTERN_THRESHOLD", 3),
+    ("max_runtime_log_chars", "HYDRAFLOW_MAX_RUNTIME_LOG_CHARS", 8_000),
+    ("max_ci_log_chars", "HYDRAFLOW_MAX_CI_LOG_CHARS", 12_000),
+    ("agent_timeout", "HYDRAFLOW_AGENT_TIMEOUT", 3600),
+    ("transcript_summary_timeout", "HYDRAFLOW_TRANSCRIPT_SUMMARY_TIMEOUT", 120),
+    ("memory_compaction_timeout", "HYDRAFLOW_MEMORY_COMPACTION_TIMEOUT", 60),
+    ("quality_timeout", "HYDRAFLOW_QUALITY_TIMEOUT", 3600),
+    ("git_command_timeout", "HYDRAFLOW_GIT_COMMAND_TIMEOUT", 30),
+    ("summarizer_timeout", "HYDRAFLOW_SUMMARIZER_TIMEOUT", 120),
+    ("error_output_max_chars", "HYDRAFLOW_ERROR_OUTPUT_MAX_CHARS", 3000),
 ]
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
@@ -74,6 +83,7 @@ _ENV_BOOL_OVERRIDES: list[tuple[str, str, bool]] = [
     ),
     ("memory_auto_approve", "HYDRAFLOW_MEMORY_AUTO_APPROVE", False),
     ("debug_escalation_enabled", "HYDRAFLOW_DEBUG_ESCALATION_ENABLED", True),
+    ("inject_runtime_logs", "HYDRAFLOW_INJECT_RUNTIME_LOGS", False),
 ]
 
 # Label env var overrides — maps env key → (field_name, default_value)
@@ -118,9 +128,6 @@ class HydraFlowConfig(BaseModel):
     max_hitl_workers: int = Field(
         default=1, ge=1, le=5, description="Concurrent HITL correction agents"
     )
-    max_budget_usd: float = Field(
-        default=0, ge=0, description="USD cap per implementation agent (0 = unlimited)"
-    )
     implementation_tool: Literal["claude", "codex"] = Field(
         default="claude",
         description="CLI backend for implementation agents",
@@ -133,9 +140,6 @@ class HydraFlowConfig(BaseModel):
         description="CLI backend for review agents",
     )
     review_model: str = Field(default="sonnet", description="Model for review agents")
-    review_budget_usd: float = Field(
-        default=0, ge=0, description="USD cap per review agent (0 = unlimited)"
-    )
 
     # CI check configuration
     ci_check_timeout: int = Field(
@@ -252,9 +256,6 @@ class HydraFlowConfig(BaseModel):
     triage_model: str = Field(
         default="haiku", description="Model for triage evaluation (fast/cheap)"
     )
-    planner_budget_usd: float = Field(
-        default=0, ge=0, description="USD cap per planning agent (0 = unlimited)"
-    )
     min_plan_words: int = Field(
         default=200,
         ge=50,
@@ -358,6 +359,32 @@ class HydraFlowConfig(BaseModel):
         le=1.0,
         description="Minimum low-tier confidence before skipping debug escalation",
     )
+    # Timeouts
+    quality_timeout: int = Field(
+        default=3600,
+        ge=60,
+        le=7200,
+        description="Timeout in seconds for 'make quality' verification",
+    )
+    git_command_timeout: int = Field(
+        default=30,
+        ge=5,
+        le=120,
+        description="Timeout in seconds for simple git commands (rev-list, rev-parse, status)",
+    )
+    summarizer_timeout: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="Timeout in seconds for transcript summarizer subprocess",
+    )
+    error_output_max_chars: int = Field(
+        default=3000,
+        ge=500,
+        le=20_000,
+        description="Max characters of error output to include in prompts and messages",
+    )
+
     test_command: str = Field(
         default="make test",
         description="Quick test command for agent prompts",
@@ -395,6 +422,24 @@ class HydraFlowConfig(BaseModel):
     memory_auto_approve: bool = Field(
         default=False,
         description="When True, memory suggestions skip HITL and go directly to the sync queue",
+    )
+
+    # Observability context injection
+    inject_runtime_logs: bool = Field(
+        default=False,
+        description="Inject runtime application logs into agent context (opt-in)",
+    )
+    max_runtime_log_chars: int = Field(
+        default=8_000,
+        ge=1_000,
+        le=100_000,
+        description="Max characters for runtime log injection",
+    )
+    max_ci_log_chars: int = Field(
+        default=12_000,
+        ge=1_000,
+        le=100_000,
+        description="Max characters for CI failure log injection",
     )
 
     # Manifest detection
@@ -533,9 +578,6 @@ class HydraFlowConfig(BaseModel):
         default="claude",
         description="CLI backend for acceptance criteria generation",
     )
-    ac_budget_usd: float = Field(
-        default=0, ge=0, description="USD cap for AC generation agent (0 = unlimited)"
-    )
     verification_judge_tool: Literal["claude", "codex"] = Field(
         default="claude",
         description="CLI backend for verification judge agents",
@@ -561,6 +603,26 @@ class HydraFlowConfig(BaseModel):
         ge=0,
         le=30,
         description="Extra minutes to wait after reported credit reset time",
+    )
+
+    # Process timeouts
+    agent_timeout: int = Field(
+        default=3600,
+        ge=60,
+        le=14400,
+        description="Default timeout in seconds for agent process runs",
+    )
+    transcript_summary_timeout: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="Timeout in seconds for transcript summarization model calls",
+    )
+    memory_compaction_timeout: int = Field(
+        default=60,
+        ge=30,
+        le=600,
+        description="Timeout in seconds for memory compaction model calls",
     )
 
     # Execution mode
@@ -684,6 +746,21 @@ class HydraFlowConfig(BaseModel):
         ):
             result.extend(labels)
         return result
+
+    @property
+    def log_dir(self) -> Path:
+        """Return the directory for transcript / log files."""
+        return self.repo_root / ".hydraflow" / "logs"
+
+    @property
+    def plans_dir(self) -> Path:
+        """Return the directory for saved plan files."""
+        return self.repo_root / ".hydraflow" / "plans"
+
+    @property
+    def memory_dir(self) -> Path:
+        """Return the directory for memory / review-insight files."""
+        return self.repo_root / ".hydraflow" / "memory"
 
     def branch_for_issue(self, issue_number: int) -> str:
         """Return the canonical branch name for a given issue number."""

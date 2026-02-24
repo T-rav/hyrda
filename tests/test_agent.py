@@ -16,6 +16,7 @@ from agent import AgentRunner
 from base_runner import BaseRunner
 from events import EventBus, EventType
 from models import WorkerStatus
+from tests.conftest import IssueFactory
 from tests.helpers import ConfigFactory, make_streaming_proc
 
 # ---------------------------------------------------------------------------
@@ -93,32 +94,6 @@ class TestBuildCommand:
         assert "--model" in cmd
         model_index = cmd.index("--model")
         assert cmd[model_index + 1] == config.model
-
-    def test_build_command_includes_max_budget(
-        self, config, event_bus: EventBus, tmp_path: Path
-    ) -> None:
-        """Command should include --max-budget-usd matching config.max_budget_usd."""
-        runner = AgentRunner(config, event_bus)
-        cmd = runner._build_command(tmp_path)
-        assert "--max-budget-usd" in cmd
-        budget_index = cmd.index("--max-budget-usd")
-        assert cmd[budget_index + 1] == str(config.max_budget_usd)
-
-    def test_build_command_omits_budget_when_zero(
-        self, event_bus: EventBus, tmp_path: Path
-    ) -> None:
-        """Command should omit --max-budget-usd when budget is 0 (unlimited)."""
-        from tests.conftest import ConfigFactory
-
-        cfg = ConfigFactory.create(
-            max_budget_usd=0,
-            repo_root=tmp_path / "repo",
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        runner = AgentRunner(cfg, event_bus)
-        cmd = runner._build_command(tmp_path)
-        assert "--max-budget-usd" not in cmd
 
     def test_build_command_includes_output_format_text(
         self, config, event_bus: EventBus, tmp_path: Path
@@ -877,6 +852,7 @@ class TestCountCommits:
             "--count",
             "origin/main..agent/issue-42",
             cwd=str(tmp_path),
+            stdin=None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=None,
@@ -2038,3 +2014,71 @@ class TestCountCommitsTimeout:
             result = await runner._count_commits(tmp_path, "agent/issue-42")
 
         assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# AgentRunner._build_prompt — runtime log injection
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPromptRuntimeLogs:
+    """Tests for runtime log injection in _build_prompt."""
+
+    def test_prompt_includes_runtime_logs_when_enabled(
+        self, tmp_path: Path, event_bus: EventBus
+    ) -> None:
+        """When inject_runtime_logs is True and logs exist, prompt includes them."""
+        config = ConfigFactory.create(
+            inject_runtime_logs=True,
+            repo_root=tmp_path,
+        )
+        # Create a log file
+        log_dir = tmp_path / ".hydraflow" / "logs"
+        log_dir.mkdir(parents=True)
+        (log_dir / "hydraflow.log").write_text("INFO: server started\nERROR: timeout\n")
+
+        runner = AgentRunner(config, event_bus)
+        issue = IssueFactory.create()
+
+        with (
+            patch("base_runner.load_project_manifest", return_value=""),
+            patch("base_runner.load_memory_digest", return_value=""),
+        ):
+            prompt = runner._build_prompt(issue)
+
+        assert "## Recent Application Logs" in prompt
+        assert "ERROR: timeout" in prompt
+
+    def test_prompt_excludes_runtime_logs_when_disabled(
+        self, config, event_bus: EventBus
+    ) -> None:
+        """Default config does not include runtime logs."""
+        runner = AgentRunner(config, event_bus)
+        issue = IssueFactory.create()
+
+        with (
+            patch("base_runner.load_project_manifest", return_value=""),
+            patch("base_runner.load_memory_digest", return_value=""),
+        ):
+            prompt = runner._build_prompt(issue)
+
+        assert "## Recent Application Logs" not in prompt
+
+    def test_prompt_excludes_runtime_logs_when_empty(
+        self, tmp_path: Path, event_bus: EventBus
+    ) -> None:
+        """Enabled but no log file — no log section in prompt."""
+        config = ConfigFactory.create(
+            inject_runtime_logs=True,
+            repo_root=tmp_path,
+        )
+        runner = AgentRunner(config, event_bus)
+        issue = IssueFactory.create()
+
+        with (
+            patch("base_runner.load_project_manifest", return_value=""),
+            patch("base_runner.load_memory_digest", return_value=""),
+        ):
+            prompt = runner._build_prompt(issue)
+
+        assert "## Recent Application Logs" not in prompt

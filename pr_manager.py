@@ -7,6 +7,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +20,9 @@ from subprocess_util import run_subprocess, run_subprocess_with_retry
 
 logger = logging.getLogger("hydraflow.pr_manager")
 
+# Cache TTL for label-count queries (seconds).
+_LABEL_CACHE_TTL: int = 30
+
 
 class SelfReviewError(RuntimeError):
     """Raised when a formal review fails due to the 'own pull request' restriction."""
@@ -27,7 +31,7 @@ class SelfReviewError(RuntimeError):
 class PRManager:
     """Pushes branches, creates PRs, merges, and manages labels."""
 
-    _GITHUB_COMMENT_LIMIT = 65_536
+    _GITHUB_COMMENT_LIMIT = 65_536  # GitHub maximum comment body size
     _HEADER_RESERVE = 50  # room for "*Part X/Y*\n\n" prefix
 
     # Re-export from prep module for backward compatibility
@@ -588,6 +592,75 @@ class PRManager:
             logger.warning("Could not fetch CI checks for PR #%d: %s", pr_number, exc)
             return []
 
+    _RUN_ID_PATTERN = re.compile(r"/actions/runs/(\d+)")
+
+    async def fetch_ci_failure_logs(self, pr_number: int) -> str:
+        """Fetch full CI failure logs for *pr_number*.
+
+        Queries check runs, extracts run IDs from failed checks, and
+        fetches their ``--log-failed`` output.  Returns the concatenated
+        log text (one section per failed check) or an empty string on
+        error or in dry-run mode.
+        """
+        if self._config.dry_run:
+            return ""
+
+        try:
+            raw = await self._run_gh(
+                "gh",
+                "pr",
+                "checks",
+                str(pr_number),
+                "--repo",
+                self._repo,
+                "--json",
+                "name,state,detailsUrl",
+            )
+            checks = json.loads(raw)
+        except (RuntimeError, json.JSONDecodeError) as exc:
+            logger.warning("Could not fetch CI checks for PR #%d: %s", pr_number, exc)
+            return ""
+
+        # Collect run IDs from failed checks
+        seen_run_ids: set[str] = set()
+        failed_names: list[tuple[str, str]] = []  # (name, run_id)
+        for check in checks:
+            state = check.get("state", "").upper()
+            if state in self._PASSING_STATES or state in self._PENDING_STATES:
+                continue
+            details_url = check.get("detailsUrl", "")
+            if not details_url:
+                continue
+            match = self._RUN_ID_PATTERN.search(details_url)
+            if not match:
+                continue
+            run_id = match.group(1)
+            if run_id not in seen_run_ids:
+                seen_run_ids.add(run_id)
+                failed_names.append((check.get("name", "unknown"), run_id))
+
+        if not failed_names:
+            return ""
+
+        sections: list[str] = []
+        for name, run_id in failed_names:
+            try:
+                log_output = await self._run_gh(
+                    "gh",
+                    "run",
+                    "view",
+                    run_id,
+                    "--repo",
+                    self._repo,
+                    "--log-failed",
+                )
+                if log_output.strip():
+                    sections.append(f"### {name} (run {run_id})\n\n{log_output}")
+            except RuntimeError as exc:
+                logger.debug("Could not fetch log for run %s: %s", run_id, exc)
+
+        return "\n\n".join(sections)
+
     _PASSING_STATES = frozenset({"SUCCESS", "NEUTRAL", "SKIPPED"})
     _PENDING_STATES = frozenset(
         {"PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING"}
@@ -900,7 +973,7 @@ class PRManager:
         import time
 
         now = time.monotonic()
-        if self._label_counts_cache and now - self._label_counts_ts < 30:
+        if self._label_counts_cache and now - self._label_counts_ts < _LABEL_CACHE_TTL:
             return self._label_counts_cache
 
         label_map = {
@@ -930,8 +1003,10 @@ class PRManager:
     _TRUNCATION_MARKER = "\n\n*...truncated to fit GitHub comment limit*"
 
     @staticmethod
-    def _chunk_body(body: str, limit: int = 65_536) -> list[str]:
+    def _chunk_body(body: str, limit: int | None = None) -> list[str]:
         """Split *body* into chunks that fit within GitHub's comment limit."""
+        if limit is None:
+            limit = PRManager._GITHUB_COMMENT_LIMIT
         if len(body) <= limit:
             return [body]
         chunks: list[str] = []
@@ -947,12 +1022,14 @@ class PRManager:
         return chunks
 
     @classmethod
-    def _cap_body(cls, body: str, limit: int = 65_536) -> str:
+    def _cap_body(cls, body: str, limit: int | None = None) -> str:
         """Hard-truncate *body* to *limit* characters.
 
         Acts as a safety net after chunking / header prepending to guarantee
         no single payload exceeds GitHub's comment size limit.
         """
+        if limit is None:
+            limit = cls._GITHUB_COMMENT_LIMIT
         if len(body) <= limit:
             return body
         marker = cls._TRUNCATION_MARKER
