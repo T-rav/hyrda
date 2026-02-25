@@ -3218,6 +3218,32 @@ class TestGetSystemWorkersEndpoint:
             success=True,
             stats={"total_tokens": 120, "pruned_chars_total": 800},
         )
+        telemetry.record(
+            source="agent",
+            tool="codex",
+            model="gpt-5",
+            issue_number=43,
+            pr_number=None,
+            session_id="s-1",
+            prompt_chars=150,
+            transcript_chars=40,
+            duration_seconds=0.8,
+            success=True,
+            stats={"total_tokens": 60, "pruned_chars_total": 200},
+        )
+        telemetry.record(
+            source="merge_conflict",
+            tool="claude",
+            model="sonnet",
+            issue_number=44,
+            pr_number=222,
+            session_id="s-1",
+            prompt_chars=180,
+            transcript_chars=50,
+            duration_seconds=1.0,
+            success=True,
+            stats={"total_tokens": 70, "pruned_chars_total": 400},
+        )
 
         router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._find_endpoint(router, "/api/system/workers")
@@ -3230,6 +3256,14 @@ class TestGetSystemWorkersEndpoint:
         assert details["pruned_chars_total"] == 800
         assert details["saved_tokens_est"] == 200
         assert details["unpruned_tokens_est"] == 320
+
+        implement_worker = next(w for w in data["workers"] if w["name"] == "implement")
+        assert implement_worker["details"]["inference_calls"] == 1
+        assert implement_worker["details"]["total_tokens"] == 60
+
+        review_worker = next(w for w in data["workers"] if w["name"] == "review")
+        assert review_worker["details"]["inference_calls"] == 1
+        assert review_worker["details"]["total_tokens"] == 70
 
 
 # ---------------------------------------------------------------------------

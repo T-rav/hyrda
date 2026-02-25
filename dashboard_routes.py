@@ -744,7 +744,7 @@ def create_router(
     _WORKER_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {
         "plan": ("planner",),
         "implement": ("agent",),
-        "review": ("reviewer",),
+        "review": ("reviewer", "merge_conflict", "fresh_rebuild"),
     }
 
     def _build_system_worker_inference_stats() -> dict[str, dict[str, int]]:

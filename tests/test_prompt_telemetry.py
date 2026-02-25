@@ -205,7 +205,7 @@ class TestPromptTelemetry:
         assert row["total_est_tokens"] == 0
         assert row["total_tokens"] == 0
 
-    def test_record_includes_explicit_pruned_counter_and_section_chars(self, tmp_path):
+    def test_record_prefers_explicit_pruned_counter_and_section_chars(self, tmp_path):
         config = ConfigFactory.create(repo_root=tmp_path)
         telemetry = PromptTelemetry(config)
         telemetry.record(
@@ -230,9 +230,34 @@ class TestPromptTelemetry:
         )
         inf_file = config.data_path("metrics", "prompt", "inferences.jsonl")
         row = json.loads(inf_file.read_text().strip())
-        assert row["pruned_chars_total"] == 623
+        assert row["pruned_chars_total"] == 123
         assert row["section_chars"]["issue_body_before"] == 1000
 
         pr_file = config.data_path("metrics", "prompt", "pr_stats.json")
         rollup = json.loads(pr_file.read_text())
-        assert rollup["prs"]["500"]["pruned_chars_total"] == 623
+        assert rollup["prs"]["500"]["pruned_chars_total"] == 123
+
+    def test_record_derives_pruned_counter_when_explicit_missing(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="planner",
+            tool="claude",
+            model="opus",
+            issue_number=45,
+            pr_number=501,
+            session_id="sess-prune",
+            prompt_chars=120,
+            transcript_chars=30,
+            duration_seconds=0.1,
+            success=True,
+            stats={
+                "history_chars_before": 1000,
+                "history_chars_after": 700,
+                "context_chars_before": 2000,
+                "context_chars_after": 1800,
+            },
+        )
+        inf_file = config.data_path("metrics", "prompt", "inferences.jsonl")
+        row = json.loads(inf_file.read_text().strip())
+        assert row["pruned_chars_total"] == 500

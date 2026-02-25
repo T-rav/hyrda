@@ -64,6 +64,7 @@ class PromptTelemetry:
         history_saved = max(0, history_before - history_after)
         context_saved = max(0, context_before - context_after)
         explicit_pruned = max(0, _as_int(st.get("pruned_chars_total", 0)))
+        has_explicit_pruned = "pruned_chars_total" in st
 
         prompt_tokens = _estimate_tokens(prompt_chars)
         transcript_tokens = _estimate_tokens(transcript_chars)
@@ -119,8 +120,12 @@ class PromptTelemetry:
                 if (cache_hits + cache_misses)
                 else 0.0
             ),
-            "pruned_chars_total": max(
-                0, history_saved + context_saved + explicit_pruned
+            # Prefer explicit pruned totals from prompt builders when provided.
+            # Fallback to derived before/after deltas for legacy callers.
+            "pruned_chars_total": (
+                explicit_pruned
+                if has_explicit_pruned
+                else max(0, history_saved + context_saved)
             ),
         }
         section_chars = st.get("section_chars")

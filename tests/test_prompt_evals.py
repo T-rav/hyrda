@@ -202,7 +202,7 @@ def test_planner_retry_prompt_eval_normal(tmp_path: Path) -> None:
     failed_plan = "## Files to Modify\n- a.py"
     errors = ["Missing required section: ## Testing Strategy"]
 
-    prompt = runner._build_retry_prompt(task, failed_plan, errors, scale="full")
+    prompt, _stats = runner._build_retry_prompt(task, failed_plan, errors, scale="full")
 
     assert "PLAN_START" in prompt
     assert "PLAN_END" in prompt
@@ -267,7 +267,7 @@ def test_reviewer_ci_fix_prompt_eval_normal(tmp_path: Path) -> None:
     issue = TaskFactory.create(title="CI fix")
     pr = PRInfoFactory.create()
 
-    prompt = runner._build_ci_fix_prompt(
+    prompt, _stats = runner._build_ci_fix_prompt(
         pr, issue, "Typecheck failed on core/service.py", attempt=2
     )
 
@@ -284,7 +284,7 @@ def test_reviewer_ci_fix_prompt_eval_edge_with_logs(tmp_path: Path) -> None:
     pr = PRInfoFactory.create()
     ci_logs = "Traceback:\n" + ("line\n" * 100)
 
-    prompt = runner._build_ci_fix_prompt(
+    prompt, _stats = runner._build_ci_fix_prompt(
         pr, issue, "Integration tests failed", attempt=1, ci_logs=ci_logs
     )
 
