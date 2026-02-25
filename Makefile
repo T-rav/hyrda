@@ -19,6 +19,9 @@ READY_LABEL ?= hydraflow-ready
 WORKERS ?= 3
 MODEL ?= opus
 REVIEW_MODEL ?= sonnet
+IMPLEMENTATION_TOOL ?= claude
+PREP_TOOL ?= $(IMPLEMENTATION_TOOL)
+PREP_MODEL ?= $(MODEL)
 BATCH_SIZE ?= 15
 PLANNER_LABEL ?= hydraflow-plan
 PLANNER_MODEL ?= opus
@@ -74,7 +77,10 @@ help:
 	@echo "  READY_LABEL      GitHub issue label (default: hydraflow-ready)"
 	@echo "  WORKERS          Max concurrent agents (default: 2)"
 	@echo "  MODEL            Implementation model (default: sonnet)"
+	@echo "  IMPLEMENTATION_TOOL Implementation backend: claude|codex|pi (default: claude)"
 	@echo "  REVIEW_MODEL     Review model (default: opus)"
+	@echo "  PREP_TOOL        Prep backend: claude|codex|pi (default: IMPLEMENTATION_TOOL)"
+	@echo "  PREP_MODEL       Prep model override (default: MODEL)"
 	@echo "  BATCH_SIZE       Issues per batch (default: 15)"
 	@echo "  PLANNER_LABEL    Planner issue label (default: hydraflow-plan)"
 	@echo "  PLANNER_MODEL    Planner model (default: opus)"
@@ -91,6 +97,7 @@ run:
 	cd $(HYDRAFLOW_DIR) && PYTHONPATH=src $(UV) python -m cli \
 		--ready-label $(READY_LABEL) \
 		--max-workers $(WORKERS) \
+		--implementation-tool $(IMPLEMENTATION_TOOL) \
 		--model $(MODEL) \
 		--review-model $(REVIEW_MODEL) \
 		--batch-size $(BATCH_SIZE) \
@@ -287,7 +294,7 @@ setup: deps
 	@echo "$(BLUE)Ensuring HydraFlow lifecycle labels...$(RESET)"
 	@echo "  target repo: $(TARGET_REPO_ROOT)"
 	@cd $(TARGET_REPO_ROOT) && $(UV) python "$(HYDRAFLOW_CLI)" --ensure-labels
-	@echo "$(BLUE)Detecting local agent assets (Claude/Codex)...$(RESET)"
+	@echo "$(BLUE)Detecting local agent assets (Claude/Codex/Pi)...$(RESET)"
 	@if [ -d "$(PROJECT_ROOT)/.claude/hooks" ]; then \
 		for HOOK in "$(PROJECT_ROOT)"/.claude/hooks/*.sh; do \
 			[ -f "$$HOOK" ] || continue; \
@@ -328,7 +335,8 @@ REPO_SLUG := $(shell git remote get-url origin 2>/dev/null | sed 's|.*github\.co
 prep: deps
 	@echo "$(BLUE)Scanning repo and scaffolding CI/tests...$(RESET)"
 	@echo "  target repo: $(TARGET_REPO_ROOT)"
-	@cd $(TARGET_REPO_ROOT) && $(UV) python "$(HYDRAFLOW_CLI)" --prep
+	@echo "  prep tool/model: $(PREP_TOOL) / $(PREP_MODEL)"
+	@cd $(TARGET_REPO_ROOT) && $(UV) python "$(HYDRAFLOW_CLI)" --prep --implementation-tool "$(PREP_TOOL)" --model "$(PREP_MODEL)"
 	@echo "$(GREEN)Prep complete$(RESET)"
 
 ensure-labels: deps

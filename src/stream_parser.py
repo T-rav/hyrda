@@ -1,4 +1,4 @@
-"""Parse Claude/Codex JSON stream output into human-readable transcript lines."""
+"""Parse Claude/Codex/Pi JSON stream output into human-readable transcript lines."""
 
 from __future__ import annotations
 
