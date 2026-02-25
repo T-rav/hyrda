@@ -10,7 +10,7 @@
 
 Log an issue. Agents handle the rest - triaging, planning, implementing, reviewing, and merging every change.
 
-HydraFlow is built for quality-first scaling: agents execute the work, but guardrails decide what ships.
+HydraFlow is a delivery kernel for GitHub repositories: it accepts intent, compiles it through a staged pipeline, enforces quality gates, and produces merged software changes.
 
 ## What Makes It Different
 
@@ -83,24 +83,28 @@ make quality      # quality-lite + tests
 HydraFlow now exposes an `hf` console script so you can run `hf init`, `hf prep`, `hf run`, etc.
 
 ```bash
-# install locally (inside this repo)
-uv tool run pip install -e .
+# install locally from pyproject.toml (including configured extras)
+uv sync --all-extras
 
 # show available commands
 hf --help
 
-# copy bundled assets (.claude, .codex, githooks) into the current repo
+# copy hf assets (.claude, .codex, .githooks) into the current repo
 hf init
 
 # run the standard prep flow without invoking make
 hf prep
 
-# register the current repo with the background supervisor (starts orchestrator + dashboard)
-hf run
+# register the current repo (or an explicit path) with the background supervisor
+hf run              # uses cwd
+hf run /path/to/repo
 
 # list/stop registered repos (state lives under ~/.hydraflow/<repo-slug>)
-hf status
-hf stop
+hf status                   # show every repo with RUNNING/STOPPED status
+hf status repo-slug         # show a single slug
+hf stop                     # stop repo in cwd
+hf stop repo-slug           # or stop by slug
+hf stop /path/to/repo
 ```
 
 > HydraFlow still writes prep logs, memory, manifests, and run artifacts to
@@ -108,6 +112,12 @@ hf stop
 > When you use `hf run`, the supervisor sets `HYDRAFLOW_HOME=~/.hydraflow/<repo-slug>`
 > so all of those artifacts move under `~/.hydraflow/<repo-slug>/...` instead of
 > cluttering your working tree.
+
+### Generating release assets
+
+If you modify `.claude`, `.codex`, or `.githooks`, run `make bundle-assets` to generate
+`dist/hf_cli-assets.tar.gz` for release/build artifact workflows.
+The repository no longer tracks a committed `src/hf_cli/assets.tar.gz`.
 
 ## Issue Flow Labels
 
