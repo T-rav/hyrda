@@ -859,6 +859,57 @@ class TestMetricsEndpoint:
         assert data["rates"].get("first_pass_approval_rate", 0.0) == pytest.approx(0.0)
         assert data["rates"].get("reviewer_fix_rate", 0.0) == pytest.approx(0.0)
 
+    @pytest.mark.asyncio
+    async def test_metrics_includes_inference_lifetime_and_session_totals(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        from prompt_telemetry import PromptTelemetry
+
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="planner",
+            tool="claude",
+            model="opus",
+            issue_number=1,
+            pr_number=0,
+            session_id="session-1",
+            prompt_chars=100,
+            transcript_chars=50,
+            duration_seconds=0.1,
+            success=True,
+            stats={"total_tokens": 60},
+        )
+
+        class Orch:
+            current_session_id = "session-1"
+
+        def _get_orch():
+            return Orch()
+
+        # Build router with orchestrator getter override
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=_get_orch,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+        get_metrics = self._find_endpoint(router, "/api/metrics")
+        response = await get_metrics()
+        data = json.loads(response.body)
+        assert data["inference_lifetime"]["total_tokens"] == 60
+        assert data["inference_session"]["total_tokens"] == 60
+
 
 class TestGitHubMetricsEndpoint:
     """Tests for the GET /api/metrics/github endpoint."""

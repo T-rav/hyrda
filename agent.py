@@ -72,9 +72,15 @@ class AgentRunner(BaseRunner):
         try:
             # Build and run the configured agent command
             cmd = self._build_command(worktree_path)
-            prompt = self._build_prompt(task, review_feedback=review_feedback)
+            prompt, prompt_stats = self._build_prompt_with_stats(
+                task, review_feedback=review_feedback
+            )
             transcript = await self._execute(
-                cmd, prompt, worktree_path, {"issue": task.id}
+                cmd,
+                prompt,
+                worktree_path,
+                {"issue": task.id, "source": "implementer"},
+                telemetry_stats=prompt_stats,
             )
             result.transcript = transcript
 
@@ -252,11 +258,23 @@ class AgentRunner(BaseRunner):
 
     def _build_prompt(self, issue: Task, review_feedback: str = "") -> str:
         """Build the implementation prompt for the agent."""
+        prompt, _stats = self._build_prompt_with_stats(
+            issue, review_feedback=review_feedback
+        )
+        return prompt
+
+    def _build_prompt_with_stats(
+        self, issue: Task, review_feedback: str = ""
+    ) -> tuple[str, dict[str, int]]:
+        """Build the implementation prompt and pruning stats."""
         plan_comment, other_comments = self._extract_plan_comment(issue.comments)
+        history_before = len(plan_comment) + sum(len(c) for c in other_comments)
+        history_after = 0
 
         # Fallback to saved plan file
         if not plan_comment:
             plan_comment = self._load_plan_fallback(issue.id)
+            history_before += len(plan_comment)
             if not plan_comment:
                 logger.error(
                     "No plan found for issue #%d — implementer will proceed without a plan",
@@ -269,6 +287,7 @@ class AgentRunner(BaseRunner):
             plan_comment = self._summarize_for_prompt(
                 plan_comment, max_chars=6_000, label="Implementation plan"
             )
+            history_after += len(plan_comment)
             plan_section = (
                 f"\n\n## Implementation Plan\n\n"
                 f"Follow this plan closely. It was created by a planner agent "
@@ -278,9 +297,11 @@ class AgentRunner(BaseRunner):
 
         review_feedback_section = ""
         if review_feedback:
+            history_before += len(review_feedback)
             review_feedback = self._summarize_for_prompt(
                 review_feedback, max_chars=2_000, label="Review feedback"
             )
+            history_after += len(review_feedback)
             review_feedback_section = (
                 f"\n\n## Review Feedback\n\n"
                 f"A reviewer rejected the previous implementation. "
@@ -293,6 +314,7 @@ class AgentRunner(BaseRunner):
             max_comments = 6
             selected_comments = other_comments[:max_comments]
             formatted = "\n".join(f"- {c}" for c in selected_comments)
+            history_after += len(formatted)
             comments_section = f"\n\n## Discussion\n{formatted}"
             if len(other_comments) > max_comments:
                 comments_section += f"\n- ... ({len(other_comments) - max_comments} more comments omitted)"
@@ -313,15 +335,17 @@ class AgentRunner(BaseRunner):
         # Truncate issue body if too long
         body = issue.body
         max_body = self._config.max_issue_body_chars
+        body_before = len(body)
         if len(body) > max_body:
             body = (
                 body[:max_body]
                 + f"\n\n[Body truncated at {max_body:,} chars — see full issue on GitHub]"
             )
+        body_after = len(body)
 
         test_cmd = self._config.test_command
 
-        return f"""You are implementing GitHub issue #{issue.id}.
+        prompt = f"""You are implementing GitHub issue #{issue.id}.
 
 ## Issue: {issue.title}
 
@@ -352,6 +376,13 @@ class AgentRunner(BaseRunner):
 - If you encounter issues, commit what works with a descriptive message.
 
 {MEMORY_SUGGESTION_PROMPT.format(context="implementation")}"""
+        stats = {
+            "history_chars_before": history_before,
+            "history_chars_after": history_after,
+            "context_chars_before": body_before,
+            "context_chars_after": body_after,
+        }
+        return prompt, stats
 
     async def _verify_result(
         self, worktree_path: Path, branch: str
@@ -486,7 +517,10 @@ SUMMARY: <one-line summary>
             review_prompt = self._build_pre_quality_review_prompt(issue, attempt)
             review_cmd = self._build_pre_quality_review_command()
             review_transcript = await self._execute(
-                review_cmd, review_prompt, worktree_path, {"issue": issue.id}
+                review_cmd,
+                review_prompt,
+                worktree_path,
+                {"issue": issue.id, "source": "implementer"},
             )
             review_ok, review_summary = self._parse_skill_result(
                 review_transcript, "PRE_QUALITY_REVIEW_RESULT"
@@ -495,7 +529,10 @@ SUMMARY: <one-line summary>
             run_tool_prompt = self._build_pre_quality_run_tool_prompt(issue, attempt)
             run_tool_cmd = self._build_command(worktree_path)
             run_tool_transcript = await self._execute(
-                run_tool_cmd, run_tool_prompt, worktree_path, {"issue": issue.id}
+                run_tool_cmd,
+                run_tool_prompt,
+                worktree_path,
+                {"issue": issue.id, "source": "implementer"},
             )
             run_tool_ok, run_tool_summary = self._parse_skill_result(
                 run_tool_transcript, "RUN_TOOL_RESULT"
@@ -543,7 +580,12 @@ SUMMARY: <one-line summary>
 
             prompt = self._build_quality_fix_prompt(issue, last_error, attempt)
             cmd = self._build_command(worktree_path)
-            await self._execute(cmd, prompt, worktree_path, {"issue": issue.id})
+            await self._execute(
+                cmd,
+                prompt,
+                worktree_path,
+                {"issue": issue.id, "source": "implementer"},
+            )
 
             success, verify_msg = await self._verify_result(worktree_path, branch)
             if success:

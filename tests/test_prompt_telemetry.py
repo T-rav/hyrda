@@ -1,0 +1,148 @@
+"""Tests for prompt_telemetry.py."""
+
+from __future__ import annotations
+
+import json
+
+from prompt_telemetry import PromptTelemetry, parse_command_tool_model
+from tests.helpers import ConfigFactory
+
+
+class TestParseCommandToolModel:
+    def test_parses_claude_model(self, tmp_path):
+        tool, model = parse_command_tool_model(
+            ["claude", "-p", "--model", "opus", "--verbose"]
+        )
+        assert tool == "claude"
+        assert model == "opus"
+
+    def test_parses_codex_model(self, tmp_path):
+        tool, model = parse_command_tool_model(
+            ["codex", "exec", "--json", "--model", "gpt-5"]
+        )
+        assert tool == "codex"
+        assert model == "gpt-5"
+
+
+class TestPromptTelemetry:
+    def test_record_writes_inference_and_pr_rollup(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+
+        telemetry.record(
+            source="reviewer",
+            tool="claude",
+            model="sonnet",
+            issue_number=42,
+            pr_number=101,
+            session_id="sess-1",
+            prompt_chars=800,
+            transcript_chars=400,
+            duration_seconds=2.5,
+            success=True,
+            stats={
+                "history_chars_before": 200,
+                "history_chars_after": 100,
+                "context_chars_before": 1200,
+                "context_chars_after": 900,
+                "cache_hits": 2,
+                "cache_misses": 1,
+            },
+        )
+
+        inf_file = config.data_path("metrics", "prompt", "inferences.jsonl")
+        pr_file = config.data_path("metrics", "prompt", "pr_stats.json")
+        assert inf_file.exists()
+        assert pr_file.exists()
+
+        rows = [ln for ln in inf_file.read_text().splitlines() if ln.strip()]
+        assert len(rows) == 1
+        row = json.loads(rows[0])
+        assert row["source"] == "reviewer"
+        assert row["pr_number"] == 101
+        assert row["session_id"] == "sess-1"
+        assert row["history_chars_saved"] == 100
+        assert row["context_chars_saved"] == 300
+        assert row["cache_hit_rate"] == 0.6667
+        assert row["token_source"] == "estimated"
+        assert row["total_tokens"] == row["total_est_tokens"]
+
+        rollup = json.loads(pr_file.read_text())
+        pr = rollup["prs"]["101"]
+        assert pr["inference_calls"] == 1
+        assert pr["history_chars_saved"] == 100
+        assert pr["context_chars_saved"] == 300
+        assert pr["actual_usage_calls"] == 0
+
+        lifetime = rollup["lifetime"]
+        assert lifetime["inference_calls"] == 1
+        assert lifetime["total_tokens"] == row["total_tokens"]
+        session = rollup["sessions"]["sess-1"]
+        assert session["inference_calls"] == 1
+        assert session["total_tokens"] == row["total_tokens"]
+
+    def test_record_prefers_actual_usage_when_available(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+
+        telemetry.record(
+            source="implementer",
+            tool="claude",
+            model="opus",
+            issue_number=7,
+            pr_number=202,
+            session_id="sess-2",
+            prompt_chars=1000,
+            transcript_chars=500,
+            duration_seconds=1.0,
+            success=True,
+            stats={"input_tokens": 123, "output_tokens": 77, "total_tokens": 200},
+        )
+
+        inf_file = config.data_path("metrics", "prompt", "inferences.jsonl")
+        row = json.loads(inf_file.read_text().strip())
+        assert row["token_source"] == "actual"
+        assert row["input_tokens"] == 123
+        assert row["output_tokens"] == 77
+        assert row["total_tokens"] == 200
+
+        pr_file = config.data_path("metrics", "prompt", "pr_stats.json")
+        rollup = json.loads(pr_file.read_text())
+        pr = rollup["prs"]["202"]
+        assert pr["total_tokens"] == 200
+        assert pr["actual_usage_calls"] == 1
+        assert rollup["lifetime"]["total_tokens"] == 200
+        assert rollup["sessions"]["sess-2"]["total_tokens"] == 200
+
+    def test_get_session_and_lifetime_totals(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="planner",
+            tool="claude",
+            model="opus",
+            issue_number=1,
+            pr_number=0,
+            session_id="sess-3",
+            prompt_chars=200,
+            transcript_chars=100,
+            duration_seconds=0.2,
+            success=True,
+            stats={"total_tokens": 50},
+        )
+        telemetry.record(
+            source="reviewer",
+            tool="claude",
+            model="sonnet",
+            issue_number=2,
+            pr_number=300,
+            session_id="sess-4",
+            prompt_chars=200,
+            transcript_chars=100,
+            duration_seconds=0.2,
+            success=True,
+            stats={"total_tokens": 70},
+        )
+        assert telemetry.get_lifetime_totals()["total_tokens"] == 120
+        assert telemetry.get_session_totals("sess-3")["total_tokens"] == 50
+        assert telemetry.get_pr_totals(300)["total_tokens"] == 70

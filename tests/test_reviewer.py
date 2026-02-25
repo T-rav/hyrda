@@ -1392,7 +1392,14 @@ class TestRunPrecheckContext:
 
         assert result == "transcript"
         mock_self_execute.assert_called_once_with(
-            ["cmd"], "prompt", tmp_path, {"pr": pr_info.number, "source": "reviewer"}
+            ["cmd"],
+            "prompt",
+            tmp_path,
+            {"pr": pr_info.number, "issue": task.id, "source": "reviewer"},
+            telemetry_stats={
+                "context_chars_before": len(task.body or "") + len("diff"),
+                "context_chars_after": len("prompt"),
+            },
         )
 
 

@@ -89,12 +89,16 @@ class ReviewRunner(BaseRunner):
                 pr, issue, diff, worktree_path
             )
             cmd = self._build_command(worktree_path)
-            prompt = self._build_review_prompt(
+            prompt, prompt_stats = self._build_review_prompt_with_stats(
                 pr, issue, diff, precheck_context=precheck_context
             )
             before_sha = await self._get_head_sha(worktree_path)
             transcript = await self._execute(
-                cmd, prompt, worktree_path, {"pr": pr.number, "source": "reviewer"}
+                cmd,
+                prompt,
+                worktree_path,
+                {"pr": pr.number, "issue": issue.id, "source": "reviewer"},
+                telemetry_stats=prompt_stats,
             )
             result.transcript = transcript
 
@@ -181,9 +185,17 @@ class ReviewRunner(BaseRunner):
             prompt = self._build_ci_fix_prompt(
                 pr, issue, failure_summary, attempt, ci_logs=ci_logs
             )
+            prompt_stats = {
+                "context_chars_before": len(failure_summary) + len(ci_logs),
+                "context_chars_after": len(prompt),
+            }
             before_sha = await self._get_head_sha(worktree_path)
             transcript = await self._execute(
-                cmd, prompt, worktree_path, {"pr": pr.number, "source": "reviewer"}
+                cmd,
+                prompt,
+                worktree_path,
+                {"pr": pr.number, "issue": issue.id, "source": "reviewer"},
+                telemetry_stats=prompt_stats,
             )
             result.transcript = transcript
             result.verdict = self._parse_verdict(transcript)
@@ -396,6 +408,19 @@ Then a brief summary on the next line starting with "SUMMARY: ".
         precheck_context: str = "",
     ) -> str:
         """Build the review prompt for the agent."""
+        prompt, _stats = self._build_review_prompt_with_stats(
+            pr, issue, diff, precheck_context=precheck_context
+        )
+        return prompt
+
+    def _build_review_prompt_with_stats(
+        self,
+        pr: PRInfo,
+        issue: Task,
+        diff: str,
+        precheck_context: str = "",
+    ) -> tuple[str, dict[str, int]]:
+        """Build the review prompt and pruning stats."""
         ci_enabled = self._config.max_ci_fix_attempts > 0
         test_cmd = self._config.test_command
         ui_criteria = ""
@@ -438,7 +463,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
         issue_body = self._summarize_issue_body(issue.body)
 
-        return f"""You are reviewing PR #{pr.number} which implements issue #{issue.id}.
+        prompt = f"""You are reviewing PR #{pr.number} which implements issue #{issue.id}.
 
 ## Issue: {issue.title}
 
@@ -497,6 +522,11 @@ VERDICT: APPROVE
 SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
 
 {MEMORY_SUGGESTION_PROMPT.format(context="review")}"""
+        stats = {
+            "context_chars_before": len(issue.body or "") + len(diff),
+            "context_chars_after": len(issue_body) + len(diff_context),
+        }
+        return prompt, stats
 
     def _build_subskill_command(self) -> list[str]:
         return build_agent_command(
@@ -539,8 +569,16 @@ Diff snippet:
         prompt = self._build_precheck_prompt(pr, issue, diff)
 
         async def execute(cmd: list[str], p: str) -> str:
+            telemetry_stats = {
+                "context_chars_before": len(issue.body or "") + len(diff),
+                "context_chars_after": len(p),
+            }
             return await self._execute(
-                cmd, p, worktree_path, {"pr": pr.number, "source": "reviewer"}
+                cmd,
+                p,
+                worktree_path,
+                {"pr": pr.number, "issue": issue.id, "source": "reviewer"},
+                telemetry_stats=telemetry_stats,
             )
 
         return await run_precheck_context(

@@ -35,6 +35,7 @@ from models import (
     QueueStats,
 )
 from pr_manager import PRManager
+from prompt_telemetry import PromptTelemetry
 from state import StateTracker
 from timeline import TimelineBuilder
 
@@ -714,12 +715,23 @@ def create_router(
         retries = state.get_retries_summary()
         if retries:
             rates["retries_per_stage"] = sum(retries.values())
+
+        telemetry = PromptTelemetry(config)
+        inference_lifetime = telemetry.get_lifetime_totals()
+        orch = get_orchestrator()
+        session_id = orch.current_session_id if orch else ""
+        inference_session = (
+            telemetry.get_session_totals(session_id) if session_id else {}
+        )
+
         return JSONResponse(
             MetricsResponse(
                 lifetime=lifetime,
                 rates=rates,
                 time_to_merge=time_to_merge,
                 thresholds=thresholds,
+                inference_lifetime=inference_lifetime,
+                inference_session=inference_session,
             ).model_dump()
         )
 

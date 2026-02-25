@@ -153,4 +153,21 @@ describe('MetricsPanel', () => {
     expect(screen.getByText('Merge Rate')).toBeInTheDocument()
     expect(screen.getByText('First-Pass Approval')).toBeInTheDocument()
   })
+
+  it('renders inference lifetime and session totals when provided', () => {
+    mockUseHydraFlow.mockReturnValue(defaultContext({
+      metrics: {
+        lifetime: { issues_completed: 1, prs_merged: 1, issues_created: 1 },
+        rates: {},
+        inference_lifetime: { total_tokens: 1234, inference_calls: 12 },
+        inference_session: { total_tokens: 234, inference_calls: 3 },
+      },
+    }))
+    render(<MetricsPanel />)
+    expect(screen.getByText('Inference')).toBeInTheDocument()
+    expect(screen.getByText('Session Tokens')).toBeInTheDocument()
+    expect(screen.getByText('Lifetime Tokens')).toBeInTheDocument()
+    expect(screen.getByText('1,234')).toBeInTheDocument()
+    expect(screen.getByText('234')).toBeInTheDocument()
+  })
 })

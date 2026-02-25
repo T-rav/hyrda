@@ -1094,6 +1094,8 @@ class MetricsResponse(BaseModel):
     rates: dict[str, float] = Field(default_factory=dict)
     time_to_merge: dict[str, float] = Field(default_factory=dict)
     thresholds: list[ThresholdProposal] = Field(default_factory=list)
+    inference_lifetime: dict[str, int] = Field(default_factory=dict)
+    inference_session: dict[str, int] = Field(default_factory=dict)
 
 
 class MetricsSnapshot(BaseModel):

@@ -102,7 +102,7 @@ class PlannerRunner(BaseRunner):
             logger.info("Issue #%d classified as %s plan", task.id, scale)
 
             cmd = self._build_command()
-            prompt = self._build_prompt(task, scale=scale)
+            prompt, prompt_stats = self._build_prompt_with_stats(task, scale=scale)
 
             def _check_plan_complete(accumulated: str) -> bool:
                 if "PLAN_END" in accumulated:
@@ -125,6 +125,7 @@ class PlannerRunner(BaseRunner):
                 self._config.repo_root,
                 {"issue": task.id, "source": "planner"},
                 on_output=_check_plan_complete,
+                telemetry_stats=prompt_stats,
             )
             result.transcript = transcript
 
@@ -180,12 +181,19 @@ class PlannerRunner(BaseRunner):
                     retry_prompt = self._build_retry_prompt(
                         task, result.plan, all_errors, scale=scale
                     )
+                    retry_stats = {
+                        "context_chars_before": len(task.body or "")
+                        + len(result.plan)
+                        + sum(len(e) for e in all_errors),
+                        "context_chars_after": len(retry_prompt),
+                    }
                     retry_transcript = await self._execute(
                         cmd,
                         retry_prompt,
                         self._config.repo_root,
                         {"issue": task.id, "source": "planner"},
                         on_output=_check_plan_complete,
+                        telemetry_stats=retry_stats,
                     )
                     result.transcript += "\n\n--- RETRY ---\n\n" + retry_transcript
 
@@ -322,10 +330,22 @@ class PlannerRunner(BaseRunner):
     def _build_prompt(self, issue: Task, *, scale: PlanScale = "full") -> str:
         """Build the planning prompt for the agent.
 
+        Compatibility wrapper that returns only the prompt string.
+        """
+        prompt, _stats = self._build_prompt_with_stats(issue, scale=scale)
+        return prompt
+
+    def _build_prompt_with_stats(
+        self, issue: Task, *, scale: PlanScale = "full"
+    ) -> tuple[str, dict[str, int]]:
+        """Build the planning prompt and pruning stats.
+
         *scale* is ``"lite"`` or ``"full"``.  The prompt adjusts which
         sections are required and whether to include the pre-mortem step.
         """
         comments_section = ""
+        history_before = sum(len(c) for c in issue.comments)
+        history_after = 0
         if issue.comments:
             max_comments = 6
             selected_comments = issue.comments[:max_comments]
@@ -334,10 +354,12 @@ class PlannerRunner(BaseRunner):
                 for c in selected_comments
             ]
             formatted = "\n".join(f"- {c}" for c in truncated)
+            history_after = len(formatted)
             comments_section = f"\n\n## Discussion\n{formatted}"
             if len(issue.comments) > max_comments:
                 comments_section += f"\n- ... ({len(issue.comments) - max_comments} more comments omitted)"
 
+        body_raw = issue.body or ""
         body = self._truncate_text(
             issue.body or "", self._config.max_issue_body_chars, self._MAX_LINE_CHARS
         )
@@ -387,7 +409,7 @@ class PlannerRunner(BaseRunner):
                 "`## Key Considerations` section."
             )
 
-        return f"""You are a planning agent for GitHub issue #{issue.id}.
+        prompt = f"""You are a planning agent for GitHub issue #{issue.id}.
 
 ## Issue: {issue.title}
 
@@ -472,6 +494,13 @@ ALREADY_SATISFIED_END
 This closes the issue automatically. Use only when you are certain.
 
 {MEMORY_SUGGESTION_PROMPT.format(context="planning")}"""
+        stats = {
+            "history_chars_before": history_before,
+            "history_chars_after": history_after,
+            "context_chars_before": len(body_raw),
+            "context_chars_after": len(body),
+        }
+        return prompt, stats
 
     # Required plan sections — each must appear as a ## header.
     REQUIRED_SECTIONS: tuple[str, ...] = (
