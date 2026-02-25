@@ -180,3 +180,27 @@ class TestPromptTelemetry:
         rows = telemetry.load_inferences(limit=1)
         assert len(rows) == 1
         assert rows[0]["issue_number"] == 11
+
+    def test_failed_empty_run_does_not_estimate_tokens(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="implementer",
+            tool="codex",
+            model="gpt-5",
+            issue_number=13,
+            pr_number=0,
+            session_id="sess-fail",
+            prompt_chars=5000,
+            transcript_chars=0,
+            duration_seconds=0.05,
+            success=False,
+            stats={},
+        )
+
+        inf_file = config.data_path("metrics", "prompt", "inferences.jsonl")
+        row = json.loads(inf_file.read_text().strip())
+        assert row["status"] == "failed"
+        assert row["token_source"] == "estimated"
+        assert row["total_est_tokens"] == 0
+        assert row["total_tokens"] == 0

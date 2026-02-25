@@ -380,3 +380,24 @@ class TestStreamParserDelta:
         usage = parser.usage_totals
         assert usage["input_tokens"] == 100
         assert usage["output_tokens"] == 20
+
+    def test_usage_ignores_token_like_keys_in_tool_payloads(self):
+        parser = StreamParser()
+        event = {
+            "type": "assistant",
+            "message": {
+                "id": "m2",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "tool_1",
+                        "name": "Read",
+                        "input": {"input_tokens": 9999, "total_tokens": 9999},
+                    }
+                ],
+            },
+        }
+        parser.parse(json.dumps(event))
+        usage = parser.usage_totals
+        assert usage["input_tokens"] == 0
+        assert usage["total_tokens"] == 0

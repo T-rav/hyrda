@@ -150,10 +150,11 @@ class StreamParser:
     def _capture_usage(self, event: dict[str, Any]) -> None:
         """Extract token usage fields from arbitrary event payloads.
 
-        Different tool backends emit usage in different shapes. We scan
-        recursively and track the maximum seen value for each known field.
+        Different tool backends emit usage in different shapes. We inspect
+        explicit usage containers first, then top-level fields, and track
+        the maximum seen value for each known field.
         """
-        for key, value in _iter_numeric_fields(event):
+        for key, value in _iter_usage_numeric_fields(event):
             canonical = _canonical_usage_key(key)
             if not canonical:
                 continue
@@ -162,8 +163,25 @@ class StreamParser:
                 self._usage[canonical] = value
 
 
+def _iter_usage_numeric_fields(event: dict[str, Any]) -> list[tuple[str, int]]:
+    """Return usage-related ``(key, int_value)`` fields from an event payload."""
+    out: list[tuple[str, int]] = []
+
+    # Top-level direct usage fields (some backends emit usage flat).
+    for key, value in event.items():
+        if isinstance(value, (int, float)):
+            out.append((str(key), int(value)))
+
+    # Common usage containers.
+    for usage_key in ("usage", "token_usage", "usage_metadata"):
+        usage_obj = event.get(usage_key)
+        out.extend(_iter_numeric_fields(usage_obj))
+
+    return out
+
+
 def _iter_numeric_fields(obj: Any) -> list[tuple[str, int]]:
-    """Return all ``(key, int_value)`` numeric fields in nested JSON-like data."""
+    """Return nested ``(key, int_value)`` numeric fields for a usage payload."""
     out: list[tuple[str, int]] = []
     if isinstance(obj, dict):
         for k, v in obj.items():

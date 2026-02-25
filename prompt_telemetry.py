@@ -67,6 +67,10 @@ class PromptTelemetry:
         prompt_tokens = _estimate_tokens(prompt_chars)
         transcript_tokens = _estimate_tokens(transcript_chars)
         estimated_total_tokens = prompt_tokens + transcript_tokens
+        # If the run failed before producing any output/usage, avoid counting
+        # estimated prompt tokens that were likely never billed.
+        if not success and actual_total_tokens == 0 and transcript_chars == 0:
+            estimated_total_tokens = 0
         if actual_total_tokens <= 0 and (actual_input_tokens or actual_output_tokens):
             actual_total_tokens = actual_input_tokens + actual_output_tokens
         token_source = "actual" if actual_total_tokens > 0 else "estimated"
