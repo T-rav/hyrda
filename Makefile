@@ -322,6 +322,13 @@ setup: deps
 			echo "  Restart Codex to load updated skills"; \
 		fi; \
 	fi
+	@if command -v pi >/dev/null 2>&1; then \
+		echo "  Pi CLI: $$(pi --version | head -1)"; \
+		echo "  Pi config: ensure provider credentials are set (for example OPENAI_API_KEY or provider-specific key)"; \
+		echo "  Pi usage: set HYDRAFLOW_*_TOOL=pi in .env to enable per-stage Pi backends"; \
+	else \
+		echo "  Pi CLI: not found (install from https://pi.dev/ if you want Pi backend support)"; \
+	fi
 	@echo "$(GREEN)Setup complete$(RESET)"
 	@echo "  pre-commit: make lint-check (when staged Python files exist)"
 	@echo "  pre-push:   make quality-lite"
