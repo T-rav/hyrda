@@ -32,6 +32,7 @@ dev = [
     "pyright==1.1.408",
     "bandit[toml]==1.8.0",
 ]
+# Compatibility extra retained so existing `hydraflow[docker]` installs keep working.
 docker = []
 dashboard = [
     "fastapi>=0.110.0",

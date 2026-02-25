@@ -66,6 +66,8 @@ class TestPromptTelemetry:
         assert row["cache_hit_rate"] == 0.6667
         assert row["token_source"] == "estimated"
         assert row["total_tokens"] == row["total_est_tokens"]
+        assert row["token_estimation_mode"] == "model-aware-chars-per-token"
+        assert row["token_estimation_confidence"] in {"low", "medium"}
 
         rollup = json.loads(pr_file.read_text())
         pr = rollup["prs"]["101"]
@@ -80,6 +82,8 @@ class TestPromptTelemetry:
         session = rollup["sessions"]["sess-1"]
         assert session["inference_calls"] == 1
         assert session["total_tokens"] == row["total_tokens"]
+        assert rollup["issues"]["42"]["inference_calls"] == 1
+        assert rollup["sources"]["reviewer"]["inference_calls"] == 1
 
     def test_record_prefers_actual_usage_when_available(self, tmp_path):
         config = ConfigFactory.create(repo_root=tmp_path)
@@ -146,6 +150,8 @@ class TestPromptTelemetry:
         assert telemetry.get_lifetime_totals()["total_tokens"] == 120
         assert telemetry.get_session_totals("sess-3")["total_tokens"] == 50
         assert telemetry.get_pr_totals(300)["total_tokens"] == 70
+        assert telemetry.get_issue_totals()[2]["total_tokens"] == 70
+        assert telemetry.get_source_totals()["reviewer"]["total_tokens"] == 70
 
     def test_load_inferences_reads_recent_rows(self, tmp_path):
         config = ConfigFactory.create(repo_root=tmp_path)

@@ -8,16 +8,30 @@ from datetime import UTC, datetime
 from typing import Any
 
 from config import HydraFlowConfig
-from file_util import atomic_write
+from file_util import atomic_write, file_lock
 
 logger = logging.getLogger("hydraflow.prompt_telemetry")
 
 
-def _estimate_tokens(chars: int) -> int:
-    """Estimate token count from character count (approx. 4 chars/token)."""
+_MODEL_CHARS_PER_TOKEN: tuple[tuple[tuple[str, ...], float, str], ...] = (
+    (("gpt-5", "codex"), 3.7, "medium"),
+    (("claude", "sonnet", "opus"), 3.9, "medium"),
+)
+
+
+def _estimate_tokens(chars: int, model: str) -> tuple[int, float, str]:
+    """Estimate token count from character count with model-aware heuristics."""
     if chars <= 0:
-        return 0
-    return max(1, round(chars / 4))
+        return 0, 4.0, "low"
+    model_l = model.lower()
+    chars_per_token = 4.0
+    confidence = "low"
+    for needles, ratio, label in _MODEL_CHARS_PER_TOKEN:
+        if any(n in model_l for n in needles):
+            chars_per_token = ratio
+            confidence = label
+            break
+    return max(1, round(chars / chars_per_token)), chars_per_token, confidence
 
 
 class PromptTelemetry:
@@ -28,6 +42,7 @@ class PromptTelemetry:
         self._dir = config.data_path("metrics", "prompt")
         self._inferences_file = self._dir / "inferences.jsonl"
         self._pr_stats_file = self._dir / "pr_stats.json"
+        self._lock_file = self._dir / ".lock"
 
     def record(
         self,
@@ -66,8 +81,10 @@ class PromptTelemetry:
         explicit_pruned = max(0, _as_int(st.get("pruned_chars_total", 0)))
         has_explicit_pruned = "pruned_chars_total" in st
 
-        prompt_tokens = _estimate_tokens(prompt_chars)
-        transcript_tokens = _estimate_tokens(transcript_chars)
+        prompt_tokens, chars_per_token, estimate_confidence = _estimate_tokens(
+            prompt_chars, model
+        )
+        transcript_tokens, _, _ = _estimate_tokens(transcript_chars, model)
         estimated_total_tokens = prompt_tokens + transcript_tokens
         # If the run failed before producing any output/usage, avoid counting
         # estimated prompt tokens that were likely never billed.
@@ -101,6 +118,9 @@ class PromptTelemetry:
             "token_source": token_source,
             "duration_seconds": round(duration_seconds, 3),
             "status": "success" if success else "failed",
+            "token_estimation_mode": "model-aware-chars-per-token",
+            "token_estimation_chars_per_token": chars_per_token,
+            "token_estimation_confidence": estimate_confidence,
             "history_chars_before": history_before,
             "history_chars_after": history_after,
             "history_chars_saved": history_saved,
@@ -141,17 +161,17 @@ class PromptTelemetry:
 
         try:
             self._dir.mkdir(parents=True, exist_ok=True)
-            with open(self._inferences_file, "a") as f:
-                f.write(json.dumps(record, sort_keys=True) + "\n")
-                f.flush()
+            with file_lock(self._lock_file):
+                with open(self._inferences_file, "a") as f:
+                    f.write(json.dumps(record, sort_keys=True) + "\n")
+                    f.flush()
+                self._update_pr_stats(record)
         except OSError:
             logger.warning(
-                "Could not append prompt telemetry to %s",
+                "Could not write prompt telemetry to %s",
                 self._inferences_file,
                 exc_info=True,
             )
-
-        self._update_pr_stats(record)
 
     def _update_pr_stats(self, record: dict[str, object]) -> None:
         data = self._load_pr_stats()
@@ -169,6 +189,18 @@ class PromptTelemetry:
         if isinstance(pr_number, int) and pr_number > 0:
             entry = _get_or_init_dict(prs, str(pr_number), _new_counter())
             self._accumulate_counter(entry, record)
+
+        issues = _get_or_init_dict(data, "issues", {})
+        issue_number = record.get("issue_number")
+        if isinstance(issue_number, int) and issue_number > 0:
+            issue_entry = _get_or_init_dict(issues, str(issue_number), _new_counter())
+            self._accumulate_counter(issue_entry, record)
+
+        sources = _get_or_init_dict(data, "sources", {})
+        source = str(record.get("source", "")).strip()
+        if source:
+            source_entry = _get_or_init_dict(sources, source, _new_counter())
+            self._accumulate_counter(source_entry, record)
 
         data["updated_at"] = str(record.get("timestamp", ""))
 
@@ -303,6 +335,41 @@ class PromptTelemetry:
         if not isinstance(entry, dict):
             return {}
         return {k: int(v) for k, v in entry.items() if isinstance(v, int)}
+
+    def get_issue_totals(self) -> dict[int, dict[str, int]]:
+        """Return aggregate telemetry totals keyed by issue number."""
+        data = self._load_pr_stats()
+        issues = data.get("issues", {})
+        if not isinstance(issues, dict):
+            return {}
+        result: dict[int, dict[str, int]] = {}
+        for key, payload in issues.items():
+            if not isinstance(payload, dict):
+                continue
+            try:
+                issue_number = int(key)
+            except (TypeError, ValueError):
+                continue
+            result[issue_number] = {
+                k: int(v) for k, v in payload.items() if isinstance(v, int)
+            }
+        return result
+
+    def get_source_totals(self) -> dict[str, dict[str, int]]:
+        """Return aggregate telemetry totals keyed by source."""
+        data = self._load_pr_stats()
+        sources = data.get("sources", {})
+        if not isinstance(sources, dict):
+            return {}
+        result: dict[str, dict[str, int]] = {}
+        for key, payload in sources.items():
+            source = str(key).strip()
+            if not source or not isinstance(payload, dict):
+                continue
+            result[source] = {
+                k: int(v) for k, v in payload.items() if isinstance(v, int)
+            }
+        return result
 
 
 def parse_command_tool_model(cmd: list[str]) -> tuple[str, str]:

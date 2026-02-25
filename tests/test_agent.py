@@ -1947,9 +1947,9 @@ class TestVerifyResultTimeout:
         """_verify_result should return (False, ...) when make quality times out."""
         runner = AgentRunner(config, event_bus)
 
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.returncode = None
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
         with (
@@ -1977,9 +1977,9 @@ class TestVerifyResultTimeout:
         """_verify_result should kill the process on timeout."""
         runner = AgentRunner(config, event_bus)
 
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.returncode = None
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
         with (
@@ -2015,9 +2015,9 @@ class TestCountCommitsTimeout:
     ) -> None:
         """_count_commits should return 0 when git rev-list times out."""
         runner = AgentRunner(config, event_bus)
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.returncode = None
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
         with (

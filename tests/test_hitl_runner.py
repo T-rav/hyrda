@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -437,9 +437,9 @@ class TestVerifyQualityTimeout:
         """_verify_quality should return (False, ...) when make quality times out."""
         runner = HITLRunner(config, EventBus())
 
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.returncode = None
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
         with (
@@ -458,9 +458,9 @@ class TestVerifyQualityTimeout:
         """_verify_quality should kill the process on timeout."""
         runner = HITLRunner(config, EventBus())
 
-        mock_proc = AsyncMock()
+        mock_proc = MagicMock()
         mock_proc.returncode = None
-        mock_proc.kill = AsyncMock()
+        mock_proc.kill = MagicMock()
         mock_proc.wait = AsyncMock()
 
         with (

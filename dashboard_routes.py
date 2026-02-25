@@ -749,25 +749,7 @@ def create_router(
 
     def _build_system_worker_inference_stats() -> dict[str, dict[str, int]]:
         telemetry = PromptTelemetry(config)
-        rows = telemetry.load_inferences(limit=5000)
-        source_totals: dict[str, dict[str, int]] = {}
-        for row in rows:
-            source = str(row.get("source", "")).strip()
-            if not source:
-                continue
-            bucket = source_totals.setdefault(
-                source,
-                {
-                    "inference_calls": 0,
-                    "total_tokens": 0,
-                    "pruned_chars_total": 0,
-                },
-            )
-            bucket["inference_calls"] += 1
-            bucket["total_tokens"] += _coerce_int(row.get("total_tokens", 0))
-            bucket["pruned_chars_total"] += _coerce_int(
-                row.get("pruned_chars_total", 0)
-            )
+        source_totals = telemetry.get_source_totals()
 
         worker_totals: dict[str, dict[str, int]] = {}
         for worker_name, _label in _bg_worker_defs:
@@ -962,46 +944,96 @@ def create_router(
             if mapped_issue is not None and mapped_issue > 0 and mapped_pr > 0:
                 pr_to_issue[mapped_pr] = mapped_issue
 
-        inference_rows = telemetry.load_inferences(limit=50000)
-        for record in inference_rows:
-            timestamp = record.get("timestamp")
-            if not _is_timestamp_in_range(
-                timestamp if isinstance(timestamp, str) else None,
-                since_dt,
-                until_dt,
-            ):
-                continue
-            issue_number = _coerce_int(record.get("issue_number"))
-            if issue_number <= 0:
-                continue
-            row = issue_rows.setdefault(
-                issue_number, _new_issue_history_entry(issue_number)
-            )
-            _touch_issue_timestamps(
-                row, timestamp if isinstance(timestamp, str) else None
-            )
+        use_issue_rollups = (
+            since_dt is None
+            and until_dt is None
+            and not query_text
+            and not requested_status
+        )
+        if use_issue_rollups:
+            for issue_number, counters in telemetry.get_issue_totals().items():
+                row = issue_rows.setdefault(
+                    issue_number, _new_issue_history_entry(issue_number)
+                )
+                for key in _INFERENCE_COUNTER_KEYS:
+                    row["inference"][key] = _coerce_int(counters.get(key, 0))
+            # Keep metadata (sessions/model/source/pr links) from recent rows
+            # without re-summing counters that already came from rollups.
+            for record in telemetry.load_inferences(limit=5000):
+                issue_number = _coerce_int(record.get("issue_number"))
+                if issue_number <= 0:
+                    continue
+                row = issue_rows.get(issue_number)
+                if row is None:
+                    continue
+                timestamp = record.get("timestamp")
+                _touch_issue_timestamps(
+                    row, timestamp if isinstance(timestamp, str) else None
+                )
+                session_id = str(record.get("session_id", "")).strip()
+                if session_id:
+                    row["session_ids"].add(session_id)
+                source = str(record.get("source", "")).strip()
+                if source:
+                    row["source_calls"][source] = row["source_calls"].get(source, 0) + 1
+                model = str(record.get("model", "")).strip()
+                if model:
+                    row["model_calls"][model] = row["model_calls"].get(model, 0) + 1
+                pr_number = _coerce_int(record.get("pr_number"))
+                if pr_number > 0:
+                    prs: dict[int, dict[str, Any]] = row["prs"]
+                    if pr_number not in prs:
+                        prs[pr_number] = {
+                            "number": pr_number,
+                            "url": "",
+                            "merged": False,
+                        }
+                    pr_to_issue.setdefault(pr_number, issue_number)
+        else:
+            inference_rows = telemetry.load_inferences(limit=50000)
+            for record in inference_rows:
+                timestamp = record.get("timestamp")
+                if not _is_timestamp_in_range(
+                    timestamp if isinstance(timestamp, str) else None,
+                    since_dt,
+                    until_dt,
+                ):
+                    continue
+                issue_number = _coerce_int(record.get("issue_number"))
+                if issue_number <= 0:
+                    continue
+                row = issue_rows.setdefault(
+                    issue_number, _new_issue_history_entry(issue_number)
+                )
+                _touch_issue_timestamps(
+                    row, timestamp if isinstance(timestamp, str) else None
+                )
 
-            session_id = str(record.get("session_id", "")).strip()
-            if session_id:
-                row["session_ids"].add(session_id)
+                session_id = str(record.get("session_id", "")).strip()
+                if session_id:
+                    row["session_ids"].add(session_id)
 
-            source = str(record.get("source", "")).strip()
-            if source:
-                row["source_calls"][source] = row["source_calls"].get(source, 0) + 1
+                source = str(record.get("source", "")).strip()
+                if source:
+                    row["source_calls"][source] = row["source_calls"].get(source, 0) + 1
 
-            model = str(record.get("model", "")).strip()
-            if model:
-                row["model_calls"][model] = row["model_calls"].get(model, 0) + 1
+                model = str(record.get("model", "")).strip()
+                if model:
+                    row["model_calls"][model] = row["model_calls"].get(model, 0) + 1
 
-            for key in _INFERENCE_COUNTER_KEYS:
-                row["inference"][key] += _coerce_int(record.get(key))
+                for key in _INFERENCE_COUNTER_KEYS:
+                    row["inference"][key] += _coerce_int(record.get(key))
 
-            pr_number = _coerce_int(record.get("pr_number"))
-            if pr_number > 0:
-                prs: dict[int, dict[str, Any]] = row["prs"]
-                if pr_number not in prs:
-                    prs[pr_number] = {"number": pr_number, "url": "", "merged": False}
-                pr_to_issue.setdefault(pr_number, issue_number)
+                pr_number = _coerce_int(record.get("pr_number"))
+                if pr_number > 0:
+                    prs: dict[int, dict[str, Any]] = row["prs"]
+                    if pr_number not in prs:
+                        prs[pr_number] = {
+                            "number": pr_number,
+                            "url": "",
+                            "merged": False,
+                        }
+                    pr_to_issue.setdefault(pr_number, issue_number)
 
         for event in all_events:
             timestamp = event.timestamp
