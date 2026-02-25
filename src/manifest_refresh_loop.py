@@ -16,6 +16,7 @@ from base_background_loop import BaseBackgroundLoop
 from config import HydraFlowConfig
 from events import EventBus
 from manifest import ProjectManifestManager
+from manifest_issue_syncer import ManifestIssueSyncer
 from models import ManifestRefreshSummary, StatusCallback
 from state import StateTracker
 
@@ -40,6 +41,7 @@ class ManifestRefreshLoop(BaseBackgroundLoop):
         enabled_cb: Callable[[str], bool],
         sleep_fn: Callable[[int | float], Coroutine[Any, Any, None]],
         interval_cb: Callable[[str], int] | None = None,
+        manifest_syncer: ManifestIssueSyncer | None = None,
     ) -> None:
         super().__init__(
             worker_name="manifest_refresh",
@@ -54,6 +56,7 @@ class ManifestRefreshLoop(BaseBackgroundLoop):
         )
         self._manifest_manager = manifest_manager
         self._state = state
+        self._syncer = manifest_syncer
 
     def _get_default_interval(self) -> int:
         return self._config.manifest_refresh_interval
@@ -61,6 +64,8 @@ class ManifestRefreshLoop(BaseBackgroundLoop):
     async def _do_work(self) -> dict[str, Any] | None:
         content, digest_hash = self._manifest_manager.refresh()
         self._state.update_manifest_state(digest_hash)
+        if self._syncer is not None:
+            await self._syncer.sync(content, digest_hash, source="manifest-refresh")
         logger.info(
             "Project manifest refreshed (hash=%s, %d chars)",
             digest_hash,

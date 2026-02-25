@@ -18,7 +18,7 @@ from memory import (
     load_memory_digest,
     parse_memory_suggestion,
 )
-from models import MEMORY_TYPE_DISPLAY_ORDER, MemoryType
+from models import MEMORY_TYPE_DISPLAY_ORDER, ManifestRefreshResult, MemoryType
 from state import StateTracker
 from tests.helpers import ConfigFactory
 
@@ -723,6 +723,46 @@ class TestMemorySyncWorkerSync:
         call_args = state.update_memory_state.call_args[0]
         assert call_args[0] == [5]  # issue IDs
         assert isinstance(call_args[1], str)  # digest hash
+
+    @pytest.mark.asyncio
+    async def test_sync_refreshes_manifest_and_syncer(self, tmp_path: Path) -> None:
+        config = ConfigFactory.create(repo_root=tmp_path)
+        state = MagicMock()
+        state.get_memory_state.return_value = ([], "", None)
+        bus = MagicMock()
+        manifest_store = MagicMock()
+        manifest_manager = MagicMock()
+        manifest_manager.refresh.return_value = ManifestRefreshResult(
+            "## Base", "abc123"
+        )
+        manifest_syncer = MagicMock()
+        manifest_syncer.sync = AsyncMock()
+
+        worker = MemorySyncWorker(
+            config,
+            state,
+            bus,
+            manifest_store=manifest_store,
+            manifest_manager=manifest_manager,
+            manifest_syncer=manifest_syncer,
+        )
+        issues = [
+            {
+                "number": 1,
+                "title": "A",
+                "body": "## Memory Suggestion\n\n**Learning:** Use hf prep\n\n**Type:** knowledge",
+                "createdAt": "2024-06-01T00:00:00Z",
+            }
+        ]
+
+        await worker.sync(issues)
+
+        manifest_store.update_from_learnings.assert_called_once()
+        manifest_manager.refresh.assert_called_once()
+        manifest_syncer.sync.assert_awaited_once_with(
+            "## Base", "abc123", source="memory-sync"
+        )
+        state.update_manifest_state.assert_called_with("abc123")
 
     @pytest.mark.asyncio
     async def test_publish_sync_event(self, tmp_path: Path) -> None:

@@ -68,7 +68,7 @@ class TestBuildConflictPrompt:
         """When config is provided and manifest exists, prompt includes project context."""
         config = ConfigFactory.create(repo_root=tmp_path / "repo")
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path = config.repo_root / ".hydraflow" / "manifest" / "manifest.md"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text("## Project Manifest\npython, make, pytest")
 
@@ -197,7 +197,7 @@ class TestBuildRebuildPrompt:
     ) -> None:
         config = ConfigFactory.create(repo_root=tmp_path / "repo")
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path = config.repo_root / ".hydraflow" / "manifest" / "manifest.md"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text("## Project Manifest\npython, make, pytest")
 

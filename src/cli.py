@@ -527,6 +527,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Labels for accepted agent learnings, comma-separated (default: hydraflow-memory)",
     )
     parser.add_argument(
+        "--manifest-label",
+        default=None,
+        help="Labels for manifest persistence issues, comma-separated (default: hydraflow-manifest)",
+    )
+    parser.add_argument(
         "--memory-sync-interval",
         type=int,
         default=None,
@@ -859,6 +864,7 @@ def build_config(args: argparse.Namespace) -> HydraFlowConfig:
         "planner_label",
         "improve_label",
         "memory_label",
+        "manifest_label",
         "metrics_label",
         "epic_label",
         "lite_plan_labels",

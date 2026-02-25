@@ -12,7 +12,7 @@ class TestContextSectionCache:
     def test_hits_cache_when_source_unchanged(self, tmp_path):
         config = ConfigFactory.create(repo_root=tmp_path)
         cache = ContextSectionCache(config)
-        source = config.data_path("memory", "manifest.md")
+        source = config.data_path("manifest", "manifest.md")
         source.parent.mkdir(parents=True, exist_ok=True)
         source.write_text("manifest v1")
 

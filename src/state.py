@@ -355,6 +355,24 @@ class StateTracker:
             self._data.manifest_last_updated,
         )
 
+    def get_manifest_issue_number(self) -> int | None:
+        """Return the cached hydraflow-manifest issue number."""
+        return self._data.manifest_issue_number
+
+    def set_manifest_issue_number(self, issue_number: int) -> None:
+        """Persist the hydraflow-manifest issue number."""
+        self._data.manifest_issue_number = issue_number
+        self.save()
+
+    def get_manifest_snapshot_hash(self) -> str:
+        """Return the last synced manifest digest hash."""
+        return self._data.manifest_snapshot_hash
+
+    def set_manifest_snapshot_hash(self, digest_hash: str) -> None:
+        """Persist the last synced manifest digest hash."""
+        self._data.manifest_snapshot_hash = digest_hash
+        self.save()
+
     # --- worker interval overrides ---
 
     def get_worker_intervals(self) -> dict[str, int]:

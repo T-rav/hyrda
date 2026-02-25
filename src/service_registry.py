@@ -20,6 +20,7 @@ from implement_phase import ImplementPhase
 from issue_fetcher import GitHubTaskFetcher, IssueFetcher
 from issue_store import IssueStore
 from manifest import ProjectManifestManager
+from manifest_issue_syncer import ManifestIssueSyncer
 from manifest_refresh_loop import ManifestRefreshLoop
 from memory import MemorySyncWorker
 from memory_sync_loop import MemorySyncLoop
@@ -118,6 +119,7 @@ def build_services(
     agents = AgentRunner(config, event_bus, runner=subprocess_runner)
     planners = PlannerRunner(config, event_bus, runner=subprocess_runner)
     prs = PRManager(config, event_bus)
+    manifest_syncer = ManifestIssueSyncer(config, state, prs)
     reviewers = ReviewRunner(config, event_bus, runner=subprocess_runner)
     hitl_runner = HITLRunner(config, event_bus, runner=subprocess_runner)
     triage = TriageRunner(config, event_bus, runner=subprocess_runner)
@@ -194,7 +196,13 @@ def build_services(
         stop_event=stop_event,
         resolver=conflict_resolver,
     )
-    memory_sync = MemorySyncWorker(config, state, event_bus, runner=subprocess_runner)
+    memory_sync = MemorySyncWorker(
+        config,
+        state,
+        event_bus,
+        runner=subprocess_runner,
+        manifest_syncer=manifest_syncer,
+    )
     retrospective = RetrospectiveCollector(config, state, prs)
     ac_generator = AcceptanceCriteriaGenerator(
         config, prs, event_bus, runner=subprocess_runner
@@ -269,6 +277,7 @@ def build_services(
         enabled_cb=callbacks.is_bg_worker_enabled,
         sleep_fn=callbacks.sleep_or_stop,
         interval_cb=callbacks.get_bg_worker_interval,
+        manifest_syncer=manifest_syncer,
     )
 
     return ServiceRegistry(

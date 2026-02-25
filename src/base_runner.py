@@ -134,7 +134,7 @@ class BaseRunner:
         cache_misses = 0
 
         manifest_section = ""
-        manifest_path = self._config.data_path("memory", "manifest.md")
+        manifest_path = self._config.data_path("manifest", "manifest.md")
         manifest, manifest_hit = self._context_cache.get_or_load(
             key="manifest",
             source_path=manifest_path,

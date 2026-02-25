@@ -26,6 +26,7 @@ HYDRAFLOW_LABELS: tuple[tuple[str, str, str], ...] = (
     ("improve_label", "7057ff", "Review insight improvement proposal"),
     ("memory_label", "1d76db", "Approved memory suggestion for sync"),
     ("metrics_label", "006b75", "Metrics persistence issue"),
+    ("manifest_label", "1185fe", "Manifest persistence issue"),
     ("dup_label", "cfd3d7", "Issue already satisfied — no changes needed"),
     ("epic_label", "5319e7", "Epic tracking issue with linked sub-issues"),
 )

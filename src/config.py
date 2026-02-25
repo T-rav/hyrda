@@ -144,6 +144,7 @@ _ENV_LABEL_MAP: dict[str, tuple[str, list[str]]] = {
     "HYDRAFLOW_LABEL_IMPROVE": ("improve_label", ["hydraflow-improve"]),
     "HYDRAFLOW_LABEL_MEMORY": ("memory_label", ["hydraflow-memory"]),
     "HYDRAFLOW_LABEL_METRICS": ("metrics_label", ["hydraflow-metrics"]),
+    "HYDRAFLOW_LABEL_MANIFEST": ("manifest_label", ["hydraflow-manifest"]),
     "HYDRAFLOW_LABEL_DUP": ("dup_label", ["hydraflow-dup"]),
     "HYDRAFLOW_LABEL_EPIC": ("epic_label", ["hydraflow-epic"]),
 }
@@ -289,6 +290,10 @@ class HydraFlowConfig(BaseModel):
     memory_label: list[str] = Field(
         default=["hydraflow-memory"],
         description="Labels for accepted agent learnings (OR logic)",
+    )
+    manifest_label: list[str] = Field(
+        default=["hydraflow-manifest"],
+        description="Labels for manifest persistence issues (OR logic)",
     )
     metrics_label: list[str] = Field(
         default=["hydraflow-metrics"],

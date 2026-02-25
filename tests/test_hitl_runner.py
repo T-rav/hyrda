@@ -146,7 +146,7 @@ class TestBuildPrompt:
     ) -> None:
         """Manifest content appears in prompt as ## Project Context."""
         config.repo_root.mkdir(parents=True, exist_ok=True)
-        manifest_path = config.repo_root / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path = config.repo_root / ".hydraflow" / "manifest" / "manifest.md"
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text("## Project Manifest\npython, make, pytest")
 

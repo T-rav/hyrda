@@ -1351,7 +1351,7 @@ class TestContextSeed:
 
         log_lines = _seed_context_assets(config)
 
-        manifest_path = tmp_path / ".hydraflow" / "memory" / "manifest.md"
+        manifest_path = tmp_path / ".hydraflow" / "manifest" / "manifest.md"
         digest_path = tmp_path / ".hydraflow" / "memory" / "digest.md"
         repo_slug = config.repo.replace("/", "-") if config.repo else "unknown"
         metrics_file = state_file.parent / "metrics" / repo_slug / "snapshots.jsonl"
