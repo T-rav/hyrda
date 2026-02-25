@@ -232,6 +232,24 @@ class AgentRunner(BaseRunner):
         except Exception:  # noqa: BLE001
             return ""
 
+    def _summarize_for_prompt(self, text: str, max_chars: int, label: str) -> str:
+        """Return text trimmed for prompt efficiency with a traceable note."""
+        if len(text) <= max_chars:
+            return text
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        cue_lines = [
+            ln for ln in lines if re.match(r"^([-*]|\d+\.)\s+", ln) or "## " in ln
+        ]
+        selected = cue_lines[:10] if cue_lines else lines[:10]
+        compact = "\n".join(f"- {ln[:200]}" for ln in selected).strip()
+        if not compact:
+            compact = text[:max_chars]
+        return (
+            f"{compact}\n\n"
+            f"[{label} summarized from {len(text):,} chars to reduce prompt size]"
+        )
+
     def _build_prompt(self, issue: Task, review_feedback: str = "") -> str:
         """Build the implementation prompt for the agent."""
         plan_comment, other_comments = self._extract_plan_comment(issue.comments)
@@ -248,6 +266,9 @@ class AgentRunner(BaseRunner):
 
         plan_section = ""
         if plan_comment:
+            plan_comment = self._summarize_for_prompt(
+                plan_comment, max_chars=6_000, label="Implementation plan"
+            )
             plan_section = (
                 f"\n\n## Implementation Plan\n\n"
                 f"Follow this plan closely. It was created by a planner agent "
@@ -257,6 +278,9 @@ class AgentRunner(BaseRunner):
 
         review_feedback_section = ""
         if review_feedback:
+            review_feedback = self._summarize_for_prompt(
+                review_feedback, max_chars=2_000, label="Review feedback"
+            )
             review_feedback_section = (
                 f"\n\n## Review Feedback\n\n"
                 f"A reviewer rejected the previous implementation. "
@@ -266,8 +290,12 @@ class AgentRunner(BaseRunner):
 
         comments_section = ""
         if other_comments:
-            formatted = "\n".join(f"- {c}" for c in other_comments)
+            max_comments = 6
+            selected_comments = other_comments[:max_comments]
+            formatted = "\n".join(f"- {c}" for c in selected_comments)
             comments_section = f"\n\n## Discussion\n{formatted}"
+            if len(other_comments) > max_comments:
+                comments_section += f"\n- ... ({len(other_comments) - max_comments} more comments omitted)"
 
         feedback_section = self._get_review_feedback_section()
 
@@ -301,20 +329,11 @@ class AgentRunner(BaseRunner):
 
 ## Instructions
 
-1. Read the issue carefully and understand what needs to be done.
-2. Explore the codebase to understand the relevant code.
-3. Write comprehensive tests FIRST (TDD approach).
-4. Implement the solution.
-5. Run a **Pre-Quality Review Skill** (self-review and corrections before quality checks):
-   - validate correctness, plan adherence, and edge cases,
-   - identify missing/weak tests and add them,
-   - simplify/refactor obviously risky code paths.
-6. Run a **Run-Tool Skill** for executable checks:
-   - run `make lint`,
-   - run `{test_cmd}`,
-   - run `make quality`,
-   - fix failures and rerun until green or clearly blocked.
-7. Commit your changes with a message: "Fixes #{issue.id}: <concise summary>"
+1. Understand the issue and relevant code paths.
+2. Write/adjust tests first, then implement.
+3. Run Pre-Quality Review Skill for correctness, plan adherence, and missing tests.
+4. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality`; fix and rerun.
+5. Commit with: "Fixes #{issue.id}: <concise summary>"
 {feedback_section}
 ## UI Guidelines
 

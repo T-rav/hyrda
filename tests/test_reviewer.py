@@ -1178,12 +1178,13 @@ async def test_fix_ci_failure_records_duration(
 def test_build_review_prompt_truncates_long_diff_with_warning(
     config, event_bus, pr_info, task
 ):
-    """Diff exceeding max_review_diff_chars should be truncated with a note."""
+    """Large diffs should be summarized/truncated with a note."""
     runner = _make_runner(config, event_bus)
     long_diff = "x" * 20_000
     prompt = runner._build_review_prompt(pr_info, task, long_diff)
 
-    assert "x" * 15_000 in prompt
+    assert "### Diff Summary" in prompt
+    assert "### Diff Excerpts" in prompt
     assert "x" * 20_000 not in prompt
     assert "Diff truncated" in prompt
     assert "review may be incomplete" in prompt
@@ -1200,13 +1201,13 @@ def test_build_review_prompt_preserves_short_diff(config, event_bus, pr_info, ta
 
 
 def test_build_review_prompt_diff_truncation_configurable(event_bus, pr_info, task):
-    """max_review_diff_chars should control the truncation limit."""
+    """Configured max_review_diff_chars should appear in truncation note."""
     cfg = ConfigFactory.create(max_review_diff_chars=5_000)
     runner = _make_runner(cfg, event_bus)
     diff = "x" * 10_000
     prompt = runner._build_review_prompt(pr_info, task, diff)
 
-    assert "x" * 5_000 in prompt
+    assert "### Diff Summary" in prompt
     assert "x" * 10_000 not in prompt
     assert "5,000 chars" in prompt
 
@@ -1314,15 +1315,15 @@ class TestBuildPrecheckPrompt:
         assert task.title in prompt
         assert "some diff content" in prompt
 
-    def test_truncates_diff_to_6000_chars(
+    def test_truncates_diff_to_3000_chars(
         self, config, event_bus, pr_info, task
     ) -> None:
         runner = _make_runner(config, event_bus)
         long_diff = "x" * 10_000
         prompt = runner._build_precheck_prompt(pr_info, task, long_diff)
-        # Should contain at most 6000 x's
-        assert "x" * 6000 in prompt
-        assert "x" * 6001 not in prompt
+        # Should contain at most 3000 x's
+        assert "x" * 3000 in prompt
+        assert "x" * 3001 not in prompt
 
     def test_short_diff_not_truncated(self, config, event_bus, pr_info, task) -> None:
         runner = _make_runner(config, event_bus)

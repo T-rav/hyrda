@@ -261,6 +261,110 @@ Then a brief summary on the next line starting with "SUMMARY: ".
             model=self._config.review_model,
         )
 
+    def _summarize_issue_body(self, body: str) -> str:
+        """Return compact issue context to reduce prompt size."""
+        text = (body or "").strip()
+        if not text:
+            return "(No issue body provided)"
+
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        cue_lines = [
+            ln
+            for ln in lines
+            if re.match(r"^([-*]|\d+\.)\s+", ln) or ln.lower().startswith("acceptance")
+        ]
+        selected = cue_lines[:8] if cue_lines else lines[:8]
+        compact = "\n".join(f"- {ln[:200]}" for ln in selected)
+        compacted = len(text) > self._config.max_issue_body_chars
+        note = (
+            f"[Body summarized from {len(text):,} chars to reduce prompt size]"
+            if compacted
+            else "[Body summarized for prompt efficiency]"
+        )
+        return (f"Issue body summarized for token efficiency:\n{compact}\n\n", note)
+
+    def _summarize_diff(self, pr_number: int, diff: str) -> str:
+        """Return compact diff context with file/change summary and excerpts."""
+        max_diff = self._config.max_review_diff_chars
+        source = diff
+        truncated = False
+        if len(source) > max_diff:
+            logger.warning(
+                "PR #%d diff truncated from %d to %d chars",
+                pr_number,
+                len(source),
+                max_diff,
+            )
+            source = source[:max_diff]
+            truncated = True
+
+        files: list[str] = []
+        current_file = ""
+        added = 0
+        removed = 0
+        excerpt_lines: list[str] = []
+        excerpt_chars = 0
+        hunk_changes = 0
+        excerpt_limit = min(2200, max_diff)
+
+        for line in source.splitlines():
+            if line.startswith("diff --git "):
+                m = re.search(r" b/(.+)$", line)
+                current_file = m.group(1) if m else ""
+                if current_file and current_file not in files:
+                    files.append(current_file)
+                hunk_changes = 0
+                if excerpt_chars < excerpt_limit:
+                    excerpt_lines.append(line)
+                    excerpt_chars += len(line) + 1
+                continue
+
+            if line.startswith("@@"):
+                hunk_changes = 0
+                if excerpt_chars < excerpt_limit:
+                    excerpt_lines.append(line)
+                    excerpt_chars += len(line) + 1
+                continue
+
+            if line.startswith(("+++", "---")):
+                continue
+
+            if line.startswith("+"):
+                added += 1
+                if hunk_changes < 4 and excerpt_chars < excerpt_limit:
+                    excerpt_lines.append(line)
+                    excerpt_chars += len(line) + 1
+                hunk_changes += 1
+                continue
+
+            if line.startswith("-"):
+                removed += 1
+                if hunk_changes < 4 and excerpt_chars < excerpt_limit:
+                    excerpt_lines.append(line)
+                    excerpt_chars += len(line) + 1
+                hunk_changes += 1
+
+        file_preview = ", ".join(files[:8]) if files else "(could not detect files)"
+        truncated_note = ""
+        if truncated:
+            truncated_note = f"\n[Diff truncated at {max_diff:,} chars — review may be incomplete for large PRs]"
+        else:
+            truncated_note = "\n[Diff summarized to reduce prompt size]"
+
+        excerpt_block = (
+            "\n".join(excerpt_lines).strip() or "(No excerpt lines captured)"
+        )
+        return (
+            "### Diff Summary\n"
+            f"- Files changed (detected): {len(files)}\n"
+            f"- Added lines (detected): {added}\n"
+            f"- Removed lines (detected): {removed}\n"
+            f"- File sample: {file_preview}\n\n"
+            "### Diff Excerpts\n"
+            f"```diff\n{excerpt_block}\n```"
+            f"{truncated_note}"
+        )
+
     def _build_review_prompt(
         self,
         pr: PRInfo,
@@ -294,22 +398,7 @@ Then a brief summary on the next line starting with "SUMMARY: ".
             )
             fix_verify = f"2. Run `make lint` and `{test_cmd}`."
 
-        # Truncate diff with warning
-        max_diff = self._config.max_review_diff_chars
-        if len(diff) > max_diff:
-            logger.warning(
-                "PR #%d diff truncated from %d to %d chars",
-                pr.number,
-                len(diff),
-                max_diff,
-            )
-            diff_text = (
-                diff[:max_diff]
-                + f"\n\n[Diff truncated at {max_diff:,} chars"
-                + " — review may be incomplete for large PRs]"
-            )
-        else:
-            diff_text = diff
+        diff_context = self._summarize_diff(pr.number, diff)
 
         min_findings = self._config.min_review_findings
 
@@ -324,11 +413,13 @@ Then a brief summary on the next line starting with "SUMMARY: ".
             if logs:
                 log_section = f"\n\n## Recent Application Logs\n\n```\n{logs}\n```"
 
+        issue_body = self._summarize_issue_body(issue.body)
+
         return f"""You are reviewing PR #{pr.number} which implements issue #{issue.id}.
 
 ## Issue: {issue.title}
 
-{issue.body}{manifest_section}{memory_section}{log_section}
+{issue_body}{manifest_section}{memory_section}{log_section}
 
 ## Precheck Context
 
@@ -336,37 +427,14 @@ Then a brief summary on the next line starting with "SUMMARY: ".
 
 ## PR Diff
 
-```diff
-{diff_text}
-```
-
-## Review Dimensions
-
-Review this PR across three dimensions:
-
-### 1. Correctness
-- Does the code work as intended? Are there edge cases?
-- Proper error handling? No off-by-one errors?
-- Are all branches tested?
-
-### 2. Completeness
-- Does the implementation address ALL requirements from the issue?
-- Were any requirements silently dropped or partially implemented?
-- Cross-reference the issue body's requirements list against the diff.
-- If any requirement from the issue body is not addressed, flag it as a completeness gap.
-
-### 3. Quality
-- Code style, type annotations, naming conventions?
-- Comprehensive test coverage (tests are MANDATORY per CLAUDE.md)?
-- Security concerns? Performance issues?
-- CLAUDE.md compliance: linting, formatting, no secrets committed?
+{diff_context}
 
 ## Review Instructions
 
-1. Check each of the three dimensions above thoroughly.
-2. You MUST examine the code critically. Look for: correctness issues, edge cases, missing error handling, security concerns, test coverage gaps, style/convention violations, and performance issues.
+1. Evaluate three dimensions: correctness, completeness, and quality.
+2. Look for edge cases, missing error handling, security risks, test gaps, and style violations.
 3. You MUST find at least {min_findings} issues across all categories. If you find fewer, re-examine the code more carefully.
-4. If after thorough examination you genuinely find fewer than {min_findings} issues, you MUST include a THOROUGH_REVIEW_COMPLETE block justifying why each category had no findings. Format:
+4. If you genuinely find fewer than {min_findings} issues, include THOROUGH_REVIEW_COMPLETE:
 ```
 THOROUGH_REVIEW_COMPLETE
 Correctness: No issues — <justification>
@@ -374,7 +442,7 @@ Completeness: No issues — <justification>
 Quality: No issues — <justification>
 ```
 {verify_step}
-6. Run the project's audit commands on the changed code:
+6. Run project audits on changed code:
    - Review code quality patterns (SRP, type hints, naming, complexity)
    - Review test quality (3As structure, factories, edge cases)
    - Check for security issues (injection, crypto, auth)
@@ -414,7 +482,7 @@ SUMMARY: Implementation looks good, tests are comprehensive, all checks pass.
         )
 
     def _build_precheck_prompt(self, pr: PRInfo, issue: Task, diff: str) -> str:
-        max_diff = min(len(diff), 6000)
+        max_diff = min(len(diff), 3000, self._config.max_review_diff_chars)
         diff_snippet = diff[:max_diff]
         return f"""Run a compact review precheck for PR #{pr.number} (issue #{issue.id}).
 

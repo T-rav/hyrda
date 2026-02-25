@@ -327,12 +327,16 @@ class PlannerRunner(BaseRunner):
         """
         comments_section = ""
         if issue.comments:
+            max_comments = 6
+            selected_comments = issue.comments[:max_comments]
             truncated = [
                 self._truncate_text(c, self._MAX_COMMENT_CHARS, self._MAX_LINE_CHARS)
-                for c in issue.comments
+                for c in selected_comments
             ]
             formatted = "\n".join(f"- {c}" for c in truncated)
             comments_section = f"\n\n## Discussion\n{formatted}"
+            if len(issue.comments) > max_comments:
+                comments_section += f"\n- ... ({len(issue.comments) - max_comments} more comments omitted)"
 
         body = self._truncate_text(
             issue.body or "", self._config.max_issue_body_chars, self._MAX_LINE_CHARS
@@ -394,31 +398,15 @@ class PlannerRunner(BaseRunner):
 {mode_note}You are in READ-ONLY mode. Do NOT create, modify, or delete any files.
 Do NOT run any commands that change state (no git commit, no file writes, no installs).
 
-Your job is to explore the codebase and create a detailed implementation plan.
+Your job: explore code and produce a concrete implementation plan.
 
 ## Exploration Strategy — USE SEMANTIC TOOLS
 
-You have access to powerful semantic navigation tools. Use them instead of grep:
-
-1. **claude-context (search_code)** — Semantic code search. Use this FIRST to find
-   relevant code by describing what you're looking for in natural language.
-   Example: search for "authentication middleware" or "database connection pool".
-
-2. **claude-context (index_codebase)** — If search_code returns an error about
-   missing index, index the codebase first, then search.
-
-3. **cclsp (find_definition)** — Jump to the definition of any symbol (function, class, variable).
-4. **cclsp (find_references)** — Find all callers/usages of a symbol across the workspace.
-5. **cclsp (find_implementation)** — Find implementations of an interface or abstract method.
-6. **cclsp (get_incoming_calls)** — Find what calls a given function.
-7. **cclsp (get_outgoing_calls)** — Find what a function calls.
-8. **cclsp (find_workspace_symbols)** — Search for symbols by name across the workspace.
-
-Use these tools to build a deep understanding of the code:
-- Start with `search_code` to find relevant areas
-- Use `find_definition` and `find_references` to trace through the code
-- Use `get_incoming_calls` / `get_outgoing_calls` to understand call graphs
-- Only fall back to Grep for simple text pattern matching
+Use semantic tools first (before grep):
+- `claude-context search_code` to find relevant code by intent.
+- `claude-context index_codebase` only if search says index is missing.
+- `cclsp` (`find_definition`, `find_references`, `find_implementation`,
+  `get_incoming_calls`, `get_outgoing_calls`, `find_workspace_symbols`) to trace impact.
 
 ### UI Exploration (when the issue involves UI changes)
 
@@ -429,13 +417,11 @@ Use these tools to build a deep understanding of the code:
 
 ## Planning Steps
 
-1. Read the issue carefully and understand what needs to be done.
-2. Restate what the issue asks for before diving into details — this ensures your plan stays on target.
-3. Use semantic search and LSP navigation to explore the relevant code.
-4. Identify what needs to change and where.
-5. Consider testing strategy (what tests to write, what to mock).
-6. Consider edge cases and potential pitfalls.
-7. If the issue involves UI changes, list existing components and shared code (`constants.js`, `types.js`, `theme.js`) that should be reused or extended.
+1. Restate the issue in your own words.
+2. Explore relevant code with semantic tools.
+3. Identify concrete file-level deltas.
+4. Define testing strategy and edge cases.
+5. For UI work, call out reusable components/shared modules (`constants.js`, `types.js`, `theme.js`).
 
 ## Required Output
 
@@ -452,15 +438,13 @@ SUMMARY: <brief one-line description of the plan>
 
 ## Handling Uncertainty
 
-If any requirement is ambiguous or has multiple valid interpretations, mark it with
-`[NEEDS CLARIFICATION: <brief description of what's unclear>]` rather than making
-assumptions. This is preferred over guessing. Plans with 0-3 markers are acceptable;
-plans with 4 or more markers will be escalated for human review.
+If a requirement is ambiguous, add
+`[NEEDS CLARIFICATION: <brief description>]` instead of guessing.
+Plans with 0-3 markers are acceptable; 4+ will escalate to human review.
 
 ## Optional: Discovered Issues
 
-If you discover bugs, tech debt, or out-of-scope work during exploration,
-you can file them as new GitHub issues using these markers:
+If you discover bugs/tech debt/out-of-scope work, optionally propose issues:
 
 NEW_ISSUES_START
 - title: Short issue title
@@ -473,25 +457,19 @@ NEW_ISSUES_START
   labels: {find_label}
 NEW_ISSUES_END
 
-Only include this section if you actually discover issues worth filing.
-**IMPORTANT:** Each issue body MUST be detailed (at least 50 characters). One-word
-or one-line bodies will be rejected. Include file paths, function names, and context.
-
-**IMPORTANT:** You MUST only use the following label for new issues: `{find_label}`
-Do NOT invent labels. All discovered issues enter the pipeline via the find label.
+Only include this section for real findings.
+Each issue body must be detailed (>=50 chars) with file/context.
+Use only label `{find_label}`.
 
 ## Already Satisfied
 
-If after exploring the codebase you determine that the issue's acceptance criteria are
-**already fully met** by the existing code (i.e., no changes are needed), do NOT produce
-a plan. Instead, output:
+If requirements are already fully met (no changes needed), do NOT produce a plan. Output:
 
 ALREADY_SATISFIED_START
 <explanation of why no changes are needed, referencing specific files and code>
 ALREADY_SATISFIED_END
 
-This will close the issue automatically. Only use this when you are **certain** the
-requirements are already implemented — not when the issue is unclear or you are unsure.
+This closes the issue automatically. Use only when you are certain.
 
 {MEMORY_SUGGESTION_PROMPT.format(context="planning")}"""
 

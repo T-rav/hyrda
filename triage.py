@@ -174,9 +174,9 @@ class TriageRunner(BaseRunner):
         )
 
     @staticmethod
-    def _build_prompt(issue: Task) -> str:
+    def _build_prompt(issue: Task, max_body: int = 5000) -> str:
         """Build the triage evaluation prompt."""
-        body = (issue.body or "")[:5000]
+        body = (issue.body or "")[:max_body]
         return f"""You are a triage agent evaluating whether a GitHub issue has enough detail for an implementation planning agent to succeed.
 
 ## Issue #{issue.id}
@@ -218,7 +218,10 @@ or
     async def _evaluate_with_llm(self, issue: Task) -> TriageResult:
         """Run LLM evaluation and parse the verdict."""
         cmd = self._build_command()
-        prompt = self._build_prompt(issue)
+        prompt = self._build_prompt(
+            issue,
+            max_body=max(1000, min(self._config.max_issue_body_chars, 5000)),
+        )
 
         transcript = await self._execute(
             cmd,
