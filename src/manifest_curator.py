@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import TypedDict
 
 from config import HydraFlowConfig
 from file_util import atomic_write
@@ -232,19 +233,25 @@ class CuratedManifestStore:
     def _coerce_payload(self, raw: dict[str, object]) -> CuratedPayload:
         payload = self._empty_payload()
         payload["overview"] = str(raw.get("overview") or "")
-        payload["key_services"] = [
-            str(item) for item in cast(Sequence[Any], raw.get("key_services") or [])
-        ]
-        payload["standards"] = [
-            str(item) for item in cast(Sequence[Any], raw.get("standards") or [])
-        ]
-        payload["architecture"] = [
-            str(item) for item in cast(Sequence[Any], raw.get("architecture") or [])
-        ]
-        source_count = raw.get("source_count")
-        payload["source_count"] = (
-            int(source_count) if isinstance(source_count, (int, str)) else 0
-        )
+        payload["key_services"] = self._as_str_list(raw.get("key_services"))
+        payload["standards"] = self._as_str_list(raw.get("standards"))
+        payload["architecture"] = self._as_str_list(raw.get("architecture"))
+        payload["source_count"] = self._coerce_int(raw.get("source_count"))
         updated = raw.get("updated_at")
         payload["updated_at"] = str(updated) if updated else None
         return payload
+
+    @staticmethod
+    def _as_str_list(value: object) -> list[str]:
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            return [str(item) for item in value]
+        return []
+
+    @staticmethod
+    def _coerce_int(value: object) -> int:
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            with contextlib.suppress(ValueError):
+                return int(value.strip() or 0)
+        return 0
