@@ -67,9 +67,10 @@ def _extract_assets_from_source_tree(target: Path, force: bool) -> tuple[int, in
 
 
 def _extract_assets(target: Path, force: bool) -> tuple[int, int]:
-    asset_path = Path(resources.files("hf_cli").joinpath("assets.tar.gz"))
-    if asset_path.is_file():
-        return _extract_assets_from_archive(target, force, asset_path)
+    asset_entry = resources.files("hf_cli").joinpath("assets.tar.gz")
+    if asset_entry.is_file():
+        with resources.as_file(asset_entry) as asset_path:
+            return _extract_assets_from_archive(target, force, asset_path)
     return _extract_assets_from_source_tree(target, force)
 
 
