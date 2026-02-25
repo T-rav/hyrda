@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 from config import HydraFlowConfig
 from file_util import atomic_write
@@ -174,6 +175,45 @@ class PromptTelemetry:
             logger.warning("Per-PR stats file is corrupt, rebuilding")
             return {}
         return parsed if isinstance(parsed, dict) else {}
+
+    def load_inferences(
+        self,
+        *,
+        limit: int = 5000,
+    ) -> list[dict[str, Any]]:
+        """Load recent inference rows from JSONL, newest last."""
+        if limit <= 0:
+            return []
+        if not self._inferences_file.is_file():
+            return []
+        rows: list[dict[str, Any]] = []
+        try:
+            with open(self._inferences_file) as f:
+                for raw_line in f:
+                    stripped = raw_line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        parsed = json.loads(stripped)
+                    except json.JSONDecodeError:
+                        logger.debug(
+                            "Skipping corrupt inference line in %s",
+                            self._inferences_file,
+                            exc_info=True,
+                        )
+                        continue
+                    if isinstance(parsed, dict):
+                        rows.append(parsed)
+        except OSError:
+            logger.warning(
+                "Could not read prompt telemetry from %s",
+                self._inferences_file,
+                exc_info=True,
+            )
+            return []
+        if len(rows) > limit:
+            return rows[-limit:]
+        return rows
 
     @staticmethod
     def _accumulate_counter(

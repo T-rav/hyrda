@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from events import EventBus
+from events import EventBus, EventType, HydraFlowEvent
 from models import HITLItem, SessionStatus
 
 
@@ -71,6 +71,7 @@ class TestCreateRouter:
             "/api/pipeline",
             "/api/metrics",
             "/api/metrics/github",
+            "/api/issues/history",
             "/api/events",
             "/api/prs",
             "/api/hitl",
@@ -177,6 +178,94 @@ class TestStartOrchestratorBroadcast:
         assert event.type == "orchestrator_status"
         assert event.data["status"] == "running"
         assert event.data["reset"] is True
+
+
+class TestIssueHistoryEndpoint:
+    @pytest.mark.asyncio
+    async def test_issue_history_aggregates_inference_and_events(
+        self, config, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        import json
+
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+        from prompt_telemetry import PromptTelemetry
+
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="implementer",
+            tool="codex",
+            model="gpt-5",
+            issue_number=77,
+            pr_number=501,
+            session_id="sess-x",
+            prompt_chars=400,
+            transcript_chars=200,
+            duration_seconds=1.5,
+            success=True,
+            stats={"total_tokens": 123, "input_tokens": 80, "output_tokens": 43},
+        )
+
+        await event_bus.publish(
+            HydraFlowEvent(
+                type=EventType.ISSUE_CREATED,
+                data={
+                    "issue": 77,
+                    "title": "Improve planner quality",
+                    "labels": ["epic:quality"],
+                },
+            )
+        )
+        await event_bus.publish(
+            HydraFlowEvent(
+                type=EventType.PR_CREATED,
+                data={"issue": 77, "pr": 501, "url": "https://example.com/pull/501"},
+            )
+        )
+        await event_bus.publish(
+            HydraFlowEvent(
+                type=EventType.MERGE_UPDATE,
+                data={"pr": 501, "status": "merged"},
+            )
+        )
+
+        pr_mgr = PRManager(config, event_bus)
+        router = create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+        endpoint = None
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == "/api/issues/history"
+                and hasattr(route, "endpoint")
+            ):
+                endpoint = route.endpoint
+                break
+        assert endpoint is not None
+
+        response = await endpoint(limit=100)
+        payload = json.loads(response.body)
+        assert payload["totals"]["issues"] >= 1
+        assert payload["totals"]["total_tokens"] >= 123
+
+        issue = next((x for x in payload["items"] if x["issue_number"] == 77), None)
+        assert issue is not None
+        assert issue["status"] == "merged"
+        assert issue["epic"] == "epic:quality"
+        assert issue["inference"]["total_tokens"] == 123
+        assert issue["session_ids"] == ["sess-x"]
+        assert issue["prs"][0]["number"] == 501
+        assert issue["prs"][0]["merged"] is True
 
 
 class TestControlStatusImproveLabel:

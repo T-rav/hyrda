@@ -146,3 +146,37 @@ class TestPromptTelemetry:
         assert telemetry.get_lifetime_totals()["total_tokens"] == 120
         assert telemetry.get_session_totals("sess-3")["total_tokens"] == 50
         assert telemetry.get_pr_totals(300)["total_tokens"] == 70
+
+    def test_load_inferences_reads_recent_rows(self, tmp_path):
+        config = ConfigFactory.create(repo_root=tmp_path)
+        telemetry = PromptTelemetry(config)
+        telemetry.record(
+            source="planner",
+            tool="claude",
+            model="opus",
+            issue_number=10,
+            pr_number=0,
+            session_id="sess-1",
+            prompt_chars=120,
+            transcript_chars=30,
+            duration_seconds=0.1,
+            success=True,
+            stats={"total_tokens": 12},
+        )
+        telemetry.record(
+            source="implementer",
+            tool="codex",
+            model="gpt-5",
+            issue_number=11,
+            pr_number=400,
+            session_id="sess-2",
+            prompt_chars=200,
+            transcript_chars=40,
+            duration_seconds=0.2,
+            success=True,
+            stats={"total_tokens": 20},
+        )
+
+        rows = telemetry.load_inferences(limit=1)
+        assert len(rows) == 1
+        assert rows[0]["issue_number"] == 11
