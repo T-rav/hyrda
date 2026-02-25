@@ -1313,13 +1313,15 @@ class TestCliScaffold:
         assert exc_info.value.code == 1
 
 
-def test_run_scaffold_uses_makefile_scaffold() -> None:
-    """_run_scaffold should call scaffold_makefile for root Makefile support."""
+def test_run_scaffold_focuses_on_ci_and_test_scaffolds() -> None:
+    """_run_scaffold should only scaffold CI + tests for quick prep."""
     from pathlib import Path
 
     cli_file = Path(__file__).resolve().parent.parent / "src" / "cli.py"
     content = cli_file.read_text()
-    assert "scaffold_makefile" in content
+    assert "scaffold_ci(" in content
+    assert "scaffold_tests_polyglot(" in content
+    assert "scaffold_makefiles(" not in content
 
 
 def test_run_scaffold_prints_summary_block() -> None:
@@ -1331,13 +1333,15 @@ def test_run_scaffold_prints_summary_block() -> None:
     assert "Prep summary:" in content
 
 
-def test_run_scaffold_uses_prep_agent_correction() -> None:
-    """_run_scaffold should invoke prep agent correction between retries."""
+def test_run_scaffold_has_quick_success_and_coverage_guidance() -> None:
+    """_run_scaffold should support early success and coverage follow-up guidance."""
     from pathlib import Path
 
     cli_file = Path(__file__).resolve().parent.parent / "src" / "cli.py"
     content = cli_file.read_text()
-    assert "_run_prep_agent_correction(" in content
+    assert "Well done: CI and baseline tests already exist" in content
+    assert "make cover" in content
+    assert "make smoke" in content
 
 
 class TestContextSeed:
