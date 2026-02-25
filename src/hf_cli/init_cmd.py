@@ -9,6 +9,7 @@ import tarfile
 from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
+from typing import BinaryIO
 
 from hf_cli.assets_manifest import ASSET_PATHS
 
@@ -21,7 +22,7 @@ _GITIGNORE_ENTRY = ".hydraflow/prep"
 
 
 def _extract_assets_from_fileobj(
-    target: Path, force: bool, fileobj: io.BufferedReader
+    target: Path, force: bool, fileobj: BinaryIO
 ) -> tuple[int, int]:
     created = 0
     skipped = 0
