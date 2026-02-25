@@ -1364,7 +1364,7 @@ async def _run_prep_agent_correction(
     issue_filenames: list[str],
     on_output: Callable[[str], bool] | None = None,
 ) -> bool:
-    """Run Claude/Codex as a prep correction agent for one attempt."""
+    """Run Claude/Codex/Pi as a prep correction agent for one attempt."""
     from agent_cli import build_agent_command  # noqa: PLC0415
     from events import EventBus  # noqa: PLC0415
     from runner_utils import stream_claude_process  # noqa: PLC0415
@@ -1412,7 +1412,7 @@ async def _run_prep_agent_workflow(
     project_paths: list[str],
     on_output: Callable[[str], bool] | None = None,
 ) -> tuple[bool, str]:
-    """Run an end-to-end prep workflow via Claude/Codex."""
+    """Run an end-to-end prep workflow via Claude/Codex/Pi."""
     from agent_cli import build_agent_command  # noqa: PLC0415
     from events import EventBus  # noqa: PLC0415
     from runner_utils import stream_claude_process  # noqa: PLC0415
