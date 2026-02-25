@@ -103,19 +103,26 @@ class TestBuildAgentCommand:
         assert "--model" in cmd
         assert cmd[cmd.index("--model") + 1] == "pi-max"
 
-    def test_pi_ignores_disallowed_tools_and_max_turns(self) -> None:
-        """Pi command currently ignores disallowed_tools and max_turns knobs."""
+    def test_pi_ignores_disallowed_tools(self) -> None:
+        """Pi command currently ignores disallowed_tools."""
         cmd_plain = build_agent_command(tool="pi", model="pi-max")
         cmd_with_opts = build_agent_command(
             tool="pi",
             model="pi-max",
             disallowed_tools="Edit",
-            max_turns=3,
         )
 
         assert cmd_plain == cmd_with_opts
         assert "--disallowedTools" not in cmd_with_opts
-        assert "--max-turns" not in cmd_with_opts
+
+    def test_pi_max_turns_adds_stop_guidance(self) -> None:
+        """Pi has no native --max-turns flag; we pass stop guidance via system prompt."""
+        cmd = build_agent_command(tool="pi", model="pi-max", max_turns=3)
+
+        assert "--append-system-prompt" in cmd
+        guidance = cmd[cmd.index("--append-system-prompt") + 1]
+        assert "at most 3 assistant turn(s)" in guidance
+        assert "--max-turns" not in cmd
 
     def test_claude_max_turns_converted_to_string(self) -> None:
         """max_turns integer should be converted to a string in the command."""

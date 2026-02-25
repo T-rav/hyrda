@@ -177,7 +177,7 @@ class StreamParser:
         if not isinstance(update, dict):
             return ""
         if update.get("type") == "text_delta":
-            delta = str(update.get("delta", "")).strip()
+            delta = str(update.get("delta", ""))
             if delta:
                 self._last_result_text += delta
             return delta

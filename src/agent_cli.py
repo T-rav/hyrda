@@ -18,7 +18,7 @@ def build_agent_command(
     if tool == "codex":
         return _build_codex_command(model=model)
     if tool == "pi":
-        return _build_pi_command(model=model)
+        return _build_pi_command(model=model, max_turns=max_turns)
 
     cmd = [
         "claude",
@@ -53,9 +53,9 @@ def _build_codex_command(*, model: str) -> list[str]:
     ]
 
 
-def _build_pi_command(*, model: str) -> list[str]:
+def _build_pi_command(*, model: str, max_turns: int | None = None) -> list[str]:
     """Build a Pi headless command that emits machine-readable output."""
-    return [
+    cmd = [
         "pi",
         "-p",
         "--mode",
@@ -63,3 +63,15 @@ def _build_pi_command(*, model: str) -> list[str]:
         "--model",
         model,
     ]
+    # Pi has no native max-turns flag; add explicit stop guidance instead.
+    if max_turns is not None:
+        cmd.extend(
+            [
+                "--append-system-prompt",
+                (
+                    "Limit yourself to at most "
+                    f"{max_turns} assistant turn(s) and then stop."
+                ),
+            ]
+        )
+    return cmd

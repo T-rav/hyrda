@@ -412,6 +412,27 @@ class TestStreamParserDelta:
         assert display == "Hello from pi"
         assert result is None
 
+    def test_pi_message_update_preserves_whitespace_in_result(self):
+        parser = StreamParser()
+        parser.parse(
+            json.dumps(
+                {
+                    "type": "message_update",
+                    "assistantMessageEvent": {"type": "text_delta", "delta": "Hello"},
+                }
+            )
+        )
+        parser.parse(
+            json.dumps(
+                {
+                    "type": "message_update",
+                    "assistantMessageEvent": {"type": "text_delta", "delta": " world"},
+                }
+            )
+        )
+        _display, result = parser.parse(json.dumps({"type": "agent_end"}))
+        assert result == "Hello world"
+
     def test_pi_tool_execution_start_and_end(self):
         parser = StreamParser()
         start = {
