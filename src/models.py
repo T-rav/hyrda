@@ -602,6 +602,8 @@ class StateData(BaseModel):
     memory_issue_ids: list[int] = Field(default_factory=list)
     memory_digest_hash: str = ""
     memory_last_synced: str | None = None
+    manifest_issue_number: int | None = None
+    manifest_snapshot_hash: str = ""
     manifest_hash: str = ""
     manifest_last_updated: str | None = None
     manifest_issue_number: int | None = None
@@ -686,6 +688,9 @@ class HITLItem(BaseModel):
 class ControlStatusConfig(BaseModel):
     """Config subset returned by GET /api/control/status."""
 
+    app_version: str = ""
+    latest_version: str = ""
+    update_available: bool = False
     repo: str = ""
     ready_label: list[str] = Field(default_factory=list)
     find_label: list[str] = Field(default_factory=list)

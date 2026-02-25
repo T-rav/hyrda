@@ -356,21 +356,21 @@ class StateTracker:
         )
 
     def get_manifest_issue_number(self) -> int | None:
-        """Return the cached hydraflow-manifest issue number."""
+        """Return the cached manifest issue number, or *None*."""
         return self._data.manifest_issue_number
 
     def set_manifest_issue_number(self, issue_number: int) -> None:
-        """Persist the hydraflow-manifest issue number."""
+        """Cache the manifest issue number."""
         self._data.manifest_issue_number = issue_number
         self.save()
 
     def get_manifest_snapshot_hash(self) -> str:
-        """Return the last synced manifest digest hash."""
+        """Return the last manifest snapshot hash posted to the manifest issue."""
         return self._data.manifest_snapshot_hash
 
-    def set_manifest_snapshot_hash(self, digest_hash: str) -> None:
-        """Persist the last synced manifest digest hash."""
-        self._data.manifest_snapshot_hash = digest_hash
+    def set_manifest_snapshot_hash(self, snapshot_hash: str) -> None:
+        """Update the last manifest snapshot hash posted to the manifest issue."""
+        self._data.manifest_snapshot_hash = snapshot_hash
         self.save()
 
     # --- worker interval overrides ---

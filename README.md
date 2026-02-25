@@ -12,6 +12,8 @@ Log an issue. Agents handle the rest - triaging, planning, implementing, reviewi
 
 HydraFlow is a delivery kernel for GitHub repositories: it accepts intent, compiles it through a staged pipeline, enforces quality gates, and produces merged software changes.
 
+It scales your workflow, not just your output, turning your repository into a programmable delivery engine powered by your hooks and skills. This is __Harness Engineering__ in practice.
+
 ## What Makes It Different
 
 - Quality-gated pipeline, not "one-shot" agent code generation
@@ -92,8 +94,14 @@ hf --help
 # copy hf assets (.claude, .codex, .githooks) into the current repo
 hf init
 
-# run the standard prep flow without invoking make
+# run the standard quick prep/scaffold flow without invoking make
 hf prep
+
+# ensure lifecycle labels exist (equivalent to make ensure-labels)
+hf ensure-labels
+
+# optional explicit alias for quick prep/scaffold
+hf scaffold
 
 # register the current repo (or an explicit path) with the background supervisor
 hf run              # uses cwd
