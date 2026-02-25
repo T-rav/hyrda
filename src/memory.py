@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -201,8 +202,23 @@ class MemorySyncWorker:
         )
         self._manifest_syncer = manifest_syncer
 
-    _LearningRecord = CuratedLearning
-    _TypedLearning = CuratedLearning  # backwards compatibility for existing tests
+    _TypedLearning = tuple[int, str, str, MemoryType]
+    _LearningRecord = CuratedLearning | _TypedLearning
+
+    @staticmethod
+    def _coerce_learning_tuple(
+        record: _LearningRecord,
+    ) -> tuple[int, str, str, MemoryType]:
+        """Normalize curated objects and legacy tuple records to a single shape."""
+        if isinstance(record, tuple):
+            num, learning, created, memory_type = record
+            return num, learning, created, memory_type
+        return (
+            record.number,
+            record.learning,
+            record.created_at,
+            record.memory_type,
+        )
 
     async def sync(self, issues: list[MemoryIssueData]) -> MemorySyncResult:
         """Main sync entry point.
@@ -227,7 +243,7 @@ class MemorySyncWorker:
             }
 
         # Extract learnings (now typed) and build digest
-        learnings: list[MemorySyncWorker._LearningRecord] = []
+        learnings: list[CuratedLearning] = []
         for issue in issues:
             body = issue.get("body", "")
             learning = self._extract_learning(body)
@@ -260,8 +276,9 @@ class MemorySyncWorker:
         items_dir = self._config.data_path("memory", "items")
         items_dir.mkdir(parents=True, exist_ok=True)
         for record in learnings:
-            item_path = items_dir / f"{record.number}.md"
-            item_path.write_text(record.learning)
+            num, learning, _, _ = self._coerce_learning_tuple(record)
+            item_path = items_dir / f"{num}.md"
+            item_path.write_text(learning)
 
         # Atomic write of digest
         self._write_digest(digest)
@@ -340,7 +357,7 @@ class MemorySyncWorker:
         return MemoryType.KNOWLEDGE
 
     @staticmethod
-    def _build_digest(learnings: list[_LearningRecord]) -> str:
+    def _build_digest(learnings: Sequence[_LearningRecord]) -> str:
         """Build the digest markdown grouped by memory type.
 
         Learnings are organised into sections by type (actionable types
@@ -355,9 +372,10 @@ class MemorySyncWorker:
         # Group learnings by type
         by_type: dict[MemoryType, list[tuple[int, str]]] = {}
         for record in learnings:
-            by_type.setdefault(record.memory_type, []).append(
-                (record.number, record.learning)
+            num, learning, _, memory_type = MemorySyncWorker._coerce_learning_tuple(
+                record
             )
+            by_type.setdefault(memory_type, []).append((num, learning))
 
         sections: list[str] = []
         for mtype in MEMORY_TYPE_DISPLAY_ORDER:
@@ -371,7 +389,7 @@ class MemorySyncWorker:
         return header + "\n" + "\n---\n".join(sections) + "\n"
 
     async def _compact_digest(
-        self, learnings: list[_LearningRecord], max_chars: int
+        self, learnings: Sequence[_LearningRecord], max_chars: int
     ) -> str:
         """Deduplicate and optionally summarise learnings to fit within *max_chars*.
 
@@ -383,10 +401,10 @@ class MemorySyncWorker:
         """
         # --- Step 1: Deduplicate by keyword overlap ---
         seen_keywords: list[set[str]] = []
-        unique: list[MemorySyncWorker._LearningRecord] = []
+        unique: list[MemorySyncWorker._TypedLearning] = []
 
         for record in learnings:
-            learning = record.learning
+            num, learning, created, mtype = self._coerce_learning_tuple(record)
             words = {
                 w.lower() for w in re.findall(r"[a-zA-Z]+", learning) if len(w) >= 4
             }
@@ -399,7 +417,7 @@ class MemorySyncWorker:
                     is_dup = True
                     break
             if not is_dup:
-                unique.append(record)
+                unique.append((num, learning, created, mtype))
                 seen_keywords.append(words)
 
         # --- Step 2: Build digest from unique items (grouped by type) ---
@@ -410,10 +428,8 @@ class MemorySyncWorker:
         )
 
         by_type: dict[MemoryType, list[tuple[int, str]]] = {}
-        for record in unique:
-            by_type.setdefault(record.memory_type, []).append(
-                (record.number, record.learning)
-            )
+        for num, learning, _, mtype in unique:
+            by_type.setdefault(mtype, []).append((num, learning))
 
         sections: list[str] = []
         for mtype in MEMORY_TYPE_DISPLAY_ORDER:
