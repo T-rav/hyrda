@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -27,6 +28,15 @@ from cli import (
     build_config,
     parse_args,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_hydraflow_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent host HYDRAFLOW_* env vars from leaking into CLI default tests."""
+    for key in list(os.environ):
+        if key.startswith("HYDRAFLOW_"):
+            monkeypatch.delenv(key, raising=False)
+
 
 # ---------------------------------------------------------------------------
 # _parse_label_arg
@@ -364,8 +374,8 @@ _CLI_DEFAULT_EXPECTATIONS: list[tuple[str, object]] = [
     ("background_tool", "inherit"),
     ("background_model", ""),
     ("hitl_active_label", ["hydraflow-hitl-active"]),
-    ("implementation_tool", "claude"),
-    ("model", "opus"),
+    ("implementation_tool", "codex"),
+    ("model", "gpt-5-codex"),
     ("review_tool", "claude"),
     ("review_model", "sonnet"),
     ("ci_check_timeout", 600),
@@ -418,7 +428,7 @@ class TestBuildConfig:
         assert cfg.batch_size == 10
         # Other fields remain at defaults
         assert cfg.max_workers == 2
-        assert cfg.model == "opus"
+        assert cfg.model == "gpt-5-codex"
 
     def test_label_arg_parsed_to_list(self) -> None:
         """A comma-separated label CLI arg should become a list."""

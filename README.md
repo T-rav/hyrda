@@ -83,8 +83,8 @@ make quality      # quality-lite + tests
 HydraFlow now exposes an `hf` console script so you can run `hf init`, `hf prep`, `hf run`, etc.
 
 ```bash
-# install locally (inside this repo)
-uv tool run pip install -e .
+# install locally from pyproject.toml (including configured extras)
+uv sync --all-extras
 
 # show available commands
 hf --help
