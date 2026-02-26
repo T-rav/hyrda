@@ -263,6 +263,11 @@ class TestTask:
         assert task.created_at == ""
         assert task.metadata == {}
 
+    def test_number_aliases_id(self) -> None:
+        """GitHub style code can access Task.number as an alias for id."""
+        task = Task(id=123, title="Alias me")
+        assert task.number == 123
+
     def test_round_trip_to_task(self) -> None:
         """GitHubIssue.to_task() followed by from_task() should reproduce the original."""
         issue = GitHubIssue(

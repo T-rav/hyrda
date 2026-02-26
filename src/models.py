@@ -126,6 +126,11 @@ class Task(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     links: list[TaskLink] = Field(default_factory=list)
 
+    @property
+    def number(self) -> int:
+        """Alias GitHub-style issue numbers to the internal id."""
+        return self.id
+
 
 # --- GitHub ---
 

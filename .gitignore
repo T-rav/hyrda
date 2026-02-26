@@ -209,6 +209,7 @@ __marimo__/
 
 # Node
 node_modules/
+src/ui/node_modules
 
 # HydraFlow runtime state
 .hydraflow/
