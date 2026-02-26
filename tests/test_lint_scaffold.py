@@ -113,7 +113,7 @@ class TestHasTypescriptFiles:
         (hydraflow / "index.ts").write_text("export {};")
         assert has_typescript_files(tmp_path) is False
 
-    def test_has_typescript_files_returns_false_when_empty(
+    def test_has_typescript_files_returns_false_without_ts_files(
         self, tmp_path: Path
     ) -> None:
         src = tmp_path / "src"
