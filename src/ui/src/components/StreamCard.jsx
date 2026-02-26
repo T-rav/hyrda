@@ -99,7 +99,6 @@ export function StreamCard({ issue, intent, defaultExpanded, onRequestChanges, t
 
   return (
     <div style={{ ...styles.card, border: cardBorder }}>
-      <style>{pulseKeyframes}</style>
       <div style={styles.header} onClick={toggle}>
         <div style={styles.headerLeft}>
           {issue.issueUrl ? (
@@ -235,13 +234,6 @@ export function StreamCard({ issue, intent, defaultExpanded, onRequestChanges, t
     </div>
   )
 }
-
-const pulseKeyframes = `
-  @keyframes stream-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-`
 
 const stageNodeBase = {
   width: 10,
