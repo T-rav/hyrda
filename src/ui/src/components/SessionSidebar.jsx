@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useHydraFlow } from '../context/HydraFlowContext'
 import { theme } from '../theme'
+import { PULSE_ANIMATION } from '../constants'
 
 export function SessionSidebar() {
   const {
@@ -386,7 +387,7 @@ const styles = {
     borderRadius: '50%',
     background: theme.green,
     flexShrink: 0,
-    animation: 'pulse 2s infinite',
+    animation: PULSE_ANIMATION,
   },
   dotCompleted: {
     width: 8,

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { theme } from '../theme'
-import { PIPELINE_STAGES } from '../constants'
+import { PIPELINE_STAGES, PULSE_ANIMATION } from '../constants'
 import { formatDuration, STAGE_META, STAGE_KEYS } from '../hooks/useTimeline'
 import { TranscriptPreview } from './TranscriptPreview'
 
@@ -26,7 +26,7 @@ function StageRow({ stageKey, stageData, isLast }) {
   const nodeStyle = stageData.status === 'pending'
     ? { ...stageNodeBase, background: 'transparent', borderColor: theme.border }
     : stageData.status === 'active'
-      ? { ...stageNodeBase, background: meta.color, borderColor: meta.color, animation: 'stream-pulse 1.5s ease-in-out infinite' }
+      ? { ...stageNodeBase, background: meta.color, borderColor: meta.color, animation: PULSE_ANIMATION }
       : stageData.status === 'failed'
         ? { ...stageNodeBase, background: theme.red, borderColor: theme.red }
         : stageData.status === 'hitl'
@@ -99,7 +99,6 @@ export function StreamCard({ issue, intent, defaultExpanded, onRequestChanges, t
 
   return (
     <div style={{ ...styles.card, border: cardBorder }}>
-      <style>{pulseKeyframes}</style>
       <div style={styles.header} onClick={toggle}>
         <div style={styles.headerLeft}>
           {issue.issueUrl ? (
@@ -236,13 +235,6 @@ export function StreamCard({ issue, intent, defaultExpanded, onRequestChanges, t
   )
 }
 
-const pulseKeyframes = `
-  @keyframes stream-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
-`
-
 const stageNodeBase = {
   width: 10,
   height: 10,
@@ -258,7 +250,7 @@ export const dotStyles = {
     height: 8,
     borderRadius: '50%',
     background: theme.accent,
-    animation: 'stream-pulse 1.5s ease-in-out infinite',
+    animation: PULSE_ANIMATION,
   },
   done: { fontSize: 11, fontWeight: 700, color: theme.green },
   failed: { fontSize: 11, fontWeight: 700, color: theme.red },
