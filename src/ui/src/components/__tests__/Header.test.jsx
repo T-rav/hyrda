@@ -7,6 +7,8 @@ import {
   dotConnected, dotDisconnected,
   startBtnEnabled, startBtnDisabled,
   stageAbbreviations,
+  pipelineStageStylesMap,
+  pipelineLabelStylesMap,
 } from '../Header'
 
 const mockUseHydraFlow = vi.fn()
@@ -56,6 +58,46 @@ describe('Header pre-computed styles', () => {
   it('style objects are referentially stable', () => {
     expect(dotConnected).toBe(dotConnected)
     expect(startBtnEnabled).toBe(startBtnEnabled)
+  })
+
+  describe('pipelineStageStylesMap', () => {
+    it('has an entry for every pipeline stage', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key]).toBeDefined()
+      })
+    })
+
+    it('each entry uses the stage color as borderColor', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key].borderColor).toBe(stage.color)
+      })
+    })
+
+    it('style objects are referentially stable', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key]).toBe(pipelineStageStylesMap[stage.key])
+      })
+    })
+  })
+
+  describe('pipelineLabelStylesMap', () => {
+    it('has an entry for every pipeline stage', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key]).toBeDefined()
+      })
+    })
+
+    it('each entry uses the stage color as text color', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key].color).toBe(stage.color)
+      })
+    })
+
+    it('style objects are referentially stable', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key]).toBe(pipelineLabelStylesMap[stage.key])
+      })
+    })
   })
 })
 

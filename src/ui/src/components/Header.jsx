@@ -162,7 +162,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-start',
-    gap: 6,
+    gap: 8,
     border: `1px solid ${theme.border}`,
     borderRadius: 8,
     padding: '8px 14px',
@@ -187,7 +187,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
   },
   pipelineStage: {
     display: 'flex',
