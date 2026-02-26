@@ -48,15 +48,8 @@ export function Header({
 
   const sessionStages = PIPELINE_STAGES.map((stage) => ({
     key: stage.key,
-    label: stage.label,
-    color: stage.color,
     count: stageStatus?.[stage.key]?.sessionCount || 0,
   }))
-
-  const abbreviateStage = (label) => {
-    if (label.length <= 4) return label.toUpperCase()
-    return label.slice(0, 3).toUpperCase()
-  }
 
   return (
     <header style={styles.header}>
@@ -91,11 +84,11 @@ export function Header({
             {sessionStages.map((stage, index) => (
               <React.Fragment key={stage.key}>
                 <div
-                  style={{ ...styles.pipelineStage, borderColor: stage.color }}
+                  style={pipelineStageStylesMap[stage.key]}
                   data-testid={`session-stage-${stage.key}`}
                 >
-                  <span style={{ ...styles.pipelineLabel, color: stage.color }}>
-                    {abbreviateStage(stage.label)}
+                  <span style={pipelineLabelStylesMap[stage.key]}>
+                    {stageAbbreviations[stage.key]}
                   </span>
                   <span style={styles.pipelineValue}>{stage.count}</span>
                 </div>
@@ -263,6 +256,12 @@ const styles = {
     fontWeight: 600,
   },
 }
+
+// Pre-computed pipeline stage style maps (avoids object spread in render loops)
+const abbreviateLabel = (label) => (label.length <= 4 ? label.toUpperCase() : label.slice(0, 3).toUpperCase())
+export const stageAbbreviations = Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, abbreviateLabel(s.label)]))
+export const pipelineStageStylesMap = Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, { ...styles.pipelineStage, borderColor: s.color }]))
+export const pipelineLabelStylesMap = Object.fromEntries(PIPELINE_STAGES.map(s => [s.key, { ...styles.pipelineLabel, color: s.color }]))
 
 // Pre-computed connection dot variants
 export const dotConnected = { ...styles.dot, background: theme.green }

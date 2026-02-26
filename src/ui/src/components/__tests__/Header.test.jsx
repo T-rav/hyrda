@@ -6,6 +6,7 @@ import { theme } from '../../theme'
 import {
   dotConnected, dotDisconnected,
   startBtnEnabled, startBtnDisabled,
+  stageAbbreviations,
 } from '../Header'
 
 const mockUseHydraFlow = vi.fn()
@@ -226,6 +227,14 @@ describe('Header component', () => {
 
       const arrows = screen.getAllByText('→')
       expect(arrows.length).toBe(PIPELINE_STAGES.length - 1)
+    })
+
+    it('shows abbreviated stage labels in each session pill', () => {
+      render(<Header {...defaultProps} />)
+      PIPELINE_STAGES.forEach(stage => {
+        const pill = screen.getByTestId(`session-stage-${stage.key}`)
+        expect(pill).toHaveTextContent(stageAbbreviations[stage.key])
+      })
     })
 
     it('uses pipeline stage colors on each session pill border', () => {
