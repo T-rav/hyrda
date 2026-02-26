@@ -231,10 +231,10 @@ class TestFetchReadyIssues:
         mock_exec.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_query_label_includes_created_asc_sort(
+    async def test_query_label_uses_rest_issue_sort_fields(
         self, config: HydraFlowConfig
     ) -> None:
-        """_query_label passes --search sort:created-asc to gh issue list."""
+        """_query_label uses REST sort fields to fetch oldest-first."""
         fetcher = IssueFetcher(config)
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
@@ -246,9 +246,12 @@ class TestFetchReadyIssues:
             await fetcher.fetch_ready_issues(set())
 
         cmd = list(mock_exec.call_args_list[0].args)
-        assert "--search" in cmd
-        search_idx = cmd.index("--search")
-        assert cmd[search_idx + 1] == "sort:created-asc"
+        assert "api" in cmd
+        assert any(
+            token.startswith("repos/") and token.endswith("/issues") for token in cmd
+        )
+        assert "sort=created" in cmd
+        assert "direction=asc" in cmd
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +297,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -320,7 +323,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -344,7 +347,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             raise RuntimeError("Command failed (rc=1): some error")
 
@@ -363,7 +366,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return "not-valid-json"
 
@@ -392,7 +395,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -411,7 +414,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return "[]"
 
@@ -455,7 +458,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json_missing_number
 

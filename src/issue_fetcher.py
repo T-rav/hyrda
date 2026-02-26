@@ -18,6 +18,22 @@ class IssueFetcher:
 
     def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
+        self._repo_owner = config.repo.split("/", 1)[0] if "/" in config.repo else ""
+
+    @staticmethod
+    def _normalize_issue_payload(item: dict) -> dict:
+        """Map REST/CLI issue shapes to the GitHubIssue-compatible payload."""
+        comments_raw = item.get("comments", [])
+        comments: list = comments_raw if isinstance(comments_raw, list) else []
+        return {
+            "number": item.get("number"),
+            "title": item.get("title", ""),
+            "body": item.get("body", ""),
+            "labels": item.get("labels", []),
+            "comments": comments,
+            "url": item.get("html_url", item.get("url", "")),
+            "createdAt": item.get("createdAt", item.get("created_at", "")),
+        }
 
     async def fetch_issues_by_labels(
         self,
@@ -43,23 +59,30 @@ class IssueFetcher:
         async def _query_label(label: str | None) -> None:
             cmd = [
                 "gh",
-                "issue",
-                "list",
-                "--repo",
-                self._config.repo,
-                "--limit",
-                str(limit),
-                "--json",
-                "number,title,body,labels,comments,url,createdAt",
-                "--search",
-                "sort:created-asc",
+                "api",
+                f"repos/{self._config.repo}/issues",
+                "--field",
+                "state=open",
+                "--field",
+                "sort=created",
+                "--field",
+                "direction=asc",
+                "--field",
+                f"per_page={limit}",
             ]
             if label is not None:
-                cmd += ["--label", label]
+                cmd += ["--field", f"labels={label}"]
             try:
                 raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
                 for item in json.loads(raw):
-                    seen.setdefault(item["number"], item)
+                    if not isinstance(item, dict):
+                        continue
+                    if "pull_request" in item:
+                        continue
+                    normalized = self._normalize_issue_payload(item)
+                    number = normalized.get("number")
+                    if isinstance(number, int):
+                        seen.setdefault(number, normalized)
             except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
                 logger.error("gh issue list failed for label=%r: %s", label, exc)
 
@@ -189,21 +212,20 @@ class IssueFetcher:
         pr_infos: list[PRInfo] = []
         for issue in issues:
             branch = f"agent/issue-{issue.number}"
+            head_filter = f"{self._repo_owner}:{branch}" if self._repo_owner else branch
             try:
                 raw = await run_subprocess(
                     "gh",
-                    "pr",
-                    "list",
-                    "--repo",
-                    self._config.repo,
-                    "--head",
-                    branch,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,url,isDraft",
-                    "--limit",
-                    "1",
+                    "api",
+                    f"repos/{self._config.repo}/pulls",
+                    "--field",
+                    "state=open",
+                    "--field",
+                    f"head={head_filter}",
+                    "--field",
+                    "per_page=1",
+                    "--jq",
+                    "[.[] | {number, url: .html_url, isDraft: .draft}]",
                     gh_token=self._config.gh_token,
                 )
                 prs_json = json.loads(raw)
