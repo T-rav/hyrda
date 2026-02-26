@@ -18,6 +18,22 @@ class IssueFetcher:
 
     def __init__(self, config: HydraFlowConfig) -> None:
         self._config = config
+        self._repo_owner = config.repo.split("/", 1)[0] if "/" in config.repo else ""
+
+    @staticmethod
+    def _normalize_issue_payload(item: dict) -> dict:
+        """Map REST/CLI issue shapes to the GitHubIssue-compatible payload."""
+        comments_raw = item.get("comments", [])
+        comments: list = comments_raw if isinstance(comments_raw, list) else []
+        return {
+            "number": item.get("number"),
+            "title": item.get("title", ""),
+            "body": item.get("body", ""),
+            "labels": item.get("labels", []),
+            "comments": comments,
+            "url": item.get("html_url", item.get("url", "")),
+            "createdAt": item.get("createdAt", item.get("created_at", "")),
+        }
 
     async def fetch_issues_by_labels(
         self,
@@ -43,23 +59,32 @@ class IssueFetcher:
         async def _query_label(label: str | None) -> None:
             cmd = [
                 "gh",
-                "issue",
-                "list",
-                "--repo",
-                self._config.repo,
-                "--limit",
-                str(limit),
-                "--json",
-                "number,title,body,labels,comments,url,createdAt",
-                "--search",
-                "sort:created-asc",
+                "api",
+                f"repos/{self._config.repo}/issues",
+                "--method",
+                "GET",
+                "--field",
+                "state=open",
+                "--field",
+                "sort=created",
+                "--field",
+                "direction=asc",
+                "--field",
+                f"per_page={limit}",
             ]
             if label is not None:
-                cmd += ["--label", label]
+                cmd += ["--field", f"labels={label}"]
             try:
                 raw = await run_subprocess(*cmd, gh_token=self._config.gh_token)
                 for item in json.loads(raw):
-                    seen.setdefault(item["number"], item)
+                    if not isinstance(item, dict):
+                        continue
+                    if "pull_request" in item:
+                        continue
+                    normalized = self._normalize_issue_payload(item)
+                    number = normalized.get("number")
+                    if isinstance(number, int):
+                        seen.setdefault(number, normalized)
             except (RuntimeError, json.JSONDecodeError, FileNotFoundError) as exc:
                 logger.error("gh issue list failed for label=%r: %s", label, exc)
 
@@ -116,16 +141,15 @@ class IssueFetcher:
         try:
             raw = await run_subprocess(
                 "gh",
-                "issue",
-                "view",
-                str(issue_number),
-                "--repo",
-                self._config.repo,
-                "--json",
-                "number,title,body,labels,comments,url,createdAt",
+                "api",
+                f"repos/{self._config.repo}/issues/{issue_number}",
+                "--jq",
+                "{number, title, body, labels, url: .html_url, createdAt: .created_at}",
                 gh_token=self._config.gh_token,
             )
             data = json.loads(raw)
+            if isinstance(data, dict):
+                data["comments"] = await self.fetch_issue_comments(issue_number)
             return GitHubIssue.model_validate(data)
         except (RuntimeError, json.JSONDecodeError) as exc:
             logger.error("Could not fetch issue #%d: %s", issue_number, exc)
@@ -189,21 +213,22 @@ class IssueFetcher:
         pr_infos: list[PRInfo] = []
         for issue in issues:
             branch = f"agent/issue-{issue.number}"
+            head_filter = f"{self._repo_owner}:{branch}" if self._repo_owner else branch
             try:
                 raw = await run_subprocess(
                     "gh",
-                    "pr",
-                    "list",
-                    "--repo",
-                    self._config.repo,
-                    "--head",
-                    branch,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,url,isDraft",
-                    "--limit",
-                    "1",
+                    "api",
+                    f"repos/{self._config.repo}/pulls",
+                    "--method",
+                    "GET",
+                    "--field",
+                    "state=open",
+                    "--field",
+                    f"head={head_filter}",
+                    "--field",
+                    "per_page=1",
+                    "--jq",
+                    "[.[] | {number, url: .html_url, isDraft: .draft}]",
                     gh_token=self._config.gh_token,
                 )
                 prs_json = json.loads(raw)
@@ -236,20 +261,16 @@ class IssueFetcher:
         try:
             raw = await run_subprocess(
                 "gh",
-                "issue",
-                "view",
-                str(issue_number),
-                "--repo",
-                self._config.repo,
-                "--json",
-                "comments",
+                "api",
+                f"repos/{self._config.repo}/issues/{issue_number}/comments",
+                "--jq",
+                "[.[] | .body]",
                 gh_token=self._config.gh_token,
             )
             data = json.loads(raw)
-            comments = data.get("comments", [])
-            return [
-                c.get("body", "") if isinstance(c, dict) else str(c) for c in comments
-            ]
+            if not isinstance(data, list):
+                return []
+            return [str(c) for c in data]
         except (RuntimeError, json.JSONDecodeError) as exc:
             logger.error(
                 "Could not fetch comments for issue #%d: %s", issue_number, exc

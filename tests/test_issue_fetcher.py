@@ -231,10 +231,10 @@ class TestFetchReadyIssues:
         mock_exec.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_query_label_includes_created_asc_sort(
+    async def test_query_label_uses_rest_issue_sort_fields(
         self, config: HydraFlowConfig
     ) -> None:
-        """_query_label passes --search sort:created-asc to gh issue list."""
+        """_query_label uses REST sort fields to fetch oldest-first."""
         fetcher = IssueFetcher(config)
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
@@ -246,9 +246,14 @@ class TestFetchReadyIssues:
             await fetcher.fetch_ready_issues(set())
 
         cmd = list(mock_exec.call_args_list[0].args)
-        assert "--search" in cmd
-        search_idx = cmd.index("--search")
-        assert cmd[search_idx + 1] == "sort:created-asc"
+        assert "api" in cmd
+        assert any(
+            token.startswith("repos/") and token.endswith("/issues") for token in cmd
+        )
+        assert "--method" in cmd
+        assert "GET" in cmd
+        assert "sort=created" in cmd
+        assert "direction=asc" in cmd
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +299,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -320,7 +325,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -337,6 +342,37 @@ class TestFetchReviewablePrs:
         assert issues[0].number == 42
 
     @pytest.mark.asyncio
+    async def test_fetch_reviewable_prs_uses_get_for_pr_lookup(
+        self, config: HydraFlowConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        captured: list[tuple[str, ...]] = []
+
+        async def fake_run(*args: str, **kwargs: Any) -> str:
+            captured.append(args)
+            if any("issues" in arg for arg in args):
+                return RAW_ISSUE_JSON
+            return json.dumps(
+                [
+                    {
+                        "number": 200,
+                        "url": "https://github.com/o/r/pull/200",
+                        "isDraft": False,
+                    }
+                ]
+            )
+
+        with patch("issue_fetcher.run_subprocess", side_effect=fake_run):
+            prs, _issues = await fetcher.fetch_reviewable_prs(set())
+
+        assert len(prs) == 1
+        pr_lookup_cmd = next(
+            cmd for cmd in captured if any("/pulls" in part for part in cmd)
+        )
+        assert "--method" in pr_lookup_cmd
+        assert "GET" in pr_lookup_cmd
+
+    @pytest.mark.asyncio
     async def test_gh_cli_failure_skips_pr_for_that_issue(
         self, config: HydraFlowConfig
     ) -> None:
@@ -344,7 +380,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             raise RuntimeError("Command failed (rc=1): some error")
 
@@ -363,7 +399,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return "not-valid-json"
 
@@ -392,7 +428,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json
 
@@ -411,7 +447,7 @@ class TestFetchReviewablePrs:
         fetcher = IssueFetcher(config)
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return "[]"
 
@@ -455,7 +491,7 @@ class TestFetchReviewablePrs:
         )
 
         async def fake_run(*args: str, **kwargs: Any) -> str:
-            if "issue" in args:
+            if any("issues" in arg for arg in args):
                 return RAW_ISSUE_JSON
             return pr_json_missing_number
 
@@ -618,7 +654,7 @@ SINGLE_ISSUE_JSON = json.dumps(
         "title": "Fix bug",
         "body": "Details",
         "labels": [{"name": "ready"}],
-        "comments": [{"body": "first comment"}],
+        "comments": [],
         "url": "https://github.com/test-org/test-repo/issues/42",
         "createdAt": "2026-01-01T00:00:00Z",
     }
@@ -635,8 +671,12 @@ class TestFetchIssueByNumber:
         fetcher = IssueFetcher(config)
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
+        comments_json = json.dumps(["first comment"])
         mock_proc.communicate = AsyncMock(
-            return_value=(SINGLE_ISSUE_JSON.encode(), b"")
+            side_effect=[
+                (SINGLE_ISSUE_JSON.encode(), b""),
+                (comments_json.encode(), b""),
+            ]
         )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
@@ -646,6 +686,7 @@ class TestFetchIssueByNumber:
         assert issue.number == 42
         assert issue.title == "Fix bug"
         assert issue.body == "Details"
+        assert issue.comments == ["first comment"]
 
     @pytest.mark.asyncio
     async def test_returns_none_on_gh_failure(self, config: HydraFlowConfig) -> None:
@@ -695,7 +736,7 @@ class TestFetchIssueComments:
     @pytest.mark.asyncio
     async def test_returns_comment_bodies(self, config: HydraFlowConfig) -> None:
         fetcher = IssueFetcher(config)
-        comments_json = json.dumps({"comments": [{"body": "c1"}, {"body": "c2"}]})
+        comments_json = json.dumps(["c1", "c2"])
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(comments_json.encode(), b""))
@@ -708,9 +749,7 @@ class TestFetchIssueComments:
     @pytest.mark.asyncio
     async def test_handles_string_comments(self, config: HydraFlowConfig) -> None:
         fetcher = IssueFetcher(config)
-        comments_json = json.dumps(
-            {"comments": [{"body": "dict comment"}, "plain string"]}
-        )
+        comments_json = json.dumps(["dict comment", "plain string"])
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
         mock_proc.communicate = AsyncMock(return_value=(comments_json.encode(), b""))
@@ -783,6 +822,35 @@ class TestFetchIssuesByLabels:
         # Same issue returned for both labels → deduplicated to 1
         assert len(issues) == 1
         assert issues[0].number == 42
+
+    @pytest.mark.asyncio
+    async def test_rest_comments_count_payload_normalizes_to_empty_comments(
+        self, config: HydraFlowConfig
+    ) -> None:
+        fetcher = IssueFetcher(config)
+        raw = json.dumps(
+            [
+                {
+                    "number": 7,
+                    "title": "REST issue",
+                    "body": "Details",
+                    "labels": [{"name": "ready"}],
+                    "comments": 3,
+                    "html_url": "https://github.com/test-org/test-repo/issues/7",
+                    "created_at": "2026-01-01T00:00:00Z",
+                }
+            ]
+        )
+        mock_proc = AsyncMock()
+        mock_proc.returncode = 0
+        mock_proc.communicate = AsyncMock(return_value=(raw.encode(), b""))
+
+        with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
+            issues = await fetcher.fetch_issues_by_labels(["ready"], limit=10)
+
+        assert len(issues) == 1
+        assert issues[0].number == 7
+        assert issues[0].comments == []
 
     @pytest.mark.asyncio
     async def test_exclude_labels_filter_correctly(

@@ -896,7 +896,7 @@ async def test_merge_pr_dry_run_skips_command(dry_config, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_add_labels_calls_gh_issue_edit_for_each_label(config, event_bus):
+async def test_add_labels_calls_issue_labels_api_for_each_label(config, event_bus):
     manager = _make_manager(config, event_bus)
     mock_create = SubprocessMockBuilder().with_stdout("").build()
 
@@ -907,12 +907,13 @@ async def test_add_labels_calls_gh_issue_edit_for_each_label(config, event_bus):
 
     first_args = mock_create.call_args_list[0][0]
     assert first_args[0] == "gh"
-    assert "issue" in first_args
-    assert "edit" in first_args
-    assert "--add-label" in first_args
+    assert "api" in first_args
+    assert "repos/test-org/test-repo/issues/42/labels" in first_args
+    assert "POST" in first_args
+    assert "labels[]=bug" in first_args
 
     second_args = mock_create.call_args_list[1][0]
-    assert "--add-label" in second_args
+    assert "labels[]=enhancement" in second_args
 
 
 @pytest.mark.asyncio
@@ -943,7 +944,7 @@ async def test_add_labels_empty_list_skips_command(config, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_remove_label_calls_gh_issue_edit(config, event_bus):
+async def test_remove_label_calls_issue_labels_api(config, event_bus):
     manager = _make_manager(config, event_bus)
     mock_create = SubprocessMockBuilder().with_stdout("").build()
 
@@ -953,11 +954,9 @@ async def test_remove_label_calls_gh_issue_edit(config, event_bus):
     assert mock_create.call_count == 1
     args = mock_create.call_args[0]
     assert args[0] == "gh"
-    assert "issue" in args
-    assert "edit" in args
-    assert "42" in args
-    assert "--remove-label" in args
-    assert "ready" in args
+    assert "api" in args
+    assert "repos/test-org/test-repo/issues/42/labels/ready" in args
+    assert "DELETE" in args
 
 
 @pytest.mark.asyncio
@@ -977,7 +976,7 @@ async def test_remove_label_dry_run_skips_command(dry_config, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_add_pr_labels_calls_gh_pr_edit_for_each_label(config, event_bus):
+async def test_add_pr_labels_calls_issue_labels_api_for_each_label(config, event_bus):
     manager = _make_manager(config, event_bus)
     mock_create = SubprocessMockBuilder().with_stdout("").build()
 
@@ -988,12 +987,13 @@ async def test_add_pr_labels_calls_gh_pr_edit_for_each_label(config, event_bus):
 
     first_args = mock_create.call_args_list[0][0]
     assert first_args[0] == "gh"
-    assert "pr" in first_args
-    assert "edit" in first_args
-    assert "--add-label" in first_args
+    assert "api" in first_args
+    assert "repos/test-org/test-repo/issues/101/labels" in first_args
+    assert "POST" in first_args
+    assert "labels[]=bug" in first_args
 
     second_args = mock_create.call_args_list[1][0]
-    assert "--add-label" in second_args
+    assert "labels[]=enhancement" in second_args
 
 
 @pytest.mark.asyncio
@@ -1036,7 +1036,7 @@ async def test_add_pr_labels_subprocess_error_does_not_raise(config, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_remove_pr_label_calls_gh_pr_edit(config, event_bus):
+async def test_remove_pr_label_calls_issue_labels_api(config, event_bus):
     manager = _make_manager(config, event_bus)
     mock_create = SubprocessMockBuilder().with_stdout("").build()
 
@@ -1044,10 +1044,9 @@ async def test_remove_pr_label_calls_gh_pr_edit(config, event_bus):
         await manager.remove_pr_label(101, "hydraflow-review")
 
     args = mock_create.call_args[0]
-    assert "pr" in args
-    assert "edit" in args
-    assert "--remove-label" in args
-    assert "hydraflow-review" in args
+    assert "api" in args
+    assert "repos/test-org/test-repo/issues/101/labels/hydraflow-review" in args
+    assert "DELETE" in args
 
 
 @pytest.mark.asyncio
@@ -1995,6 +1994,28 @@ class TestListHitlItems:
         assert result[0].branch == "agent/issue-42"
 
     @pytest.mark.asyncio
+    async def test_fetch_hitl_raw_issues_uses_get_method(self, event_bus, tmp_path):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        captured: list[tuple[str, ...]] = []
+
+        async def mock_run_gh(*cmd, cwd=None):
+            captured.append(cmd)
+            return "[]"
+
+        mgr._run_gh = mock_run_gh
+        await mgr._fetch_hitl_raw_issues(["hydraflow-hitl"])
+
+        assert len(captured) == 1
+        cmd = captured[0]
+        assert "--method" in cmd
+        assert "GET" in cmd
+
+    @pytest.mark.asyncio
     async def test_returns_zero_pr_when_no_pr_found(self, event_bus, tmp_path):
         import json
 
@@ -2591,9 +2612,10 @@ class TestAddLabelsHelper:
             await mgr._add_labels("issue", 42, ["bug"])
 
         cmd = mock_create.call_args[0]
-        assert "issue" in cmd
-        assert "edit" in cmd
-        assert "--add-label" in cmd
+        assert "api" in cmd
+        assert "repos/test-org/test-repo/issues/42/labels" in cmd
+        assert "POST" in cmd
+        assert "labels[]=bug" in cmd
 
     @pytest.mark.asyncio
     async def test_add_labels_pr_target(self, config, event_bus):
@@ -2604,9 +2626,10 @@ class TestAddLabelsHelper:
             await mgr._add_labels("pr", 101, ["enhancement"])
 
         cmd = mock_create.call_args[0]
-        assert "pr" in cmd
-        assert "edit" in cmd
-        assert "--add-label" in cmd
+        assert "api" in cmd
+        assert "repos/test-org/test-repo/issues/101/labels" in cmd
+        assert "POST" in cmd
+        assert "labels[]=enhancement" in cmd
 
     @pytest.mark.asyncio
     async def test_add_labels_dry_run(self, dry_config, event_bus):
@@ -2661,10 +2684,9 @@ class TestRemoveLabelHelper:
             await mgr._remove_label("issue", 42, "ready")
 
         cmd = mock_create.call_args[0]
-        assert "issue" in cmd
-        assert "edit" in cmd
-        assert "--remove-label" in cmd
-        assert "ready" in cmd
+        assert "api" in cmd
+        assert "repos/test-org/test-repo/issues/42/labels/ready" in cmd
+        assert "DELETE" in cmd
 
     @pytest.mark.asyncio
     async def test_remove_label_pr_target(self, config, event_bus):
@@ -2675,10 +2697,9 @@ class TestRemoveLabelHelper:
             await mgr._remove_label("pr", 101, "hydraflow-review")
 
         cmd = mock_create.call_args[0]
-        assert "pr" in cmd
-        assert "edit" in cmd
-        assert "--remove-label" in cmd
-        assert "hydraflow-review" in cmd
+        assert "api" in cmd
+        assert "repos/test-org/test-repo/issues/101/labels/hydraflow-review" in cmd
+        assert "DELETE" in cmd
 
     @pytest.mark.asyncio
     async def test_remove_label_dry_run(self, dry_config, event_bus):

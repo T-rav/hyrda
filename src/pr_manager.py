@@ -11,6 +11,7 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote
 
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
@@ -89,6 +90,7 @@ class PRManager:
         self._config = config
         self._bus = event_bus
         self._repo = config.repo
+        self._repo_owner = config.repo.split("/", 1)[0] if "/" in config.repo else ""
         self._max_retries = config.gh_max_retries
         self._label_counts_cache: LabelCounts | None = None
         self._label_counts_ts: float = 0.0
@@ -414,13 +416,12 @@ class PRManager:
             try:
                 await self._run_gh(
                     "gh",
-                    target,
-                    "edit",
-                    str(number),
-                    "--repo",
-                    self._repo,
-                    "--add-label",
-                    label,
+                    "api",
+                    f"repos/{self._repo}/issues/{number}/labels",
+                    "-X",
+                    "POST",
+                    "--raw-field",
+                    f"labels[]={label}",
                 )
             except RuntimeError as exc:
                 logger.warning(
@@ -442,15 +443,13 @@ class PRManager:
         if self._config.dry_run:
             return
         try:
+            encoded_label = quote(label, safe="")
             await self._run_gh(
                 "gh",
-                target,
-                "edit",
-                str(number),
-                "--repo",
-                self._repo,
-                "--remove-label",
-                label,
+                "api",
+                f"repos/{self._repo}/issues/{number}/labels/{encoded_label}",
+                "-X",
+                "DELETE",
             )
         except RuntimeError as exc:
             logger.warning(
@@ -939,18 +938,18 @@ class PRManager:
             try:
                 raw = await self._run_gh(
                     "gh",
-                    "pr",
-                    "list",
-                    "--repo",
-                    self._repo,
-                    "--label",
-                    label,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,url,headRefName,isDraft,title",
-                    "--limit",
-                    "50",
+                    "api",
+                    f"repos/{self._repo}/issues",
+                    "--method",
+                    "GET",
+                    "--field",
+                    "state=open",
+                    "--field",
+                    f"labels={label}",
+                    "--field",
+                    "per_page=50",
+                    "--jq",
+                    "[.[] | select(.pull_request) | {number, url: .html_url, title}]",
                 )
                 for p in json.loads(raw):
                     pr_num = p.get("number")
@@ -962,21 +961,22 @@ class PRManager:
                     if pr_num in seen:
                         continue
                     seen.add(pr_num)
-                    branch = p.get("headRefName", "")
-                    issue_num = 0
-                    if branch.startswith("agent/issue-"):
-                        with contextlib.suppress(ValueError):
-                            issue_num = int(branch.split("-")[-1])
-                    prs.append(
-                        PRListItem(
-                            pr=pr_num,
-                            issue=issue_num,
-                            branch=branch,
-                            url=p.get("url", ""),
-                            draft=p.get("isDraft", False),
-                            title=p.get("title", ""),
+                    try:
+                        branch, draft = await self._get_pr_branch_and_draft(pr_num)
+                        issue_num = self._issue_number_from_branch(branch)
+                        prs.append(
+                            PRListItem(
+                                pr=pr_num,
+                                issue=issue_num,
+                                branch=branch,
+                                url=p.get("url", ""),
+                                draft=draft,
+                                title=p.get("title", ""),
+                            )
                         )
-                    )
+                    except (RuntimeError, json.JSONDecodeError, KeyError, TypeError):
+                        logger.debug("Skipping PR in list_open_prs", exc_info=True)
+                        continue
             except (RuntimeError, json.JSONDecodeError, KeyError, TypeError):
                 logger.debug("Skipping PR in list_open_prs", exc_info=True)
                 continue
@@ -993,18 +993,18 @@ class PRManager:
             try:
                 raw = await self._run_gh(
                     "gh",
-                    "issue",
-                    "list",
-                    "--repo",
-                    self._repo,
-                    "--label",
-                    label,
-                    "--state",
-                    "open",
-                    "--json",
-                    "number,title,url",
-                    "--limit",
-                    "50",
+                    "api",
+                    f"repos/{self._repo}/issues",
+                    "--method",
+                    "GET",
+                    "--field",
+                    "state=open",
+                    "--field",
+                    f"labels={label}",
+                    "--field",
+                    "per_page=50",
+                    "--jq",
+                    "[.[] | select(.pull_request | not) | {number, title, url: .html_url}]",
                 )
                 for issue in json.loads(raw):
                     if issue["number"] not in seen_issues:
@@ -1023,20 +1023,21 @@ class PRManager:
         pr_number = 0
         pr_url = ""
         try:
+            head_filter = f"{self._repo_owner}:{branch}" if self._repo_owner else branch
             pr_raw = await self._run_gh(
                 "gh",
-                "pr",
-                "list",
-                "--repo",
-                self._repo,
-                "--head",
-                branch,
-                "--state",
-                "open",
-                "--json",
-                "number,url",
-                "--limit",
-                "1",
+                "api",
+                f"repos/{self._repo}/pulls",
+                "--method",
+                "GET",
+                "--field",
+                "state=open",
+                "--field",
+                f"head={head_filter}",
+                "--field",
+                "per_page=1",
+                "--jq",
+                "[.[] | {number, url: .html_url}]",
             )
             pr_data = json.loads(pr_raw)
             if pr_data:
@@ -1056,6 +1057,30 @@ class PRManager:
             prUrl=pr_url,
             branch=branch,
         )
+
+    @staticmethod
+    def _issue_number_from_branch(branch: str) -> int:
+        issue_num = 0
+        if branch.startswith("agent/issue-"):
+            with contextlib.suppress(ValueError):
+                issue_num = int(branch.rsplit("-", maxsplit=1)[-1])
+        return issue_num
+
+    async def _get_pr_branch_and_draft(self, pr_number: int) -> tuple[str, bool]:
+        """Resolve branch + draft status for a PR via REST API."""
+        raw = await self._run_gh(
+            "gh",
+            "api",
+            f"repos/{self._repo}/pulls/{pr_number}",
+            "--jq",
+            "{headRefName: .head.ref, isDraft: .draft}",
+        )
+        data = json.loads(raw)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        if not isinstance(data, dict):
+            return "", False
+        return str(data.get("headRefName", "")), bool(data.get("isDraft", False))
 
     async def list_hitl_items(self, hitl_labels: list[str]) -> list[HITLItem]:
         """Fetch HITL issues and look up their associated PRs.
