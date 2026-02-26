@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { deriveStageStatus } from '../../hooks/useStageStatus'
+import { PIPELINE_STAGES } from '../../constants'
+import { theme } from '../../theme'
 import {
   dotConnected, dotDisconnected,
   startBtnEnabled, startBtnDisabled,
+  stageAbbreviations,
+  pipelineStageStylesMap,
+  pipelineLabelStylesMap,
 } from '../Header'
 
 const mockUseHydraFlow = vi.fn()
@@ -53,6 +58,46 @@ describe('Header pre-computed styles', () => {
   it('style objects are referentially stable', () => {
     expect(dotConnected).toBe(dotConnected)
     expect(startBtnEnabled).toBe(startBtnEnabled)
+  })
+
+  describe('pipelineStageStylesMap', () => {
+    it('has an entry for every pipeline stage', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key]).toBeDefined()
+      })
+    })
+
+    it('each entry uses the stage color as borderColor', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key].borderColor).toBe(stage.color)
+      })
+    })
+
+    it('style objects are referentially stable', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineStageStylesMap[stage.key]).toBe(pipelineStageStylesMap[stage.key])
+      })
+    })
+  })
+
+  describe('pipelineLabelStylesMap', () => {
+    it('has an entry for every pipeline stage', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key]).toBeDefined()
+      })
+    })
+
+    it('each entry uses the stage color as text color', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key].color).toBe(stage.color)
+      })
+    })
+
+    it('style objects are referentially stable', () => {
+      PIPELINE_STAGES.forEach(stage => {
+        expect(pipelineLabelStylesMap[stage.key]).toBe(pipelineLabelStylesMap[stage.key])
+      })
+    })
   })
 })
 
@@ -186,6 +231,61 @@ describe('Header component', () => {
     const centerDiv = sessionLabel.closest('div').parentElement
     expect(centerDiv.style.minWidth).toBe('0px')
     expect(centerDiv.style.overflow).toBe('hidden')
+  })
+
+  describe('session pipeline row', () => {
+    const counterFixture = {
+      sessionTriaged: 7,
+      sessionPlanned: 5,
+      sessionImplemented: 4,
+      sessionReviewed: 3,
+      mergedCount: 2,
+    }
+
+    beforeEach(() => {
+      mockUseHydraFlow.mockReturnValue({
+        stageStatus: mockStageStatus({}, counterFixture),
+        config: null,
+      })
+    })
+
+    it('renders compact stage pills with arrows separating each stage', () => {
+      render(<Header {...defaultProps} />)
+      const pipelineRow = screen.getByTestId('session-pipeline')
+      expect(pipelineRow).toBeInTheDocument()
+
+      const expectedCounts = {
+        triage: counterFixture.sessionTriaged,
+        plan: counterFixture.sessionPlanned,
+        implement: counterFixture.sessionImplemented,
+        review: counterFixture.sessionReviewed,
+        merged: counterFixture.mergedCount,
+      }
+
+      PIPELINE_STAGES.forEach(stage => {
+        const pill = screen.getByTestId(`session-stage-${stage.key}`)
+        expect(pill).toHaveTextContent(String(expectedCounts[stage.key] ?? 0))
+      })
+
+      const arrows = screen.getAllByText('→')
+      expect(arrows.length).toBe(PIPELINE_STAGES.length - 1)
+    })
+
+    it('shows abbreviated stage labels in each session pill', () => {
+      render(<Header {...defaultProps} />)
+      PIPELINE_STAGES.forEach(stage => {
+        const pill = screen.getByTestId(`session-stage-${stage.key}`)
+        expect(pill).toHaveTextContent(stageAbbreviations[stage.key])
+      })
+    })
+
+    it('uses pipeline stage colors on each session pill border', () => {
+      render(<Header {...defaultProps} />)
+      PIPELINE_STAGES.forEach(stage => {
+        const pill = screen.getByTestId(`session-stage-${stage.key}`)
+        expect(pill.style.borderColor).toBe(stage.color)
+      })
+    })
   })
 
   describe('stopping state with active workers', () => {
