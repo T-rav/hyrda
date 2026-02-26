@@ -189,6 +189,7 @@ class RepoAuditor:
             self._check_test_framework(),
             self._check_coverage_policy(),
             self._check_package_manager(),
+            self._check_agents_md(),
             await self._check_gh_cli(),
             await self._check_labels(),
         ]
@@ -757,6 +758,32 @@ class RepoAuditor:
             name="Labels",
             status=AuditCheckStatus.PARTIAL,
             detail=f"missing: {', '.join(sorted(missing))}",
+        )
+
+    def _check_agents_md(self) -> AuditCheck:
+        """Check for AGENTS.md in the repo root.
+
+        AGENTS.md is the canonical prompt contract document.  Its presence
+        ensures every agent (Claude, Codex, Pi.dev) has documented role
+        expectations, output markers, and behaviour rules.
+
+        See: AGENTS.md in the HydraFlow repo.
+        """
+        agents_md = self._root / "AGENTS.md"
+        if agents_md.is_file():
+            return AuditCheck(
+                name="AGENTS.md",
+                status=AuditCheckStatus.PRESENT,
+                detail="agent prompt contracts documented",
+            )
+        return AuditCheck(
+            name="AGENTS.md",
+            status=AuditCheckStatus.MISSING,
+            detail=(
+                "missing AGENTS.md — agent roles, output markers, and prompt "
+                "contracts are undocumented; copy from the HydraFlow repo or run "
+                "`hf init` to scaffold"
+            ),
         )
 
     def _get_hydra_labels(self) -> list[str]:

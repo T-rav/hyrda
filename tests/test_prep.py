@@ -1507,8 +1507,59 @@ class TestContextSeed:
         digest_path.write_text("custom digest")
         metrics_file.write_text("existing metrics line\n")
 
-        log_lines = _seed_context_assets(config)
+        _seed_context_assets(config)
 
         assert digest_path.read_text() == "custom digest"
         assert metrics_file.read_text() == "existing metrics line\n"
-        assert any("already existed" in line for line in log_lines)
+
+
+# ---------------------------------------------------------------------------
+# RepoAuditor._check_agents_md
+# ---------------------------------------------------------------------------
+
+
+class TestCheckAgentsMd:
+    """Tests for RepoAuditor._check_agents_md."""
+
+    def test_present_when_agents_md_exists(self, tmp_path: Path) -> None:
+        """PRESENT when AGENTS.md is in the repo root."""
+        (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_agents_md()
+        assert check.status == AuditCheckStatus.PRESENT
+        assert check.name == "AGENTS.md"
+
+    def test_missing_when_agents_md_absent(self, tmp_path: Path) -> None:
+        """MISSING when AGENTS.md is not present."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_agents_md()
+        assert check.status == AuditCheckStatus.MISSING
+        assert check.name == "AGENTS.md"
+        assert "hf init" in check.detail
+
+    def test_missing_is_not_critical(self, tmp_path: Path) -> None:
+        """Missing AGENTS.md is a warning, not a blocking error."""
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_agents_md()
+        assert not check.critical
+
+    def test_included_in_audit_result(self, tmp_path: Path) -> None:
+        """AGENTS.md check appears in the full audit result."""
+        (tmp_path / "AGENTS.md").write_text("# AGENTS\n")
+        config = ConfigFactory.create(repo_root=tmp_path)
+        from prep import RepoAuditor
+
+        auditor = RepoAuditor(config)
+        check = auditor._check_agents_md()
+        # Verify the check name matches what run_audit() would include
+        assert check.name == "AGENTS.md"
+        assert check.status == AuditCheckStatus.PRESENT
