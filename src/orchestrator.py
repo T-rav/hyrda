@@ -486,6 +486,7 @@ class HydraFlowOrchestrator:
         )
 
         await self._prs.ensure_labels_exist()
+        self._warn_if_agents_md_missing()
         await self._start_session()
 
         try:
@@ -500,6 +501,22 @@ class HydraFlowOrchestrator:
             self._running = False
             await self._publish_status()
             logger.info("HydraFlow stopped")
+
+    def _warn_if_agents_md_missing(self) -> None:
+        """Log a warning if AGENTS.md is absent from the repo root.
+
+        AGENTS.md documents the prompt contracts for all agent roles.  Its
+        absence means agent behaviour is undocumented and harder to audit or
+        adapt.  Run ``hf init`` or copy AGENTS.md from the HydraFlow repo to
+        resolve this.
+        """
+        agents_md = self._config.repo_root / "AGENTS.md"
+        if not agents_md.is_file():
+            logger.warning(
+                "AGENTS.md not found in %s — agent prompt contracts are "
+                "undocumented. Run `hf init` to scaffold it.",
+                self._config.repo_root,
+            )
 
     async def _handle_auth_error(self, loop_name: str) -> None:
         """Set auth_failed, publish SYSTEM_ALERT, stop all loops."""
