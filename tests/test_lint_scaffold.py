@@ -209,7 +209,7 @@ class TestHasEslintConfig:
         (tmp_path / ".eslintrc.yaml").write_text("rules: {}")
         assert _has_eslint_config(tmp_path) is True
 
-    def test_no_eslint_config(self, tmp_path: Path) -> None:
+    def test_has_eslint_config_returns_false_when_absent(self, tmp_path: Path) -> None:
         assert _has_eslint_config(tmp_path) is False
 
 
