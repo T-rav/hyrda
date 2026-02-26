@@ -490,3 +490,27 @@ class TestStreamParserDelta:
         assert usage["cache_read_input_tokens"] == 5
         assert usage["cache_creation_input_tokens"] == 3
         assert usage["total_tokens"] == 115
+
+    def test_usage_snapshot_marks_unavailable_when_no_usage_emitted(self):
+        parser = StreamParser()
+        parser.parse(json.dumps({"type": "assistant", "message": {"content": []}}))
+        snap = parser.usage_snapshot
+        assert snap["usage_status"] == "unavailable"
+        assert snap["usage_available"] is False
+
+    def test_usage_snapshot_tracks_backend_for_codex_events(self):
+        parser = StreamParser()
+        parser.parse(
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "id": "i1",
+                        "usage": {"input_tokens": 3, "total_tokens": 5},
+                    },
+                }
+            )
+        )
+        snap = parser.usage_snapshot
+        assert snap["usage_backend"] == "codex"
+        assert snap["input_tokens"] == 3

@@ -34,7 +34,7 @@ async def stream_claude_process(
     on_output: Callable[[str], bool] | None = None,
     timeout: float = 3600.0,
     runner: SubprocessRunner | None = None,
-    usage_stats: dict[str, int] | None = None,
+    usage_stats: dict[str, object] | None = None,
 ) -> str:
     """Run an agent subprocess and stream its output.
 
@@ -60,8 +60,8 @@ async def stream_claude_process(
         Optional callback receiving accumulated display text.
         Return ``True`` to kill the process early.
     usage_stats:
-        Optional dict populated with exact token-usage metrics when present in
-        stream events (input/output/cache/total tokens). Omitted when unavailable.
+        Optional dict populated with normalized usage totals and metadata
+        (availability status, backend, and raw usage blobs when emitted).
 
     Returns
     -------
@@ -170,7 +170,7 @@ async def stream_claude_process(
                 )
 
             if usage_stats is not None:
-                usage_stats.update(parser.usage_totals)
+                usage_stats.update(parser.usage_snapshot)
 
             return result_text or accumulated_text.rstrip("\n") or "\n".join(raw_lines)
 

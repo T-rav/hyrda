@@ -101,7 +101,7 @@ class TestStreamClaudeProcessOutput:
             }
         )
         mock_create = make_streaming_proc(returncode=0, stdout=usage_event)
-        usage_stats: dict[str, int] = {}
+        usage_stats: dict[str, object] = {}
 
         with patch("asyncio.create_subprocess_exec", mock_create):
             result = await stream_claude_process(
@@ -112,6 +112,10 @@ class TestStreamClaudeProcessOutput:
         assert usage_stats["input_tokens"] == 50
         assert usage_stats["output_tokens"] == 10
         assert usage_stats["total_tokens"] == 60
+        assert usage_stats["usage_status"] == "available"
+        assert usage_stats["usage_available"] is True
+        assert usage_stats["usage_backend"] == "claude"
+        assert isinstance(usage_stats["raw_usage"], list)
 
 
 # ---------------------------------------------------------------------------
