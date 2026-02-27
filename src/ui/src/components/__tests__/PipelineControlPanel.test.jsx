@@ -161,16 +161,16 @@ describe('PipelineControlPanel', () => {
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('1/1')
     })
 
-    it('falls back to default worker caps when config is null', () => {
+    it('falls back to active-only non-triage counts when config is null', () => {
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers, config: null }))
       render(<PipelineControlPanel />)
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('1/1')
-      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1/1')
-      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1/2')
-      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1/2')
-      for (const loop of PIPELINE_LOOPS) {
-        expect(screen.getByTestId(`loop-count-${loop.key}`).textContent).toContain('/')
-      }
+      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-plan').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-implement').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-review').textContent).not.toContain('/')
     })
 
     it('updates display when config max values change', () => {
@@ -190,13 +190,16 @@ describe('PipelineControlPanel', () => {
       expect(screen.getByTestId('loop-count-review')).toHaveTextContent('0/2')
     })
 
-    it('falls back to default worker caps when config is missing keys', () => {
+    it('falls back to active-only counts when config is missing keys', () => {
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ workers: mockPipelineWorkers, config: {} }))
       render(<PipelineControlPanel />)
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('1/1')
-      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1/1')
-      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1/2')
-      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1/2')
+      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('1')
+      expect(screen.getByTestId('loop-count-plan').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-implement').textContent).not.toContain('/')
+      expect(screen.getByTestId('loop-count-review').textContent).not.toContain('/')
     })
   })
 

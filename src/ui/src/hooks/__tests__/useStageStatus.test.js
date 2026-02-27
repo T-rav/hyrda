@@ -168,7 +168,7 @@ describe('deriveStageStatus', () => {
     })
   })
 
-  it('clamps invalid worker caps to stage defaults', () => {
+  it('leaves missing/invalid worker caps unset (config drives limits)', () => {
     const result = deriveStageStatus(
       emptyPipeline,
       {},
@@ -178,9 +178,9 @@ describe('deriveStageStatus', () => {
     )
     expect(result.workerCaps).toEqual({
       triage: 1,
-      plan: 1,
-      implement: 2,
-      review: 2,
+      plan: 0,
+      implement: 0,
+      review: -2,
     })
   })
 

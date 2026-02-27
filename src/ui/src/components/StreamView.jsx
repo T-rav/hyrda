@@ -103,7 +103,11 @@ function StageSection({ stage, issues, workerCount, workerCap, intentMap, onRequ
               <span> · {queuedCount} queued</span>
               {failedCount > 0 && <span style={styles.failedBadge}> · {failedCount} failed</span>}
               {hitlCount > 0 && <span style={styles.hitlBadge}> · {hitlCount} hitl</span>}
-              <span> · {workerCount}/{workerCap || 0} workers</span>
+              <span>
+                {workerCap != null
+                  ? ` · ${workerCount}/${workerCap} workers`
+                  : ` · ${workerCount} ${workerCount === 1 ? 'worker' : 'workers'}`}
+              </span>
             </>
           ) : (
             <span>{issues.length} merged</span>
@@ -281,7 +285,7 @@ export function StreamView({ intents, expandedStages, onToggleStage, onRequestCh
         const status = stageStatus[stage.key] || {}
         const enabled = status.enabled !== false
         const workerCount = status.workerCount || 0
-        const workerCap = stage.role ? (stageStatus.workerCaps?.[stage.key] || 0) : 0
+        const workerCap = stage.role ? (stageStatus.workerCaps?.[stage.key] ?? null) : null
         let dotColor
         if (!stage.role) {
           dotColor = theme.green
