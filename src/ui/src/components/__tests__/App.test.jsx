@@ -72,17 +72,6 @@ beforeEach(() => {
   cleanup()
 })
 
-describe('Transcript tab', () => {
-  it('clicking Transcript tab shows transcript content', async () => {
-    const { default: App } = await import('../../App')
-    render(<App />)
-
-    fireEvent.click(screen.getByText('Transcript'))
-    // Auto-selects the active worker and shows its transcript
-    expect(screen.getByText('line 1')).toBeInTheDocument()
-  })
-})
-
 describe('HITL badge rendering', () => {
   it('shows no badge when hitlItems is empty', async () => {
     const { default: App } = await import('../../App')
@@ -196,13 +185,21 @@ describe('System and Metrics tabs', () => {
 })
 
 describe('Main tab bar', () => {
-  it('has exactly 5 main tabs after merging Metrics into System', async () => {
+  it('has exactly 4 main tabs after removing Transcript', async () => {
     const { default: App } = await import('../../App')
     render(<App />)
-    const tabLabels = ['Work Stream', 'History', 'Transcript', 'HITL', 'System']
+    const tabLabels = ['Work Stream', 'History', 'HITL', 'System']
+    const tabContainer = screen.getByTestId('main-tabs')
+    expect(tabContainer.childElementCount).toBe(tabLabels.length)
     for (const label of tabLabels) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
+  })
+
+  it('does not render Transcript in the main tab bar', async () => {
+    const { default: App } = await import('../../App')
+    render(<App />)
+    expect(screen.queryByText('Transcript')).not.toBeInTheDocument()
   })
 
   it('does not include Livestream in the main tab bar', async () => {
