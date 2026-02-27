@@ -3385,7 +3385,9 @@ class TestListSupervisedReposEndpoint:
         from pr_manager import PRManager
 
         pr_mgr = PRManager(config, event_bus)
-        with patch("dashboard_routes.importlib.import_module", return_value=supervisor_module):
+        with patch(
+            "dashboard_routes.importlib.import_module", return_value=supervisor_module
+        ):
             return create_router(
                 config=config,
                 event_bus=event_bus,
