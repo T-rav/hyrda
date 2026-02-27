@@ -63,7 +63,7 @@ function StageRow({ stageKey, stageData, isLast }) {
           data-testid={`stage-badge-${stageKey}`}
           style={
             stageData.status === 'queued'
-              ? { ...badgeBase, background: meta.subtleColor, color: meta.color }
+              ? queuedBadgeStyleMap[stageKey]
               : badgeStyleMap[stageData.status] || badgeStyleMap.pending
           }
         >
@@ -299,6 +299,11 @@ export const badgeStyleMap = {
   hitl: { ...badgeBase, background: theme.yellowSubtle, color: theme.yellow },
   pending: { ...badgeBase, background: theme.mutedSubtle, color: theme.textMuted },
 }
+
+// Pre-computed per-stage queued badge styles (avoids object spread in StageRow render)
+const queuedBadgeStyleMap = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...badgeBase, background: s.subtleColor, color: s.color }])
+)
 
 const styles = {
   card: {

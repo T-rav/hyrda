@@ -54,6 +54,7 @@ describe('StatusDot component', () => {
     const el = container.firstChild
     expect(el.tagName).toBe('SPAN')
     expect(el.style.background).toBe(STAGE_META.plan.subtleColor)
+    expect(el.style.border).toContain(STAGE_META.plan.color)
     expect(el.style.animation).toBe('')
   })
 
