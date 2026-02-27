@@ -44,6 +44,7 @@ function PipelineFlow({ stageGroups }) {
                       issue.overallStatus === 'active' ? flowDotActiveStyles[group.stage.key]
                       : issue.overallStatus === 'failed' ? flowDotFailedStyles[group.stage.key]
                       : issue.overallStatus === 'hitl' ? flowDotHitlStyles[group.stage.key]
+                      : issue.overallStatus === 'queued' ? flowDotQueuedStyles[group.stage.key]
                       : flowDotStyles[group.stage.key]
                     }
                     title={`#${issue.issueNumber}`}
@@ -330,6 +331,10 @@ const flowLabelStyles = Object.fromEntries(
 
 const flowDotStyles = Object.fromEntries(
   PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: s.color }])
+)
+
+const flowDotQueuedStyles = Object.fromEntries(
+  PIPELINE_STAGES.map(s => [s.key, { ...flowDotBase, background: s.subtleColor }])
 )
 
 const flowDotActiveStyles = Object.fromEntries(

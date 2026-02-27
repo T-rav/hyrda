@@ -708,7 +708,7 @@ describe('PipelineFlow failed and hitl dots', () => {
     expect(dot.style.animation).toBe('')
   })
 
-  it('renders queued dots with stage color', () => {
+  it('renders queued dots with subtle stage color', () => {
     mockUseHydraFlow.mockReturnValue(defaultHydraFlowContext({
       pipelineIssues: {
         triage: [],
@@ -721,7 +721,7 @@ describe('PipelineFlow failed and hitl dots', () => {
     }))
     render(<StreamView {...defaultProps} />)
     const dot = screen.getByTestId('flow-dot-3')
-    expect(dot.style.background).toBe('var(--accent)')
+    expect(dot.style.background).toBe('var(--accent-subtle)')
     expect(dot.style.animation).toBe('')
   })
 
@@ -752,9 +752,9 @@ describe('PipelineFlow failed and hitl dots', () => {
     const hitlDot = screen.getByTestId('flow-dot-12')
     expect(hitlDot.style.background).toBe('var(--yellow)')
     expect(hitlDot.style.animation).toBe('')
-    // Queued: stage color (accent), no animation
+    // Queued: subtle stage color (accent), no animation
     const queuedDot = screen.getByTestId('flow-dot-13')
-    expect(queuedDot.style.background).toBe('var(--accent)')
+    expect(queuedDot.style.background).toBe('var(--accent-subtle)')
     expect(queuedDot.style.animation).toBe('')
   })
 })
