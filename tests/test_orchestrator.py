@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import ANY, AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -2052,6 +2052,24 @@ class TestMemorySuggestionFiling:
         ) as mock_mem:
             await orch._review_loop()
             mock_mem.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_do_review_work_requeues_and_returns_idle_when_no_prs(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """No-PR review fetch should requeue tasks and signal idle for backoff sleep."""
+        orch = HydraFlowOrchestrator(config)
+        review_task = TaskFactory.create(id=42)
+
+        orch._store.get_reviewable = lambda _max_count: [review_task]  # type: ignore[method-assign]
+        orch._store.get_active_issues = lambda: {}  # type: ignore[method-assign]
+        orch._store.enqueue_transition = MagicMock()  # type: ignore[method-assign]
+        orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        did_work = await orch._do_review_work()
+
+        assert did_work is False
+        orch._store.enqueue_transition.assert_called_once_with(review_task, "review")
 
     @pytest.mark.asyncio
     async def test_review_loop_multiple_results_files_each(

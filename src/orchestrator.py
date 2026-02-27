@@ -828,6 +828,8 @@ class HydraFlowOrchestrator:
                 # Keep review tasks in queue memory when PR visibility lags labels.
                 for issue in review_issues:
                     self._store.enqueue_transition(issue, "review")
+                # Treat as idle so the polling loop applies its normal backoff.
+                did_work = False
                 break
             review_results = await self._reviewer.review_prs(
                 prs, [i.to_task() for i in gh_issues]
