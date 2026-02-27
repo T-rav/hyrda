@@ -40,6 +40,16 @@ export function eventSummary(type, data) {
   }
 }
 
+const ISSUE_PREFIX_PATTERN = /^#\d+\s*/
+const ISSUE_WORD_PREFIX_PATTERN = /^Issue #\d+\s*/
+
+export function eventMessage(type, data) {
+  const summary = eventSummary(type, data)
+  if (summary.startsWith('#')) return summary.replace(ISSUE_PREFIX_PATTERN, '')
+  if (summary.startsWith('Issue #')) return summary.replace(ISSUE_WORD_PREFIX_PATTERN, '')
+  return summary
+}
+
 export function EventLog({ events }) {
   // Filter out noisy transcript_line events from the log
   const filtered = events.filter(e => e.type !== 'transcript_line')
