@@ -713,6 +713,42 @@ def test_validate_plan_implementation_steps_require_concrete_target(config, even
     assert any("concrete code target" in e for e in errors)
 
 
+def test_score_actionability_high_for_concrete_plan(config, event_bus):
+    """Concrete, test-aware plans should rank high actionability."""
+    runner = _make_runner(config, event_bus)
+    score, rank = runner._score_actionability(_valid_plan(), scale="full")
+    assert score >= 85
+    assert rank == "high"
+
+
+def test_score_actionability_low_for_shallow_plan(config, event_bus):
+    """Shallow plans with vague steps should rank low."""
+    runner = _make_runner(config, event_bus)
+    shallow_plan = (
+        _valid_plan()
+        .replace(
+            "1. Add the new model class to models.py\n"
+            "2. Add configuration field to config.py\n"
+            "3. Wire up the new model in the orchestrator\n"
+            "4. Add validation logic",
+            "1. Do stuff\n2. Make better",
+        )
+        .replace(
+            "## Testing Strategy\n\n"
+            "- Add tests/test_models.py for the new model\n"
+            "- Add tests/test_config.py for the new config field",
+            "## Testing Strategy\n\n- Manual check",
+        )
+        .replace(
+            "## File Delta\n\nMODIFIED: src/models.py\nMODIFIED: src/config.py",
+            "## File Delta\n\nNone",
+        )
+    )
+    score, rank = runner._score_actionability(shallow_plan, scale="full")
+    assert score < 65
+    assert rank == "low"
+
+
 def test_validate_plan_minimum_word_count(config, event_bus):
     """Plan below min_plan_words fails."""
     runner = _make_runner(config, event_bus)

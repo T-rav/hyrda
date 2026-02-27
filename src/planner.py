@@ -158,6 +158,10 @@ class PlannerRunner(BaseRunner):
             result.new_issues = self._extract_new_issues(transcript)
 
             if result.plan:
+                (
+                    result.actionability_score,
+                    result.actionability_rank,
+                ) = self._score_actionability(result.plan, scale=scale)
                 await self._emit_status(task.id, worker_id, PlannerStatus.VALIDATING)
                 validation_errors = self._validate_plan(task, result.plan, scale=scale)
                 if scale == "lite":
@@ -194,6 +198,10 @@ class PlannerRunner(BaseRunner):
 
                     retry_plan = self._extract_plan(retry_transcript)
                     if retry_plan:
+                        (
+                            result.actionability_score,
+                            result.actionability_rank,
+                        ) = self._score_actionability(retry_plan, scale=scale)
                         retry_validation = self._validate_plan(
                             task, retry_plan, scale=scale
                         )
@@ -650,18 +658,7 @@ This closes the issue automatically. Use only when you are certain.
         )
         if is_match:
             is_body = is_match.group(1)
-            list_steps = re.findall(
-                r"^\s*(?:\d+[\.\)]|[-*+]|\[[ xX]\])\s+(.+)$",
-                is_body,
-                re.MULTILINE,
-            )
-            heading_steps = re.findall(
-                r"^\s*#{2,6}\s*(?:Step\s*\d+[:\.\-]?\s+(.+)|\d+[\.\)]\s+(.+))$",
-                is_body,
-                re.MULTILINE | re.IGNORECASE,
-            )
-            step_texts = [s.strip() for s in list_steps]
-            step_texts.extend((s1 or s2).strip() for s1, s2 in heading_steps)
+            step_texts = self._extract_implementation_step_texts(is_body)
             if not step_texts:
                 errors.append(
                     "## Implementation Steps must include at least one actionable step"
@@ -723,6 +720,93 @@ This closes the issue automatically. Use only when you are certain.
             )
 
         return errors
+
+    def _extract_implementation_step_texts(self, section_body: str) -> list[str]:
+        """Extract step text from Implementation Steps section body."""
+        list_steps = re.findall(
+            r"^\s*(?:\d+[\.\)]|[-*+]|\[[ xX]\])\s+(.+)$",
+            section_body,
+            re.MULTILINE,
+        )
+        heading_steps = re.findall(
+            r"^\s*#{2,6}\s*(?:Step\s*\d+[:\.\-]?\s+(.+)|\d+[\.\)]\s+(.+))$",
+            section_body,
+            re.MULTILINE | re.IGNORECASE,
+        )
+        step_texts = [s.strip() for s in list_steps]
+        step_texts.extend((s1 or s2).strip() for s1, s2 in heading_steps)
+        return [s for s in step_texts if s]
+
+    def _score_actionability(
+        self, plan: str, *, scale: PlanScale = "full"
+    ) -> tuple[int, str]:
+        """Return actionability ``(score, rank)`` for *plan*."""
+        score = 0
+        is_match = re.search(
+            r"## Implementation Steps\s*\n(.*?)(?=\n## |\Z)",
+            plan,
+            re.DOTALL | re.IGNORECASE,
+        )
+        step_texts = (
+            self._extract_implementation_step_texts(is_match.group(1))
+            if is_match
+            else []
+        )
+
+        if step_texts:
+            score += 20
+        if scale != "lite" and len(step_texts) >= 2:
+            score += 15
+        elif scale == "lite" and step_texts:
+            score += 10
+
+        has_concrete_target = any(
+            re.search(r"[\w\-]+(?:/[\w\-]+)+|[\w\-]+\.[\w]+|`[^`]+`|\w+\(", s)
+            for s in step_texts
+        )
+        if has_concrete_target:
+            score += 25
+
+        if step_texts:
+            shallow_steps = [
+                s for s in step_texts if len(re.findall(r"\b\w+\b", s)) < 3
+            ]
+            if not shallow_steps:
+                score += 10
+            avg_words = sum(len(re.findall(r"\b\w+\b", s)) for s in step_texts) / len(
+                step_texts
+            )
+            if avg_words >= 6:
+                score += 10
+
+        fd_match = re.search(
+            r"## File Delta\s*\n(.*?)(?=\n## |\Z)", plan, re.DOTALL | re.IGNORECASE
+        )
+        if fd_match and re.search(
+            r"^\s*(MODIFIED|ADDED|REMOVED):\s+\S", fd_match.group(1), re.MULTILINE
+        ):
+            score += 10
+
+        ts_match = re.search(
+            r"## Testing Strategy\s*\n(.*?)(?=\n## |\Z)",
+            plan,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if ts_match and re.search(
+            r"test[\w\-]*\.[\w]+|tests/|pytest|unit test|integration test",
+            ts_match.group(1),
+            re.IGNORECASE,
+        ):
+            score += 10
+
+        score = max(0, min(100, score))
+        if score >= 85:
+            rank = "high"
+        elif score >= 65:
+            rank = "medium"
+        else:
+            rank = "low"
+        return score, rank
 
     def _run_phase_minus_one_gates(self, plan: str) -> tuple[list[str], list[str]]:
         """Run Phase -1 gates on *plan*.
