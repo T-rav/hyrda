@@ -29,13 +29,31 @@ const LOOP_KEYS = new Set(PIPELINE_LOOPS.map(l => l.key))
  *   workload is pipeline-centric (same source as Stream/System pipeline views):
  *   open issue counts come from pipelineIssues; merged comes from session counters.
  */
-export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, sessionCounters) {
+export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, sessionCounters, config) {
   const issues = pipelineIssues || {}
   const workerValues = Object.values(workers || {})
   const bgMap = new Map((backgroundWorkers || []).map(w => [w.name, w]))
   const counters = sessionCounters || {}
+  const cfg = config || {}
 
   const stageStatus = {}
+
+  const plannerCap = Number.isFinite(Number(cfg.max_planners))
+    ? Number(cfg.max_planners)
+    : null
+  const implementCap = Number.isFinite(Number(cfg.max_workers))
+    ? Number(cfg.max_workers)
+    : null
+  const reviewCap = Number.isFinite(Number(cfg.max_reviewers))
+    ? Number(cfg.max_reviewers)
+    : null
+
+  const workerCaps = {
+    triage: 1,
+    plan: plannerCap,
+    implement: implementCap,
+    review: reviewCap,
+  }
 
   for (const stage of PIPELINE_STAGES) {
     const stageIssues = issues[stage.key] || []
@@ -91,6 +109,7 @@ export function deriveStageStatus(pipelineIssues, workers, backgroundWorkers, se
   }
 
   stageStatus.workload = workload
+  stageStatus.workerCaps = workerCaps
 
   return stageStatus
 }

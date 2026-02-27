@@ -152,6 +152,38 @@ describe('deriveStageStatus', () => {
     expect(result.merged.sessionCount).toBe(0)
   })
 
+  it('derives canonical worker caps from config', () => {
+    const result = deriveStageStatus(
+      emptyPipeline,
+      {},
+      [],
+      {},
+      { max_planners: 3, max_workers: 5, max_reviewers: 4 },
+    )
+    expect(result.workerCaps).toEqual({
+      triage: 1,
+      plan: 3,
+      implement: 5,
+      review: 4,
+    })
+  })
+
+  it('leaves missing/invalid worker caps unset (config drives limits)', () => {
+    const result = deriveStageStatus(
+      emptyPipeline,
+      {},
+      [],
+      {},
+      { max_planners: 0, max_workers: 0, max_reviewers: -2 },
+    )
+    expect(result.workerCaps).toEqual({
+      triage: 1,
+      plan: 0,
+      implement: 0,
+      review: -2,
+    })
+  })
+
   describe('workload aggregate', () => {
     it('computes workload totals from pipeline issues plus merged session count', () => {
       const pipeline = {
