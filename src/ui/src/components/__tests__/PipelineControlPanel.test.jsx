@@ -181,13 +181,13 @@ describe('PipelineControlPanel', () => {
       expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('0/5')
     })
 
-    it('clamps invalid/zero config max values to default worker caps', () => {
+    it('uses zero worker caps when config max values are zero', () => {
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ config: { max_planners: 0, max_workers: 0, max_reviewers: 0 } }))
       render(<PipelineControlPanel />)
       expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('0/1')
-      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('0/1')
-      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('0/2')
-      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('0/2')
+      expect(screen.getByTestId('loop-count-plan')).toHaveTextContent('0/0')
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('0/0')
+      expect(screen.getByTestId('loop-count-review')).toHaveTextContent('0/0')
     })
 
     it('falls back to active-only counts when config is missing keys', () => {
