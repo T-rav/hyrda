@@ -558,6 +558,12 @@ def create_router(
                     _warm_hitl_summary(item.issue, cause=cause or "", origin=origin)
                 )
             enriched.append(data)
+
+        # When memory auto-approve is on, filter out memory suggestions that
+        # were queued before the setting was enabled.
+        if config.memory_auto_approve:
+            enriched = [d for d in enriched if not d.get("isMemorySuggestion")]
+
         return JSONResponse(enriched)
 
     @router.get("/api/hitl/{issue_number}/summary")
