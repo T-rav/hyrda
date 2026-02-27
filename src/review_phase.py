@@ -550,6 +550,7 @@ class ReviewPhase:
             ),
             event_cause="ci_failed",
             extra_event_data={"ci_fix_attempts": ci_fix_attempts},
+            task=issue,
         )
 
     async def wait_and_fix_ci(
@@ -666,6 +667,7 @@ class ReviewPhase:
         post_on_pr: bool = True,
         event_cause: str = "",
         extra_event_data: dict[str, object] | None = None,
+        task: Task | None = None,
     ) -> None:
         """Record HITL escalation state, swap labels, post comment, publish event."""
         self._state.set_hitl_origin(issue_number, origin_label)
@@ -673,6 +675,8 @@ class ReviewPhase:
         self._state.record_hitl_escalation()
 
         await self._transitioner.transition(issue_number, "hitl", pr_number=pr_number)
+        if task is not None:
+            self._store.enqueue_transition(task, "hitl")
 
         if post_on_pr:
             await self._prs.post_pr_comment(pr_number, comment)
