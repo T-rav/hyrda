@@ -115,16 +115,15 @@ describe('dotStyles', () => {
 })
 
 describe('badgeStyleMap', () => {
-  it('has entries for all supported statuses including queued', () => {
-    const expectedStatuses = ['active', 'done', 'failed', 'hitl', 'queued', 'pending']
+  it('has entries for all non-queued statuses', () => {
+    const expectedStatuses = ['active', 'done', 'failed', 'hitl', 'pending']
     for (const status of expectedStatuses) {
       expect(badgeStyleMap).toHaveProperty(status)
     }
   })
 
-  it('queued badge uses yellow theme colors', () => {
-    expect(badgeStyleMap.queued.background).toBe(theme.yellowSubtle)
-    expect(badgeStyleMap.queued.color).toBe(theme.yellow)
+  it('does not have a queued entry (stage-specific colors are applied inline in StageRow)', () => {
+    expect(badgeStyleMap).not.toHaveProperty('queued')
   })
 })
 

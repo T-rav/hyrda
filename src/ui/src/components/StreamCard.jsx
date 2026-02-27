@@ -297,7 +297,6 @@ export const badgeStyleMap = {
   done: { ...badgeBase, background: theme.greenSubtle, color: theme.green },
   failed: { ...badgeBase, background: theme.redSubtle, color: theme.red },
   hitl: { ...badgeBase, background: theme.yellowSubtle, color: theme.yellow },
-  queued: { ...badgeBase, background: theme.yellowSubtle, color: theme.yellow },
   pending: { ...badgeBase, background: theme.mutedSubtle, color: theme.textMuted },
 }
 
