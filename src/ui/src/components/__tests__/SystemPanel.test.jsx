@@ -752,6 +752,8 @@ describe('BackgroundWorkerCard schedule display', () => {
     expect(screen.getByTestId('preset-15s')).toBeInTheDocument()
     expect(screen.queryByTestId('preset-30m')).not.toBeInTheDocument()
     expect(screen.queryByTestId('preset-1h')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('preset-2h')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('preset-4h')).not.toBeInTheDocument()
   })
 
   it('calls onUpdateInterval with pipeline_poller when preset clicked', () => {
