@@ -1,7 +1,6 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { HydraFlowProvider, useHydraFlow } from './context/HydraFlowContext'
 import { Header } from './components/Header'
-import { TranscriptView } from './components/TranscriptView'
 import { HumanInputBanner } from './components/HumanInputBanner'
 import { HITLTable } from './components/HITLTable'
 import { SystemPanel } from './components/SystemPanel'
@@ -9,14 +8,12 @@ import { IssueHistoryPanel } from './components/IssueHistoryPanel'
 import { StreamView } from './components/StreamView'
 import { SessionSidebar } from './components/SessionSidebar'
 import { theme } from './theme'
-import { ACTIVE_STATUSES } from './constants'
 
-const TABS = ['issues', 'history', 'transcript', 'hitl', 'system']
+const TABS = ['issues', 'history', 'hitl', 'system']
 
 const TAB_LABELS = {
   issues: 'Work Stream',
   history: 'History',
-  transcript: 'Transcript',
   hitl: 'HITL',
   system: 'System',
 }
@@ -64,21 +61,8 @@ function AppContent() {
     stageStatus,
     requestChanges, resetSession,
   } = useHydraFlow()
-  const [selectedWorker, setSelectedWorker] = useState(null)
   const [activeTab, setActiveTab] = useState('issues')
   const [expandedStages, setExpandedStages] = useState({})
-
-  // Auto-select the first active worker when none is selected
-  useEffect(() => {
-    if (selectedWorker !== null && workers[selectedWorker]) return
-    const active = Object.entries(workers).find(
-      ([, w]) => ACTIVE_STATUSES.includes(w.status)
-    )
-    if (active) {
-      const key = active[0]
-      setSelectedWorker(isNaN(Number(key)) ? key : Number(key))
-    }
-  }, [workers, selectedWorker])
 
   const handleStart = useCallback(async () => {
     resetSession()
@@ -134,7 +118,7 @@ function AppContent() {
         <SystemAlertBanner alert={systemAlert} />
         <HumanInputBanner requests={humanInputRequests} onSubmit={submitHumanInput} />
 
-        <div style={styles.tabs}>
+        <div style={styles.tabs} data-testid="main-tabs">
           {TABS.map((tab) => (
             <div
               key={tab}
@@ -159,9 +143,6 @@ function AppContent() {
               />
             )}
             {activeTab === 'history' && <IssueHistoryPanel />}
-            {activeTab === 'transcript' && (
-              <TranscriptView workers={workers} selectedWorker={selectedWorker} />
-            )}
             {activeTab === 'hitl' && <HITLTable items={hitlItems} onRefresh={refreshHitl} />}
             {activeTab === 'system' && (
               <SystemPanel
