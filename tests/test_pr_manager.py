@@ -3886,6 +3886,38 @@ class TestSwapPipelineLabels:
         # Only one add_labels call (for issue)
         assert mgr._add_labels.call_count == 1
 
+    @pytest.mark.asyncio
+    async def test_hitl_transition_adds_hitl_and_hitl_active(
+        self, config, event_bus
+    ) -> None:
+        mgr = _make_manager(config, event_bus)
+        mgr._remove_label = AsyncMock()
+        mgr._add_labels = AsyncMock()
+
+        await mgr.swap_pipeline_labels(42, config.hitl_label[0])
+
+        mgr._add_labels.assert_any_call(
+            "issue",
+            42,
+            [config.hitl_label[0], config.hitl_active_label[0]],
+        )
+
+    @pytest.mark.asyncio
+    async def test_hitl_active_transition_also_adds_hitl_pair(
+        self, config, event_bus
+    ) -> None:
+        mgr = _make_manager(config, event_bus)
+        mgr._remove_label = AsyncMock()
+        mgr._add_labels = AsyncMock()
+
+        await mgr.swap_pipeline_labels(42, config.hitl_active_label[0])
+
+        mgr._add_labels.assert_any_call(
+            "issue",
+            42,
+            [config.hitl_label[0], config.hitl_active_label[0]],
+        )
+
 
 # --- update_issue_body ---
 

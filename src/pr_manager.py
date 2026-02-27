@@ -615,21 +615,34 @@ class PRManager:
         *,
         pr_number: int | None = None,
     ) -> None:
-        """Atomically swap to *new_label*, removing all other pipeline labels.
+        """Atomically swap pipeline labels for an issue (and optional PR).
 
-        This prevents the dual-label bug where a crash between remove and add
-        leaves an issue with conflicting pipeline labels (e.g. hydraflow-ready +
-        hydraflow-hitl simultaneously).
+        For most stages, this sets exactly ``new_label`` and removes all other
+        pipeline labels. For HITL transitions, this normalizes to the full HITL
+        label set (``hitl_label`` + ``hitl_active_label``) so operations can
+        reliably find items regardless of whether they are pending or active.
         """
+        hitl_labels = list(
+            dict.fromkeys(
+                [
+                    *(self._config.hitl_label or []),
+                    *(self._config.hitl_active_label or []),
+                ]
+            )
+        )
+        target_labels = (
+            hitl_labels if new_label in hitl_labels and hitl_labels else [new_label]
+        )
+
         all_labels = self._config.all_pipeline_labels
         for lbl in all_labels:
-            if lbl != new_label:
+            if lbl not in target_labels:
                 await self._remove_label("issue", issue_number, lbl)
                 if pr_number is not None:
                     await self._remove_label("pr", pr_number, lbl)
-        await self._add_labels("issue", issue_number, [new_label])
+        await self._add_labels("issue", issue_number, target_labels)
         if pr_number is not None:
-            await self._add_labels("pr", pr_number, [new_label])
+            await self._add_labels("pr", pr_number, target_labels)
 
     async def create_issue(
         self,
