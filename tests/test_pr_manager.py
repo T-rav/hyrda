@@ -1444,6 +1444,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         fixed_label=["custom-fixed"],
         improve_label=["custom-improve"],
         memory_label=["custom-memory"],
+        transcript_label=["custom-transcript"],
         manifest_label=["custom-manifest"],
         metrics_label=["custom-metrics"],
         dup_label=["custom-dup"],
@@ -1489,6 +1490,7 @@ async def test_ensure_labels_exist_uses_config_label_names(config, event_bus, tm
         "custom-fixed",
         "custom-improve",
         "custom-memory",
+        "custom-transcript",
         "custom-manifest",
         "custom-metrics",
         "custom-dup",
@@ -1597,6 +1599,9 @@ def test_makefile_setup_runs_label_bootstrap() -> None:
     )
     assert "python -m hf_cli init --target" in match.group(1), (
         "setup target must bootstrap .claude/.codex/.pi/.githooks via hf init"
+    )
+    assert ".hydraflow-managed" in match.group(1), (
+        "setup target should mark managed Codex skills to enable safe stale-skill pruning"
     )
 
 
