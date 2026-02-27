@@ -240,6 +240,8 @@ class PlanResult(BaseModel):
     duration_seconds: float = 0.0
     new_issues: list[NewIssueSpec] = Field(default_factory=list)
     validation_errors: list[str] = Field(default_factory=list)
+    actionability_score: int = 0
+    actionability_rank: str = "unknown"
     retry_attempted: bool = False
     already_satisfied: bool = False
 
