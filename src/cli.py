@@ -78,56 +78,6 @@ def _prep_stage_line(stage: str, detail: str, status: str, color: bool) -> str:
     return f"{tint}[prep:{stage}] {glyph} {detail}{reset}"
 
 
-def _build_prep_failure_error_message(transcript: str, transcript_ref: str) -> str:
-    """Build a concrete failure message for local `.hydraflow/prep` issues."""
-    if re.search(r"PREP_RESULT_JSON\s*:\s*\{", transcript, re.IGNORECASE):
-        reason = "Agent returned PREP_RESULT_JSON with non-success status."
-    elif re.search(r"PREP_STATUS\s*:\s*FAILED", transcript, re.IGNORECASE):
-        reason = "Agent returned PREP_STATUS: FAILED."
-    elif re.search(r"File has not been read yet", transcript, re.IGNORECASE):
-        reason = (
-            "Agent hit tool precondition failure: attempted Edit before Read "
-            '("File has not been read yet").'
-        )
-    elif re.search(
-        r"(max[\s_-]*turns?|turn limit|conversation limit)", transcript, re.IGNORECASE
-    ):
-        reason = "Agent hit conversation turn limit before finishing prep."
-    elif not transcript.strip():
-        reason = "Agent produced an empty transcript."
-    else:
-        reason = "Agent did not return PREP_RESULT_JSON with prep_status SUCCESS."
-
-    lines = [ln for ln in transcript.splitlines() if ln.strip()]
-    tail = "\n".join(lines[-30:])
-    tail = tail[-3000:] if tail else "(no output)"
-    return f"{reason}\nTranscript path: {transcript_ref}\n\nLast output tail:\n{tail}"
-
-
-def _parse_prep_result(transcript: str) -> tuple[bool, str]:
-    """Parse structured prep result from transcript.
-
-    Returns ``(success, mode)`` where mode is ``json`` or ``legacy``.
-    """
-    json_match = re.search(
-        r"PREP_RESULT_JSON\s*:\s*(\{.*\})", transcript, re.IGNORECASE
-    )
-    if json_match:
-        try:
-            payload = json.loads(json_match.group(1))
-            status = str(payload.get("prep_status", "")).strip().upper()
-            if status == "SUCCESS":
-                return True, "json"
-            if status == "FAILED":
-                return False, "json"
-        except json.JSONDecodeError:
-            pass
-
-    return bool(
-        re.search(r"PREP_STATUS\s*:\s*SUCCESS", transcript, re.IGNORECASE)
-    ), "legacy"
-
-
 def _seed_context_assets(config: HydraFlowConfig) -> list[str]:
     """Ensure manifest, memory digest, and metrics cache exist after prep."""
     from manifest import ProjectManifestManager  # noqa: PLC0415
@@ -1114,49 +1064,6 @@ def _choose_prep_tool(configured: str) -> tuple[str | None, str]:
         selected = configured
         mode = "configured"
     return selected, mode
-
-
-def _build_prep_agent_prompt(
-    *,
-    stack: str,
-    failures: list[tuple[str, list[str], str]],
-    issue_filenames: list[str],
-) -> str:
-    """Build correction prompt for prep-agent runs."""
-    failure_lines = "\n".join(
-        [
-            f"- {step}: `{' '.join(cmd)}`\n  Error: {err[:500]}"
-            for step, cmd, err in failures
-        ]
-    )
-    issues = (
-        "\n".join([f"- .hydraflow/prep/{name}" for name in issue_filenames])
-        or "- (none)"
-    )
-    return (
-        "You are the HydraFlow prep correction agent.\n"
-        f"Stack: {stack}\n\n"
-        "Your task:\n"
-        "1) Read the local prep issue files listed below.\n"
-        "2) Apply code/config fixes in this repo to resolve the failures.\n"
-        "3) Keep changes minimal and safe.\n"
-        "4) Do not edit files outside this repository.\n"
-        "5) Drive verification through Make targets when available "
-        "(lint-fix, lint-check, typecheck, test, quality-lite, quality).\n"
-        "6) Before each Edit, Read that file first. If a tool error says a file has not "
-        "been read yet, immediately read it and retry the edit.\n"
-        "7) For independent failures, fan out work to sub-agents in parallel when available "
-        "(max 4 concurrent tracks).\n"
-        "8) Within each track, apply edits one file at a time and verify before the next edit.\n"
-        "9) Do not refactor unrelated application source to chase existing lint debt. "
-        "If failures are outside prep-managed files, record/update `.hydraflow/prep` issues with "
-        "concrete failing commands and file paths.\n\n"
-        "Local prep issue files:\n"
-        f"{issues}\n\n"
-        "Observed failed steps:\n"
-        f"{failure_lines}\n\n"
-        "Output a concise summary of fixes applied.\n"
-    )
 
 
 async def _run_scaffold(config: HydraFlowConfig) -> bool:
