@@ -63,27 +63,19 @@ function addEvent(state, action) {
 }
 
 function mergeStageIssues(existingIssues, incomingIssues) {
-  const next = [...(existingIssues || [])]
-  const idxByIssue = new Map()
-  next.forEach((item, idx) => {
-    if (item?.issue_number != null && !idxByIssue.has(item.issue_number)) {
-      idxByIssue.set(item.issue_number, idx)
-    }
+  // Server snapshot is authoritative: items absent from incoming are removed
+  // (prevents ghost cards) and incoming fields (including status) override
+  // local state for items still present.
+  const existingById = new Map(
+    (existingIssues || [])
+      .filter(item => item?.issue_number != null)
+      .map(item => [item.issue_number, item])
+  )
+  return (incomingIssues || []).map(item => {
+    if (item?.issue_number == null) return item
+    const existing = existingById.get(item.issue_number)
+    return existing ? { ...existing, ...item } : item
   })
-  for (const item of (incomingIssues || [])) {
-    if (item?.issue_number == null) {
-      next.push(item)
-      continue
-    }
-    const existingIdx = idxByIssue.get(item.issue_number)
-    if (existingIdx != null) {
-      next[existingIdx] = { ...next[existingIdx], ...item }
-    } else {
-      idxByIssue.set(item.issue_number, next.length)
-      next.push(item)
-    }
-  }
-  return next
 }
 
 export function reducer(state, action) {
@@ -471,8 +463,8 @@ export function reducer(state, action) {
         if (!Object.prototype.hasOwnProperty.call(incoming, key)) {
           return [key, state.pipelineIssues[key] || []]
         }
-        // Snapshot payloads are additive: upsert known issues by id and keep
-        // existing queue members until an explicit transition/reset removes them.
+        // Server snapshot is authoritative: reconcile stage membership so issues
+        // absent from the snapshot are removed (eliminates ghost cards).
         return [key, mergeStageIssues(state.pipelineIssues[key], incoming[key] || [])]
       }))
 
