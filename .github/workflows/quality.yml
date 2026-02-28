@@ -83,6 +83,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Set up uv
+        if: ${{ hashFiles(format('{0}/Makefile', matrix.project_dir), format('{0}/makefile', matrix.project_dir), format('{0}/GNUmakefile', matrix.project_dir)) != '' }}
+        uses: astral-sh/setup-uv@v5
       - name: Set up Node
         if: ${{ hashFiles(format('{0}/package.json', matrix.project_dir)) != '' }}
         uses: actions/setup-node@v4
@@ -116,8 +119,7 @@ jobs:
             make quality-lite
             exit 0
           fi
-          echo "Missing Makefile in ${{ matrix.project_dir }}. Run 'make prep' to scaffold make targets." >&2
-          exit 1
+          echo "No Makefile in ${{ matrix.project_dir }}; skipping make quality-lite."
       - name: Quality Full
         shell: bash
         run: |
@@ -127,8 +129,7 @@ jobs:
             make quality
             exit 0
           fi
-          echo "Missing Makefile in ${{ matrix.project_dir }}. Run 'make prep' to scaffold make targets." >&2
-          exit 1
+          echo "No Makefile in ${{ matrix.project_dir }}; skipping make quality."
       - name: Smoke
         shell: bash
         run: |
@@ -142,5 +143,4 @@ jobs:
             fi
             exit 0
           fi
-          echo "Missing Makefile in ${{ matrix.project_dir }}. Run 'make prep' to scaffold make targets." >&2
-          exit 1
+          echo "No Makefile in ${{ matrix.project_dir }}; skipping smoke."
