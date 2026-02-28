@@ -1453,6 +1453,34 @@ class TestStateDataVerificationIssues:
         assert data.verification_issues["99"] == 501
 
 
+class TestStateDataManifestFields:
+    """Regression tests for manifest-related fields on StateData."""
+
+    def test_manifest_issue_number_default(self) -> None:
+        data = StateData()
+        assert data.manifest_issue_number is None
+
+    def test_manifest_snapshot_hash_default(self) -> None:
+        data = StateData()
+        assert data.manifest_snapshot_hash == ""
+
+    def test_manifest_fields_accept_explicit_values(self) -> None:
+        data = StateData(manifest_issue_number=42, manifest_snapshot_hash="abc123")
+        assert data.manifest_issue_number == 42
+        assert data.manifest_snapshot_hash == "abc123"
+
+    def test_manifest_fields_round_trip_serialization(self) -> None:
+        start = StateData(manifest_issue_number=99, manifest_snapshot_hash="sha256hash")
+        payload = start.model_dump()
+        restored = StateData(**payload)
+        assert restored.manifest_issue_number == 99
+        assert restored.manifest_snapshot_hash == "sha256hash"
+
+    def test_no_duplicate_field_names_in_state_data(self) -> None:
+        field_names = list(StateData.model_fields.keys())
+        assert len(field_names) == len(set(field_names))
+
+
 # ---------------------------------------------------------------------------
 # TaskLink / TaskLinkKind
 # ---------------------------------------------------------------------------
