@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
@@ -15,6 +15,7 @@ from typing import (
     NotRequired,
     Protocol,
 )
+from uuid import uuid4
 
 from pydantic import (
     AfterValidator,
@@ -636,6 +637,7 @@ class StateData(BaseModel):
     worker_intervals: dict[str, int] = Field(default_factory=dict)
     interrupted_issues: dict[str, str] = Field(default_factory=dict)
     last_reviewed_shas: dict[str, str] = Field(default_factory=dict)
+    pending_reports: list[PendingReport] = Field(default_factory=list)
     last_updated: str | None = None
 
 
@@ -697,6 +699,16 @@ class ReportIssueResponse(BaseModel):
     title: str
     url: HttpUrl = ""
     status: str = "created"
+
+
+class PendingReport(BaseModel):
+    """A queued bug report awaiting background processing."""
+
+    id: str = Field(default_factory=lambda: uuid4().hex[:12])
+    description: str
+    screenshot_base64: str = ""
+    environment: dict[str, Any] = Field(default_factory=dict)
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class PRListItem(BaseModel):
