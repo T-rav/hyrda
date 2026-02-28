@@ -999,8 +999,9 @@ class TestZeroCommitEscalation:
         comment_calls = [c.args for c in mock_prs.post_comment.call_args_list]
         assert any("Zero Commits" in c[1] for c in comment_calls)
 
-        # Issue should be transitioned to HITL
-        mock_prs.transition.assert_awaited_once_with(42, "hitl")
+        # Issue should be escalated to HITL with cause
+        mock_prs.swap_pipeline_labels.assert_awaited_once_with(42, config.hitl_label[0])
+        assert phase._state.get_hitl_cause(42) == "Implementation produced zero commits"
 
     @pytest.mark.asyncio
     async def test_zero_commit_marks_issue_failed(
@@ -1477,7 +1478,8 @@ class TestHandleImplementationResult:
         returned = await phase._handle_implementation_result(issue, result, False)
 
         assert phase._state.to_dict()["processed_issues"].get(str(42)) == "failed"
-        mock_prs.transition.assert_awaited_once_with(42, "hitl")
+        mock_prs.swap_pipeline_labels.assert_awaited_once_with(42, config.hitl_label[0])
+        assert phase._state.get_hitl_cause(42) == "Implementation produced zero commits"
         assert returned is result
 
     @pytest.mark.asyncio
@@ -1544,7 +1546,11 @@ class TestHandleImplementationResult:
         await phase._handle_implementation_result(issue, result, False)
 
         assert phase._state.to_dict()["processed_issues"].get(str(42)) == "failed"
-        mock_prs.transition.assert_awaited_once_with(42, "hitl")
+        mock_prs.swap_pipeline_labels.assert_awaited()
+        assert (
+            phase._state.get_hitl_cause(42)
+            == "Implementation produced no changes (zero diff)"
+        )
 
     @pytest.mark.asyncio
     async def test_success_without_pr_and_with_diff_stays_ready_as_failed(
