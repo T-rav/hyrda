@@ -1,15 +1,17 @@
 import React, { useState, useCallback, useMemo } from 'react'
 import { theme } from '../theme'
-import { BACKGROUND_WORKERS, INTERVAL_PRESETS, EDITABLE_INTERVAL_WORKERS, SYSTEM_WORKER_INTERVALS, UNSTICK_BATCH_OPTIONS } from '../constants'
+import { BACKGROUND_WORKERS, INTERVAL_PRESETS, PIPELINE_POLLER_PRESETS, EDITABLE_INTERVAL_WORKERS, SYSTEM_WORKER_INTERVALS, UNSTICK_BATCH_OPTIONS } from '../constants'
 import { useHydraFlow } from '../context/HydraFlowContext'
 import { Livestream } from './Livestream'
 import { PipelineControlPanel } from './PipelineControlPanel'
 import { WorkerLogStream } from './WorkerLogStream'
 import { EventLog } from './EventLog'
+import { MetricsPanel } from './MetricsPanel'
 
 const SUB_TABS = [
   { key: 'workers', label: 'Workers' },
   { key: 'pipeline', label: 'Pipeline' },
+  { key: 'metrics', label: 'Metrics' },
   { key: 'livestream', label: 'Livestream' },
   { key: 'event_log', label: 'Event Log' },
 ]
@@ -69,6 +71,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
   const isSystem = def.system === true
   const orchRunning = orchestratorStatus === 'running'
   const isEditable = EDITABLE_INTERVAL_WORKERS.has(def.key)
+  const presets = isPipelinePoller ? PIPELINE_POLLER_PRESETS : INTERVAL_PRESETS
 
   let dotColor, statusText, lastRun, details
 
@@ -148,6 +151,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
   const showToggle = onToggleBgWorker && !isSystem
   const isError = statusText === 'error' || statusText === 'stopped'
   const hasDetails = Object.keys(details).length > 0
+  const description = state?.description || def.description || ''
   return (
     <div style={styles.card} data-testid={`worker-card-${def.key}`}>
       <div style={styles.cardHeader}>
@@ -177,6 +181,11 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
           </button>
         )}
       </div>
+      {description && (
+        <div style={styles.description} data-testid={`desc-${def.key}`}>
+          {description}
+        </div>
+      )}
       <div style={styles.lastRun}>
         Last run: {relativeTime(lastRun)}
       </div>
@@ -203,7 +212,7 @@ function BackgroundWorkerCard({ def, state, pipelinePollerLastRun, pipelineIssue
       )}
       {showIntervalEditor && isEditable && onUpdateInterval && (
         <div style={styles.intervalEditor} data-testid={`interval-editor-${def.key}`}>
-          {INTERVAL_PRESETS.map((preset) => (
+          {presets.map((preset) => (
             <button
               key={preset.seconds}
               style={state?.interval_seconds === preset.seconds ? styles.presetActive : styles.presetButton}
@@ -343,7 +352,7 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onUpdateInter
           </div>
         ))}
       </div>
-      <div style={styles.subTabContent}>
+      <div style={styles.subTabContent} data-testid="system-subtab-content">
         {activeSubTab === 'workers' && (
           <div style={styles.workersContent}>
             <h3 style={styles.heading}>Background Workers</h3>
@@ -392,6 +401,9 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onUpdateInter
         )}
         {activeSubTab === 'pipeline' && (
           <PipelineControlPanel onToggleBgWorker={onToggleBgWorker} />
+        )}
+        {activeSubTab === 'metrics' && (
+          <MetricsPanel />
         )}
         {activeSubTab === 'livestream' && <Livestream events={events} />}
         {activeSubTab === 'event_log' && (
@@ -502,6 +514,12 @@ const styles = {
     fontWeight: 600,
     color: theme.textMuted,
     textTransform: 'uppercase',
+  },
+  description: {
+    fontSize: 12,
+    color: theme.textMuted,
+    lineHeight: 1.35,
+    marginBottom: 6,
   },
   lastRun: {
     fontSize: 12,
