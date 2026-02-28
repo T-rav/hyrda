@@ -637,8 +637,9 @@ class TestUploadScreenshotGist:
         with patch("asyncio.create_subprocess_exec", mock_exec):
             result = await mgr.upload_screenshot_gist(png_with_prefix)
 
-        assert "gist.githubusercontent.com" in result
-        assert result.endswith("/raw/screenshot.png")
+        assert result == (
+            "https://gist.githubusercontent.com/user/def456/raw/screenshot.png"
+        )
 
     @pytest.mark.asyncio
     async def test_failure_returns_empty_string(self, event_bus, tmp_path):
