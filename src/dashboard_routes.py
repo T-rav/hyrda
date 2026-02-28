@@ -813,6 +813,7 @@ def create_router(
 
     # Mutable fields that can be changed at runtime via PATCH
     _MUTABLE_FIELDS = {
+        "max_triagers",
         "max_workers",
         "max_planners",
         "max_reviewers",

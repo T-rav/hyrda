@@ -743,6 +743,55 @@ class TestPatchConfigMemoryAutoApprove:
         assert data["updated"] == {}
 
 
+class TestPatchConfigMaxTriagers:
+    """Tests that PATCH /api/control/config accepts max_triagers."""
+
+    def _make_router(self, config, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_patch_config_updates_max_triagers(
+        self, config, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        """PATCH /api/control/config with max_triagers should update config."""
+        import json
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        patch_config = self._find_endpoint(router, "/api/control/config")
+        assert patch_config is not None
+
+        assert config.max_triagers == 1
+        response = await patch_config({"max_triagers": 3})
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        assert data["updated"]["max_triagers"] == 3
+        assert config.max_triagers == 3
+
+
 class TestHITLEndpointCause:
     """Tests that /api/hitl includes the cause from state."""
 
