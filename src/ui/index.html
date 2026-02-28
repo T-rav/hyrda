@@ -57,9 +57,15 @@
       gap: 16px;
       margin-bottom: 24px;
     }
+    .metrics-grid > *:last-child:nth-child(odd) {
+      grid-column: span 2;
+    }
     @media (max-width: 600px) {
       .metrics-grid {
         grid-template-columns: 1fr;
+      }
+      .metrics-grid > *:last-child:nth-child(odd) {
+        grid-column: span 1;
       }
     }
   </style>
