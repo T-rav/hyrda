@@ -168,7 +168,6 @@ describe('MetricsPanel', () => {
         },
         snapshots: [
           {
-            timestamp: '2024-01-01T00:00:00Z',
             issues_completed: 4,
             prs_merged: 3,
           },
@@ -177,6 +176,36 @@ describe('MetricsPanel', () => {
     }))
     render(<MetricsPanel />)
     expect(screen.queryByText('Snapshot History')).not.toBeInTheDocument()
+  })
+
+  it('renders trend indicators when previous snapshot data exists', () => {
+    mockUseHydraFlow.mockReturnValue(defaultContext({
+      metricsHistory: {
+        current: {
+          merge_rate: 0.8,
+          first_pass_approval_rate: 0.7,
+          quality_fix_rate: 0.1,
+          hitl_escalation_rate: 0.05,
+          issues_completed: 10,
+          prs_merged: 8,
+        },
+        snapshots: [
+          {
+            merge_rate: 0.6,
+            first_pass_approval_rate: 0.5,
+            quality_fix_rate: 0.2,
+            hitl_escalation_rate: 0.1,
+            issues_completed: 8,
+            prs_merged: 6,
+          },
+        ],
+      },
+    }))
+    render(<MetricsPanel />)
+    // TrendIndicators should render delta arrows since current > previous
+    // e.g. issues_completed: 10 - 8 = 2 → renders "↑ 2"
+    const upArrows = screen.getAllByText(/↑/)
+    expect(upArrows.length).toBeGreaterThan(0)
   })
 
   it('renders inference lifetime and session totals when provided', () => {
