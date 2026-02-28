@@ -618,6 +618,8 @@ class StateData(BaseModel):
     review_attempts: dict[str, int] = Field(default_factory=dict)
     review_feedback: dict[str, str] = Field(default_factory=dict)
     worker_result_meta: dict[str, WorkerResultMeta] = Field(default_factory=dict)
+    bg_worker_states: dict[str, BackgroundWorkerState] = Field(default_factory=dict)
+    worker_heartbeats: dict[str, PersistedWorkerHeartbeat] = Field(default_factory=dict)
     verification_issues: dict[str, int] = Field(default_factory=dict)
     issue_attempts: dict[str, int] = Field(default_factory=dict)
     active_issue_numbers: list[int] = Field(default_factory=list)
@@ -783,6 +785,14 @@ class BackgroundWorkerState(TypedDict):
     last_run: str | None
     details: dict[str, Any]
     enabled: NotRequired[bool]  # added by get_bg_worker_states()
+
+
+class PersistedWorkerHeartbeat(TypedDict, total=False):
+    """Lightweight persisted snapshot for worker heartbeats."""
+
+    status: str
+    last_run: str | None
+    details: dict[str, Any]
 
 
 class TranscriptEventData(TypedDict, total=False):

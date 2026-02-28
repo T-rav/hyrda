@@ -19,6 +19,7 @@ from state import StateTracker
 if TYPE_CHECKING:
     from config import HydraFlowConfig
 from models import (
+    BackgroundWorkerState,
     GitHubIssue,
     PlanResult,
     PRInfo,
@@ -3094,6 +3095,56 @@ class TestUpdateBgWorkerStatus:
         orch.update_bg_worker_status("memory_sync", "idle")
         state = orch._bg_worker_states["memory_sync"]
         assert state["details"] == {}
+
+    @pytest.mark.asyncio
+    async def test_restore_bg_worker_states_backfills_from_events(
+        self, config: HydraFlowConfig
+    ) -> None:
+        bus = EventBus()
+        await bus.publish(
+            HydraFlowEvent(
+                type=EventType.BACKGROUND_WORKER_STATUS,
+                data={
+                    "worker": "memory_sync",
+                    "status": "ok",
+                    "last_run": "2026-02-25T09:00:00Z",
+                    "details": {"count": 4},
+                },
+            )
+        )
+        orch = HydraFlowOrchestrator(config, event_bus=bus)
+        orch._restore_bg_worker_states()
+        states = orch.get_bg_worker_states()
+        assert states["memory_sync"]["status"] == "ok"
+        assert states["memory_sync"]["details"]["count"] == 4
+        persisted = orch.state.get_bg_worker_states()
+        assert "memory_sync" in persisted
+
+    def test_update_bg_worker_status_persists_to_state(
+        self, config: HydraFlowConfig
+    ) -> None:
+        orch = HydraFlowOrchestrator(config)
+        orch.update_bg_worker_status("memory_sync", "ok")
+        persisted = orch._state.get_bg_worker_states()
+        assert "memory_sync" in persisted
+        assert persisted["memory_sync"]["status"] == "ok"
+
+    def test_restore_bg_worker_states(self, config: HydraFlowConfig) -> None:
+        tracker = StateTracker(config.state_file)
+        tracker.set_bg_worker_state(
+            "memory_sync",
+            BackgroundWorkerState(
+                name="memory_sync",
+                status="ok",
+                last_run="2026-02-20T10:30:00Z",
+                details={"count": 2},
+            ),
+        )
+        orch = HydraFlowOrchestrator(config, state=tracker)
+        orch._restore_state()
+        states = orch.get_bg_worker_states()
+        assert states["memory_sync"]["last_run"] == "2026-02-20T10:30:00Z"
+        assert states["memory_sync"]["details"]["count"] == 2
 
 
 # --- Orchestrator Property Accessors ---

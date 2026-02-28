@@ -322,8 +322,9 @@ class HydraFlowOrchestrator:
             name=name,
             status=status,
             last_run=datetime.now(UTC).isoformat(),
-            details=dict(details) if details else {},
+            details=dict(details) if details is not None else {},
         )
+        self._state.set_bg_worker_state(name, self._bg_worker_states[name])
 
     def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
         """Enable or disable a background worker by name."""
@@ -410,10 +411,61 @@ class HydraFlowOrchestrator:
             self._state.clear_interrupted_issues()
 
     def _restore_state(self) -> None:
-        """Restore interval overrides, crash-recovered issues, and interrupted issues."""
+        """Restore worker intervals, crash-recovered issues, interrupted issues, and background worker heartbeats."""
         self._restore_worker_intervals()
         self._restore_crash_recovered_issues()
         self._restore_interrupted_issues()
+        self._restore_bg_worker_states()
+
+    def _restore_bg_worker_states(self) -> None:
+        """Hydrate background worker heartbeat cache from persisted state."""
+        persisted = self._state.get_bg_worker_states()
+        restored = 0
+        if persisted:
+            self._bg_worker_states.update(persisted)
+            restored = len(persisted)
+            logger.info(
+                "Restored %d background worker heartbeat entr%s from state",
+                restored,
+                "ies" if restored != 1 else "y",
+            )
+        backfilled = self._backfill_bg_worker_states_from_events()
+        if backfilled:
+            logger.info(
+                "Backfilled %d background worker heartbeat entr%s from event history",
+                backfilled,
+                "ies" if backfilled != 1 else "y",
+            )
+
+    def _backfill_bg_worker_states_from_events(self) -> int:
+        """Populate heartbeat cache from recent BACKGROUND_WORKER_STATUS events."""
+        history = list(self._bus.get_history())
+        if not history:
+            return 0
+        latest: dict[str, BackgroundWorkerState] = {}
+        existing = set(self._bg_worker_states)
+        for event in reversed(history):
+            if event.type != EventType.BACKGROUND_WORKER_STATUS:
+                continue
+            worker = event.data.get("worker")
+            if not worker or worker in existing or worker in latest:
+                continue
+            raw_details = event.data.get("details", {}) or {}
+            details = (
+                dict(raw_details)
+                if isinstance(raw_details, dict)
+                else {"raw": raw_details}
+            )
+            latest[worker] = BackgroundWorkerState(
+                name=worker,
+                status=str(event.data.get("status", "disabled")),
+                last_run=event.data.get("last_run"),
+                details=details,
+            )
+        for name, state in latest.items():
+            self._bg_worker_states[name] = state
+            self._state.set_bg_worker_state(name, state)
+        return len(latest)
 
     async def _start_session(self) -> None:
         """Create a new session log and publish SESSION_START."""
