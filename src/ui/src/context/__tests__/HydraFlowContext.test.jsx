@@ -133,29 +133,67 @@ describe('HydraFlowContext reducer', () => {
 })
 
 describe('PIPELINE_SNAPSHOT reducer', () => {
-  it('fully replaces pipelineIssues with server data', () => {
+  it('additively upserts provided stages with server data', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        triage: [{ issue_number: 1, title: 'Old title', url: '/old', status: 'active' }],
+      },
+    }
     const data = {
-      triage: [{ issue_number: 1, title: 'Bug', url: '', status: 'queued' }],
+      triage: [
+        { issue_number: 1, title: 'Bug', url: '', status: 'queued' },
+        { issue_number: 9, title: 'New', url: '', status: 'queued' },
+      ],
       plan: [],
       implement: [{ issue_number: 2, title: 'Feature', url: '', status: 'active' }],
       review: [],
       hitl: [],
     }
-    const next = reducer(initialState, { type: 'PIPELINE_SNAPSHOT', data })
-    expect(next.pipelineIssues.triage).toHaveLength(1)
-    expect(next.pipelineIssues.triage[0].issue_number).toBe(1)
+    const next = reducer(state, { type: 'PIPELINE_SNAPSHOT', data })
+    expect(next.pipelineIssues.triage).toHaveLength(2)
+    expect(next.pipelineIssues.triage.find(i => i.issue_number === 1)?.title).toBe('Bug')
+    expect(next.pipelineIssues.triage.find(i => i.issue_number === 9)).toBeTruthy()
     expect(next.pipelineIssues.implement).toHaveLength(1)
     expect(next.pipelineIssues.implement[0].status).toBe('active')
   })
 
-  it('fills missing stages with empty arrays', () => {
+  it('preserves missing stages from existing state', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        plan: [{ issue_number: 77, title: 'Carry', url: '', status: 'queued' }],
+        implement: [{ issue_number: 88, title: 'Keep', url: '', status: 'active' }],
+      },
+    }
     const data = { triage: [{ issue_number: 3, title: 'X', url: '', status: 'queued' }] }
-    const next = reducer(initialState, { type: 'PIPELINE_SNAPSHOT', data })
+    const next = reducer(state, { type: 'PIPELINE_SNAPSHOT', data })
     expect(next.pipelineIssues.triage).toHaveLength(1)
-    expect(next.pipelineIssues.plan).toEqual([])
-    expect(next.pipelineIssues.implement).toEqual([])
+    expect(next.pipelineIssues.plan).toHaveLength(1)
+    expect(next.pipelineIssues.plan[0].issue_number).toBe(77)
+    expect(next.pipelineIssues.implement).toHaveLength(1)
+    expect(next.pipelineIssues.implement[0].issue_number).toBe(88)
     expect(next.pipelineIssues.review).toEqual([])
     expect(next.pipelineIssues.hitl).toEqual([])
+  })
+
+  it('does not clear existing queues on empty snapshots', () => {
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        triage: [{ issue_number: 10, title: 'Queued', url: '', status: 'queued' }],
+        implement: [{ issue_number: 11, title: 'Active', url: '', status: 'active' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'PIPELINE_SNAPSHOT',
+      data: { triage: [], plan: [], implement: [], review: [], hitl: [] },
+    })
+    expect(next.pipelineIssues.triage).toHaveLength(1)
+    expect(next.pipelineIssues.implement).toHaveLength(1)
   })
 })
 
