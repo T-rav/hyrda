@@ -558,6 +558,26 @@ def create_router(
         items = await pr_manager.list_open_prs(all_labels)
         return JSONResponse([item.model_dump() for item in items])
 
+    @router.get("/api/epics")
+    async def get_epics() -> JSONResponse:
+        """Return all tracked epics with progress."""
+        orch = get_orchestrator()
+        if orch is None:
+            return JSONResponse([])
+        progress = orch._epic_manager.get_all_progress()
+        return JSONResponse([p.model_dump() for p in progress])
+
+    @router.get("/api/epics/{epic_number}")
+    async def get_epic_detail(epic_number: int) -> JSONResponse:
+        """Return full detail for a single epic including child issue info."""
+        orch = get_orchestrator()
+        if orch is None:
+            return JSONResponse({"error": "orchestrator not running"}, status_code=503)
+        detail = await orch._epic_manager.get_detail(epic_number)
+        if detail is None:
+            return JSONResponse({"error": "epic not found"}, status_code=404)
+        return JSONResponse(detail.model_dump())
+
     @router.get("/api/hitl")
     async def get_hitl() -> JSONResponse:
         """Fetch issues/PRs labeled for human-in-the-loop (stuck on CI)."""

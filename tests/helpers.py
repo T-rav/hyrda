@@ -265,6 +265,10 @@ class ConfigFactory:
         unstick_all_causes: bool = True,
         enable_fresh_branch_rebuild: bool = True,
         max_troubleshooting_prompt_chars: int = 3000,
+        epic_auto_decompose: bool = False,
+        epic_decompose_complexity_threshold: int = 8,
+        epic_monitor_interval: int = 1800,
+        epic_stale_days: int = 7,
     ):
         """Create a HydraFlowConfig with test-friendly defaults."""
         from config import HydraFlowConfig
@@ -417,6 +421,10 @@ class ConfigFactory:
             unstick_all_causes=unstick_all_causes,
             enable_fresh_branch_rebuild=enable_fresh_branch_rebuild,
             max_troubleshooting_prompt_chars=max_troubleshooting_prompt_chars,
+            epic_auto_decompose=epic_auto_decompose,
+            epic_decompose_complexity_threshold=epic_decompose_complexity_threshold,
+            epic_monitor_interval=epic_monitor_interval,
+            epic_stale_days=epic_stale_days,
         )
 
 

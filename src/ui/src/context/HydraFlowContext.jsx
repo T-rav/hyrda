@@ -36,6 +36,7 @@ export const initialState = {
   metrics: null,
   systemAlert: null,
   intents: [],
+  epics: [],
   githubMetrics: null,
   metricsHistory: null,
   pipelineIssues: { ...emptyPipeline },
@@ -436,6 +437,20 @@ export function reducer(state, action) {
           : state.metrics,
       }
 
+    case 'epic_update': {
+      const progress = action.data?.progress
+      if (!progress) return addEvent(state, action)
+      const epicNum = progress.epic_number
+      const existingEpics = state.epics.filter(e => e.epic_number !== epicNum)
+      return {
+        ...addEvent(state, action),
+        epics: [...existingEpics, progress],
+      }
+    }
+
+    case 'EPICS':
+      return { ...state, epics: action.data || [] }
+
     case 'system_alert':
       return { ...addEvent(state, action), systemAlert: action.data }
 
@@ -691,6 +706,13 @@ export function HydraFlowProvider({ children }) {
       .catch(() => {})
   }, [])
 
+  const fetchEpics = useCallback(() => {
+    fetch('/api/epics')
+      .then(r => r.json())
+      .then(data => dispatch({ type: 'EPICS', data }))
+      .catch(() => {})
+  }, [])
+
   const fetchSessions = useCallback(() => {
     fetch('/api/sessions')
       .then(r => r.json())
@@ -926,6 +948,7 @@ export function HydraFlowProvider({ children }) {
       fetchGithubMetrics()
       fetchMetricsHistory()
       fetchPipeline()
+      fetchEpics()
       fetchSessions()
       fetchRepos()
       if (lastEventTsRef.current) {
@@ -983,7 +1006,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions, fetchRepos])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchEpics, fetchSessions, fetchRepos])
 
   useEffect(() => {
     const poll = () => {
