@@ -439,17 +439,45 @@ export function reducer(state, action) {
       return { ...state, events: merged }
     }
 
-    case 'PIPELINE_SNAPSHOT':
+    case 'PIPELINE_SNAPSHOT': {
+      const incoming = action.data || {}
+      const openStages = ['triage', 'plan', 'implement', 'review', 'hitl']
+      const incomingOpenCount = openStages.reduce(
+        (sum, key) => sum + ((incoming[key] || []).length),
+        0,
+      )
+      const existingOpenCount = openStages.reduce(
+        (sum, key) => sum + ((state.pipelineIssues[key] || []).length),
+        0,
+      )
+
+      // Guard against transient empty snapshots while running: preserve prior
+      // open queues to avoid UI queue wipe/reload flicker.
+      const preserveExistingOpen = state.orchestratorStatus === 'running'
+        && incomingOpenCount === 0
+        && existingOpenCount > 0
+
+      const nextOpen = Object.fromEntries(openStages.map((key) => {
+        if (preserveExistingOpen) {
+          return [key, state.pipelineIssues[key] || []]
+        }
+        // Partial payloads should not clear stages omitted by backend.
+        if (!Object.prototype.hasOwnProperty.call(incoming, key)) {
+          return [key, state.pipelineIssues[key] || []]
+        }
+        return [key, incoming[key] || []]
+      }))
+
       return {
         ...state,
         pipelineIssues: {
-          ...emptyPipeline,
-          ...action.data,
+          ...nextOpen,
           // Server never sends merged — preserve session-accumulated merged items
           merged: state.pipelineIssues.merged || [],
         },
         pipelinePollerLastRun: new Date().toISOString(),
       }
+    }
 
     case 'WS_PIPELINE_UPDATE': {
       const { issueNumber, fromStage, toStage, status: pipeStatus } = action.data
