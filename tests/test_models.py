@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 # conftest.py already inserts the hydraflow package directory into sys.path
@@ -1473,9 +1475,12 @@ class TestStateDataManifestFields:
         assert restored.manifest_issue_number == 99
         assert restored.manifest_snapshot_hash == "sha256hash"
 
-    def test_no_duplicate_field_names_in_state_data(self) -> None:
-        import inspect
+    def test_manifest_issue_number_none_survives_round_trip(self) -> None:
+        start = StateData(manifest_issue_number=None)
+        restored = StateData.model_validate(start.model_dump())
+        assert restored.manifest_issue_number is None
 
+    def test_no_duplicate_field_names_in_state_data(self) -> None:
         source = inspect.getsource(StateData)
         field_lines = [
             line.split(":")[0].strip()
