@@ -259,7 +259,7 @@ describe('StreamCard auto-collapse on status change', () => {
       expect(screen.queryByText('Intent:')).toBeNull()
     })
 
-    fireEvent.click(screen.getByText('Fix the frobnicator'))
+    fireEvent.click(screen.getByText('Keep UI clean'))
     expect(screen.getByText('Intent:')).toBeInTheDocument()
   })
 })

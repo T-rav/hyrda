@@ -63,9 +63,9 @@ function addEvent(state, action) {
 }
 
 function mergeStageIssues(existingIssues, incomingIssues) {
-  // Server snapshot is authoritative for stage membership: items absent from
-  // incoming are removed (prevents ghost cards). Local state is preserved for
-  // items still present so WS-derived status updates survive polls.
+  // Server snapshot is authoritative: items absent from incoming are removed
+  // (prevents ghost cards) and incoming fields (including status) override
+  // local state for items still present.
   const existingById = new Map(
     (existingIssues || [])
       .filter(item => item?.issue_number != null)

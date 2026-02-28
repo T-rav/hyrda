@@ -133,7 +133,7 @@ describe('HydraFlowContext reducer', () => {
 })
 
 describe('PIPELINE_SNAPSHOT reducer', () => {
-  it('additively upserts provided stages with server data', () => {
+  it('reconciles stage membership with server snapshot data', () => {
     const state = {
       ...initialState,
       pipelineIssues: {
@@ -224,9 +224,9 @@ describe('PIPELINE_SNAPSHOT reducer', () => {
     expect(next.pipelineIssues.review[0].issue_number).toBe(100)
   })
 
-  it('preserves local status updates for issues that remain in their stage', () => {
-    // WS-derived status update (e.g., active) must not be clobbered by a
-    // subsequent poll snapshot that sends the issue with stale status.
+  it('snapshot status overrides local WS status for issues that remain in their stage', () => {
+    // Snapshot is authoritative: a subsequent poll snapshot's status value
+    // overrides any locally-applied WS-derived status update.
     const state = {
       ...initialState,
       pipelineIssues: {
