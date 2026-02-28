@@ -179,7 +179,9 @@ describe('PIPELINE_SNAPSHOT reducer', () => {
     expect(next.pipelineIssues.hitl).toEqual([])
   })
 
-  it('does not clear existing queues on empty snapshots', () => {
+  it('removes issues absent from the server snapshot (ghost card fix)', () => {
+    // When the server sends an empty array for a stage, issues that were locally
+    // tracked in that stage must be removed — they have moved elsewhere.
     const state = {
       ...initialState,
       pipelineIssues: {
@@ -192,8 +194,54 @@ describe('PIPELINE_SNAPSHOT reducer', () => {
       type: 'PIPELINE_SNAPSHOT',
       data: { triage: [], plan: [], implement: [], review: [], hitl: [] },
     })
-    expect(next.pipelineIssues.triage).toHaveLength(1)
-    expect(next.pipelineIssues.implement).toHaveLength(1)
+    expect(next.pipelineIssues.triage).toHaveLength(0)
+    expect(next.pipelineIssues.implement).toHaveLength(0)
+  })
+
+  it('removes issue from old stage when snapshot shows it has moved (cross-stage ghost card)', () => {
+    // Regression for #1515: issue #100 was in implement, backend transitioned
+    // it to review. Next snapshot delivers { implement: [], review: [#100] }.
+    // The issue must appear ONLY in review, not in both stages.
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        implement: [{ issue_number: 100, title: 'Fix bug', url: '', status: 'active' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'PIPELINE_SNAPSHOT',
+      data: {
+        triage: [],
+        plan: [],
+        implement: [],
+        review: [{ issue_number: 100, title: 'Fix bug', url: '', status: 'queued' }],
+        hitl: [],
+      },
+    })
+    expect(next.pipelineIssues.implement).toHaveLength(0)
+    expect(next.pipelineIssues.review).toHaveLength(1)
+    expect(next.pipelineIssues.review[0].issue_number).toBe(100)
+  })
+
+  it('preserves local status updates for issues that remain in their stage', () => {
+    // WS-derived status update (e.g., active) must not be clobbered by a
+    // subsequent poll snapshot that sends the issue with stale status.
+    const state = {
+      ...initialState,
+      pipelineIssues: {
+        ...emptyPipeline,
+        implement: [{ issue_number: 55, title: 'Impl', url: '', status: 'active' }],
+      },
+    }
+    const next = reducer(state, {
+      type: 'PIPELINE_SNAPSHOT',
+      data: {
+        implement: [{ issue_number: 55, title: 'Impl', url: '', status: 'queued' }],
+      },
+    })
+    // Incoming status wins (snapshot is newer / more authoritative than local WS update)
+    expect(next.pipelineIssues.implement[0].status).toBe('queued')
   })
 })
 
