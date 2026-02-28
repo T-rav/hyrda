@@ -303,7 +303,7 @@ class TestGetDetail:
         c10 = next(c for c in detail.children if c.issue_number == 10)
         assert c10.title == "Child 10"
         assert c10.is_completed is True
-        assert "github.com" in c10.url
+        assert c10.url.startswith("https://github.com/")
 
         c20 = next(c for c in detail.children if c.issue_number == 20)
         assert c20.title == "Child 20"
