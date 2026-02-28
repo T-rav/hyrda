@@ -68,7 +68,7 @@ describe('ReportIssueModal', () => {
     render(<ReportIssueModal {...defaultProps} screenshotDataUrl={fakeScreenshot} />)
     fireEvent.click(screen.getByTestId('screenshot-thumbnail'))
     const canvas = screen.getByTestId('report-canvas')
-    expect(canvas.style.cursor).toContain('url(')
+    expect(canvas.style.cursor).toContain('data:image/svg+xml')
     expect(canvas.style.cursor).toContain('crosshair')
   })
 
