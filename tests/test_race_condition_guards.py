@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from events import EventBus, EventType
-from tests.conftest import EventFactory, IssueFactory
+from tests.conftest import EventFactory, IssueFactory, WorkerResultFactory
 from tests.helpers import ConfigFactory
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,6 @@ class TestImplementPhaseActiveIssuesLock:
     ) -> None:
         """Multiple concurrent workers never produce a partial snapshot."""
         from implement_phase import ImplementPhase
-        from models import WorkerResult
         from state import StateTracker
 
         config = ConfigFactory.create(
@@ -82,12 +81,13 @@ class TestImplementPhaseActiveIssuesLock:
 
         mock_agents = AsyncMock()
         mock_agents.run = AsyncMock(
-            side_effect=lambda issue, wt, br, **_kw: WorkerResult(
+            side_effect=lambda issue, wt, br, **_kw: WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=br,
                 success=True,
                 commits=1,
                 worktree_path=str(wt),
+                use_defaults=True,
             )
         )
 

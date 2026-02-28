@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,8 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from tests.helpers import ConfigFactory  # noqa: E402
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from ci_scaffold import CIScaffoldResult
     from config import HydraFlowConfig
     from events import HydraFlowEvent
@@ -121,20 +119,70 @@ class WorkerResultFactory:
         *,
         issue_number: int = 42,
         branch: str = "agent/issue-42",
-        success: bool = True,
-        transcript: str = "Implemented the feature.",
-        commits: int = 1,
-        worktree_path: str = "/tmp/worktrees/issue-42",
+        success: bool | None = None,
+        transcript: str | None = None,
+        commits: int | None = None,
+        worktree_path: str | None = None,
+        error: str | None = None,
+        duration_seconds: float | None = None,
+        pre_quality_review_attempts: int | None = None,
+        quality_fix_attempts: int | None = None,
+        pr_info: Any | None = None,
+        use_defaults: bool = False,
     ):
         from models import WorkerResult
+
+        if use_defaults:
+            kwargs: dict[str, Any] = {
+                "issue_number": issue_number,
+                "branch": branch,
+            }
+            if worktree_path is not None:
+                kwargs["worktree_path"] = worktree_path
+            if success is not None:
+                kwargs["success"] = success
+            if error is not None:
+                kwargs["error"] = error
+            if transcript is not None:
+                kwargs["transcript"] = transcript
+            if commits is not None:
+                kwargs["commits"] = commits
+            if duration_seconds is not None:
+                kwargs["duration_seconds"] = duration_seconds
+            if pre_quality_review_attempts is not None:
+                kwargs["pre_quality_review_attempts"] = pre_quality_review_attempts
+            if quality_fix_attempts is not None:
+                kwargs["quality_fix_attempts"] = quality_fix_attempts
+            if pr_info is not None:
+                kwargs["pr_info"] = pr_info
+            return WorkerResult(**kwargs)
 
         return WorkerResult(
             issue_number=issue_number,
             branch=branch,
-            success=success,
-            transcript=transcript,
-            commits=commits,
-            worktree_path=worktree_path,
+            worktree_path=(
+                worktree_path
+                if worktree_path is not None
+                else "/tmp/worktrees/issue-42"
+            ),
+            success=True if success is None else success,
+            error=error,
+            transcript=(
+                transcript if transcript is not None else "Implemented the feature."
+            ),
+            commits=commits if commits is not None else 1,
+            duration_seconds=(
+                duration_seconds if duration_seconds is not None else 0.0
+            ),
+            pre_quality_review_attempts=(
+                pre_quality_review_attempts
+                if pre_quality_review_attempts is not None
+                else 0
+            ),
+            quality_fix_attempts=(
+                quality_fix_attempts if quality_fix_attempts is not None else 0
+            ),
+            pr_info=pr_info,
         )
 
 

@@ -28,7 +28,7 @@ from models import (
 )
 from orchestrator import HydraFlowOrchestrator
 from subprocess_util import AuthenticationError
-from tests.conftest import IssueFactory, PRInfoFactory
+from tests.conftest import IssueFactory, PRInfoFactory, WorkerResultFactory
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,13 +57,14 @@ def make_worker_result(
     worktree_path: str = "/tmp/worktrees/issue-42",
     transcript: str = "Implemented the feature.",
 ) -> WorkerResult:
-    return WorkerResult(
+    return WorkerResultFactory.create(
         issue_number=issue_number,
         branch=branch,
         success=success,
         transcript=transcript,
         commits=1,
         worktree_path=worktree_path,
+        use_defaults=True,
     )
 
 

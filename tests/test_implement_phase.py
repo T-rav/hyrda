@@ -510,12 +510,13 @@ class TestImplementLifecycleMetrics:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
                 worktree_path=str(wt_path),
                 duration_seconds=60.5,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(
@@ -538,12 +539,13 @@ class TestImplementLifecycleMetrics:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
                 worktree_path=str(wt_path),
                 duration_seconds=0.0,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(
@@ -566,12 +568,13 @@ class TestImplementLifecycleMetrics:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
                 worktree_path=str(wt_path),
                 quality_fix_attempts=2,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(config, [issue], agent_run=agent_with_qf)
@@ -607,13 +610,14 @@ class TestImplementLifecycleMetrics:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
                 worktree_path=str(wt_path),
                 duration_seconds=30.0,
                 quality_fix_attempts=1,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(config, issues, agent_run=agent_with_metrics)
@@ -828,7 +832,7 @@ class TestWorkerResultMetaPersistence:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
@@ -836,6 +840,7 @@ class TestWorkerResultMetaPersistence:
                 quality_fix_attempts=2,
                 duration_seconds=150.5,
                 error=None,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(
@@ -863,7 +868,7 @@ class TestWorkerResultMetaPersistence:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=False,
@@ -871,6 +876,7 @@ class TestWorkerResultMetaPersistence:
                 quality_fix_attempts=0,
                 duration_seconds=30.0,
                 error="make quality failed",
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(config, [issue], agent_run=failing_agent)
@@ -903,13 +909,14 @@ class TestAlreadySatisfiedZeroCommit:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=False,
                 error="No commits found on branch",
                 commits=0,
                 worktree_path=str(wt_path),
+                use_defaults=True,
             )
 
         phase, _, mock_prs = make_implement_phase(
@@ -944,13 +951,14 @@ class TestAlreadySatisfiedZeroCommit:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=False,
                 error="No commits found on branch",
                 commits=0,
                 worktree_path=str(wt_path),
+                use_defaults=True,
             )
 
         phase, _, mock_prs = make_implement_phase(
@@ -979,13 +987,14 @@ class TestAlreadySatisfiedZeroCommit:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=False,
                 error="No commits found on branch",
                 commits=0,
                 worktree_path=str(wt_path),
+                use_defaults=True,
             )
 
         phase, _, mock_prs = make_implement_phase(
@@ -1013,13 +1022,14 @@ class TestAlreadySatisfiedZeroCommit:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=False,
                 error="make quality failed",
                 commits=2,
                 worktree_path=str(wt_path),
+                use_defaults=True,
             )
 
         phase, _, mock_prs = make_implement_phase(
@@ -1166,7 +1176,7 @@ class TestCommitsPersistedInMeta:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
@@ -1174,6 +1184,7 @@ class TestCommitsPersistedInMeta:
                 commits=3,
                 quality_fix_attempts=1,
                 duration_seconds=90.0,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(
@@ -1410,13 +1421,14 @@ class TestRunImplementation:
             worker_id: int = 0,
             review_feedback: str = "",
         ) -> WorkerResult:
-            return WorkerResult(
+            return WorkerResultFactory.create(
                 issue_number=issue.number,
                 branch=branch,
                 success=True,
                 worktree_path=str(wt_path),
                 duration_seconds=60.0,
                 quality_fix_attempts=2,
+                use_defaults=True,
             )
 
         phase, _, _ = make_implement_phase(
@@ -1437,13 +1449,14 @@ class TestHandleImplementationResult:
     async def test_zero_commit_closes_issue(self, config: HydraFlowConfig) -> None:
         """Zero-commit failure should close issue as already satisfied."""
         issue = IssueFactory.create()
-        result = WorkerResult(
+        result = WorkerResultFactory.create(
             issue_number=42,
             branch="agent/issue-42",
             success=False,
             error="No commits found on branch",
             commits=0,
             worktree_path=str(config.worktree_base / "issue-42"),
+            use_defaults=True,
         )
 
         phase, _, mock_prs = make_implement_phase(config, [issue])
@@ -1519,11 +1532,12 @@ class TestHandleImplementationResult:
     ) -> None:
         """When result.worktree_path is empty, push and PR creation should be skipped."""
         issue = IssueFactory.create()
-        result = WorkerResult(
+        result = WorkerResultFactory.create(
             issue_number=42,
             branch="agent/issue-42",
             success=True,
             worktree_path="",
+            use_defaults=True,
         )
 
         phase, _, mock_prs = make_implement_phase(config, [issue])
