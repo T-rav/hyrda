@@ -44,7 +44,9 @@ export const initialState = {
   sessions: [],
   currentSessionId: null,
   selectedSessionId: null,
+  selectedRepoSlug: null,
   supervisedRepos: [],
+  runtimes: [],
 }
 
 function isDuplicate(state, action) {
@@ -633,6 +635,15 @@ export function reducer(state, action) {
     case 'SELECT_SESSION':
       return { ...state, selectedSessionId: action.data.sessionId }
 
+    case 'SELECT_REPO':
+      return { ...state, selectedRepoSlug: action.data.slug, selectedSessionId: null }
+
+    case 'SET_RUNTIMES':
+      return {
+        ...state,
+        runtimes: Array.isArray(action.data?.runtimes) ? action.data.runtimes : [],
+      }
+
     case 'DELETE_SESSION':
       return {
         ...state,
@@ -704,6 +715,10 @@ export function HydraFlowProvider({ children }) {
     dispatch({ type: 'SELECT_SESSION', data: { sessionId } })
   }, [])
 
+  const selectRepo = useCallback((slug) => {
+    dispatch({ type: 'SELECT_REPO', data: { slug } })
+  }, [])
+
   const deleteSession = useCallback(async (sessionId) => {
     dispatch({ type: 'DELETE_SESSION', data: { sessionId } })
     try {
@@ -731,6 +746,33 @@ export function HydraFlowProvider({ children }) {
       dispatch({ type: 'SET_REPOS', data: { repos: [] } })
     }
   }, [])
+
+  const fetchRuntimes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/runtimes')
+      if (!res.ok) return
+      const data = await res.json()
+      dispatch({ type: 'SET_RUNTIMES', data: { runtimes: data.runtimes || [] } })
+    } catch { /* ignore */ }
+  }, [])
+
+  const startRuntime = useCallback(async (slug) => {
+    try {
+      await fetch(`/api/runtimes/${encodeURIComponent(slug)}/start`, { method: 'POST' })
+      await fetchRuntimes()
+    } catch (err) {
+      console.warn('Failed to start runtime', slug, err)
+    }
+  }, [fetchRuntimes])
+
+  const stopRuntime = useCallback(async (slug) => {
+    try {
+      await fetch(`/api/runtimes/${encodeURIComponent(slug)}/stop`, { method: 'POST' })
+      await fetchRuntimes()
+    } catch (err) {
+      console.warn('Failed to stop runtime', slug, err)
+    }
+  }, [fetchRuntimes])
 
   const ensureRepoRunning = useCallback(async (repoSlug) => {
     const short = (repoSlug || '').split('/').pop()
@@ -930,6 +972,7 @@ export function HydraFlowProvider({ children }) {
       fetchPipeline()
       fetchSessions()
       fetchRepos()
+      fetchRuntimes()
       if (lastEventTsRef.current) {
         fetch(`/api/events?since=${encodeURIComponent(lastEventTsRef.current)}`)
           .then(r => r.json())
@@ -985,7 +1028,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions, fetchRepos])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchSessions, fetchRepos, fetchRuntimes])
 
   useEffect(() => {
     const poll = () => {
@@ -1025,6 +1068,12 @@ export function HydraFlowProvider({ children }) {
     return () => clearInterval(interval)
   }, [fetchRepos])
 
+  useEffect(() => {
+    fetchRuntimes()
+    const interval = setInterval(fetchRuntimes, 15000)
+    return () => clearInterval(interval)
+  }, [fetchRuntimes])
+
   const stageStatus = useMemo(
     () => deriveStageStatus(
       state.pipelineIssues,
@@ -1042,6 +1091,14 @@ export function HydraFlowProvider({ children }) {
     [state.pipelineIssues, state.workers, state.backgroundWorkers, state.sessionTriaged, state.sessionPlanned, state.sessionImplemented, state.sessionReviewed, state.mergedCount, state.config],
   )
 
+  const repoFilteredSessions = useMemo(() => {
+    if (!state.selectedRepoSlug) return state.sessions
+    return state.sessions.filter(s => {
+      const slug = (s.repo || '').replace('/', '-')
+      return slug === state.selectedRepoSlug
+    })
+  }, [state.sessions, state.selectedRepoSlug])
+
   const selectedSession = useMemo(() => {
     if (!state.selectedSessionId) return null
     return state.sessions.find(s => s.id === state.selectedSessionId) ?? null
@@ -1057,6 +1114,7 @@ export function HydraFlowProvider({ children }) {
   const value = {
     ...state,
     events: filteredEvents,
+    sessions: repoFilteredSessions,
     selectedSession,
     stageStatus,
     resetSession,
@@ -1068,9 +1126,12 @@ export function HydraFlowProvider({ children }) {
     updateBgWorkerInterval,
     refreshHitl: fetchHitlItems,
     selectSession,
+    selectRepo,
     deleteSession,
     addRepoShortcut,
     removeRepoShortcut,
+    startRuntime,
+    stopRuntime,
   }
 
   return (
