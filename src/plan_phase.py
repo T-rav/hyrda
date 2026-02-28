@@ -224,8 +224,28 @@ class PlanPhase:
                     result = await self._planners.plan(issue, worker_id=idx)
 
                     if result.already_satisfied:
-                        await self._handle_already_satisfied(issue, result)
-                        return result
+                        # Guard: never auto-close epic children as "already
+                        # satisfied" — they were explicitly created as part
+                        # of a planned epic and should always get a plan.
+                        epic_child_labels = {
+                            lbl.lower() for lbl in self._config.epic_child_label
+                        }
+                        issue_labels = {t.lower() for t in issue.tags}
+                        if epic_child_labels & issue_labels:
+                            logger.warning(
+                                "Issue #%d is an epic child — ignoring "
+                                "'already satisfied' claim from planner",
+                                issue.id,
+                            )
+                            result.already_satisfied = False
+                            result.success = False
+                            result.error = (
+                                "Planner claimed already satisfied but issue "
+                                "is an epic child — forcing plan retry"
+                            )
+                        else:
+                            await self._handle_already_satisfied(issue, result)
+                            return result
 
                     if result.success and result.plan:
                         await self._handle_plan_success(issue, result)

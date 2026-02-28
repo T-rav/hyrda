@@ -631,6 +631,30 @@ class TestPlanPhaseAlreadySatisfied:
         ready_calls = [c for c in add_calls if config.ready_label[0] in c[1]]
         assert len(ready_calls) == 0
 
+    @pytest.mark.asyncio
+    async def test_epic_child_not_closed_as_already_satisfied(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """Epic children should never be auto-closed as already satisfied."""
+        phase, _state, planners, prs, store, _stop = _make_phase(config)
+        issue = TaskFactory.create(id=42, tags=["hydraflow-epic-child"])
+        plan_result = PlanResult(
+            issue_number=42,
+            success=True,
+            already_satisfied=True,
+            summary="The feature is already implemented",
+        )
+
+        planners.plan = AsyncMock(return_value=plan_result)
+        store.get_plannable = lambda _max_count: [issue]  # type: ignore[method-assign]
+
+        await phase.plan_issues()
+
+        # Should NOT close the issue
+        prs.close_task.assert_not_awaited()
+        # Should NOT swap to dup label
+        prs.swap_pipeline_labels.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # Plan phase — transcript summary comments
