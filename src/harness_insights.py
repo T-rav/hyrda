@@ -320,6 +320,14 @@ def _generate_suggestion(category: str, subcategory: str, count: int) -> str:
             "Review agent error patterns and consider adding guardrails "
             "or retry logic for the most common failure modes."
         ),
+        FailureCategory.VISUAL_FAIL: (
+            "Add visual regression baseline management to the pipeline. "
+            "Review screenshot diff thresholds and update baselines after intentional UI changes."
+        ),
+        FailureCategory.VISUAL_WARN: (
+            "Minor visual differences detected repeatedly — consider tightening diff thresholds "
+            "or updating baselines to prevent warning escalation."
+        ),
     }
     base = suggestions.get(category, f"Review recurring {category} failures.")
 
