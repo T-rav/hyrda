@@ -1477,37 +1477,61 @@ def _apply_env_overrides(config: HydraFlowConfig) -> None:
                             )
                     object.__setattr__(config, field, new_val)
 
-    # Ratio float overrides ([0, 1] bounds) — same logic as above
+    # Ratio float overrides ([0, 1] bounds) — parse failures are silently ignored
+    # but out-of-bounds values emit a warning so operators know their config was rejected.
     for field, env_key, default in _ENV_FLOAT_RATIO_OVERRIDES:
         if getattr(config, field) == default:
             env_val = _get_env(env_key)
             if env_val is not None:
-                with contextlib.suppress(ValueError):
+                try:
                     new_val = float(env_val)
-                    for constraint in HydraFlowConfig.model_fields[field].metadata:
-                        ge = getattr(constraint, "ge", None)
-                        le = getattr(constraint, "le", None)
-                        if ge is not None and new_val < ge:
-                            raise ValueError(
-                                f"{env_key}={new_val} is below minimum {ge}"
-                            )
-                        if le is not None and new_val > le:
-                            raise ValueError(
-                                f"{env_key}={new_val} is above maximum {le}"
-                            )
+                except ValueError:
+                    continue
+                in_bounds = True
+                for constraint in HydraFlowConfig.model_fields[field].metadata:
+                    ge = getattr(constraint, "ge", None)
+                    le = getattr(constraint, "le", None)
+                    if ge is not None and new_val < ge:
+                        logger.warning(
+                            "%s=%s is below minimum %s; ignoring env override",
+                            env_key,
+                            new_val,
+                            ge,
+                        )
+                        in_bounds = False
+                        break
+                    if le is not None and new_val > le:
+                        logger.warning(
+                            "%s=%s is above maximum %s; ignoring env override",
+                            env_key,
+                            new_val,
+                            le,
+                        )
+                        in_bounds = False
+                        break
+                if in_bounds:
                     object.__setattr__(config, field, new_val)
 
     # Cross-field validation: visual_fail_threshold must remain > visual_warn_threshold
     # after env overrides (the Pydantic field_validator only fires at model construction).
+    # Strategy: revert only visual_fail_threshold first; if that still violates the
+    # invariant (e.g. warn was also overridden to a value >= the fail default), revert
+    # visual_warn_threshold too so we always land on a valid pair.
     if config.visual_fail_threshold <= config.visual_warn_threshold:
         logger.warning(
             "visual_fail_threshold (%.4f) is not greater than visual_warn_threshold (%.4f) "
-            "after env overrides; reverting both thresholds to defaults (warn=0.05, fail=0.15)",
+            "after env overrides; reverting visual_fail_threshold to default (0.15)",
             config.visual_fail_threshold,
             config.visual_warn_threshold,
         )
-        object.__setattr__(config, "visual_warn_threshold", 0.05)
         object.__setattr__(config, "visual_fail_threshold", 0.15)
+        if config.visual_fail_threshold <= config.visual_warn_threshold:
+            logger.warning(
+                "visual_warn_threshold (%.4f) still >= fail default (0.15); "
+                "reverting visual_warn_threshold to default (0.05) as well",
+                config.visual_warn_threshold,
+            )
+            object.__setattr__(config, "visual_warn_threshold", 0.05)
 
     # Data-driven env var overrides (bool fields)
     for field, env_key, default in _ENV_BOOL_OVERRIDES:

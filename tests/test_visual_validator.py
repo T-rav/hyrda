@@ -463,6 +463,42 @@ class TestVisualConfigFields:
         # Assert — fail_threshold must be reverted so the invariant holds
         assert config.visual_fail_threshold > config.visual_warn_threshold
 
+    def test_env_override_only_fail_bad_preserves_warn(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should preserve a valid warn override when only fail violates the invariant.
+
+        When warn=0.02 is valid and fail=0.01 only causes a violation because
+        fail < warn, the revert should only reset fail_threshold to 0.15 and
+        leave the valid warn=0.02 intact.
+        """
+        # Arrange — warn=0.02 (valid), fail=0.01 (< warn → violates invariant)
+        monkeypatch.setenv("HYDRAFLOW_VISUAL_WARN_THRESHOLD", "0.02")
+        monkeypatch.setenv("HYDRAFLOW_VISUAL_FAIL_THRESHOLD", "0.01")
+
+        # Act
+        config = ConfigFactory.create()
+
+        # Assert — warn is preserved; fail is reverted to default (0.15 > 0.02)
+        assert config.visual_warn_threshold == pytest.approx(0.02)
+        assert config.visual_fail_threshold == pytest.approx(0.15)
+        assert config.visual_fail_threshold > config.visual_warn_threshold
+
+    def test_env_override_out_of_bounds_warn_is_ignored(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should ignore HYDRAFLOW_VISUAL_WARN_THRESHOLD when value exceeds [0, 1]."""
+        # Arrange
+        monkeypatch.setenv("HYDRAFLOW_VISUAL_WARN_THRESHOLD", "1.5")
+
+        # Act
+        config = ConfigFactory.create()
+
+        # Assert — invalid value is rejected; field stays at default
+        assert config.visual_warn_threshold == pytest.approx(0.05)
+
 
 # ---------------------------------------------------------------------------
 # Integration tests: VisualValidator
