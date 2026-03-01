@@ -271,17 +271,14 @@ class TestArtifactConfigFields:
         config = ConfigFactory.create()
         assert config.artifact_retention_days == 30
         assert config.artifact_max_size_mb == 500
-        assert config.artifact_cleanup_interval == 3600
         assert config.runs_gc_interval == 3600
 
     def test_custom_values(self) -> None:
         config = ConfigFactory.create(
             artifact_retention_days=7,
             artifact_max_size_mb=100,
-            artifact_cleanup_interval=600,
             runs_gc_interval=1800,
         )
         assert config.artifact_retention_days == 7
         assert config.artifact_max_size_mb == 100
-        assert config.artifact_cleanup_interval == 600
         assert config.runs_gc_interval == 1800

@@ -46,7 +46,6 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
     ("collaborator_cache_ttl", "HYDRAFLOW_COLLABORATOR_CACHE_TTL", 600),
     ("artifact_retention_days", "HYDRAFLOW_ARTIFACT_RETENTION_DAYS", 30),
     ("artifact_max_size_mb", "HYDRAFLOW_ARTIFACT_MAX_SIZE_MB", 500),
-    ("artifact_cleanup_interval", "HYDRAFLOW_ARTIFACT_CLEANUP_INTERVAL", 3600),
     ("runs_gc_interval", "HYDRAFLOW_RUNS_GC_INTERVAL", 3600),
     ("pr_unstick_batch_size", "HYDRAFLOW_PR_UNSTICK_BATCH_SIZE", 10),
     ("max_subskill_attempts", "HYDRAFLOW_MAX_SUBSKILL_ATTEMPTS", 0),
@@ -402,12 +401,6 @@ class HydraFlowConfig(BaseModel):
         ge=10,
         le=10_000,
         description="Max total artifact storage in MB before oldest runs are pruned (default 500)",
-    )
-    artifact_cleanup_interval: int = Field(
-        default=3600,
-        ge=300,
-        le=86400,
-        description="Artifact cleanup check interval in seconds (default 1 hour)",
     )
     runs_gc_interval: int = Field(
         default=3600,

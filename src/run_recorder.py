@@ -162,10 +162,15 @@ class RunRecorder:
     ) -> str | None:
         """Read a specific artifact file from a recorded run."""
         artifact_path = self._runs_dir / str(issue_number) / timestamp / filename
-        if not artifact_path.is_file():
+        try:
+            resolved = artifact_path.resolve()
+            runs_root = self._runs_dir.resolve()
+        except OSError:
+            return None
+        if not resolved.is_relative_to(runs_root) or not resolved.is_file():
             return None
         try:
-            return artifact_path.read_text()
+            return resolved.read_text()
         except OSError:
             return None
 
@@ -258,11 +263,16 @@ class RunRecorder:
         runs.sort(key=lambda r: r[0])
         max_bytes = max_size_mb * 1024 * 1024
         removed = 0
+        current_bytes = self._compute_total_bytes()
 
-        while runs and self._compute_total_bytes() > max_bytes:
+        while runs and current_bytes > max_bytes:
             _, oldest_run = runs.pop(0)
             parent = oldest_run.parent
+            run_bytes = sum(
+                f.stat().st_size for f in oldest_run.rglob("*") if f.is_file()
+            )
             shutil.rmtree(oldest_run, ignore_errors=True)
+            current_bytes -= run_bytes
             removed += 1
             logger.info("Purged oversized run %s", oldest_run)
             # Remove empty issue dirs
