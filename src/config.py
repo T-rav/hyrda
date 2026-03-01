@@ -64,6 +64,12 @@ _ENV_INT_OVERRIDES: list[tuple[str, str, int]] = [
         "HYDRAFLOW_MAX_TROUBLESHOOTING_PROMPT_CHARS",
         3000,
     ),
+    ("visual_max_screens", "HYDRAFLOW_VISUAL_MAX_SCREENS", 20),
+    (
+        "visual_per_screen_budget_bytes",
+        "HYDRAFLOW_VISUAL_PER_SCREEN_BUDGET_BYTES",
+        5_000_000,
+    ),
 ]
 
 _ENV_STR_OVERRIDES: list[tuple[str, str, str]] = [
@@ -112,6 +118,7 @@ _ENV_BOOL_OVERRIDES: list[tuple[str, str, bool]] = [
     ("auto_process_bug_reports", "HYDRAFLOW_AUTO_PROCESS_BUG_REPORTS", False),
     ("collaborator_check_enabled", "HYDRAFLOW_COLLABORATOR_CHECK_ENABLED", True),
     ("code_scanning_enabled", "HYDRAFLOW_CODE_SCANNING_ENABLED", False),
+    ("visual_validation_enabled", "HYDRAFLOW_VISUAL_VALIDATION_ENABLED", False),
 ]
 
 # Literal-typed env-var overrides.
@@ -628,6 +635,34 @@ class HydraFlowConfig(BaseModel):
         description="Max characters for code scanning alert injection",
     )
 
+    # Visual validation
+    visual_validation_enabled: bool = Field(
+        default=False,
+        description="Enable visual regression diff pipeline",
+    )
+    visual_diff_threshold: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=1.0,
+        description="Per-screen pixel diff ratio that triggers FAIL",
+    )
+    visual_warn_threshold: float = Field(
+        default=0.005,
+        ge=0.0,
+        le=1.0,
+        description="Per-screen pixel diff ratio that triggers WARN",
+    )
+    visual_max_screens: int = Field(
+        default=20,
+        ge=1,
+        description="Maximum number of screens to compare",
+    )
+    visual_per_screen_budget_bytes: int = Field(
+        default=5_000_000,
+        ge=1,
+        description="Maximum artifact size in bytes per screen",
+    )
+
     # Manifest detection
     manifest_refresh_interval: int = Field(
         default=3600,
@@ -992,6 +1027,11 @@ class HydraFlowConfig(BaseModel):
     def memory_dir(self) -> Path:
         """Return the directory for memory / review-insight files."""
         return self.data_root / "memory"
+
+    @property
+    def visual_reports_dir(self) -> Path:
+        """Return the directory for visual validation reports."""
+        return self.data_root / "visual-reports"
 
     def data_path(self, *parts: str | os.PathLike[str]) -> Path:
         """Return an absolute path inside the HydraFlow data_root."""
@@ -1411,6 +1451,19 @@ def _apply_env_overrides(config: HydraFlowConfig) -> None:
                         env_val,
                         allowed,
                     )
+
+    # Visual validation float thresholds (bounded 0.0–1.0, special-case).
+    for field, env_key, default in (
+        ("visual_diff_threshold", "HYDRAFLOW_VISUAL_DIFF_THRESHOLD", 0.01),
+        ("visual_warn_threshold", "HYDRAFLOW_VISUAL_WARN_THRESHOLD", 0.005),
+    ):
+        if getattr(config, field) == default:
+            env_val = _get_env(env_key)
+            if env_val is not None:
+                with contextlib.suppress(ValueError):
+                    new_val = float(env_val)
+                    if 0.0 <= new_val <= 1.0:
+                        object.__setattr__(config, field, new_val)
 
     # Backward-compat bridge: promote legacy HYDRAFLOW_DOCKER_ENABLED /
     # HYDRA_DOCKER_ENABLED to execution_mode="docker" when the canonical
