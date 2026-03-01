@@ -226,6 +226,7 @@ const styles = {
   },
   tabContent: {
     flex: 1,
+    minWidth: 0,
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',

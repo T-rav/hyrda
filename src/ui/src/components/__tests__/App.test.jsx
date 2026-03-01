@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, within } from '@testing-library/react'
 import { tabActiveStyle, tabInactiveStyle, hitlBadgeStyle } from '../../App'
 
 const { mockState } = vi.hoisted(() => {
@@ -246,7 +246,7 @@ describe('EventLog panel', () => {
     render(<App />)
     const tabs = ['Work Stream', 'Outcomes', 'HITL', 'Work Log', 'System']
     for (const tabLabel of tabs) {
-      fireEvent.click(screen.getByText(tabLabel))
+      fireEvent.click(screen.getByRole('tab', { name: tabLabel }))
       expect(screen.getByTestId('event-log-panel')).toBeVisible()
     }
   })
@@ -272,8 +272,9 @@ describe('EventLog panel', () => {
     ]
     const { default: App } = await import('../../App')
     render(<App />)
-    expect(screen.getByText('test error')).toBeInTheDocument()
-    expect(screen.getByText('[system]')).toBeInTheDocument()
+    const panel = screen.getByTestId('event-log-panel')
+    expect(within(panel).getByText('test error')).toBeInTheDocument()
+    expect(within(panel).getByText('[system]')).toBeInTheDocument()
   })
 })
 
