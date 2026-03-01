@@ -489,6 +489,23 @@ describe('SessionSidebar add repo button', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(addRepoShortcut).not.toHaveBeenCalled()
   })
+
+  it('closes input when "+" is clicked again while input is visible (toggle off)', () => {
+    render(<SessionSidebar />)
+    fireEvent.click(screen.getByLabelText('Add repo'))
+    expect(screen.getByPlaceholderText('owner/repo')).toBeDefined()
+    fireEvent.click(screen.getByLabelText('Add repo'))
+    expect(screen.queryByPlaceholderText('owner/repo')).toBeNull()
+  })
+
+  it('closes panel on empty Enter (documents current dismiss behavior)', () => {
+    render(<SessionSidebar />)
+    fireEvent.click(screen.getByLabelText('Add repo'))
+    const input = screen.getByPlaceholderText('owner/repo')
+    // Press Enter with empty input — panel dismisses without submitting
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.queryByPlaceholderText('owner/repo')).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------
