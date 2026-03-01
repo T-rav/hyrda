@@ -4848,3 +4848,74 @@ class TestTwoPhasePathResolution:
         cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
         assert cfg.state_file == data_root / "acme-widgets" / "state.json"
         assert not cfg.state_file.exists()  # copy failed, file was not created
+
+    def test_legacy_event_log_migrated(self, tmp_path: Path) -> None:
+        """If legacy flat events.jsonl exists, it should be copied to scoped path."""
+        data_root = tmp_path / ".hydraflow"
+        data_root.mkdir()
+        legacy_events = data_root / "events.jsonl"
+        legacy_events.write_text('{"event":"deploy"}\n')
+
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
+        assert cfg.event_log_path.exists()
+        assert cfg.event_log_path.read_text() == '{"event":"deploy"}\n'
+        assert "acme-widgets" in str(cfg.event_log_path)
+
+    def test_event_log_migration_copy_failure_does_not_raise(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A shutil.copy2 failure migrating events.jsonl should log, not raise."""
+        import shutil
+
+        data_root = tmp_path / ".hydraflow"
+        data_root.mkdir()
+        (data_root / "events.jsonl").write_text('{"event":"deploy"}\n')
+
+        def fail_copy(src: object, dst: object, **kw: object) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(shutil, "copy2", fail_copy)
+
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
+        assert cfg.event_log_path == data_root / "acme-widgets" / "events.jsonl"
+        assert not cfg.event_log_path.exists()
+
+    def test_hydraflow_home_env_scopes_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HYDRAFLOW_HOME env var should set data_root and repo-scoped paths use it."""
+        custom_home = tmp_path / "custom-data"
+        custom_home.mkdir()
+        monkeypatch.setenv("HYDRAFLOW_HOME", str(custom_home))
+
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="org/project")
+        assert cfg.data_root == custom_home.resolve()
+        assert str(cfg.state_file).startswith(str(custom_home.resolve()))
+        assert "org-project" in str(cfg.state_file)
+
+    def test_sessions_migration_copy_failure_does_not_raise(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A shutil.copy2 failure migrating sessions.jsonl should log, not raise."""
+        import shutil
+
+        data_root = tmp_path / ".hydraflow"
+        data_root.mkdir()
+        (data_root / "sessions.jsonl").write_text('{"id":"s1"}\n')
+
+        original_copy2 = shutil.copy2
+        call_count = 0
+
+        def selective_fail(src: object, dst: object, **kw: object) -> None:
+            nonlocal call_count
+            call_count += 1
+            # Let state_file and event_log migrations succeed, fail on sessions
+            if "sessions.jsonl" in str(dst):
+                raise OSError("permission denied")
+            return original_copy2(src, dst, **kw)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(shutil, "copy2", selective_fail)
+
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
+        scoped_sessions = cfg.state_file.parent / "sessions.jsonl"
+        assert not scoped_sessions.exists()  # copy failed
