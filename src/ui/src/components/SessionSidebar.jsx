@@ -142,7 +142,7 @@ export function SessionSidebar() {
 
       <div
         onClick={() => { selectRepo(null); selectSession(null) }}
-        style={selectedRepoSlug === null && selectedSessionId === null ? styles.allButtonActive : styles.allButton}
+        style={selectedRepoSlug === null && selectedSessionId === null ? allButtonActive : styles.allButton}
       >
         <span>All Repos</span>
         <button
