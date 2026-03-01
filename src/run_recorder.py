@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import shutil
@@ -171,7 +172,7 @@ class RunRecorder:
             return None
         try:
             return resolved.read_text()
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             return None
 
     def list_issues(self) -> list[int]:
@@ -239,7 +240,8 @@ class RunRecorder:
                     logger.info("Purged expired run %s", run_dir)
             # Remove empty issue dirs
             if issue_dir.is_dir() and not any(issue_dir.iterdir()):
-                issue_dir.rmdir()
+                with contextlib.suppress(OSError):
+                    issue_dir.rmdir()
         return removed
 
     def purge_oversized(self, max_size_mb: int) -> int:
@@ -287,7 +289,8 @@ class RunRecorder:
             logger.info("Purged oversized run %s", oldest_run)
             # Remove empty issue dirs
             if parent.is_dir() and not any(parent.iterdir()):
-                parent.rmdir()
+                with contextlib.suppress(OSError):
+                    parent.rmdir()
 
         return removed
 

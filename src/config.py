@@ -1452,10 +1452,24 @@ def _apply_env_overrides(config: HydraFlowConfig) -> None:
                         ge = getattr(constraint, "ge", None)
                         le = getattr(constraint, "le", None)
                         if ge is not None and new_val < ge:
+                            logger.warning(
+                                "Ignoring %s=%s: value %d is below minimum %d",
+                                env_key,
+                                env_val,
+                                new_val,
+                                ge,
+                            )
                             raise ValueError(
                                 f"{env_key}={new_val} is below minimum {ge}"
                             )
                         if le is not None and new_val > le:
+                            logger.warning(
+                                "Ignoring %s=%s: value %d is above maximum %d",
+                                env_key,
+                                env_val,
+                                new_val,
+                                le,
+                            )
                             raise ValueError(
                                 f"{env_key}={new_val} is above maximum {le}"
                             )
@@ -1479,10 +1493,24 @@ def _apply_env_overrides(config: HydraFlowConfig) -> None:
                         ge = getattr(constraint, "ge", None)
                         le = getattr(constraint, "le", None)
                         if ge is not None and new_val < ge:
+                            logger.warning(
+                                "Ignoring %s=%s: value %g is below minimum %g",
+                                env_key,
+                                env_val,
+                                new_val,
+                                ge,
+                            )
                             raise ValueError(
                                 f"{env_key}={new_val} is below minimum {ge}"
                             )
                         if le is not None and new_val > le:
+                            logger.warning(
+                                "Ignoring %s=%s: value %g is above maximum %g",
+                                env_key,
+                                env_val,
+                                new_val,
+                                le,
+                            )
                             raise ValueError(
                                 f"{env_key}={new_val} is above maximum {le}"
                             )
