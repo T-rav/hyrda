@@ -179,7 +179,7 @@ class TestPurgeOversized:
     def test_removes_oldest_until_under_limit(self, tmp_path: Path) -> None:
         _config, recorder = _make_recorder(tmp_path)
         # Seed runs with large files (each ~1KB)
-        for ts in ("20260101T100000Z", "20260101T200000Z", "20260101T300000Z"):
+        for ts in ("20260101T100000Z", "20260101T200000Z", "20260102T100000Z"):
             run_dir = _seed_run(recorder, 42, ts)
             (run_dir / "big.bin").write_bytes(b"x" * 512)
 
@@ -197,7 +197,7 @@ class TestPurgeOversized:
     def test_removes_oldest_first(self, tmp_path: Path) -> None:
         _config, recorder = _make_recorder(tmp_path)
         # Create three runs with large files so each exceeds 1 byte
-        for ts in ("20260101T100000Z", "20260101T200000Z", "20260101T300000Z"):
+        for ts in ("20260101T100000Z", "20260101T200000Z", "20260102T100000Z"):
             run_dir = _seed_run(recorder, 42, ts)
             (run_dir / "data.bin").write_bytes(b"x" * 1024)
 
