@@ -11,7 +11,7 @@ from changelog import generate_changelog
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from issue_fetcher import IssueFetcher
-from models import EpicChildInfo, EpicDetail, EpicProgress, EpicState
+from models import EpicChildInfo, EpicDetail, EpicProgress, EpicState, Release
 from pr_manager import PRManager
 from state import StateTracker
 
@@ -31,6 +31,24 @@ def check_all_checkboxes(body: str) -> str:
     return re.sub(r"- \[ \] (#\d+)", r"- [x] \1", body)
 
 
+# Matches version strings requiring either a "v" prefix (v1, v1.2, v1.2.3)
+# or multi-part notation (1.2, 1.2.3) to avoid matching bare integers like
+# "Phase 3" or "Sprint 5".
+_VERSION_PATTERN = re.compile(r"v(\d+(?:\.\d+)*)|\b(\d+\.\d+(?:\.\d+)*)\b")
+
+
+def extract_version_from_title(title: str) -> str:
+    """Extract a semantic version string from an epic title.
+
+    Looks for patterns like "v1.2.0", "1.0", "v2" in the title.
+    Requires either a 'v' prefix or multi-part notation to avoid matching
+    bare integers (e.g. "Phase 3" would not extract "3").
+    Returns the matched version (without 'v' prefix) or empty string.
+    """
+    match = _VERSION_PATTERN.search(title)
+    return (match.group(1) or match.group(2)) if match else ""
+
+
 class EpicCompletionChecker:
     """Checks whether parent epics should be auto-closed after sub-issue completion."""
 
@@ -39,10 +57,12 @@ class EpicCompletionChecker:
         config: HydraFlowConfig,
         prs: PRManager,
         fetcher: IssueFetcher,
+        state: StateTracker | None = None,
     ) -> None:
         self._config = config
         self._prs = prs
         self._fetcher = fetcher
+        self._state = state
 
     async def check_and_close_epics(self, completed_issue_number: int) -> None:
         """Check all open epics and close any whose sub-issues are all completed."""
@@ -65,7 +85,9 @@ class EpicCompletionChecker:
                 continue
 
             try:
-                await self._try_close_epic(epic.number, epic.body, sub_issues)
+                await self._try_close_epic(
+                    epic.number, epic.title, epic.body, sub_issues
+                )
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Epic completion check failed for epic #%d",
@@ -74,11 +96,12 @@ class EpicCompletionChecker:
                 )
 
     async def _try_close_epic(
-        self, epic_number: int, epic_body: str, sub_issues: list[int]
+        self, epic_number: int, epic_title: str, epic_body: str, sub_issues: list[int]
     ) -> None:
         """Close the epic if all sub-issues are completed."""
         fixed_label = self._config.fixed_label[0] if self._config.fixed_label else ""
 
+        sub_issue_titles: list[str] = []
         for issue_num in sub_issues:
             issue = await self._fetcher.fetch_issue_by_number(issue_num)
             if issue is None:
@@ -90,6 +113,7 @@ class EpicCompletionChecker:
                 )
                 return
             if fixed_label and fixed_label in issue.labels:
+                sub_issue_titles.append(issue.title)
                 continue
             # Not completed
             return
@@ -97,42 +121,42 @@ class EpicCompletionChecker:
         # All sub-issues are completed — close the epic
         logger.info("All sub-issues completed for epic #%d — closing", epic_number)
 
-        # Generate changelog from sub-issue PRs
-        changelog_body = await self._generate_epic_changelog(epic_number, sub_issues)
-
         updated_body = check_all_checkboxes(epic_body)
         await self._prs.update_issue_body(epic_number, updated_body)
         await self._prs.add_labels(epic_number, [fixed_label])
 
+        # Create release if feature is enabled
+        release_url = ""
+        generated_changelog = ""
+        if self._config.release_on_epic_close:
+            release_url, generated_changelog = await self._create_release_for_epic(
+                epic_number, epic_title, sub_issues
+            )
+
         close_comment = "All sub-issues completed — closing epic automatically."
-        if changelog_body:
-            close_comment += f"\n\n---\n\n{changelog_body}"
+        if release_url:
+            close_comment += f"\n\n**Release:** {release_url}"
         await self._prs.post_comment(epic_number, close_comment)
         await self._prs.close_issue(epic_number)
 
-        # Create GitHub release with changelog
-        if changelog_body:
-            tag = f"epic-{epic_number}"
-            await self._prs.create_release(
-                tag=tag,
-                title=f"Epic #{epic_number} completed",
-                body=changelog_body,
-            )
-
         # Optionally write to CHANGELOG.md file
-        if changelog_body and self._config.changelog_file:
-            self._write_changelog_file(changelog_body)
+        if self._config.changelog_file:
+            changelog_body = generated_changelog or await self._generate_epic_changelog(
+                epic_number, sub_issues
+            )
+            if changelog_body:
+                self._write_changelog_file(changelog_body)
 
     async def _generate_epic_changelog(
-        self, epic_number: int, sub_issues: list[int]
+        self, epic_number: int, sub_issues: list[int], version: str | None = None
     ) -> str:
         """Generate a changelog from sub-issue PRs. Returns empty string on failure."""
         try:
-            version = f"epic-{epic_number}"
+            v = version or f"epic-{epic_number}"
             return await generate_changelog(
                 pr_manager=self._prs,
                 sub_issues=sub_issues,
-                version=version,
+                version=v,
             )
         except Exception:  # noqa: BLE001
             logger.warning(
@@ -148,6 +172,20 @@ class EpicCompletionChecker:
             changelog_path = Path(self._config.changelog_file)
             if not changelog_path.is_absolute():
                 changelog_path = self._config.repo_root / changelog_path
+
+            # Guard against path traversal outside the repo root
+            repo_resolved = self._config.repo_root.resolve()
+            path_resolved = changelog_path.resolve()
+            if (
+                not str(path_resolved).startswith(str(repo_resolved) + "/")
+                and path_resolved != repo_resolved
+            ):
+                logger.warning(
+                    "changelog_file %r resolves outside repo_root %r — skipping write",
+                    str(changelog_path),
+                    str(repo_resolved),
+                )
+                return
 
             existing = ""
             if changelog_path.exists():
@@ -175,6 +213,73 @@ class EpicCompletionChecker:
                 exc_info=True,
             )
 
+    async def _create_release_for_epic(
+        self,
+        epic_number: int,
+        epic_title: str,
+        sub_issues: list[int],
+    ) -> tuple[str, str]:
+        """Create a git tag and GitHub Release for a completed epic.
+
+        Returns ``(release_url, changelog)`` on success, ``("", "")`` on failure.
+        The caller can reuse the generated changelog to avoid redundant API calls.
+        """
+        if self._config.release_version_source != "epic_title":
+            logger.warning(
+                "release_version_source=%r is not yet implemented — falling back to 'epic_title'",
+                self._config.release_version_source,
+            )
+
+        version = extract_version_from_title(epic_title)
+        if not version:
+            logger.info(
+                "No version found in epic #%d title %r — skipping release",
+                epic_number,
+                epic_title,
+            )
+            return "", ""
+
+        tag = f"{self._config.release_tag_prefix}{version}"
+        changelog = await self._generate_epic_changelog(
+            epic_number, sub_issues, version=version
+        )
+        release_title = f"Release {tag}"
+
+        # Create the git tag
+        tag_ok = await self._prs.create_tag(tag)
+        if not tag_ok:
+            logger.warning("Tag creation failed for %s — skipping release", tag)
+            return "", ""
+
+        # Create the GitHub Release
+        release_ok = await self._prs.create_release(tag, release_title, changelog)
+        if not release_ok:
+            logger.warning("GitHub Release creation failed for %s", tag)
+            return "", ""
+
+        release_url = f"https://github.com/{self._config.repo}/releases/tag/{tag}"
+
+        # Persist release state if a state tracker is available
+        release = Release(
+            version=version,
+            epic_number=epic_number,
+            sub_issues=list(sub_issues),
+            status="released",
+            released_at=datetime.now(UTC).isoformat(),
+            changelog=changelog,
+            tag=tag,
+        )
+        if self._state is not None:
+            self._state.upsert_release(release)
+
+        logger.info(
+            "Created release %s for epic #%d with %d sub-issues",
+            tag,
+            epic_number,
+            len(sub_issues),
+        )
+        return release_url, changelog
+
 
 class EpicManager:
     """Centralized epic lifecycle management.
@@ -197,7 +302,7 @@ class EpicManager:
         self._prs = prs
         self._fetcher = fetcher
         self._bus = event_bus
-        self._checker = EpicCompletionChecker(config, prs, fetcher)
+        self._checker = EpicCompletionChecker(config, prs, fetcher, state=state)
 
     async def register_epic(
         self,
