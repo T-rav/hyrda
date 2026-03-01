@@ -221,7 +221,7 @@ export function Header({ connected, orchestratorStatus }) {
         <span style={connected ? dotConnected : dotDisconnected} />
       </div>
       <div style={styles.center}>
-        <div style={styles.sessionBox} data-testid="session-box">
+        <div style={styles.sessionBox} data-testid="session-box" aria-label="Session pipeline statistics">
           <div style={styles.pipelineRow} data-testid="session-pipeline">
             {sessionStages.map((stage, index) => (
               <React.Fragment key={stage.key}>
@@ -301,9 +301,7 @@ const styles = {
   },
   sessionBox: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'flex-start',
-    gap: 8,
     border: `1px solid ${theme.border}`,
     borderRadius: 8,
     padding: '8px 14px',
