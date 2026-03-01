@@ -462,6 +462,25 @@ class ReviewResult(BaseModel):
     duration_seconds: float = 0.0
 
 
+# --- Visual Validation ---
+
+
+class VisualValidationPolicy(StrEnum):
+    """Deterministic policy for visual validation scope."""
+
+    REQUIRED = "required"
+    SKIPPED = "skipped"
+
+
+class VisualValidationDecision(BaseModel):
+    """Deterministic decision about whether visual validation is required."""
+
+    policy: VisualValidationPolicy
+    reason: str
+    triggered_patterns: list[str] = Field(default_factory=list)
+    override_label: str = ""
+
+
 # --- Verification Judge ---
 
 

@@ -114,6 +114,7 @@ _ENV_BOOL_OVERRIDES: list[tuple[str, str, bool]] = [
     ("collaborator_check_enabled", "HYDRAFLOW_COLLABORATOR_CHECK_ENABLED", True),
     ("code_scanning_enabled", "HYDRAFLOW_CODE_SCANNING_ENABLED", False),
     ("release_on_epic_close", "HYDRAFLOW_RELEASE_ON_EPIC_CLOSE", False),
+    ("visual_validation_enabled", "HYDRAFLOW_VISUAL_VALIDATION_ENABLED", True),
 ]
 
 # Literal-typed env-var overrides.
@@ -643,6 +644,34 @@ class HydraFlowConfig(BaseModel):
         ge=1_000,
         le=100_000,
         description="Max characters for code scanning alert injection",
+    )
+
+    # Visual validation scope
+    visual_validation_enabled: bool = Field(
+        default=True,
+        description="Enable deterministic visual validation scope checks during review",
+    )
+    visual_validation_trigger_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "src/ui/**",
+            "ui/**",
+            "frontend/**",
+            "web/**",
+            "*.css",
+            "*.scss",
+            "*.tsx",
+            "*.jsx",
+            "*.html",
+        ],
+        description="Glob patterns for files that trigger visual validation requirement",
+    )
+    visual_required_label: str = Field(
+        default="hydraflow-visual-required",
+        description="Override label to force visual validation regardless of file paths",
+    )
+    visual_skip_label: str = Field(
+        default="hydraflow-visual-skip",
+        description="Override label to skip visual validation with an audit reason",
     )
 
     # Manifest detection
