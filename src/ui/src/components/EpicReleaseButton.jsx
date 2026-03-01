@@ -32,9 +32,13 @@ export function EpicReleaseButton({ epic, onRelease, releasing }) {
     setShowConfirm(false)
     setError(null)
     if (onRelease) {
-      const result = await onRelease(epic.epic_number)
-      if (!result.ok) {
-        setError(result.error || 'Release failed')
+      try {
+        const result = await onRelease(epic.epic_number)
+        if (!result?.ok) {
+          setError(result?.error || 'Release failed')
+        }
+      } catch (err) {
+        setError(err.message || 'Release failed')
       }
     }
   }
@@ -132,18 +136,7 @@ const styles = {
   },
   enabledBtn: { ...btnBase, background: theme.green, color: theme.white, cursor: 'pointer', transition: 'all 0.15s' },
   disabledBtn: { ...btnBase, background: theme.border, color: theme.textMuted, cursor: 'not-allowed' },
-  releasingBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 8,
-    fontSize: 12,
-    fontWeight: 700,
-    padding: '6px 16px',
-    borderRadius: 8,
-    background: theme.greenSubtle,
-    color: theme.green,
-    animation: PULSE_ANIMATION,
-  },
+  releasingBtn: { ...btnBase, gap: 8, background: theme.greenSubtle, color: theme.green, animation: PULSE_ANIMATION },
   spinner: {
     display: 'inline-block',
     width: 12,
