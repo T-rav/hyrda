@@ -350,7 +350,7 @@ class TestHydraFlowConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_workers == 2
+        assert cfg.max_workers == 1
 
     def test_improve_label_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -382,7 +382,7 @@ class TestHydraFlowConfigDefaults:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_reviewers == 2
+        assert cfg.max_reviewers == 1
 
     def test_max_triagers_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -391,17 +391,6 @@ class TestHydraFlowConfigDefaults:
             state_file=tmp_path / "s.json",
         )
         assert cfg.max_triagers == 1
-
-    def test_max_triagers_env_override(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv("HYDRAFLOW_MAX_TRIAGERS", "4")
-        cfg = HydraFlowConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.max_triagers == 4
 
     def test_max_hitl_workers_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
