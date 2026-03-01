@@ -101,9 +101,20 @@ export function PipelineControlPanel({ onToggleBgWorker }) {
 
   const [localCaps, setLocalCaps] = useState({})
 
+  const workerCapsKey = JSON.stringify(workerCaps)
   useEffect(() => {
-    setLocalCaps({})
-  }, [workerCaps.triage, workerCaps.plan, workerCaps.implement, workerCaps.review])
+    const serverCaps = JSON.parse(workerCapsKey)
+    setLocalCaps(caps => {
+      if (Object.keys(caps).length === 0) return caps
+      const next = {}
+      for (const [key, val] of Object.entries(caps)) {
+        if (serverCaps[key] !== val) {
+          next[key] = val
+        }
+      }
+      return Object.keys(next).length > 0 ? next : {}
+    })
+  }, [workerCapsKey])
 
   const updateWorkerCount = useCallback(async (loopKey, configKey, newValue) => {
     setLocalCaps(caps => ({ ...caps, [loopKey]: newValue }))

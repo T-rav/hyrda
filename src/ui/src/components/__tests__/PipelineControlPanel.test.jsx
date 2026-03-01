@@ -320,6 +320,50 @@ describe('PipelineControlPanel', () => {
       })
     })
 
+    it('preserves optimistic override for other stages when one stage cap changes from server', async () => {
+      const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {}))
+      vi.stubGlobal('fetch', fetchMock)
+      const { rerender } = render(<PipelineControlPanel />)
+
+      // Optimistically increment implement from 3 → 4
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('inc-implement'))
+      })
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('4')
+
+      // Server pushes a config update that only changes triage (1 → 2), implement stays at 3
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({
+        config: { max_triagers: 2, max_planners: 2, max_workers: 3, max_reviewers: 2 },
+      }))
+      rerender(<PipelineControlPanel />)
+
+      // Implement optimistic override (4) should be preserved since server still says 3
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('4')
+      // Triage should reflect new server value
+      expect(screen.getByTestId('loop-count-triage')).toHaveTextContent('2')
+    })
+
+    it('clears optimistic override when server confirms the new value', async () => {
+      const fetchMock = vi.fn().mockImplementation(() => new Promise(() => {}))
+      vi.stubGlobal('fetch', fetchMock)
+      const { rerender } = render(<PipelineControlPanel />)
+
+      // Optimistically increment implement from 3 → 4
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('inc-implement'))
+      })
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('4')
+
+      // Server confirms: implement is now 4
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({
+        config: { max_triagers: 1, max_planners: 2, max_workers: 4, max_reviewers: 2 },
+      }))
+      rerender(<PipelineControlPanel />)
+
+      // Should show server-confirmed value of 4
+      expect(screen.getByTestId('loop-count-implement')).toHaveTextContent('4')
+    })
+
     it('uses correct configKey for each stage', async () => {
       const fetchMock = vi.fn().mockResolvedValue({ ok: true })
       vi.stubGlobal('fetch', fetchMock)
