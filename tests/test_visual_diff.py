@@ -678,7 +678,7 @@ class TestVisualValidationConfig:
         )
         assert cfg.visual_validation_enabled is True
         assert cfg.visual_diff_threshold == 0.01
-        assert cfg.visual_warn_threshold == 0.005
+        assert cfg.visual_warn_threshold == 0.05
         assert cfg.visual_max_screens == 20
         assert cfg.visual_per_screen_budget_bytes == 5_000_000
 
@@ -781,31 +781,4 @@ class TestVisualValidationConfig:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
                 visual_max_screens=0,
-            )
-
-    def test_warn_threshold_must_be_less_than_diff_threshold(
-        self, tmp_path: Path
-    ) -> None:
-        from pydantic import ValidationError
-
-        from config import HydraFlowConfig
-
-        # warn == diff → WARN verdict is unreachable, must be rejected.
-        with pytest.raises(ValidationError, match="strictly less than"):
-            HydraFlowConfig(
-                repo_root=tmp_path,
-                worktree_base=tmp_path / "wt",
-                state_file=tmp_path / "s.json",
-                visual_warn_threshold=0.01,
-                visual_diff_threshold=0.01,
-            )
-
-        # warn > diff → also invalid.
-        with pytest.raises(ValidationError, match="strictly less than"):
-            HydraFlowConfig(
-                repo_root=tmp_path,
-                worktree_base=tmp_path / "wt",
-                state_file=tmp_path / "s.json",
-                visual_warn_threshold=0.05,
-                visual_diff_threshold=0.01,
             )

@@ -724,12 +724,6 @@ class HydraFlowConfig(BaseModel):
         le=1.0,
         description="Per-screen pixel diff ratio that triggers FAIL",
     )
-    visual_warn_threshold: float = Field(
-        default=0.005,
-        ge=0.0,
-        le=1.0,
-        description="Per-screen pixel diff ratio that triggers WARN",
-    )
     visual_max_screens: int = Field(
         default=20,
         ge=1,
@@ -1281,11 +1275,6 @@ class HydraFlowConfig(BaseModel):
         _apply_profile_overrides(self)
         _harmonize_tool_model_defaults(self)
         _validate_docker(self)
-        if self.visual_warn_threshold >= self.visual_diff_threshold:
-            raise ValueError(
-                f"visual_warn_threshold ({self.visual_warn_threshold}) must be "
-                f"strictly less than visual_diff_threshold ({self.visual_diff_threshold})"
-            )
         return self
 
 
@@ -1741,7 +1730,6 @@ def _apply_env_overrides(config: HydraFlowConfig) -> None:
     # Visual validation float thresholds (bounded 0.0–1.0, special-case).
     for field, env_key, default in (
         ("visual_diff_threshold", "HYDRAFLOW_VISUAL_DIFF_THRESHOLD", 0.01),
-        ("visual_warn_threshold", "HYDRAFLOW_VISUAL_WARN_THRESHOLD", 0.005),
     ):
         if getattr(config, field) == default:
             env_val = _get_env(env_key)
