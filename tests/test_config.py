@@ -4653,7 +4653,7 @@ class TestLabelsMustNotBeEmpty:
 
 
 # ---------------------------------------------------------------------------
-# Repo-namespaced persistence (_namespace_repo_paths)
+# Repo-namespaced persistence (two-phase path resolution)
 # ---------------------------------------------------------------------------
 
 
@@ -4748,3 +4748,62 @@ class TestNamespaceRepoPaths:
 
         cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
         assert cfg.state_file.read_text() == '{"new": true}'
+
+
+# ---------------------------------------------------------------------------
+# Two-phase path resolution order (base paths → repo → repo-scoped paths)
+# ---------------------------------------------------------------------------
+
+
+class TestTwoPhasePathResolution:
+    """Tests verifying that repo-scoped paths depend on repo being resolved first.
+
+    The resolve_defaults validator must resolve base paths (repo_root, worktree_base,
+    data_root) before resolving the repo slug, and resolve the repo slug before
+    computing repo-scoped paths (state_file, event_log_path).
+    """
+
+    def test_state_file_never_flat_when_repo_available(self, tmp_path: Path) -> None:
+        """state_file must be repo-scoped, never flat data_root/state.json."""
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
+        flat_default = cfg.data_root / "state.json"
+        assert cfg.state_file != flat_default
+        assert cfg.repo_slug in str(cfg.state_file)
+
+    def test_event_log_never_flat_when_repo_available(self, tmp_path: Path) -> None:
+        """event_log_path must be repo-scoped, never flat data_root/events.jsonl."""
+        cfg = HydraFlowConfig(repo_root=tmp_path, repo="acme/widgets")
+        flat_default = cfg.data_root / "events.jsonl"
+        assert cfg.event_log_path != flat_default
+        assert cfg.repo_slug in str(cfg.event_log_path)
+
+    def test_base_paths_resolved_before_repo_detection(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """repo_root and data_root must be resolved before repo slug detection."""
+        monkeypatch.setenv("HYDRAFLOW_GITHUB_REPO", "org/repo")
+        cfg = HydraFlowConfig(repo_root=tmp_path)
+        # repo_root should be resolved (absolute) despite repo coming from env
+        assert cfg.repo_root.is_absolute()
+        assert cfg.data_root.is_absolute()
+        # And repo-scoped paths should use the resolved data_root
+        assert str(cfg.state_file).startswith(str(cfg.data_root))
+
+    def test_no_repo_falls_back_to_directory_name_scoped_paths(
+        self, tmp_path: Path
+    ) -> None:
+        """Without a repo slug, paths should use repo_root dir name as fallback slug."""
+        cfg = HydraFlowConfig(repo_root=tmp_path)
+        # repo_slug falls back to repo_root.name
+        assert cfg.repo_slug == tmp_path.name
+        expected_state = cfg.data_root / tmp_path.name / "state.json"
+        assert cfg.state_file == expected_state
+
+    def test_env_detected_repo_scopes_paths(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Repo detected from env var should scope state_file and event_log_path."""
+        monkeypatch.setenv("HYDRAFLOW_GITHUB_REPO", "env-org/env-repo")
+        cfg = HydraFlowConfig(repo_root=tmp_path)
+        assert "env-org-env-repo" in str(cfg.state_file)
+        assert "env-org-env-repo" in str(cfg.event_log_path)
