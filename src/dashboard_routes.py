@@ -2264,6 +2264,25 @@ def create_router(
             }
         )
 
+    @router.get("/api/troubleshooting")
+    async def get_troubleshooting() -> JSONResponse:
+        """Return learned troubleshooting patterns."""
+        from troubleshooting_store import TroubleshootingPatternStore
+
+        memory_dir = config.data_path("memory")
+        store = TroubleshootingPatternStore(memory_dir)
+        all_patterns = store._load_all()
+        total = len(all_patterns)
+        all_patterns.sort(key=lambda p: p.frequency, reverse=True)
+        capped = all_patterns[:100]
+
+        return JSONResponse(
+            {
+                "total_patterns": total,
+                "patterns": [p.model_dump() for p in capped],
+            }
+        )
+
     @router.get("/api/timeline")
     async def get_timeline() -> JSONResponse:
         builder = TimelineBuilder(event_bus)
