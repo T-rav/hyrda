@@ -257,7 +257,6 @@ class ConfigFactory:
         max_ci_log_chars: int = 12_000,
         code_scanning_enabled: bool = False,
         max_code_scanning_chars: int = 6_000,
-        visual_validation_enabled: bool = False,
         visual_diff_threshold: float = 0.01,
         visual_warn_threshold: float = 0.005,
         visual_max_screens: int = 20,
@@ -437,11 +436,6 @@ class ConfigFactory:
             max_ci_log_chars=max_ci_log_chars,
             code_scanning_enabled=code_scanning_enabled,
             max_code_scanning_chars=max_code_scanning_chars,
-            visual_validation_enabled=visual_validation_enabled,
-            visual_diff_threshold=visual_diff_threshold,
-            visual_warn_threshold=visual_warn_threshold,
-            visual_max_screens=visual_max_screens,
-            visual_per_screen_budget_bytes=visual_per_screen_budget_bytes,
             agent_timeout=agent_timeout,
             transcript_summary_timeout=transcript_summary_timeout,
             memory_compaction_timeout=memory_compaction_timeout,
@@ -466,6 +460,10 @@ class ConfigFactory:
             release_version_source=release_version_source,
             release_tag_prefix=release_tag_prefix,
             visual_validation_enabled=visual_validation_enabled,
+            visual_diff_threshold=visual_diff_threshold,
+            visual_warn_threshold=visual_warn_threshold,
+            visual_max_screens=visual_max_screens,
+            visual_per_screen_budget_bytes=visual_per_screen_budget_bytes,
             visual_validation_trigger_patterns=(
                 visual_validation_trigger_patterns
                 if visual_validation_trigger_patterns is not None
