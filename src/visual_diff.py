@@ -124,11 +124,14 @@ def compare_screen(
         )
 
     # --- Size mismatch ---
+    # Different dimensions means the images cannot be meaningfully compared,
+    # so this is a structural ERROR (like missing baseline or budget exceeded),
+    # not a threshold-based FAIL.
     if (b_w, b_h) != (c_w, c_h):
         elapsed = time.monotonic() - t0
         return ScreenResult(
             screen_name=screen_name,
-            verdict=ScreenVerdict.FAIL,
+            verdict=ScreenVerdict.ERROR,
             diff_ratio=1.0,
             changed_pixels=b_w * b_h,
             total_pixels=b_w * b_h,

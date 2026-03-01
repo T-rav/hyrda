@@ -319,7 +319,7 @@ class TestCompareScreen:
         assert result.verdict == ScreenVerdict.ERROR
         assert "candidate" in result.error_message.lower()
 
-    def test_size_mismatch_returns_fail(self, tmp_path: Path) -> None:
+    def test_size_mismatch_returns_error(self, tmp_path: Path) -> None:
         baseline = _write_png(tmp_path / "baseline.png", width=10, height=10)
         candidate = _write_png(tmp_path / "candidate.png", width=20, height=20)
         result = compare_screen(
@@ -330,7 +330,7 @@ class TestCompareScreen:
             warn_threshold=0.005,
             budget_bytes=5_000_000,
         )
-        assert result.verdict == ScreenVerdict.FAIL
+        assert result.verdict == ScreenVerdict.ERROR
         assert result.diff_ratio == 1.0
         assert "size mismatch" in result.error_message.lower()
 
@@ -461,6 +461,7 @@ class TestRunVisualDiff:
         # a misconfigured environment where screenshots were never captured.
         assert report.aggregate_verdict == ScreenVerdict.ERROR
         assert report.is_fail is True
+        assert report.is_error is True
         assert report.total_screens == 0
         assert report.failure_category == FailureCategory.MISSING_BASELINE
 
@@ -574,6 +575,21 @@ class TestRunVisualDiff:
         report = run_visual_diff(baseline_dir, candidate_dir)
         assert report.aggregate_verdict == ScreenVerdict.ERROR
         assert report.failure_category == FailureCategory.MISSING_BASELINE
+
+    def test_error_size_mismatch_classification(self, tmp_path: Path) -> None:
+        """ERROR from dimension mismatch → failure_category = SIZE_MISMATCH."""
+        baseline_dir = tmp_path / "baseline"
+        candidate_dir = tmp_path / "candidate"
+        baseline_dir.mkdir()
+        candidate_dir.mkdir()
+        _write_png(baseline_dir / "s.png", width=10, height=10)
+        _write_png(candidate_dir / "s.png", width=20, height=20)
+
+        report = run_visual_diff(baseline_dir, candidate_dir)
+        assert report.aggregate_verdict == ScreenVerdict.ERROR
+        assert report.failure_category == FailureCategory.SIZE_MISMATCH
+        assert report.is_error is True
+        assert report.errored == 1
 
 
 # ---------------------------------------------------------------------------
