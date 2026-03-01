@@ -132,6 +132,14 @@ class TestFindOverrideLabel:
         )
         assert result == "hydraflow-visual-required"
 
+    def test_required_takes_precedence_over_skip_reverse_order(self) -> None:
+        """REQUIRED must win even when SKIP appears first in the label list."""
+        labels = ["hydraflow-visual-skip", "hydraflow-visual-required"]
+        result = _find_override_label(
+            labels, "hydraflow-visual-required", "hydraflow-visual-skip"
+        )
+        assert result == "hydraflow-visual-required"
+
 
 class TestExtractOverrideReason:
     """Tests for _extract_override_reason."""

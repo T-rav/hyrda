@@ -42,12 +42,15 @@ def _find_override_label(
     required_label: str,
     skip_label: str,
 ) -> str | None:
-    """Return the override label if present, or None."""
-    for label in labels:
-        if label == required_label:
-            return required_label
-        if label == skip_label:
-            return skip_label
+    """Return the override label if present, or None.
+
+    REQUIRED always takes precedence over SKIP regardless of list order.
+    """
+    label_set = set(labels)
+    if required_label in label_set:
+        return required_label
+    if skip_label in label_set:
+        return skip_label
     return None
 
 
