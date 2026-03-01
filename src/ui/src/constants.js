@@ -83,14 +83,18 @@ export const PULSE_ANIMATION = 'stream-pulse 1.5s ease-in-out infinite'
 /** Valid overall statuses for stream cards. */
 export const STREAM_CARD_STATUSES = ['active', 'queued', 'done', 'failed', 'hitl']
 
+/** Min/max bounds for per-stage worker counts — mirrors backend Pydantic field constraints. */
+export const WORKER_COUNT_MIN = 1
+export const WORKER_COUNT_MAX = 10
+
 /**
  * Pipeline loop definitions — core processing loops that can be toggled on/off.
  */
 export const PIPELINE_LOOPS = [
-  { key: 'triage',    label: 'Triage',    color: theme.yellow,      dimColor: theme.yellowSubtle  },
-  { key: 'plan',      label: 'Plan',      color: theme.purple,      dimColor: theme.purpleSubtle },
-  { key: 'implement', label: 'Implement', color: theme.accent,      dimColor: theme.accentSubtle },
-  { key: 'review',    label: 'Review',    color: theme.orange,      dimColor: theme.orangeSubtle },
+  { key: 'triage',    label: 'Triage',    color: theme.yellow,      dimColor: theme.yellowSubtle,  configKey: 'max_triagers' },
+  { key: 'plan',      label: 'Plan',      color: theme.purple,      dimColor: theme.purpleSubtle, configKey: 'max_planners' },
+  { key: 'implement', label: 'Implement', color: theme.accent,      dimColor: theme.accentSubtle, configKey: 'max_workers' },
+  { key: 'review',    label: 'Review',    color: theme.orange,      dimColor: theme.orangeSubtle, configKey: 'max_reviewers' },
 ]
 
 /**
