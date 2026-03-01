@@ -213,6 +213,44 @@ class EpicCompletionChecker:
         await self._prs.close_issue(epic_number)
         return True
 
+    async def close_specific_epic(self, epic_number: int) -> bool | None:
+        """Check and close a specific epic if all sub-issues are resolved.
+
+        Returns ``True`` if the epic was closed, ``False`` if the epic was
+        found but has unresolved sub-issues, or ``None`` if the epic could
+        not be located on GitHub (missing label, API failure, etc.).
+        """
+        try:
+            epics = await self._fetcher.fetch_issues_by_labels(
+                self._config.epic_label, limit=50
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Failed to fetch epic issues for specific-epic check",
+                exc_info=True,
+            )
+            return None
+
+        epic = next((e for e in epics if e.number == epic_number), None)
+        if epic is None:
+            return None
+
+        sub_issues = parse_epic_sub_issues(epic.body)
+        if not sub_issues:
+            return None
+
+        try:
+            return await self._try_close_epic(
+                epic.number, epic.title, epic.body, sub_issues
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Epic close failed for #%d during specific-epic check",
+                epic_number,
+                exc_info=True,
+            )
+            return None
+
     async def _post_hitl_warnings(
         self, epic_number: int, hitl_issues: list[int]
     ) -> None:
@@ -592,39 +630,37 @@ class EpicManager:
         if not all_children or not all_children.issubset(resolved):
             return
 
-        # Delegate to the existing EpicCompletionChecker for GitHub operations
-        # (checkbox update, label add, close). If that fails, try a direct close.
-        # Use a completed child as the trigger; fall back to excluded if all children
-        # were closed-without-merge (completed_children may be empty in that case).
-        trigger = (epic.completed_children or epic.excluded_children)[-1]
-        github_closed = False
+        # Try the full checker workflow (body update, label, release).
+        # close_specific_epic returns True (closed), False (not ready), or
+        # None (epic not found on GitHub).
+        result = await self._checker.close_specific_epic(epic_number)
+        if result is True:
+            self._state.close_epic(epic_number)
+            await self._publish_update(epic_number, "closed")
+            logger.info("Epic #%d auto-closed — all children resolved", epic_number)
+            return
+
+        if result is False:
+            # Checker found the epic but sub-issues are not all resolved
+            # on GitHub — respect GitHub as source of truth.
+            logger.warning(
+                "Epic #%d: GitHub sub-issues not all resolved — skipping auto-close",
+                epic_number,
+            )
+            return
+
+        # Epic not found on GitHub — fall back to direct close.
         try:
-            github_closed = await self._checker.check_and_close_epics(trigger)
+            await self._prs.post_comment(
+                epic_number,
+                "All child issues completed — closing epic automatically.",
+            )
+            await self._prs.close_issue(epic_number)
         except Exception:  # noqa: BLE001
             logger.warning(
-                "EpicCompletionChecker failed for #%d — attempting direct close",
+                "Direct close failed for epic #%d",
                 epic_number,
                 exc_info=True,
-            )
-            try:
-                await self._prs.post_comment(
-                    epic_number,
-                    "All child issues completed — closing epic automatically.",
-                )
-                await self._prs.close_issue(epic_number)
-                github_closed = True
-            except Exception:  # noqa: BLE001
-                logger.warning(
-                    "Direct close also failed for epic #%d",
-                    epic_number,
-                    exc_info=True,
-                )
-                return
-
-        if not github_closed:
-            logger.warning(
-                "Epic #%d was not closed by checker (GitHub state may differ from local state)",
-                epic_number,
             )
             return
 

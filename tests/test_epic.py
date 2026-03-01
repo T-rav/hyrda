@@ -873,6 +873,86 @@ class TestEpicManagerOnChildExcluded:
         prs.close_issue.assert_not_called()
 
 
+class TestCloseSpecificEpic:
+    """EpicCompletionChecker.close_specific_epic tri-state return."""
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_closed(self) -> None:
+        epic = _make_epic(100, [1])
+        sub_issues = {
+            1: IssueFactory.create(
+                number=1, labels=["hydraflow-fixed"], title="Issue #1"
+            ),
+        }
+        checker, prs, _, _ = _make_checker_with_state(
+            epics=[epic],
+            sub_issues=sub_issues,
+            epic_state=EpicState(epic_number=100, child_issues=[1]),
+        )
+
+        result = await checker.close_specific_epic(100)
+
+        assert result is True
+        prs.close_issue.assert_called_once_with(100)
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_sub_issues_unresolved(self) -> None:
+        epic = _make_epic(100, [1, 2])
+        sub_issues = {
+            1: IssueFactory.create(
+                number=1, labels=["hydraflow-fixed"], title="Issue #1"
+            ),
+            2: GitHubIssue(number=2, title="Issue #2", labels=[], state="open"),
+        }
+        checker, prs, _, _ = _make_checker_with_state(
+            epics=[epic],
+            sub_issues=sub_issues,
+            epic_state=EpicState(epic_number=100, child_issues=[1, 2]),
+        )
+
+        result = await checker.close_specific_epic(100)
+
+        assert result is False
+        prs.close_issue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_epic_not_found(self) -> None:
+        checker, prs, _, _ = _make_checker_with_state(epics=[])
+
+        result = await checker.close_specific_epic(999)
+
+        assert result is None
+        prs.close_issue.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_on_fetch_failure(self) -> None:
+        config = ConfigFactory.create(epic_label=["hydraflow-epic"])
+        prs = AsyncMock()
+        fetcher = AsyncMock()
+        fetcher.fetch_issues_by_labels = AsyncMock(
+            side_effect=RuntimeError("API error")
+        )
+        checker = EpicCompletionChecker(config, prs, fetcher)
+
+        result = await checker.close_specific_epic(100)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_epic_has_no_sub_issues(self) -> None:
+        epic = GitHubIssue(
+            number=100,
+            title="[Epic] No checkboxes",
+            body="This epic has no checkbox sub-issues.",
+            labels=["hydraflow-epic"],
+        )
+        checker, prs, _, _ = _make_checker_with_state(epics=[epic])
+
+        result = await checker.close_specific_epic(100)
+
+        assert result is None
+
+
 class TestEpicManagerTryAutoClose:
     """EpicManager._try_auto_close guards: only closes state when GitHub is closed."""
 
@@ -936,6 +1016,49 @@ class TestEpicManagerTryAutoClose:
                 child_issues=[1, 2],
                 completed_children=[1],
                 excluded_children=[2],
+            )
+        )
+
+        await manager._try_auto_close(100)
+
+        prs.close_issue.assert_called_once_with(100)
+        epic = manager._state.get_epic_state(100)
+        assert epic is not None
+        assert epic.closed is True
+
+    @pytest.mark.asyncio
+    async def test_direct_close_fallback_when_epic_not_on_github(
+        self, tmp_path: Path
+    ) -> None:
+        """When checker can't find the epic on GitHub, fall back to direct close."""
+        manager, prs, _ = _make_epic_manager(tmp_path, epics=[])
+        manager._state.upsert_epic_state(
+            EpicState(
+                epic_number=100,
+                child_issues=[1, 2],
+                completed_children=[1, 2],
+            )
+        )
+
+        await manager._try_auto_close(100)
+
+        prs.close_issue.assert_called_once_with(100)
+        prs.post_comment.assert_called_once()
+        epic = manager._state.get_epic_state(100)
+        assert epic is not None
+        assert epic.closed is True
+
+    @pytest.mark.asyncio
+    async def test_direct_close_fallback_with_excluded_children(
+        self, tmp_path: Path
+    ) -> None:
+        """Direct close fallback works when all children are excluded."""
+        manager, prs, _ = _make_epic_manager(tmp_path, epics=[])
+        manager._state.upsert_epic_state(
+            EpicState(
+                epic_number=100,
+                child_issues=[1, 2],
+                excluded_children=[1, 2],
             )
         )
 
