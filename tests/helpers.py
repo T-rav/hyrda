@@ -288,6 +288,10 @@ class ConfigFactory:
             "epic_title", "milestone", "manual"
         ] = "epic_title",
         release_tag_prefix: str = "v",
+        baseline_snapshot_patterns: list[str] | None = None,
+        baseline_approval_required: bool = True,
+        baseline_approvers: list[str] | None = None,
+        baseline_max_audit_records: int = 100,
         visual_validation_enabled: bool = True,
         visual_validation_trigger_patterns: list[str] | None = None,
         visual_required_label: str = "hydraflow-visual-required",
@@ -465,6 +469,14 @@ class ConfigFactory:
             release_on_epic_close=release_on_epic_close,
             release_version_source=release_version_source,
             release_tag_prefix=release_tag_prefix,
+            baseline_snapshot_patterns=baseline_snapshot_patterns
+            if baseline_snapshot_patterns is not None
+            else ["**/__snapshots__/**", "**/*.snap.png", "**/*.baseline.png"],
+            baseline_approval_required=baseline_approval_required,
+            baseline_approvers=baseline_approvers
+            if baseline_approvers is not None
+            else [],
+            baseline_max_audit_records=baseline_max_audit_records,
             visual_validation_enabled=visual_validation_enabled,
             visual_validation_trigger_patterns=(
                 visual_validation_trigger_patterns
@@ -776,6 +788,7 @@ def make_review_phase(
     default_mocks: bool = False,
     review_result=None,
     issue_number: int = 42,
+    baseline_policy=None,
 ):
     """Build a ReviewPhase with standard mock dependencies.
 
@@ -855,6 +868,7 @@ def make_review_phase(
         event_bus=bus,
         conflict_resolver=conflict_resolver,
         post_merge=post_merge,
+        baseline_policy=baseline_policy,
     )
 
     if default_mocks:
