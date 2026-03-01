@@ -225,7 +225,8 @@ export function Header({
   }, [submitReport])
 
   const totalRepos = supervisedRepos.length
-  const runningRepos = (runtimes || []).filter(rt => rt.running).length
+  const supervisedSlugs = new Set(supervisedRepos.map(r => r.slug))
+  const runningRepos = runtimes.filter(rt => rt.running && supervisedSlugs.has(rt.slug)).length
 
   const sessionStages = PIPELINE_STAGES.map((stage) => ({
     key: stage.key,
@@ -456,7 +457,7 @@ const styles = {
     fontSize: 11,
     fontWeight: 600,
     color: theme.textMuted,
-    padding: '3px 10px',
+    padding: '4px 8px',
     borderRadius: 6,
     border: `1px solid ${theme.border}`,
     background: theme.surface,
