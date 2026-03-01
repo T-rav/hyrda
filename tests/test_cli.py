@@ -366,6 +366,7 @@ _CLI_DEFAULT_EXPECTATIONS: list[tuple[str, object]] = [
     ("max_workers", 1),
     ("max_planners", 1),
     ("max_reviewers", 1),
+    ("max_triagers", 1),
     ("max_hitl_workers", 1),
     ("system_tool", "inherit"),
     ("system_model", ""),
