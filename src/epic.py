@@ -141,11 +141,15 @@ class EpicCompletionChecker:
 
         # Optionally write to CHANGELOG.md file
         if self._config.changelog_file:
-            changelog_body = generated_changelog or await self._generate_epic_changelog(
-                epic_number, sub_issues
-            )
-            if changelog_body:
-                self._write_changelog_file(changelog_body)
+            if not generated_changelog:
+                # Extract version from title so the file entry uses the real version,
+                # not the "epic-N" fallback (e.g. when release_on_epic_close=False).
+                extracted_version = extract_version_from_title(epic_title) or None
+                generated_changelog = await self._generate_epic_changelog(
+                    epic_number, sub_issues, version=extracted_version
+                )
+            if generated_changelog:
+                self._write_changelog_file(generated_changelog)
 
     async def _generate_epic_changelog(
         self, epic_number: int, sub_issues: list[int], version: str | None = None
@@ -249,13 +253,13 @@ class EpicCompletionChecker:
         tag_ok = await self._prs.create_tag(tag)
         if not tag_ok:
             logger.warning("Tag creation failed for %s — skipping release", tag)
-            return "", ""
+            return "", changelog  # preserve changelog so caller can still write to file
 
         # Create the GitHub Release
         release_ok = await self._prs.create_release(tag, release_title, changelog)
         if not release_ok:
             logger.warning("GitHub Release creation failed for %s", tag)
-            return "", ""
+            return "", changelog  # preserve changelog so caller can still write to file
 
         release_url = f"https://github.com/{self._config.repo}/releases/tag/{tag}"
 
