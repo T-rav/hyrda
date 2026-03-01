@@ -122,7 +122,7 @@ class EpicCompletionChecker:
         - Is closed without the fixed_label (wontfix/duplicate/invalid)
 
         Sub-issues with the HITL label that are still open produce a warning
-        comment but do NOT block epic completion.
+        comment and DO temporarily block epic completion until resolved.
 
         Returns True if the epic was closed, False otherwise.
         """
@@ -255,6 +255,7 @@ class EpicCompletionChecker:
         self, epic_number: int, hitl_issues: list[int]
     ) -> None:
         """Post a warning comment for HITL-escalated sub-issues (once per issue)."""
+        epic_state: EpicState | None = None
         already_warned: set[int] = set()
         if self._state is not None:
             epic_state = self._state.get_epic_state(epic_number)
@@ -266,23 +267,29 @@ class EpicCompletionChecker:
             return
 
         issues_str = ", ".join(f"#{n}" for n in new_warnings)
-        await self._prs.post_comment(
-            epic_number,
-            f"**Epic completion blocked:** {issues_str} "
-            f"{'is' if len(new_warnings) == 1 else 'are'} escalated to HITL.\n"
-            f"Resolve the HITL {'issue' if len(new_warnings) == 1 else 'issues'} "
-            f"or close {'it' if len(new_warnings) == 1 else 'them'} to unblock the release.\n\n"
-            f"---\n*HydraFlow Epic Monitor*",
-        )
+        try:
+            await self._prs.post_comment(
+                epic_number,
+                f"**Epic completion blocked:** {issues_str} "
+                f"{'is' if len(new_warnings) == 1 else 'are'} escalated to HITL.\n"
+                f"Resolve the HITL {'issue' if len(new_warnings) == 1 else 'issues'} "
+                f"or close {'it' if len(new_warnings) == 1 else 'them'} to unblock the release.\n\n"
+                f"---\n*HydraFlow Epic Monitor*",
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Failed to post HITL warning comment for epic #%d",
+                epic_number,
+                exc_info=True,
+            )
+            return
 
         # Track that we've warned about these issues
-        if self._state is not None:
-            epic_state = self._state.get_epic_state(epic_number)
-            if epic_state is not None:
-                for n in new_warnings:
-                    if n not in epic_state.hitl_warned_children:
-                        epic_state.hitl_warned_children.append(n)
-                self._state.upsert_epic_state(epic_state)
+        if self._state is not None and epic_state is not None:
+            for n in new_warnings:
+                if n not in epic_state.hitl_warned_children:
+                    epic_state.hitl_warned_children.append(n)
+            self._state.upsert_epic_state(epic_state)
 
     def _audit_sub_issue_changes(
         self, epic_number: int, current_sub_issues: list[int]
