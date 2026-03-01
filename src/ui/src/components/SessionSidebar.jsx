@@ -3,6 +3,11 @@ import { useHydraFlow } from '../context/HydraFlowContext'
 import { theme } from '../theme'
 import { PULSE_ANIMATION } from '../constants'
 
+function shortRepo(repo) {
+  const parts = (repo || '').split('/')
+  return parts.length > 1 ? parts[parts.length - 1] : repo
+}
+
 export function SessionSidebar() {
   const {
     sessions,
@@ -26,11 +31,6 @@ export function SessionSidebar() {
   const [showAddRepo, setShowAddRepo] = useState(false)
   const [addRepoValue, setAddRepoValue] = useState('')
   const addRepoInputRef = useRef(null)
-
-  const shortRepo = (repo) => {
-    const parts = (repo || '').split('/')
-    return parts.length > 1 ? parts[parts.length - 1] : repo
-  }
 
   const repoEntries = useMemo(() => {
     const entries = new Map()
