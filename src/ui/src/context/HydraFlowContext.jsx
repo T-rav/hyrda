@@ -469,7 +469,9 @@ export function reducer(state, action) {
     }
 
     case 'EPIC_RELEASING': {
-      const releasingNum = action.data?.epic_number
+      // null data signals a clear (e.g. release failure revert)
+      if (!action.data) return { ...state, epicReleasing: null }
+      const releasingNum = action.data.epic_number
       if (!releasingNum) return state
       return {
         ...state,
@@ -958,6 +960,7 @@ export function HydraFlowProvider({ children }) {
       dispatch({ type: 'EPIC_RELEASED', data: { epic_number: epicNumber, version: data.version, released_at: data.released_at } })
       return { ok: true, version: data.version }
     } catch (err) {
+      dispatch({ type: 'EPIC_RELEASING', data: null })
       fetchEpics()
       return { ok: false, error: err.message }
     }

@@ -50,8 +50,8 @@ export function EpicCard({ epic, onRelease, releasing }) {
     return { total, merged, active, queued, pct }
   }, [epic])
 
-  // Released epics show the collapsed released card
-  if (epic.status === 'released') {
+  // Released/completed epics show the collapsed released card
+  if (epic.status === 'released' || epic.status === 'completed') {
     return <EpicReleasedCard epic={epic} />
   }
 

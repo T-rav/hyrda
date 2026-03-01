@@ -568,6 +568,15 @@ describe('EPIC_RELEASING reducer', () => {
     const next = reducer(state, { type: 'EPIC_RELEASING', data: {} })
     expect(next.epicReleasing).toBeNull()
   })
+
+  it('clears epicReleasing when data is null (release failure revert)', () => {
+    const state = {
+      ...initialState,
+      epicReleasing: { epicNumber: 100, progress: 0, total: 0 },
+    }
+    const next = reducer(state, { type: 'EPIC_RELEASING', data: null })
+    expect(next.epicReleasing).toBeNull()
+  })
 })
 
 describe('EPIC_RELEASED reducer', () => {

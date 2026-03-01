@@ -134,6 +134,18 @@ describe('EpicCard', () => {
     expect(screen.queryByTestId('epic-card-100')).not.toBeInTheDocument()
   })
 
+  it('renders EpicReleasedCard for completed epics', () => {
+    const completedEpic = {
+      ...baseEpic,
+      status: 'completed',
+      version: 'v1.0.0',
+      merged_children: 5,
+    }
+    render(<EpicCard epic={completedEpic} />)
+    expect(screen.getByTestId('released-card-100')).toBeInTheDocument()
+    expect(screen.queryByTestId('epic-card-100')).not.toBeInTheDocument()
+  })
+
   // Readiness section tests
   it('shows readiness section for bundled epics when expanded', () => {
     const bundledEpic = {
