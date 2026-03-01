@@ -1,4 +1,4 @@
-# ADR-0009: Session Counter Forward-Progression Semantics
+# ADR-0014: Session Counter Forward-Progression Semantics
 
 **Status:** Proposed
 **Date:** 2026-03-01

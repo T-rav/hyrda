@@ -1,4 +1,4 @@
-"""Tests for ADR-0009: Session Counter Forward-Progression Semantics."""
+"""Tests for ADR-0014: Session Counter Forward-Progression Semantics."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import re
 from pathlib import Path
 
 ADR_DIR = Path(__file__).resolve().parent.parent / "docs" / "adr"
-ADR_FILE = ADR_DIR / "0009-session-counter-forward-progression-semantics.md"
+ADR_FILE = ADR_DIR / "0014-session-counter-forward-progression-semantics.md"
 README_FILE = ADR_DIR / "README.md"
 
 
 class TestAdr0009Exists:
-    """ADR-0009 file exists and is referenced in the index."""
+    """ADR-0014 file exists and is referenced in the index."""
 
     def test_adr_file_exists(self) -> None:
         assert ADR_FILE.exists(), f"ADR file missing: {ADR_FILE}"
@@ -22,21 +22,21 @@ class TestAdr0009Exists:
 
     def test_readme_references_adr(self) -> None:
         readme = README_FILE.read_text()
-        assert "0009" in readme, "README.md does not reference ADR-0009"
+        assert "0014" in readme, "README.md does not reference ADR-0014"
         assert "session-counter-forward-progression-semantics" in readme, (
-            "README.md missing ADR-0009 filename link"
+            "README.md missing ADR-0014 filename link"
         )
 
 
 class TestAdr0009Format:
-    """ADR-0009 follows the required format."""
+    """ADR-0014 follows the required format."""
 
     def setup_method(self) -> None:
         self.content = ADR_FILE.read_text()
 
     def test_has_title(self) -> None:
-        assert self.content.startswith("# ADR-0009:"), (
-            "ADR must start with '# ADR-0009:'"
+        assert self.content.startswith("# ADR-0014:"), (
+            "ADR must start with '# ADR-0014:'"
         )
 
     def test_has_status(self) -> None:
@@ -60,7 +60,7 @@ class TestAdr0009Format:
 
 
 class TestAdr0009Content:
-    """ADR-0009 contains the required domain-specific content."""
+    """ADR-0014 contains the required domain-specific content."""
 
     def setup_method(self) -> None:
         self.content = ADR_FILE.read_text()
