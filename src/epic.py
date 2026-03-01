@@ -608,34 +608,25 @@ class EpicManager:
         merge_order = self._get_merge_order(epic)
         results: list[dict[str, object]] = []
         for child_num in merge_order:
+            halt_msg: str | None = None
             try:
                 pr_number = await self._prs.find_pr_for_issue(child_num)
                 if not pr_number:
-                    results.append({"issue": child_num, "status": "no_pr"})
                     # Halt on missing PR — bundle guarantee requires all PRs to merge
-                    await self._publish_update(epic_number, "release_failed")
-                    return {
-                        "epic_number": epic_number,
-                        "merges": results,
-                        "error": f"no PR found for child #{child_num}; bundle halted",
-                    }
-                merged = await self._prs.merge_pr(pr_number)
-                if merged:
-                    self._state.mark_epic_child_complete(epic_number, child_num)
-                    results.append(
-                        {"issue": child_num, "pr": pr_number, "status": "merged"}
-                    )
+                    results.append({"issue": child_num, "status": "no_pr"})
+                    halt_msg = f"no PR found for child #{child_num}; bundle halted"
                 else:
-                    results.append(
-                        {"issue": child_num, "pr": pr_number, "status": "failed"}
-                    )
-                    # Halt on first failure — remaining PRs stay unmerged
-                    await self._publish_update(epic_number, "release_failed")
-                    return {
-                        "epic_number": epic_number,
-                        "merges": results,
-                        "error": f"merge failed for child #{child_num} (PR #{pr_number}); bundle halted",
-                    }
+                    merged = await self._prs.merge_pr(pr_number)
+                    if merged:
+                        self._state.mark_epic_child_complete(epic_number, child_num)
+                        results.append(
+                            {"issue": child_num, "pr": pr_number, "status": "merged"}
+                        )
+                    else:
+                        results.append(
+                            {"issue": child_num, "pr": pr_number, "status": "failed"}
+                        )
+                        halt_msg = f"merge failed for child #{child_num} (PR #{pr_number}); bundle halted"
             except Exception:  # noqa: BLE001
                 logger.warning(
                     "Failed to merge child #%d of epic #%d",
@@ -644,12 +635,13 @@ class EpicManager:
                     exc_info=True,
                 )
                 results.append({"issue": child_num, "status": "error"})
-                # Halt on exception too — remaining PRs stay unmerged
+                halt_msg = f"exception merging child #{child_num}; bundle halted"
+            if halt_msg:
                 await self._publish_update(epic_number, "release_failed")
                 return {
                     "epic_number": epic_number,
                     "merges": results,
-                    "error": f"exception merging child #{child_num}; bundle halted",
+                    "error": halt_msg,
                 }
 
         # Mark epic as released to prevent duplicate release attempts

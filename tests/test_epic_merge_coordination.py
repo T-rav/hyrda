@@ -590,6 +590,49 @@ class TestReleaseEpic:
 
         result = await mgr.release_epic(100)
         assert result["merges"][0]["status"] == "failed"
+        assert "error" in result
+
+    @pytest.mark.asyncio
+    async def test_release_handles_merge_exception(self, tmp_path: Path) -> None:
+        """Exception during merge halts the bundle and returns error."""
+        mgr, state, _, prs, _ = _make_manager(
+            tmp_path, epic_merge_strategy="bundled_hitl"
+        )
+        await mgr.register_epic(100, "Epic", [1])
+        await mgr.on_child_approved(100, 1)
+
+        prs.find_pr_for_issue = AsyncMock(return_value=10)
+        prs.merge_pr = AsyncMock(side_effect=RuntimeError("network error"))
+
+        result = await mgr.release_epic(100)
+
+        assert result["merges"][0]["status"] == "error"
+        assert "error" in result
+        assert "exception" in result["error"]
+        # Should not mark as released so operator can retry
+        epic = state.get_epic_state(100)
+        assert epic is not None
+        assert epic.released is False
+
+    @pytest.mark.asyncio
+    async def test_release_halts_on_second_child_failure(self, tmp_path: Path) -> None:
+        """When the second child fails, the first is already merged but we halt."""
+        mgr, state, _, prs, _ = _make_manager(
+            tmp_path, epic_merge_strategy="bundled_hitl"
+        )
+        await mgr.register_epic(100, "Epic", [1, 2])
+        await mgr.on_child_approved(100, 1)
+        await mgr.on_child_approved(100, 2)
+
+        prs.find_pr_for_issue = AsyncMock(side_effect=[10, 20])
+        prs.merge_pr = AsyncMock(side_effect=[True, False])
+
+        result = await mgr.release_epic(100)
+
+        assert len(result["merges"]) == 2
+        assert result["merges"][0]["status"] == "merged"
+        assert result["merges"][1]["status"] == "failed"
+        assert "error" in result
 
     @pytest.mark.asyncio
     async def test_release_idempotent_second_call_rejected(
