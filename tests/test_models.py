@@ -2870,7 +2870,7 @@ class TestVisualEvidenceItem:
         item = VisualEvidenceItem(screen_name="login")
         assert item.screen_name == "login"
         assert item.diff_percent == 0.0
-        assert item.status == "fail"
+        assert item.status == "pass"
 
     def test_all_fields(self) -> None:
         item = VisualEvidenceItem(

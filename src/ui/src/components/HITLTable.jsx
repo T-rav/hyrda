@@ -269,7 +269,7 @@ export function HITLTable({ items, onRefresh }) {
                             )}
                             <div style={styles.visualGrid}>
                               {item.visualEvidence.items.map((ev, idx) => (
-                                <div key={idx} style={styles.visualCard} data-testid={`hitl-visual-item-${item.issue}-${idx}`}>
+                                <div key={ev.screen_name || idx} style={styles.visualCard} data-testid={`hitl-visual-item-${item.issue}-${idx}`}>
                                   <div style={styles.visualCardHeader}>
                                     <span style={styles.visualScreenName}>{ev.screen_name}</span>
                                     <span style={visualStatusStyle(ev.status)}>
@@ -277,7 +277,7 @@ export function HITLTable({ items, onRefresh }) {
                                     </span>
                                   </div>
                                   <div style={styles.visualDiffBar}>
-                                    <div style={{ ...styles.visualDiffFill, width: `${Math.min(ev.diff_percent, 100)}%`, background: ev.status === 'fail' ? theme.red : ev.status === 'warn' ? theme.yellow : theme.green }} />
+                                    <div style={diffFillStyle(ev.status, ev.diff_percent)} />
                                   </div>
                                   <span style={styles.visualDiffLabel}>{ev.diff_percent.toFixed(1)}% diff</span>
                                   <div style={styles.visualLinks}>
@@ -410,6 +410,11 @@ function visualStatusStyle(status) {
     fontSize: 10, padding: '1px 6px', borderRadius: 4, fontWeight: 700,
     background: bg, color: fg,
   }
+}
+
+function diffFillStyle(status, diffPercent) {
+  const bg = status === 'fail' ? theme.red : status === 'warn' ? theme.yellow : theme.green
+  return { ...styles.visualDiffFill, width: `${Math.min(diffPercent, 100)}%`, background: bg }
 }
 
 function causeBadgeStyle(item) {

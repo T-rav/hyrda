@@ -424,7 +424,7 @@ class VisualEvidenceItem(BaseModel):
     baseline_url: HttpUrl = ""
     actual_url: HttpUrl = ""
     diff_url: HttpUrl = ""
-    status: Literal["pass", "fail", "warn"] = "fail"
+    status: Literal["pass", "fail", "warn"] = "pass"
 
 
 class VisualEvidence(BaseModel):
@@ -1190,7 +1190,7 @@ class HITLEscalationPayload(TypedDict, total=False):
     status: str
     role: str
     repo: str
-    visual_evidence: VisualEvidence
+    visual_evidence: dict[str, object]
 
 
 class IssueCreatedPayload(TypedDict):
