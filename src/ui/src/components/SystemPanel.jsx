@@ -11,6 +11,7 @@ import { InsightsPanel } from './InsightsPanel'
 const SUB_TABS = [
   { key: 'workers', label: 'Workers' },
   { key: 'pipeline', label: 'Pipeline' },
+  { key: 'processes', label: 'Processes' },
   { key: 'metrics', label: 'Metrics' },
   { key: 'insights', label: 'Insights' },
   { key: 'livestream', label: 'Livestream' },
@@ -457,6 +458,10 @@ export function SystemPanel({ backgroundWorkers, onToggleBgWorker, onUpdateInter
                 )
               })}
             </div>
+          </div>
+        )}
+        {activeSubTab === 'processes' && (
+          <div style={styles.workersContent}>
             <ProcessToggles />
           </div>
         )}
@@ -717,9 +722,7 @@ const styles = {
     transition: 'all 0.15s',
   },
   processTogglesSection: {
-    marginTop: 24,
-    borderTop: `1px solid ${theme.border}`,
-    paddingTop: 16,
+    paddingTop: 0,
   },
   autoApproveRow: {
     display: 'flex',

@@ -256,18 +256,18 @@ describe('SystemPanel', () => {
       expect(screen.getByText('Pipeline Poller')).toBeInTheDocument()
       expect(screen.getByText('Memory Manager')).toBeInTheDocument()
       expect(screen.getByText('Metrics Munger')).toBeInTheDocument()
-      // Count On/Off buttons — should be non-system bg workers + memory auto-approve + 2 process toggles
+      // Count On/Off buttons — should be non-system bg workers + memory auto-approve (process toggles are on Processes tab)
       const allToggleButtons = [...screen.getAllByText('On'), ...screen.getAllByText('Off')]
       const nonSystemBgCount = BACKGROUND_WORKERS.filter(w => !w.system).length
-      expect(allToggleButtons.length).toBe(nonSystemBgCount + 3)
+      expect(allToggleButtons.length).toBe(nonSystemBgCount + 1)
     })
 
     it('does not show toggle buttons when onToggleBgWorker is not provided', () => {
       render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
-      // No worker toggle On buttons, but memory auto-approve + 2 process toggles show Off
+      // No worker toggle On buttons, but memory auto-approve shows Off (process toggles on Processes tab)
       expect(screen.queryByText('On')).not.toBeInTheDocument()
       const offButtons = screen.getAllByText('Off')
-      expect(offButtons.length).toBe(3) // memory auto-approve + 2 process toggles
+      expect(offButtons.length).toBe(1) // memory auto-approve only
     })
 
     it('shows Off button for disabled workers when orchestrator running', () => {
@@ -315,8 +315,8 @@ describe('SystemPanel', () => {
       mockUseHydraFlow.mockReturnValue(defaultMockContext({ backgroundWorkers: disabledWorkers }))
       render(<SystemPanel backgroundWorkers={disabledWorkers} onToggleBgWorker={onToggle} />)
       const offButtons = screen.getAllByText('Off')
-      // 2 disabled workers + 1 memory auto-approve + 2 process toggles (all default off)
-      expect(offButtons.length).toBe(5)
+      // 2 disabled workers + 1 memory auto-approve (process toggles on Processes tab)
+      expect(offButtons.length).toBe(3)
     })
   })
 
@@ -391,11 +391,12 @@ describe('SystemPanel', () => {
   })
 
   describe('Sub-tab Navigation', () => {
-    it('shows Workers, Pipeline, Metrics, and Livestream sub-tab labels', () => {
+    it('shows Workers, Pipeline, Metrics, Processes, and Livestream sub-tab labels', () => {
       render(<SystemPanel backgroundWorkers={[]} />)
       expect(screen.getByText('Workers')).toBeInTheDocument()
       expect(screen.getByText('Pipeline')).toBeInTheDocument()
       expect(screen.getByText('Metrics')).toBeInTheDocument()
+      expect(screen.getByText('Processes')).toBeInTheDocument()
       expect(screen.getByText('Livestream')).toBeInTheDocument()
       expect(screen.queryByText('Event Log')).not.toBeInTheDocument()
     })
@@ -465,6 +466,37 @@ describe('SystemPanel', () => {
       expect(screen.getByText('[implement]')).toBeInTheDocument()
     })
 
+  })
+
+  describe('Processes sub-tab', () => {
+    it('clicking Processes sub-tab shows process toggles', () => {
+      render(<SystemPanel backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Processes'))
+      expect(screen.getByText('Process Toggles')).toBeInTheDocument()
+      expect(screen.getByTestId('auto-process-epics-toggle')).toBeInTheDocument()
+      expect(screen.getByTestId('auto-process-bugs-toggle')).toBeInTheDocument()
+    })
+
+    it('Processes sub-tab hides Workers content', () => {
+      render(<SystemPanel backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Processes'))
+      expect(screen.queryByText('Background Workers')).not.toBeInTheDocument()
+    })
+
+    it('process toggles do not appear on Workers tab', () => {
+      render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
+      expect(screen.queryByTestId('auto-process-epics-toggle')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('auto-process-bugs-toggle')).not.toBeInTheDocument()
+    })
+
+    it('clicking Workers after Processes returns to worker content without process toggles', () => {
+      render(<SystemPanel backgroundWorkers={mockBgWorkers} />)
+      fireEvent.click(screen.getByText('Processes'))
+      expect(screen.getByTestId('auto-process-epics-toggle')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('Workers'))
+      expect(screen.getByText('Background Workers')).toBeInTheDocument()
+      expect(screen.queryByTestId('auto-process-epics-toggle')).not.toBeInTheDocument()
+    })
   })
 
   describe('Worker Log Stream integration', () => {
