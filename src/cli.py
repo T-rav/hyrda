@@ -151,7 +151,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-workers",
         type=int,
         default=None,
-        help="Max concurrent implementation agents (default: 2)",
+        help="Max concurrent implementation agents (default: 1)",
     )
     parser.add_argument(
         "--max-planners",
@@ -163,7 +163,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--max-reviewers",
         type=int,
         default=None,
-        help="Max concurrent review agents (default: 2)",
+        help="Max concurrent review agents (default: 1)",
     )
     parser.add_argument(
         "--max-hitl-workers",
@@ -572,6 +572,11 @@ def build_config(args: argparse.Namespace) -> HydraFlowConfig:
     Merge priority: defaults → config file → env vars → CLI args.
     Only explicitly-provided CLI values are passed through;
     HydraFlowConfig supplies all defaults.
+
+    Note: worker count fields (max_workers, max_planners, max_reviewers,
+    max_triagers, max_hitl_workers) skip the env-var step — their effective
+    priority is defaults → config file → CLI args. They are managed
+    exclusively via the config JSON file and dashboard UI.
     """
     # 0) Load config file values (lowest priority after defaults)
     from pathlib import Path  # noqa: PLC0415
@@ -1263,13 +1268,6 @@ async def _run_clean(config: HydraFlowConfig) -> None:
 
     state = StateTracker(config.state_file)
     state.reset()
-
-    from run_recorder import RunRecorder  # noqa: PLC0415
-
-    recorder = RunRecorder(config)
-    purged = recorder.purge_all()
-    if purged:
-        logger.info("Purged %d run artifact(s)", purged)
 
     logger.info("Cleanup complete")
 
