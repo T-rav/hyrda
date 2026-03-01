@@ -648,6 +648,20 @@ def create_router(
             return JSONResponse({"error": "epic not found"}, status_code=404)
         return JSONResponse(detail.model_dump())
 
+    @router.post("/api/epics/{epic_number}/release")
+    async def release_epic(epic_number: int) -> JSONResponse:
+        """Trigger sequential merge for a bundled epic.
+
+        Called from the dashboard "Merge & Release" button or externally.
+        """
+        orch = get_orchestrator()
+        if orch is None:
+            return JSONResponse({"error": "orchestrator not running"}, status_code=503)
+        result = await orch._epic_manager.release_epic(epic_number)
+        if "error" in result:
+            return JSONResponse(result, status_code=400)
+        return JSONResponse(result)
+
     # --- Crate (milestone) routes ---
 
     @router.get("/api/crates")
@@ -797,6 +811,9 @@ def create_router(
             cached_summary = state.get_hitl_summary(item.issue)
             data["llmSummary"] = cached_summary or ""
             data["llmSummaryUpdatedAt"] = state.get_hitl_summary_updated_at(item.issue)
+            visual_ev = state.get_hitl_visual_evidence(item.issue)
+            if visual_ev:
+                data["visualEvidence"] = visual_ev.model_dump()
             if (
                 not cached_summary
                 and config.transcript_summarization_enabled
