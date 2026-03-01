@@ -500,6 +500,37 @@ class TestEpicHITLHandling:
         prs.close_issue.assert_called_once_with(100)
 
     @pytest.mark.asyncio
+    async def test_hitl_warning_creates_state_when_no_epic_record(self) -> None:
+        """Warning is posted and state is created even when epic has no state record."""
+        epic = _make_epic(100, [1, 2])
+        sub_issues = {
+            1: IssueFactory.create(
+                number=1, labels=["hydraflow-fixed"], title="Issue #1"
+            ),
+            2: GitHubIssue(
+                number=2,
+                title="Issue #2",
+                labels=["hydraflow-hitl"],
+                state="open",
+            ),
+        }
+        # epic_state=None simulates an epic not yet registered in state
+        checker, prs, _, state = _make_checker_with_state(
+            epics=[epic],
+            sub_issues=sub_issues,
+            epic_state=None,
+        )
+
+        await checker.check_and_close_epics(1)
+
+        # Warning should be posted
+        prs.post_comment.assert_called_once()
+        comment = prs.post_comment.call_args[0][1]
+        assert "Epic completion blocked" in comment
+        # State should be created to prevent repeated warnings
+        state.upsert_epic_state.assert_called()
+
+    @pytest.mark.asyncio
     async def test_multiple_hitl_sub_issues_in_warning(self) -> None:
         """Warning mentions all HITL sub-issues."""
         epic = _make_epic(100, [1, 2, 3])

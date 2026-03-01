@@ -194,7 +194,8 @@ class EpicCompletionChecker:
 
         updated_body = check_all_checkboxes(epic_body)
         await self._prs.update_issue_body(epic_number, updated_body)
-        await self._prs.add_labels(epic_number, [fixed_label])
+        if fixed_label:
+            await self._prs.add_labels(epic_number, [fixed_label])
 
         # Create release if feature is enabled
         release_url = ""
@@ -285,7 +286,9 @@ class EpicCompletionChecker:
             return
 
         # Track that we've warned about these issues
-        if self._state is not None and epic_state is not None:
+        if self._state is not None:
+            if epic_state is None:
+                epic_state = EpicState(epic_number=epic_number)
             for n in new_warnings:
                 if n not in epic_state.hitl_warned_children:
                     epic_state.hitl_warned_children.append(n)
