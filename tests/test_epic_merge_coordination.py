@@ -448,6 +448,29 @@ class TestOnChildApproved:
         ready_events = [e for e in bus.get_history() if e.type == EventType.EPIC_READY]
         assert len(ready_events) == 0
 
+    @pytest.mark.asyncio
+    async def test_already_released_skips_dispatch(self, tmp_path: Path) -> None:
+        """Duplicate on_child_approved after a successful release must not re-trigger
+        bundled handlers or post spurious GitHub comments."""
+        mgr, state, bus, prs, _ = _make_manager(tmp_path, epic_merge_strategy="bundled")
+        prs.find_pr_for_issue = AsyncMock(side_effect=[10, 20])
+        prs.merge_pr = AsyncMock(return_value=True)
+
+        await mgr.register_epic(100, "Epic", [1, 2])
+        await mgr.on_child_approved(100, 1)
+        await mgr.on_child_approved(100, 2)  # triggers auto-release
+
+        # Reset mock call counts after the first (legitimate) release
+        prs.post_comment.reset_mock()
+        prs.merge_pr.reset_mock()
+
+        # Simulate a duplicate approval event after the epic is already released
+        await mgr.on_child_approved(100, 2)
+
+        # No additional comments or merge attempts
+        prs.post_comment.assert_not_called()
+        prs.merge_pr.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # EpicManager: find_parent_epics

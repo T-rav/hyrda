@@ -470,6 +470,25 @@ class ReviewResult(BaseModel):
     duration_seconds: float = 0.0
 
 
+# --- Visual Validation ---
+
+
+class VisualValidationPolicy(StrEnum):
+    """Deterministic policy for visual validation scope."""
+
+    REQUIRED = "required"
+    SKIPPED = "skipped"
+
+
+class VisualValidationDecision(BaseModel):
+    """Deterministic decision about whether visual validation is required."""
+
+    policy: VisualValidationPolicy
+    reason: str
+    triggered_patterns: list[str] = Field(default_factory=list)
+    override_label: str | None = None
+
+
 # --- Verification Judge ---
 
 
@@ -682,6 +701,17 @@ class SessionLog(BaseModel):
     status: SessionStatus = SessionStatus.ACTIVE
 
 
+class SessionCounters(BaseModel):
+    """Per-session completion counts, persisted to state.json."""
+
+    triaged: int = 0
+    planned: int = 0
+    implemented: int = 0
+    reviewed: int = 0
+    merged: int = 0
+    session_start: str = ""
+
+
 class LifetimeStats(BaseModel):
     """All-time counters preserved across resets."""
 
@@ -746,6 +776,20 @@ class EpicState(BaseModel):
     auto_decomposed: bool = False
 
 
+class Release(BaseModel):
+    """Persisted state for a GitHub Release created when an epic completes."""
+
+    version: str
+    epic_number: int
+    sub_issues: list[int] = Field(default_factory=list)
+    pr_numbers: list[int] = Field(default_factory=list)
+    status: Literal["pending", "released"] = "pending"
+    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    released_at: str | None = None
+    changelog: str = ""
+    tag: str = ""
+
+
 class StateData(BaseModel):
     """Typed schema for the JSON-backed crash-recovery state."""
 
@@ -768,6 +812,7 @@ class StateData(BaseModel):
     issue_attempts: dict[str, int] = Field(default_factory=dict)
     active_issue_numbers: list[int] = Field(default_factory=list)
     lifetime_stats: LifetimeStats = Field(default_factory=LifetimeStats)
+    session_counters: SessionCounters = Field(default_factory=SessionCounters)
     memory_issue_ids: list[int] = Field(default_factory=list)
     memory_digest_hash: str = ""
     memory_last_synced: str | None = None
@@ -785,6 +830,7 @@ class StateData(BaseModel):
     issue_outcomes: dict[str, IssueOutcome] = Field(default_factory=dict)
     hook_failures: dict[str, list[HookFailureRecord]] = Field(default_factory=dict)
     epic_states: dict[str, EpicState] = Field(default_factory=dict)
+    releases: dict[str, Release] = Field(default_factory=dict)
     last_updated: str | None = None
 
 
