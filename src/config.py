@@ -1331,8 +1331,8 @@ def _resolve_repo_scoped_paths(config: HydraFlowConfig) -> None:
         if slug:
             flat = data_root / "state.json"
             if not target.exists() and flat.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
                 try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(flat, target)
                 except OSError as exc:
                     logger.warning("Failed to migrate %s → %s: %s", flat, target, exc)
@@ -1348,8 +1348,8 @@ def _resolve_repo_scoped_paths(config: HydraFlowConfig) -> None:
         if slug:
             flat = data_root / "events.jsonl"
             if not target.exists() and flat.exists():
-                target.parent.mkdir(parents=True, exist_ok=True)
                 try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(flat, target)
                 except OSError as exc:
                     logger.warning("Failed to migrate %s → %s: %s", flat, target, exc)
@@ -1377,8 +1377,8 @@ def _resolve_repo_scoped_paths(config: HydraFlowConfig) -> None:
             and not scoped_sessions.exists()
             and flat_sessions.exists()
         ):
-            scoped_sessions.parent.mkdir(parents=True, exist_ok=True)
             try:
+                scoped_sessions.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(flat_sessions, scoped_sessions)
             except OSError as exc:
                 logger.warning(
