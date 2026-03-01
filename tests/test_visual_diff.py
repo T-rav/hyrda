@@ -449,7 +449,10 @@ class TestRunVisualDiff:
         candidate_dir.mkdir()
 
         report = run_visual_diff(baseline_dir, candidate_dir)
-        assert report.aggregate_verdict == ScreenVerdict.PASS
+        # No baseline PNGs → treated as ERROR so callers cannot silently pass
+        # a misconfigured environment where screenshots were never captured.
+        assert report.aggregate_verdict == ScreenVerdict.ERROR
+        assert report.is_fail is True
         assert report.total_screens == 0
         assert report.failure_category == FailureCategory.MISSING_BASELINE
 
@@ -520,6 +523,38 @@ class TestRunVisualDiff:
         )
         assert report.aggregate_verdict == ScreenVerdict.WARN
         assert report.warned >= 1
+
+    def test_error_budget_exceeded_classification(self, tmp_path: Path) -> None:
+        """ERROR from budget exceeded → failure_category = BUDGET_EXCEEDED."""
+        baseline_dir = tmp_path / "baseline"
+        candidate_dir = tmp_path / "candidate"
+        baseline_dir.mkdir()
+        candidate_dir.mkdir()
+        _write_png(baseline_dir / "s.png")
+        _write_png(candidate_dir / "s.png")
+
+        report = run_visual_diff(
+            baseline_dir,
+            candidate_dir,
+            budget_bytes=1,  # forces budget-exceeded ERROR on every screen
+        )
+        assert report.aggregate_verdict == ScreenVerdict.ERROR
+        assert report.failure_category == FailureCategory.BUDGET_EXCEEDED
+
+    def test_error_missing_baseline_classification(self, tmp_path: Path) -> None:
+        """ERROR from unreadable baseline → failure_category = MISSING_BASELINE."""
+        baseline_dir = tmp_path / "baseline"
+        candidate_dir = tmp_path / "candidate"
+        baseline_dir.mkdir()
+        candidate_dir.mkdir()
+        # Write a file that has valid PNG header but is too short to parse.
+        bad_baseline = baseline_dir / "s.png"
+        bad_baseline.write_bytes(_PNG_HEADER + b"\x00")  # truncated, < 24 bytes
+        _write_png(candidate_dir / "s.png")
+
+        report = run_visual_diff(baseline_dir, candidate_dir)
+        assert report.aggregate_verdict == ScreenVerdict.ERROR
+        assert report.failure_category == FailureCategory.MISSING_BASELINE
 
 
 # ---------------------------------------------------------------------------
@@ -682,4 +717,31 @@ class TestVisualValidationConfig:
                 worktree_base=tmp_path / "wt",
                 state_file=tmp_path / "s.json",
                 visual_max_screens=0,
+            )
+
+    def test_warn_threshold_must_be_less_than_diff_threshold(
+        self, tmp_path: Path
+    ) -> None:
+        from pydantic import ValidationError
+
+        from config import HydraFlowConfig
+
+        # warn == diff → WARN verdict is unreachable, must be rejected.
+        with pytest.raises(ValidationError, match="strictly less than"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                visual_warn_threshold=0.01,
+                visual_diff_threshold=0.01,
+            )
+
+        # warn > diff → also invalid.
+        with pytest.raises(ValidationError, match="strictly less than"):
+            HydraFlowConfig(
+                repo_root=tmp_path,
+                worktree_base=tmp_path / "wt",
+                state_file=tmp_path / "s.json",
+                visual_warn_threshold=0.05,
+                visual_diff_threshold=0.01,
             )

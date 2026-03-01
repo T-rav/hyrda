@@ -232,6 +232,10 @@ def run_visual_diff(
     elif failed > 0:
         aggregate = ScreenVerdict.FAIL
         failure_category = FailureCategory.THRESHOLD_EXCEEDED
+    elif failure_category == FailureCategory.MISSING_BASELINE:
+        # No screens processed because baseline dir is empty — treat as ERROR
+        # so callers cannot silently pass with a misconfigured baseline.
+        aggregate = ScreenVerdict.ERROR
     elif warned > 0:
         aggregate = ScreenVerdict.WARN
     else:
