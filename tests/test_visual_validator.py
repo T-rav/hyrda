@@ -499,6 +499,34 @@ class TestVisualConfigFields:
         # Assert — invalid value is rejected; field stays at default
         assert config.visual_warn_threshold == pytest.approx(0.05)
 
+    def test_env_override_visual_max_retries_above_le_is_ignored(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should ignore HYDRAFLOW_VISUAL_MAX_RETRIES when value exceeds le=5."""
+        # Arrange
+        monkeypatch.setenv("HYDRAFLOW_VISUAL_MAX_RETRIES", "99")
+
+        # Act
+        config = ConfigFactory.create()
+
+        # Assert — out-of-bounds value is rejected; field stays at default
+        assert config.visual_max_retries == 2
+
+    def test_env_override_visual_max_retries_negative_is_ignored(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Should ignore HYDRAFLOW_VISUAL_MAX_RETRIES when value is negative."""
+        # Arrange
+        monkeypatch.setenv("HYDRAFLOW_VISUAL_MAX_RETRIES", "-1")
+
+        # Act
+        config = ConfigFactory.create()
+
+        # Assert — out-of-bounds value is rejected; field stays at default
+        assert config.visual_max_retries == 2
+
 
 # ---------------------------------------------------------------------------
 # Integration tests: VisualValidator
