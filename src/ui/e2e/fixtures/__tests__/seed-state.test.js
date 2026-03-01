@@ -33,6 +33,15 @@ describe('seed-state fixture', () => {
     }
   })
 
+  it('seedStateEmpty covers all keys from initialState', () => {
+    const expectedKeys = Object.keys(initialState).sort()
+    const emptyKeys = Object.keys(seedStateEmpty).sort()
+
+    for (const key of expectedKeys) {
+      expect(emptyKeys).toContain(key)
+    }
+  })
+
   it('seedStateEmpty has empty pipeline stages', () => {
     const stages = ['triage', 'plan', 'implement', 'review', 'hitl', 'merged']
     for (const stage of stages) {

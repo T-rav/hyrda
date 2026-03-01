@@ -5,8 +5,12 @@ export default defineConfig({
   testMatch: '*.spec.js',
   outputDir: './e2e/results',
   snapshotDir: './e2e/screenshots',
+  snapshotPathTemplate: '{snapshotDir}/{arg}{ext}',
   timeout: 30_000,
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    toHaveScreenshot: { maxDiffPixelRatio: 0 },
+  },
   fullyParallel: false,
   retries: 0,
   workers: 1,

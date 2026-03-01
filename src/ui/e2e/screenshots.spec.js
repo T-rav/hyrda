@@ -82,6 +82,10 @@ async function stubApiRoutes(page) {
 
 /**
  * Inject seed state and disable animations before navigating.
+ *
+ * Animation-suppression CSS is injected via `addInitScript` so it takes
+ * effect before React's first paint, eliminating any animation frames that
+ * could produce non-deterministic pixels.
  */
 async function setupPage(page, state) {
   await stubApiRoutes(page)
@@ -90,8 +94,13 @@ async function setupPage(page, state) {
     window.__HYDRAFLOW_SEED_STATE__ = seedData
   }, state)
 
+  await page.addInitScript((css) => {
+    const style = document.createElement('style')
+    style.textContent = css
+    ;(document.head || document.documentElement).appendChild(style)
+  }, DISABLE_ANIMATIONS_CSS)
+
   await page.goto('/')
-  await page.addStyleTag({ content: DISABLE_ANIMATIONS_CSS })
   await page.waitForSelector('[data-testid="main-tabs"]', { timeout: 10_000 })
 }
 
