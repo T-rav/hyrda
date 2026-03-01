@@ -30,6 +30,7 @@ and optionally **Alternatives considered** and **Related** links.
 | [0017](0017-auto-decompose-triage-counter-exclusion.md) | Auto-Decompose Triage Counter Exclusion | Proposed |
 | [0018](0018-screenshot-capture-pipeline.md) | Screenshot Capture Pipeline Architecture | Proposed |
 | [0019](0019-background-task-delegation-abstraction-layer.md) | Background Task Delegation Abstraction Layer | Proposed |
+| [0020](0020-autoApproveRow-border-context-awareness.md) | autoApproveRow Border Context Awareness | Proposed |
 
 ## Adding a new ADR
 
