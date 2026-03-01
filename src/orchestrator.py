@@ -343,8 +343,10 @@ class HydraFlowOrchestrator:
         self._state.set_bg_worker_state(name, self._bg_worker_states[name])
 
     def set_bg_worker_enabled(self, name: str, enabled: bool) -> None:
-        """Enable or disable a background worker by name."""
+        """Enable or disable a background worker by name and persist to state."""
         self._bg_worker_enabled[name] = enabled
+        disabled = {n for n, e in self._bg_worker_enabled.items() if not e}
+        self._state.set_disabled_workers(disabled)
 
     def is_bg_worker_enabled(self, name: str) -> bool:
         """Return whether a background worker is enabled (defaults to True)."""
@@ -553,11 +555,24 @@ class HydraFlowOrchestrator:
             )
             self._state.clear_interrupted_issues()
 
+    def _restore_disabled_workers(self) -> None:
+        """Restore persisted disabled-worker flags into the in-memory map."""
+        disabled = self._state.get_disabled_workers()
+        if disabled:
+            for name in disabled:
+                self._bg_worker_enabled[name] = False
+            logger.info(
+                "Restored %d disabled worker(s) from state: %s",
+                len(disabled),
+                sorted(disabled),
+            )
+
     def _restore_state(self) -> None:
-        """Restore worker intervals, crash-recovered issues, interrupted issues, and background worker heartbeats."""
+        """Restore worker intervals, crash-recovered issues, interrupted issues, disabled workers, and background worker heartbeats."""
         self._restore_worker_intervals()
         self._restore_crash_recovered_issues()
         self._restore_interrupted_issues()
+        self._restore_disabled_workers()
         self._restore_bg_worker_states()
 
     def _restore_bg_worker_states(self) -> None:
