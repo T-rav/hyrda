@@ -826,6 +826,29 @@ class EpicDetail(BaseModel):
     children: list[EpicChildInfo] = Field(default_factory=list)
 
 
+# --- Changelog ---
+
+
+class ChangeCategory(StrEnum):
+    """Category for a changelog entry derived from conventional commit prefixes."""
+
+    FEATURES = "Features"
+    BUG_FIXES = "Bug Fixes"
+    IMPROVEMENTS = "Improvements"
+    DOCUMENTATION = "Documentation"
+    MISCELLANEOUS = "Miscellaneous"
+
+
+class ChangelogEntry(BaseModel):
+    """A single entry in a generated changelog."""
+
+    category: ChangeCategory = ChangeCategory.MISCELLANEOUS
+    title: str
+    summary: str = ""
+    issue_number: int = 0
+    pr_number: int = 0
+
+
 class Crate(BaseModel):
     """A GitHub milestone used as a delivery work package (crate)."""
 

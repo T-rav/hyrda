@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
+from changelog import generate_changelog
 from config import HydraFlowConfig
 from events import EventBus, EventType, HydraFlowEvent
 from issue_fetcher import IssueFetcher
@@ -95,14 +97,83 @@ class EpicCompletionChecker:
         # All sub-issues are completed — close the epic
         logger.info("All sub-issues completed for epic #%d — closing", epic_number)
 
+        # Generate changelog from sub-issue PRs
+        changelog_body = await self._generate_epic_changelog(epic_number, sub_issues)
+
         updated_body = check_all_checkboxes(epic_body)
         await self._prs.update_issue_body(epic_number, updated_body)
         await self._prs.add_labels(epic_number, [fixed_label])
-        await self._prs.post_comment(
-            epic_number,
-            "All sub-issues completed — closing epic automatically.",
-        )
+
+        close_comment = "All sub-issues completed — closing epic automatically."
+        if changelog_body:
+            close_comment += f"\n\n---\n\n{changelog_body}"
+        await self._prs.post_comment(epic_number, close_comment)
         await self._prs.close_issue(epic_number)
+
+        # Create GitHub release with changelog
+        if changelog_body:
+            tag = f"epic-{epic_number}"
+            await self._prs.create_release(
+                tag=tag,
+                title=f"Epic #{epic_number} completed",
+                body=changelog_body,
+            )
+
+        # Optionally write to CHANGELOG.md file
+        if changelog_body and self._config.changelog_file:
+            self._write_changelog_file(changelog_body)
+
+    async def _generate_epic_changelog(
+        self, epic_number: int, sub_issues: list[int]
+    ) -> str:
+        """Generate a changelog from sub-issue PRs. Returns empty string on failure."""
+        try:
+            version = f"epic-{epic_number}"
+            return await generate_changelog(
+                pr_manager=self._prs,
+                sub_issues=sub_issues,
+                version=version,
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Changelog generation failed for epic #%d",
+                epic_number,
+                exc_info=True,
+            )
+            return ""
+
+    def _write_changelog_file(self, content: str) -> None:
+        """Append changelog content to the configured changelog file."""
+        try:
+            changelog_path = Path(self._config.changelog_file)
+            if not changelog_path.is_absolute():
+                changelog_path = self._config.repo_root / changelog_path
+
+            existing = ""
+            if changelog_path.exists():
+                existing = changelog_path.read_text(encoding="utf-8")
+
+            # Prepend new changelog entry after any top-level heading
+            if existing.startswith("# "):
+                # Insert after the first line (the heading)
+                first_nl = existing.index("\n") if "\n" in existing else len(existing)
+                updated = (
+                    existing[: first_nl + 1]
+                    + "\n"
+                    + content
+                    + "\n"
+                    + existing[first_nl + 1 :]
+                )
+            else:
+                updated = content + "\n" + existing
+
+            changelog_path.write_text(updated, encoding="utf-8")
+            logger.info("Changelog written to %s", changelog_path)
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "Failed to write changelog file",
+                exc_info=True,
+            )
 
 
 class EpicManager:
