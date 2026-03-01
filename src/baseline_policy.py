@@ -18,6 +18,30 @@ from state import StateTracker
 logger = logging.getLogger("hydraflow.baseline_policy")
 
 
+def _glob_match(path: str, pattern: str) -> bool:
+    """Match *path* against a glob *pattern* with proper ``**`` support.
+
+    ``fnmatch.fnmatch`` treats ``*`` as matching everything (including ``/``)
+    but ``**`` in glob semantics should also match *zero* path segments.
+    This helper strips leading ``**/`` and trailing ``/**`` to cover that case.
+    """
+    if fnmatch.fnmatch(path, pattern):
+        return True
+    # Handle ** matching zero directories by stripping leading **/ prefixes.
+    stripped = pattern
+    while stripped.startswith("**/"):
+        stripped = stripped[3:]
+        if fnmatch.fnmatch(path, stripped):
+            return True
+    # Handle trailing /** matching zero directories.
+    stripped = pattern
+    while stripped.endswith("/**"):
+        stripped = stripped[:-3]
+        if fnmatch.fnmatch(path, stripped):
+            return True
+    return False
+
+
 class BaselinePolicy:
     """Enforces baseline image governance during the review phase.
 
@@ -44,7 +68,7 @@ class BaselinePolicy:
         matched: list[str] = []
         for path in changed_files:
             for pattern in patterns:
-                if fnmatch.fnmatch(path, pattern):
+                if _glob_match(path, pattern):
                     matched.append(path)
                     break
         return matched
@@ -55,6 +79,7 @@ class BaselinePolicy:
         issue_number: int,
         changed_files: list[str],
         pr_approvers: list[str],
+        commit_sha: str = "",
     ) -> BaselineApprovalResult:
         """Check whether baseline changes in a PR are properly approved.
 
@@ -63,6 +88,7 @@ class BaselinePolicy:
             issue_number: The linked issue number.
             changed_files: All files changed in the PR.
             pr_approvers: GitHub usernames that have approved the PR.
+            commit_sha: HEAD commit SHA for the PR (recorded in audit trail).
 
         Returns:
             A :class:`BaselineApprovalResult` with approval status.
@@ -132,13 +158,19 @@ class BaselinePolicy:
             if approved
             else "Baseline approval denied — no authorized approver found"
         )
+        # Use INITIAL type when this is the first baseline record for the issue.
+        prior = self._state.get_baseline_audit(issue_number)
+        change_type = (
+            BaselineChangeType.INITIAL if not prior else BaselineChangeType.UPDATE
+        )
         record = BaselineAuditRecord(
             pr_number=pr_number,
             issue_number=issue_number,
             changed_files=baseline_files,
-            change_type=BaselineChangeType.UPDATE,
+            change_type=change_type,
             approver=approver,
             reason=audit_reason,
+            commit_sha=commit_sha,
         )
         self._state.record_baseline_change(
             issue_number,

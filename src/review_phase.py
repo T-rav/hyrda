@@ -306,11 +306,13 @@ class ReviewPhase:
             if not changed_files:
                 return None
             pr_approvers = await self._prs.get_pr_approvers(pr.number)
+            commit_sha = await self._prs.get_pr_head_sha(pr.number)
             return await self._baseline_policy.check_approval(
                 pr_number=pr.number,
                 issue_number=pr.issue_number,
                 changed_files=changed_files,
                 pr_approvers=pr_approvers,
+                commit_sha=commit_sha,
             )
         except Exception:  # noqa: BLE001
             logger.warning(

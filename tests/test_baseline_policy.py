@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from baseline_policy import BaselinePolicy
+from baseline_policy import BaselinePolicy, _glob_match
 from events import EventBus, EventType
 from models import (
     BaselineApprovalResult,
@@ -52,6 +52,42 @@ def policy(config, state, bus):
 
 
 # ---------------------------------------------------------------------------
+# _glob_match
+# ---------------------------------------------------------------------------
+
+
+class TestGlobMatch:
+    """Tests for _glob_match helper with ** glob support."""
+
+    def test_standard_fnmatch_still_works(self):
+        assert _glob_match("ui/dashboard.snap.png", "**/*.snap.png") is True
+
+    def test_double_star_leading_matches_zero_dirs(self):
+        """** at the start should match files in the root directory."""
+        assert _glob_match("dashboard.snap.png", "**/*.snap.png") is True
+
+    def test_double_star_trailing_matches_zero_dirs(self):
+        """** at the end should match files without trailing path segments."""
+        assert _glob_match("__snapshots__/file.png", "**/__snapshots__/**") is True
+
+    def test_double_star_both_sides_zero_dirs(self):
+        """** on both sides should match a single-segment __snapshots__ path."""
+        assert _glob_match("__snapshots__/file.png", "**/__snapshots__/**") is True
+
+    def test_deep_nested_path(self):
+        assert _glob_match("a/b/c/__snapshots__/d.png", "**/__snapshots__/**") is True
+
+    def test_no_match(self):
+        assert _glob_match("src/app.py", "**/*.snap.png") is False
+
+    def test_exact_filename_pattern(self):
+        assert _glob_match("file.golden", "*.golden") is True
+
+    def test_nested_with_no_double_star(self):
+        assert _glob_match("a/file.golden", "*.golden") is True
+
+
+# ---------------------------------------------------------------------------
 # detect_baseline_changes
 # ---------------------------------------------------------------------------
 
@@ -89,6 +125,18 @@ class TestDetectBaselineChanges:
         files = ["tests/__snapshots__/widget.snap.png"]
         result = policy.detect_baseline_changes(files)
         assert result == ["tests/__snapshots__/widget.snap.png"]
+
+    def test_root_level_snap_file(self, policy: BaselinePolicy):
+        """A .snap.png file in the root dir should match **/*.snap.png."""
+        files = ["widget.snap.png", "src/main.py"]
+        result = policy.detect_baseline_changes(files)
+        assert result == ["widget.snap.png"]
+
+    def test_root_level_snapshots_dir(self, policy: BaselinePolicy):
+        """__snapshots__/ at the root should match **/__snapshots__/**."""
+        files = ["__snapshots__/home.snap.png"]
+        result = policy.detect_baseline_changes(files)
+        assert result == ["__snapshots__/home.snap.png"]
 
     def test_empty_file_list(self, policy: BaselinePolicy):
         result = policy.detect_baseline_changes([])
@@ -221,9 +269,10 @@ class TestCheckApproval:
         assert event.data["approved"] is True
 
     @pytest.mark.asyncio
-    async def test_records_audit_on_approval(
+    async def test_first_audit_record_uses_initial_type(
         self, policy: BaselinePolicy, state: StateTracker
     ):
+        """First baseline record for an issue should use INITIAL change type."""
         await policy.check_approval(
             pr_number=101,
             issue_number=42,
@@ -233,7 +282,45 @@ class TestCheckApproval:
         records = state.get_baseline_audit(42)
         assert len(records) == 1
         assert records[0].approver == "alice"
-        assert records[0].change_type == BaselineChangeType.UPDATE
+        assert records[0].change_type == BaselineChangeType.INITIAL
+
+    @pytest.mark.asyncio
+    async def test_subsequent_record_uses_update_type(
+        self, policy: BaselinePolicy, state: StateTracker
+    ):
+        """Second baseline record for an issue should use UPDATE change type."""
+        await policy.check_approval(
+            pr_number=101,
+            issue_number=42,
+            changed_files=["tests/__snapshots__/home.snap.png"],
+            pr_approvers=["alice"],
+        )
+        await policy.check_approval(
+            pr_number=102,
+            issue_number=42,
+            changed_files=["tests/__snapshots__/home.snap.png"],
+            pr_approvers=["bob"],
+        )
+        records = state.get_baseline_audit(42)
+        assert len(records) == 2
+        assert records[0].change_type == BaselineChangeType.INITIAL
+        assert records[1].change_type == BaselineChangeType.UPDATE
+
+    @pytest.mark.asyncio
+    async def test_commit_sha_recorded_in_audit(
+        self, policy: BaselinePolicy, state: StateTracker
+    ):
+        """commit_sha should be stored in the audit record."""
+        await policy.check_approval(
+            pr_number=101,
+            issue_number=42,
+            changed_files=["tests/__snapshots__/home.snap.png"],
+            pr_approvers=["alice"],
+            commit_sha="abc123def456",
+        )
+        records = state.get_baseline_audit(42)
+        assert len(records) == 1
+        assert records[0].commit_sha == "abc123def456"
 
     @pytest.mark.asyncio
     async def test_denial_is_recorded_in_audit(
@@ -250,7 +337,7 @@ class TestCheckApproval:
         assert len(records) == 1
         assert records[0].approver == ""
         assert "denied" in records[0].reason.lower()
-        assert records[0].change_type == BaselineChangeType.UPDATE
+        assert records[0].change_type == BaselineChangeType.INITIAL
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +482,7 @@ class TestAuditTrail:
             pr_approvers=["alice"],
         )
         summary = policy.format_audit_summary(42)
-        assert "UPDATE" in summary
+        assert "INITIAL" in summary
         assert "alice" in summary
         assert "home.snap.png" in summary
 
