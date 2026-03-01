@@ -579,8 +579,11 @@ class EpicManager:
 
         # Delegate to the existing EpicCompletionChecker for GitHub operations
         # (checkbox update, label add, close). If that fails, try a direct close.
+        # Use a completed child as the trigger; fall back to excluded if all children
+        # were closed-without-merge (completed_children may be empty in that case).
+        trigger = (epic.completed_children or epic.excluded_children)[-1]
         try:
-            await self._checker.check_and_close_epics(epic.completed_children[-1])
+            await self._checker.check_and_close_epics(trigger)
         except Exception:  # noqa: BLE001
             logger.warning(
                 "EpicCompletionChecker failed for #%d — attempting direct close",
@@ -603,7 +606,7 @@ class EpicManager:
 
         self._state.close_epic(epic_number)
         await self._publish_update(epic_number, "closed")
-        logger.info("Epic #%d auto-closed — all children completed", epic_number)
+        logger.info("Epic #%d auto-closed — all children resolved", epic_number)
 
     def _is_stale(self, epic: EpicState) -> bool:
         """Return True if the epic has had no activity within the stale threshold."""
