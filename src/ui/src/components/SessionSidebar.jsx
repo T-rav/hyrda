@@ -103,7 +103,8 @@ export function SessionSidebar() {
 
   const handleAddRepoSubmit = () => {
     const trimmed = addRepoValue.trim()
-    if (trimmed && addRepoShortcut) {
+    if (!trimmed) return
+    if (addRepoShortcut) {
       addRepoShortcut(trimmed)
     }
     setAddRepoValue('')

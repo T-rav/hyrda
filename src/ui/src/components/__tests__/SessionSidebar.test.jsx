@@ -498,13 +498,13 @@ describe('SessionSidebar add repo button', () => {
     expect(screen.queryByPlaceholderText('owner/repo')).toBeNull()
   })
 
-  it('closes panel on empty Enter (documents current dismiss behavior)', () => {
+  it('keeps panel open on empty Enter', () => {
     render(<SessionSidebar />)
     fireEvent.click(screen.getByLabelText('Add repo'))
     const input = screen.getByPlaceholderText('owner/repo')
-    // Press Enter with empty input — panel dismisses without submitting
+    // Press Enter with empty input — panel should stay open
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(screen.queryByPlaceholderText('owner/repo')).toBeNull()
+    expect(screen.getByPlaceholderText('owner/repo')).toBeDefined()
   })
 })
 
@@ -677,7 +677,7 @@ describe('SessionSidebar per-repo Start/Stop', () => {
     expect(stopRuntime).toHaveBeenCalledWith('demo')
   })
 
-  it('Start/Stop click does not trigger selectRepo', () => {
+  it('Start click does not trigger selectRepo', () => {
     const selectRepo = vi.fn()
     const startRuntime = vi.fn()
     mockUseHydraFlow.mockReturnValue(
@@ -690,6 +690,23 @@ describe('SessionSidebar per-repo Start/Stop', () => {
     render(<SessionSidebar />)
     selectRepo.mockClear()
     fireEvent.click(screen.getByText('Start'))
+    expect(selectRepo).not.toHaveBeenCalled()
+  })
+
+  it('Stop click does not trigger selectRepo', () => {
+    const selectRepo = vi.fn()
+    const stopRuntime = vi.fn()
+    mockUseHydraFlow.mockReturnValue(
+      defaultContext({
+        supervisedRepos: [SUPERVISED_REPO],
+        runtimes: [{ slug: 'demo', running: true }],
+        selectRepo,
+        stopRuntime,
+      })
+    )
+    render(<SessionSidebar />)
+    selectRepo.mockClear()
+    fireEvent.click(screen.getByText('Stop'))
     expect(selectRepo).not.toHaveBeenCalled()
   })
 
