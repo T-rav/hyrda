@@ -450,12 +450,12 @@ ui-clean:
 
 screenshot:
 	@echo "$(BLUE)Capturing deterministic screenshots...$(RESET)"
-	@cd $(HYDRAFLOW_DIR)src/ui && npm install --silent && npx playwright install --with-deps chromium && npm run screenshot
+	@cd $(HYDRAFLOW_DIR)src/ui && npm ci && npx playwright install --with-deps chromium && npm run screenshot
 	@echo "$(GREEN)Screenshots captured → src/ui/e2e/screenshots/$(RESET)"
 
 screenshot-update:
 	@echo "$(BLUE)Updating screenshot baselines...$(RESET)"
-	@cd $(HYDRAFLOW_DIR)src/ui && npm install --silent && npx playwright install --with-deps chromium && npm run screenshot:update
+	@cd $(HYDRAFLOW_DIR)src/ui && npm ci && npx playwright install --with-deps chromium && npm run screenshot:update
 	@echo "$(GREEN)Screenshot baselines updated → src/ui/e2e/screenshots/$(RESET)"
 
 docker-build:

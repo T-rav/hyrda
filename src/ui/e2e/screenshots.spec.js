@@ -92,9 +92,7 @@ async function setupPage(page, state) {
     window.__HYDRAFLOW_SEED_STATE__ = seedData
   }, state)
 
-  await page.addStyleTag({ content: DISABLE_ANIMATIONS_CSS })
   await page.goto('/')
-  // Re-inject stylesheet after navigation (addStyleTag before goto is a no-op)
   await page.addStyleTag({ content: DISABLE_ANIMATIONS_CSS })
   await page.waitForSelector('[data-testid="main-tabs"]', { timeout: 10_000 })
 }
