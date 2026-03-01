@@ -276,6 +276,58 @@ class TestFormatChangelog:
         result = format_changelog("1.0.0", entries, date="2026-02-28")
         assert "- chore: update dependencies\n" in result
 
+    def test_summary_rendered_below_title(self) -> None:
+        """Entry summaries are rendered as indented lines below the title."""
+        entries = [
+            ChangelogEntry(
+                category=ChangeCategory.FEATURES,
+                title="feat: add auth",
+                summary="- Added OAuth flow\n- Added token refresh",
+                issue_number=1,
+                pr_number=2,
+            ),
+        ]
+        result = format_changelog("1.0.0", entries, date="2026-02-28")
+        assert "- add auth (#1, PR #2)\n" in result
+        assert "  - Added OAuth flow\n" in result
+        assert "  - Added token refresh\n" in result
+
+    def test_summary_blank_lines_skipped(self) -> None:
+        """Blank lines in summaries are skipped rather than producing empty indented lines."""
+        entries = [
+            ChangelogEntry(
+                category=ChangeCategory.FEATURES,
+                title="feat: add feature",
+                summary="- Line 1\n\n- Line 2",
+                issue_number=1,
+                pr_number=2,
+            ),
+        ]
+        result = format_changelog("1.0.0", entries, date="2026-02-28")
+        assert "  - Line 1\n" in result
+        assert "  - Line 2\n" in result
+        # No empty indented line
+        assert "  \n" not in result
+
+    def test_empty_summary_not_rendered(self) -> None:
+        """Entries with empty summaries produce no indented lines."""
+        entries = [
+            ChangelogEntry(
+                category=ChangeCategory.FEATURES,
+                title="feat: add feature",
+                summary="",
+                issue_number=1,
+                pr_number=2,
+            ),
+        ]
+        result = format_changelog("1.0.0", entries, date="2026-02-28")
+        lines = result.strip().splitlines()
+        # The entry line should be the last non-empty line in the Features section
+        entry_line = [line for line in lines if line.startswith("- ")][0]
+        assert entry_line == "- add feature (#1, PR #2)"
+        # No indented summary lines
+        assert not any(line.startswith("  ") for line in lines)
+
 
 # ---------------------------------------------------------------------------
 # generate_changelog (async integration)
@@ -304,8 +356,10 @@ class TestGenerateChangelog:
         assert "## [1.0.0] - 2026-02-28" in result
         assert "### Features" in result
         assert "add auth" in result
+        assert "Added OAuth" in result
         assert "### Bug Fixes" in result
         assert "crash on login" in result
+        assert "Fixed null pointer" in result
 
     @pytest.mark.asyncio
     async def test_skips_issues_without_prs(self) -> None:

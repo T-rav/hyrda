@@ -116,6 +116,11 @@ def format_changelog(
                 refs.append(f"PR #{entry.pr_number}")
             ref_str = f" ({', '.join(refs)})" if refs else ""
             lines.append(f"- {display_title}{ref_str}")
+            if entry.summary:
+                for summary_line in entry.summary.splitlines():
+                    stripped = summary_line.strip()
+                    if stripped:
+                        lines.append(f"  {stripped}")
 
     lines.append("")
     return "\n".join(lines)
