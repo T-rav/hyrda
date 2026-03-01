@@ -517,6 +517,22 @@ describe('SystemPanel', () => {
       expect(epicsToggle).toHaveTextContent('On')
       expect(bugsToggle).toHaveTextContent('Off')
     })
+
+    it('clicking a process toggle calls PATCH /api/control/config with correct payload', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true })
+      mockUseHydraFlow.mockReturnValue(defaultMockContext({
+        config: { auto_process_epics: false, auto_process_bug_reports: false },
+      }))
+      render(<SystemPanel backgroundWorkers={[]} />)
+      fireEvent.click(screen.getByText('Processes'))
+      fireEvent.click(screen.getByTestId('auto-process-epics-toggle'))
+      expect(fetchSpy).toHaveBeenCalledWith('/api/control/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auto_process_epics: true, persist: true }),
+      })
+      fetchSpy.mockRestore()
+    })
   })
 
   describe('Worker Log Stream integration', () => {
