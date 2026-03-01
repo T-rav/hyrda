@@ -494,3 +494,112 @@ class TestEpicEndpoints:
         assert response.status_code == 400
         data = json.loads(response.body)
         assert data["error"] == "epic not found"
+
+
+class TestMergeableEnrichment:
+    """Tests for mergeable field population in _enrich_pr_status."""
+
+    @pytest.mark.asyncio
+    async def test_mergeable_set_true(self) -> None:
+        """_enrich_pr_status populates mergeable=True from PRManager."""
+        from epic import EpicManager
+
+        prs = AsyncMock()
+        prs.get_pr_checks = AsyncMock(return_value=[])
+        prs.get_pr_reviews = AsyncMock(return_value=[])
+        prs.get_pr_mergeable = AsyncMock(return_value=True)
+
+        child = EpicChildInfo(issue_number=42)
+        mgr = EpicManager.__new__(EpicManager)
+        mgr._prs = prs
+
+        await mgr._enrich_pr_status(child, 99)
+        assert child.mergeable is True
+
+    @pytest.mark.asyncio
+    async def test_mergeable_set_false(self) -> None:
+        """_enrich_pr_status populates mergeable=False for conflicted PRs."""
+        from epic import EpicManager
+
+        prs = AsyncMock()
+        prs.get_pr_checks = AsyncMock(return_value=[])
+        prs.get_pr_reviews = AsyncMock(return_value=[])
+        prs.get_pr_mergeable = AsyncMock(return_value=False)
+
+        child = EpicChildInfo(issue_number=42)
+        mgr = EpicManager.__new__(EpicManager)
+        mgr._prs = prs
+
+        await mgr._enrich_pr_status(child, 99)
+        assert child.mergeable is False
+
+    @pytest.mark.asyncio
+    async def test_mergeable_none_on_error(self) -> None:
+        """_enrich_pr_status leaves mergeable=None on API failure."""
+        from epic import EpicManager
+
+        prs = AsyncMock()
+        prs.get_pr_checks = AsyncMock(return_value=[])
+        prs.get_pr_reviews = AsyncMock(return_value=[])
+        prs.get_pr_mergeable = AsyncMock(side_effect=RuntimeError("API error"))
+
+        child = EpicChildInfo(issue_number=42)
+        mgr = EpicManager.__new__(EpicManager)
+        mgr._prs = prs
+
+        await mgr._enrich_pr_status(child, 99)
+        assert child.mergeable is None
+
+    @pytest.mark.asyncio
+    async def test_readiness_uses_mergeable_data(self) -> None:
+        """_compute_readiness correctly uses mergeable=False to set no_conflicts=False."""
+        from epic import EpicManager
+
+        children = [
+            EpicChildInfo(
+                issue_number=10,
+                pr_number=42,
+                ci_status="passing",
+                review_status="approved",
+                mergeable=False,
+            ),
+        ]
+
+        mgr = EpicManager.__new__(EpicManager)
+        from models import EpicState
+
+        epic = EpicState(
+            epic_number=100,
+            title="v1.0 Release",
+            child_issues=[10],
+        )
+
+        readiness = mgr._compute_readiness(children, epic)
+        assert readiness.no_conflicts is False
+
+    @pytest.mark.asyncio
+    async def test_readiness_passes_when_all_mergeable(self) -> None:
+        """_compute_readiness sets no_conflicts=True when all PRs are mergeable."""
+        from epic import EpicManager
+
+        children = [
+            EpicChildInfo(
+                issue_number=10,
+                pr_number=42,
+                ci_status="passing",
+                review_status="approved",
+                mergeable=True,
+            ),
+        ]
+
+        mgr = EpicManager.__new__(EpicManager)
+        from models import EpicState
+
+        epic = EpicState(
+            epic_number=100,
+            title="v1.0 Release",
+            child_issues=[10],
+        )
+
+        readiness = mgr._compute_readiness(children, epic)
+        assert readiness.no_conflicts is True

@@ -455,6 +455,7 @@ class TestGetDetailEnriched:
         prs.get_pr_reviews = AsyncMock(
             return_value=[{"state": "APPROVED", "author": "reviewer"}]
         )
+        prs.get_pr_mergeable = AsyncMock(return_value=True)
 
         detail = await mgr.get_detail(100)
         c10 = detail.children[0]
@@ -492,6 +493,7 @@ class TestGetDetailEnriched:
         prs.get_pr_reviews = AsyncMock(
             return_value=[{"state": "CHANGES_REQUESTED", "author": "rev"}]
         )
+        prs.get_pr_mergeable = AsyncMock(return_value=False)
 
         detail = await mgr.get_detail(100)
         c10 = detail.children[0]
@@ -957,6 +959,109 @@ class TestExecuteRelease:
         assert 100 not in mgr._release_jobs
 
 
+class TestCacheInvalidation:
+    """Verify that child state changes invalidate the detail cache."""
+
+    @pytest.mark.asyncio
+    async def test_on_child_completed_invalidates_cache(self, tmp_path: Path) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])
+        await mgr.register_epic(100, "Epic", [10, 20])
+
+        # Seed the cache manually
+        from models import EpicDetail
+
+        mgr._detail_cache[100] = EpicDetail(epic_number=100)
+        mgr._cache_timestamps[100] = 999999.0
+
+        await mgr.on_child_completed(100, 10)
+
+        assert 100 not in mgr._detail_cache
+        assert 100 not in mgr._cache_timestamps
+
+    @pytest.mark.asyncio
+    async def test_on_child_failed_invalidates_cache(self, tmp_path: Path) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])
+        await mgr.register_epic(100, "Epic", [10, 20])
+
+        from models import EpicDetail
+
+        mgr._detail_cache[100] = EpicDetail(epic_number=100)
+        mgr._cache_timestamps[100] = 999999.0
+
+        await mgr.on_child_failed(100, 10)
+
+        assert 100 not in mgr._detail_cache
+        assert 100 not in mgr._cache_timestamps
+
+    @pytest.mark.asyncio
+    async def test_on_child_approved_invalidates_cache(self, tmp_path: Path) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])
+        await mgr.register_epic(100, "Epic", [10, 20])
+
+        from models import EpicDetail
+
+        mgr._detail_cache[100] = EpicDetail(epic_number=100)
+        mgr._cache_timestamps[100] = 999999.0
+
+        await mgr.on_child_approved(100, 10)
+
+        assert 100 not in mgr._detail_cache
+        assert 100 not in mgr._cache_timestamps
+
+    @pytest.mark.asyncio
+    async def test_on_child_planned_invalidates_cache(self, tmp_path: Path) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])
+        await mgr.register_epic(100, "Epic", [10, 20])
+
+        from models import EpicDetail
+
+        mgr._detail_cache[100] = EpicDetail(epic_number=100)
+        mgr._cache_timestamps[100] = 999999.0
+
+        await mgr.on_child_planned(100, 10)
+
+        assert 100 not in mgr._detail_cache
+        assert 100 not in mgr._cache_timestamps
+
+    @pytest.mark.asyncio
+    async def test_cache_invalidation_no_op_for_unknown_epic(
+        self, tmp_path: Path
+    ) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        # Should not raise even if epic doesn't exist in cache
+        mgr._invalidate_cache(999)
+        assert 999 not in mgr._detail_cache
+
+    @pytest.mark.asyncio
+    async def test_get_detail_returns_fresh_data_after_invalidation(
+        self, tmp_path: Path
+    ) -> None:
+        mgr, state, bus, prs, fetcher = _make_manager(tmp_path)
+        fetcher.fetch_issues_by_labels = AsyncMock(return_value=[])
+        await mgr.register_epic(100, "Epic", [10])
+
+        from models import EpicDetail
+
+        stale_detail = EpicDetail(epic_number=100, title="Stale")
+        mgr._detail_cache[100] = stale_detail
+        mgr._cache_timestamps[100] = 999999999.0  # far in the future
+
+        # Cache should return stale data before invalidation
+        cached = mgr.get_cached_detail(100)
+        assert cached is not None
+        assert cached.title == "Stale"
+
+        # Invalidate
+        mgr._invalidate_cache(100)
+
+        # Cache should now return None
+        assert mgr.get_cached_detail(100) is None
+
+
 class TestRefreshCacheReadyGuard:
     """Tests for EPIC_READY event publishing with released guard."""
 
@@ -990,6 +1095,7 @@ class TestRefreshCacheReadyGuard:
         prs.get_pr_reviews = AsyncMock(
             return_value=[{"state": "APPROVED", "author": "rev"}]
         )
+        prs.get_pr_mergeable = AsyncMock(return_value=True)
 
         await mgr.refresh_cache()
 
@@ -1025,6 +1131,7 @@ class TestRefreshCacheReadyGuard:
         prs.get_pr_reviews = AsyncMock(
             return_value=[{"state": "APPROVED", "author": "rev"}]
         )
+        prs.get_pr_mergeable = AsyncMock(return_value=True)
 
         await mgr.refresh_cache()
 
@@ -1145,6 +1252,7 @@ class TestReadinessEdgeCases:
         prs.find_open_pr_for_branch = AsyncMock(return_value=pr_info)
         prs.get_pr_checks = AsyncMock(return_value=[])
         prs.get_pr_reviews = AsyncMock(return_value=[])
+        prs.get_pr_mergeable = AsyncMock(return_value=None)
 
         detail = await mgr.get_detail(100)
         c10 = detail.children[0]
@@ -1168,6 +1276,7 @@ class TestReadinessEdgeCases:
         prs.find_open_pr_for_branch = AsyncMock(return_value=pr_info)
         prs.get_pr_checks = AsyncMock(return_value=[{"state": "pending", "name": "CI"}])
         prs.get_pr_reviews = AsyncMock(return_value=[])
+        prs.get_pr_mergeable = AsyncMock(return_value=None)
 
         detail = await mgr.get_detail(100)
         c10 = detail.children[0]

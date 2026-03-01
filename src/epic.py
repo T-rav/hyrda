@@ -297,6 +297,11 @@ class EpicManager:
             auto_decomposed,
         )
 
+    def _invalidate_cache(self, epic_number: int) -> None:
+        """Remove cached detail for *epic_number* so the next read fetches fresh data."""
+        self._detail_cache.pop(epic_number, None)
+        self._cache_timestamps.pop(epic_number, None)
+
     async def on_child_planned(self, epic_number: int, child_number: int) -> None:
         """Update last_activity when a child issue completes planning."""
         epic = self._state.get_epic_state(epic_number)
@@ -304,6 +309,7 @@ class EpicManager:
             return
         epic.last_activity = datetime.now(UTC).isoformat()
         self._state.upsert_epic_state(epic)
+        self._invalidate_cache(epic_number)
         logger.debug(
             "Epic #%d child #%d planned — updated last_activity",
             epic_number,
@@ -317,6 +323,7 @@ class EpicManager:
         are approved and optionally auto-merge or escalate for human review.
         """
         self._state.mark_epic_child_approved(epic_number, child_number)
+        self._invalidate_cache(epic_number)
         await self._publish_update(epic_number, "child_approved")
         logger.info("Epic #%d child #%d approved", epic_number, child_number)
 
@@ -346,6 +353,7 @@ class EpicManager:
     async def on_child_completed(self, epic_number: int, child_number: int) -> None:
         """Record child completion and attempt auto-close."""
         self._state.mark_epic_child_complete(epic_number, child_number)
+        self._invalidate_cache(epic_number)
         await self._publish_update(epic_number, "child_completed")
         logger.info(
             "Epic #%d child #%d completed",
@@ -357,6 +365,7 @@ class EpicManager:
     async def on_child_failed(self, epic_number: int, child_number: int) -> None:
         """Record a child failure."""
         self._state.mark_epic_child_failed(epic_number, child_number)
+        self._invalidate_cache(epic_number)
         await self._publish_update(epic_number, "child_failed")
         logger.info(
             "Epic #%d child #%d failed",
@@ -613,6 +622,11 @@ class EpicManager:
                     child_info.review_status = "pending"
         except Exception:  # noqa: BLE001
             logger.debug("Could not fetch reviews for PR #%d", pr_number)
+
+        try:
+            child_info.mergeable = await self._prs.get_pr_mergeable(pr_number)
+        except Exception:  # noqa: BLE001
+            logger.debug("Could not fetch mergeable status for PR #%d", pr_number)
 
     def _compute_readiness(
         self, children: list[EpicChildInfo], epic: EpicState
