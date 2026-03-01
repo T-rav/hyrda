@@ -277,6 +277,10 @@ class ConfigFactory:
         epic_stale_days: int = 7,
         collaborator_check_enabled: bool = False,
         collaborator_cache_ttl: int = 600,
+        artifact_retention_days: int = 30,
+        artifact_max_size_mb: int = 500,
+        artifact_cleanup_interval: int = 3600,
+        runs_gc_interval: int = 3600,
         release_on_epic_close: bool = False,
         release_version_source: Literal[
             "epic_title", "milestone", "manual"
@@ -446,6 +450,10 @@ class ConfigFactory:
             auto_process_bug_reports=auto_process_bug_reports,
             collaborator_check_enabled=collaborator_check_enabled,
             collaborator_cache_ttl=collaborator_cache_ttl,
+            artifact_retention_days=artifact_retention_days,
+            artifact_max_size_mb=artifact_max_size_mb,
+            artifact_cleanup_interval=artifact_cleanup_interval,
+            runs_gc_interval=runs_gc_interval,
             release_on_epic_close=release_on_epic_close,
             release_version_source=release_version_source,
             release_tag_prefix=release_tag_prefix,

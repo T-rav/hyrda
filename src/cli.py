@@ -1264,6 +1264,13 @@ async def _run_clean(config: HydraFlowConfig) -> None:
     state = StateTracker(config.state_file)
     state.reset()
 
+    from run_recorder import RunRecorder  # noqa: PLC0415
+
+    recorder = RunRecorder(config)
+    purged = recorder.purge_all()
+    if purged:
+        logger.info("Purged %d run artifact(s)", purged)
+
     logger.info("Cleanup complete")
 
 
