@@ -674,9 +674,10 @@ class EpicManager:
                             },
                         )
                     )
-                    # Check and publish readiness
+                    # Check and publish readiness (skip already-released epics)
                     if (
-                        detail.readiness.all_implemented
+                        not epic.released
+                        and detail.readiness.all_implemented
                         and detail.readiness.all_approved
                         and detail.readiness.all_ci_passing
                         and detail.readiness.no_conflicts

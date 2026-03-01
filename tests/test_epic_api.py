@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -300,3 +301,196 @@ class TestStageFromLabels:
         from epic import _stage_from_labels
 
         assert _stage_from_labels([], config) == ""
+
+
+class TestEpicEndpoints:
+    """Tests for epic API endpoint handlers."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, get_orch):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=get_orch,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+        )
+
+    def _find_endpoint(self, router, path, method="GET"):
+        for route in router.routes:
+            if not hasattr(route, "path") or route.path != path:
+                continue
+            if not hasattr(route, "methods"):
+                continue
+            if method in route.methods:
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_get_epics_returns_empty_when_no_orchestrator(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        router = self._make_router(config, event_bus, state, tmp_path, lambda: None)
+        endpoint = self._find_endpoint(router, "/api/epics")
+        assert endpoint is not None
+
+        response = await endpoint()
+        data = json.loads(response.body)
+        assert data == []
+
+    @pytest.mark.asyncio
+    async def test_get_epics_returns_details(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from unittest.mock import MagicMock
+
+        mock_orch = MagicMock()
+        mock_detail = EpicDetail(
+            epic_number=100,
+            title="v1.0",
+            merged_children=2,
+            readiness=EpicReadiness(all_implemented=True),
+        )
+        mock_orch._epic_manager = MagicMock()
+        mock_orch._epic_manager.get_all_detail = AsyncMock(return_value=[mock_detail])
+
+        router = self._make_router(
+            config, event_bus, state, tmp_path, lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/epics")
+
+        response = await endpoint()
+        data = json.loads(response.body)
+        assert len(data) == 1
+        assert data[0]["epic_number"] == 100
+        assert data[0]["merged_children"] == 2
+        assert data[0]["readiness"]["all_implemented"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_epic_detail_returns_404_when_not_found(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from unittest.mock import MagicMock
+
+        mock_orch = MagicMock()
+        mock_orch._epic_manager = MagicMock()
+        mock_orch._epic_manager.get_detail = AsyncMock(return_value=None)
+
+        router = self._make_router(
+            config, event_bus, state, tmp_path, lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/epics/{epic_number}")
+
+        response = await endpoint(999)
+        assert response.status_code == 404
+        data = json.loads(response.body)
+        assert "error" in data
+
+    @pytest.mark.asyncio
+    async def test_get_epic_detail_returns_detail(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from unittest.mock import MagicMock
+
+        mock_detail = EpicDetail(
+            epic_number=100,
+            title="v1.0",
+            merge_strategy="bundled",
+            children=[
+                EpicChildInfo(issue_number=10, current_stage="merged", status="done"),
+            ],
+        )
+        mock_orch = MagicMock()
+        mock_orch._epic_manager = MagicMock()
+        mock_orch._epic_manager.get_detail = AsyncMock(return_value=mock_detail)
+
+        router = self._make_router(
+            config, event_bus, state, tmp_path, lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(router, "/api/epics/{epic_number}")
+
+        response = await endpoint(100)
+        data = json.loads(response.body)
+        assert data["epic_number"] == 100
+        assert data["merge_strategy"] == "bundled"
+        assert len(data["children"]) == 1
+        assert data["children"][0]["current_stage"] == "merged"
+
+    @pytest.mark.asyncio
+    async def test_trigger_release_returns_503_when_no_orchestrator(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        router = self._make_router(config, event_bus, state, tmp_path, lambda: None)
+        endpoint = self._find_endpoint(
+            router, "/api/epics/{epic_number}/release", method="POST"
+        )
+        assert endpoint is not None
+
+        response = await endpoint(100)
+        assert response.status_code == 503
+        data = json.loads(response.body)
+        assert "error" in data
+
+    @pytest.mark.asyncio
+    async def test_trigger_release_returns_job_id(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from unittest.mock import MagicMock
+
+        mock_orch = MagicMock()
+        mock_orch._epic_manager = MagicMock()
+        mock_orch._epic_manager.trigger_release = AsyncMock(
+            return_value={"job_id": "release-100-123", "status": "started"}
+        )
+
+        router = self._make_router(
+            config, event_bus, state, tmp_path, lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(
+            router, "/api/epics/{epic_number}/release", method="POST"
+        )
+
+        response = await endpoint(100)
+        data = json.loads(response.body)
+        assert data["job_id"] == "release-100-123"
+        assert data["status"] == "started"
+
+    @pytest.mark.asyncio
+    async def test_trigger_release_returns_400_on_error(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from unittest.mock import MagicMock
+
+        mock_orch = MagicMock()
+        mock_orch._epic_manager = MagicMock()
+        mock_orch._epic_manager.trigger_release = AsyncMock(
+            return_value={"error": "epic not found", "status": "failed"}
+        )
+
+        router = self._make_router(
+            config, event_bus, state, tmp_path, lambda: mock_orch
+        )
+        endpoint = self._find_endpoint(
+            router, "/api/epics/{epic_number}/release", method="POST"
+        )
+
+        response = await endpoint(999)
+        assert response.status_code == 400
+        data = json.loads(response.body)
+        assert data["error"] == "epic not found"
