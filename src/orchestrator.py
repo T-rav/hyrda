@@ -445,7 +445,7 @@ class HydraFlowOrchestrator:
             "plan": "planned",
             "implement": "implemented",
             "review": "reviewed",
-            "hitl": "triaged",  # HITL has no dedicated counter; fallback
+            "hitl": "",  # HITL has no dedicated counter; shows 0
         }
 
         stages: dict[str, StageStats] = {}
