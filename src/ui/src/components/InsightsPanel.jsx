@@ -311,10 +311,6 @@ function formatDuration(seconds) {
 }
 
 // ---------------------------------------------------------------------------
-// Learnings sub-section
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Learnings sub-section: collapsible inner section
 // ---------------------------------------------------------------------------
 
@@ -384,7 +380,7 @@ function TroubleshootingSubSection() {
         <span style={styles.totalBadge}>{data.total_patterns}</span>
         <span style={styles.headerText}>patterns learned</span>
       </div>
-      {data.patterns.map((p, i) => (
+      {(data.patterns || []).map((p, i) => (
         <TroubleshootingCard key={i} pattern={p} />
       ))}
     </div>
@@ -478,7 +474,7 @@ function LearningsSection() {
             style={styles.filterInput}
           />
           {filteredItems.length > 0 ? (
-            filteredItems.reverse().map((item, i) => (
+            [...filteredItems].reverse().map((item, i) => (
               <div key={i} style={styles.memoryCard}>
                 <span style={styles.memoryIssue}>#{item.issue_number}</span>
                 <span style={styles.memoryText}>{item.learning}</span>

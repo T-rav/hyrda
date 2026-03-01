@@ -2271,9 +2271,8 @@ def create_router(
 
         memory_dir = config.data_path("memory")
         store = TroubleshootingPatternStore(memory_dir)
-        all_patterns = store._load_all()
+        all_patterns = store.load_patterns(limit=9999)
         total = len(all_patterns)
-        all_patterns.sort(key=lambda p: p.frequency, reverse=True)
         capped = all_patterns[:100]
 
         return JSONResponse(
