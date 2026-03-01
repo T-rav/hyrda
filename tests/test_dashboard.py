@@ -2646,7 +2646,7 @@ class TestPipelineStatsRoute:
             uptime_seconds=120.0,
         )
         orch = make_orchestrator_mock()
-        orch._build_pipeline_stats = MagicMock(return_value=stats)
+        orch.build_pipeline_stats = MagicMock(return_value=stats)
         dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
         app = dashboard.create_app()
 
@@ -2670,7 +2670,7 @@ class TestPipelineStatsRoute:
 
         stats = PipelineStats(timestamp="2026-02-28T00:00:00Z")
         orch = make_orchestrator_mock()
-        orch._build_pipeline_stats = MagicMock(return_value=stats)
+        orch.build_pipeline_stats = MagicMock(return_value=stats)
         dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
         app = dashboard.create_app()
 

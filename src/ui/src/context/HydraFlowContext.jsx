@@ -499,10 +499,7 @@ export function reducer(state, action) {
       }
     }
 
-    case 'pipeline_stats': {
-      return { ...state, pipelineStats: action.data }
-    }
-
+    case 'pipeline_stats':
     case 'PIPELINE_STATS': {
       return { ...state, pipelineStats: action.data }
     }

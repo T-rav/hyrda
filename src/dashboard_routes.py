@@ -590,7 +590,7 @@ def create_router(
         _cfg, _state, _bus, _get_orch = _resolve_runtime(repo)
         orch = _get_orch()
         if orch:
-            stats = orch._build_pipeline_stats()
+            stats = orch.build_pipeline_stats()
             return JSONResponse(stats.model_dump())
         return JSONResponse({})
 
