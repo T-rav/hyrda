@@ -8,6 +8,10 @@ function shortRepo(repo) {
   return parts.length > 1 ? parts[parts.length - 1] : repo
 }
 
+function canonicalRepoSlug(repo) {
+  return String(repo || '').trim().replace(/[\\/]+/g, '-')
+}
+
 export function SessionSidebar() {
   const {
     sessions,
@@ -50,7 +54,7 @@ export function SessionSidebar() {
     }
 
     for (const session of sessions) {
-      const slug = shortRepo(session.repo)
+      const slug = canonicalRepoSlug(session.repo) || shortRepo(session.repo)
       const key = slug || session.repo
       const entry = ensureEntry(key, slug, session.repo)
       entry.sessions.push(session)
@@ -58,7 +62,7 @@ export function SessionSidebar() {
 
     for (const repo of supervisedRepos || []) {
       if (!repo) continue
-      const slug = repo.slug || shortRepo(repo.path || '')
+      const slug = repo.slug || canonicalRepoSlug(repo.path || '') || shortRepo(repo.path || '')
       let entryKey = (slug && slugIndex.get(slug)) || slug
       let entry = entryKey ? entries.get(entryKey) : undefined
       if (!entry) {

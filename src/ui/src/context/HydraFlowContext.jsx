@@ -1213,7 +1213,7 @@ export function HydraFlowProvider({ children }) {
   const repoFilteredSessions = useMemo(() => {
     if (!state.selectedRepoSlug) return state.sessions
     return state.sessions.filter(s => {
-      const slug = (s.repo || '').replace('/', '-')
+      const slug = String(s.repo || '').replace(/[\\/]+/g, '-')
       return slug === state.selectedRepoSlug
     })
   }, [state.sessions, state.selectedRepoSlug])
