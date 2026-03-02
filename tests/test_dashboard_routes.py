@@ -6767,15 +6767,10 @@ class TestAddRepoByPath:
     ) -> None:
         import json as json_mod
 
-        from pydantic import BaseModel
-
         router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._get_endpoint(router)
 
-        class FakeReq(BaseModel):
-            path: str = ""
-
-        resp = await endpoint(FakeReq(path=""))
+        resp = await endpoint({"path": ""})
         data = json_mod.loads(resp.body)
         assert resp.status_code == 400
         assert "path required" in data["error"]
@@ -6799,6 +6794,24 @@ class TestAddRepoByPath:
         assert "path required" in data["error"]
 
     @pytest.mark.asyncio
+    async def test_non_string_path_returns_400(
+        self,
+        config,
+        event_bus: EventBus,
+        state,
+        tmp_path: Path,
+    ) -> None:
+        import json as json_mod
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._get_endpoint(router)
+
+        resp = await endpoint({"path": 123})
+        data = json_mod.loads(resp.body)
+        assert resp.status_code == 400
+        assert "path must be a string" in data["error"]
+
+    @pytest.mark.asyncio
     async def test_nonexistent_path_returns_400(
         self,
         config,
@@ -6808,15 +6821,10 @@ class TestAddRepoByPath:
     ) -> None:
         import json as json_mod
 
-        from pydantic import BaseModel
-
         router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._get_endpoint(router)
 
-        class FakeReq(BaseModel):
-            path: str = ""
-
-        resp = await endpoint(FakeReq(path=str(tmp_path / "missing-repo-dir")))
+        resp = await endpoint({"path": str(tmp_path / "missing-repo-dir")})
         data = json_mod.loads(resp.body)
         assert resp.status_code == 400
         assert "not a git repository" in data["error"]
@@ -6831,17 +6839,12 @@ class TestAddRepoByPath:
     ) -> None:
         import json as json_mod
 
-        from pydantic import BaseModel
-
         fake_dir = tmp_path / "not-a-repo"
         fake_dir.mkdir()
         router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._get_endpoint(router)
 
-        class FakeReq(BaseModel):
-            path: str = ""
-
-        resp = await endpoint(FakeReq(path=str(fake_dir)))
+        resp = await endpoint({"path": str(fake_dir)})
         data = json_mod.loads(resp.body)
         assert resp.status_code == 400
         assert "not a git repository" in data["error"]
@@ -6856,15 +6859,10 @@ class TestAddRepoByPath:
     ) -> None:
         import json as json_mod
 
-        from pydantic import BaseModel
-
         router = self._make_router(config, event_bus, state, tmp_path)
         endpoint = self._get_endpoint(router)
 
-        class FakeReq(BaseModel):
-            path: str = ""
-
-        resp = await endpoint(FakeReq(path="/"))
+        resp = await endpoint({"path": "/"})
         data = json_mod.loads(resp.body)
         assert resp.status_code == 400
         assert "inside your home directory or temp directory" in data["error"]
@@ -6880,8 +6878,6 @@ class TestAddRepoByPath:
         """Valid git repo path is registered with supervisor."""
         import json as json_mod
         import subprocess
-
-        from pydantic import BaseModel
 
         repo_dir = tmp_path / "my-repo"
         repo_dir.mkdir()
@@ -6922,11 +6918,8 @@ class TestAddRepoByPath:
             )
             endpoint = self._get_endpoint(router)
 
-            class FakeReq(BaseModel):
-                path: str = ""
-
             with patch("prep.ensure_labels", new_callable=AsyncMock):
-                resp = await endpoint(FakeReq(path=str(repo_dir)))
+                resp = await endpoint({"path": str(repo_dir)})
 
         data = json_mod.loads(resp.body)
         assert resp.status_code == 200
@@ -6944,8 +6937,6 @@ class TestAddRepoByPath:
         """Labels fail but repo is still registered with a warning."""
         import json as json_mod
         import subprocess
-
-        from pydantic import BaseModel
 
         repo_dir = tmp_path / "label-fail-repo"
         repo_dir.mkdir()
@@ -6986,15 +6977,12 @@ class TestAddRepoByPath:
             )
             endpoint = self._get_endpoint(router)
 
-            class FakeReq(BaseModel):
-                path: str = ""
-
             with patch(
                 "prep.ensure_labels",
                 new_callable=AsyncMock,
                 side_effect=RuntimeError("gh not found"),
             ):
-                resp = await endpoint(FakeReq(path=str(repo_dir)))
+                resp = await endpoint({"path": str(repo_dir)})
 
         data = json_mod.loads(resp.body)
         assert resp.status_code == 200

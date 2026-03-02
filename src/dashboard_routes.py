@@ -403,9 +403,6 @@ def create_router(
     class RepoAddRequest(BaseModel):
         slug: str | None = None
 
-    class RepoAddByPathRequest(BaseModel):
-        path: str | None = None
-
     def _resolve_runtime(
         slug: str | None,
     ) -> tuple[
@@ -2906,10 +2903,16 @@ def create_router(
 
     @router.post("/api/repos/add")
     async def add_repo_by_path(  # noqa: PLR0911
-        req: RepoAddByPathRequest | None = Body(default=None),
+        req: dict[str, Any] | None = Body(default=None),
     ) -> JSONResponse:
         """Register a repo by local filesystem path (does NOT start it)."""
-        raw_path = ((req.path or "") if req else "").strip()
+        raw_value = None if req is None else req.get("path")
+        if raw_value is None:
+            raw_path = ""
+        elif isinstance(raw_value, str):
+            raw_path = raw_value.strip()
+        else:
+            return JSONResponse({"error": "path must be a string"}, status_code=400)
         repo_path, path_error = _normalize_allowed_dir(raw_path)
         if path_error or repo_path is None:
             return JSONResponse(
