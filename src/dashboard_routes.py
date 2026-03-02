@@ -428,6 +428,10 @@ def create_router(
         supervisor_client = importlib.import_module("hf_cli.supervisor_client")
     except ImportError:  # pragma: no cover - env missing CLI
         supervisor_client = None  # type: ignore[assignment]
+    try:
+        supervisor_manager = importlib.import_module("hf_cli.supervisor_manager")
+    except ImportError:  # pragma: no cover - env missing CLI
+        supervisor_manager = None  # type: ignore[assignment]
     issue_fetcher = IssueFetcher(config)
     hitl_summarizer = TranscriptSummarizer(config, pr_manager, event_bus, state)
     hitl_summary_inflight: set[int] = set()
@@ -2941,7 +2945,69 @@ def create_router(
             )
         # Detect slug
         slug = await _detect_repo_slug_from_path(repo_path)
-        # Create labels (best-effort)
+        # Register with supervisor
+        if supervisor_client is None:
+            return JSONResponse(
+                {
+                    "error": (
+                        "hf supervisor is not running. "
+                        "Run `hf run` inside a repo to start it."
+                    )
+                },
+                status_code=503,
+            )
+        try:
+            await _call_supervisor(
+                supervisor_client.register_repo,
+                repo_path,
+                slug,
+            )
+        except Exception as exc:  # noqa: BLE001
+            if _is_expected_supervisor_unavailable(exc):
+                if supervisor_manager is not None:
+                    try:
+                        await _call_supervisor(supervisor_manager.ensure_running)
+                        await _call_supervisor(
+                            supervisor_client.register_repo,
+                            repo_path,
+                            slug,
+                        )
+                    except Exception as retry_exc:  # noqa: BLE001
+                        if _is_expected_supervisor_unavailable(retry_exc):
+                            return JSONResponse(
+                                {
+                                    "error": (
+                                        "hf supervisor is not running. "
+                                        "Run `hf run` inside a repo to start it."
+                                    )
+                                },
+                                status_code=503,
+                            )
+                        logger.warning(
+                            "Supervisor register_repo failed after auto-start: %s",
+                            retry_exc,
+                        )
+                        return JSONResponse(
+                            {"error": "Failed to register repo"},
+                            status_code=500,
+                        )
+                else:
+                    return JSONResponse(
+                        {
+                            "error": (
+                                "hf supervisor is not running. "
+                                "Run `hf run` inside a repo to start it."
+                            )
+                        },
+                        status_code=503,
+                    )
+            else:
+                logger.warning("Supervisor register_repo failed: %s", exc)
+                return JSONResponse(
+                    {"error": "Failed to register repo"},
+                    status_code=500,
+                )
+        # Create labels (best-effort, only after successful registration)
         labels_created = False
         if slug:
             try:
@@ -2957,24 +3023,6 @@ def create_router(
                 labels_created = True
             except Exception:  # noqa: BLE001
                 logger.warning("Label creation failed for %s", slug, exc_info=True)
-        # Register with supervisor
-        if supervisor_client is None:
-            return JSONResponse(
-                {"error": "supervisor unavailable"},
-                status_code=503,
-            )
-        try:
-            await _call_supervisor(
-                supervisor_client.register_repo,
-                repo_path,
-                slug,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Supervisor register_repo failed: %s", exc)
-            return JSONResponse(
-                {"error": "Failed to register repo"},
-                status_code=500,
-            )
         return JSONResponse(
             {
                 "status": "ok",
