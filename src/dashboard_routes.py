@@ -2909,7 +2909,7 @@ def create_router(
         req: RepoAddByPathRequest | None = Body(default=None),
     ) -> JSONResponse:
         """Register a repo by local filesystem path (does NOT start it)."""
-        raw_path = (req.path if req else "").strip()
+        raw_path = ((req.path or "") if req else "").strip()
         repo_path, path_error = _normalize_allowed_dir(raw_path)
         if path_error or repo_path is None:
             return JSONResponse(
