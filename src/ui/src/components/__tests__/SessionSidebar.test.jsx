@@ -431,35 +431,11 @@ describe('SessionSidebar add repo button', () => {
   beforeEach(() => {
     global.fetch = vi.fn(async (url) => {
       const rawUrl = String(url || '')
-      if (rawUrl.includes('/api/fs/roots')) {
+      if (rawUrl.includes('/api/repos/pick-folder')) {
         return {
           ok: true,
           json: async () => ({
-            roots: [
-              { name: 'Home', path: '/home/user' },
-              { name: 'Temp', path: '/tmp' },
-            ],
-          }),
-        }
-      }
-      if (rawUrl.includes('/api/fs/list')) {
-        const path = decodeURIComponent(rawUrl.split('path=')[1] || '/home/user')
-        if (path === '/home/user/repos') {
-          return {
-            ok: true,
-            json: async () => ({
-              current_path: '/home/user/repos',
-              parent_path: '/home/user',
-              directories: [{ name: 'insightmesh', path: '/home/user/repos/insightmesh' }],
-            }),
-          }
-        }
-        return {
-          ok: true,
-          json: async () => ({
-            current_path: '/home/user',
-            parent_path: '/home',
-            directories: [{ name: 'repos', path: '/home/user/repos' }],
+            path: '/home/user/repos',
           }),
         }
       }
@@ -472,38 +448,18 @@ describe('SessionSidebar add repo button', () => {
     expect(screen.getByLabelText('Add repo')).toBeDefined()
   })
 
-  it('loads browsable folders when "+" is clicked', async () => {
-    render(<SessionSidebar />)
-    fireEvent.click(screen.getByLabelText('Add repo'))
-    await vi.waitFor(() => {
-      expect(screen.getByRole('dialog', { name: 'Choose repository folder' })).toBeDefined()
-      expect(screen.getByText('Use This Folder')).toBeDefined()
-      expect(screen.getByText('repos')).toBeDefined()
-      expect(screen.getByText('/home/user')).toBeDefined()
-    })
-  })
-
-  it('navigates into a child directory and adds current folder', async () => {
+  it('opens native picker and adds selected folder', async () => {
     const addRepoByPath = vi.fn().mockResolvedValue({ ok: true })
     mockUseHydraFlow.mockReturnValue(defaultContext({ addRepoByPath }))
     render(<SessionSidebar />)
     fireEvent.click(screen.getByLabelText('Add repo'))
     await vi.waitFor(() => {
-      expect(screen.getByText('repos')).toBeDefined()
-    })
-    fireEvent.click(screen.getByText('repos'))
-    await vi.waitFor(() => {
-      expect(screen.getByText('/home/user/repos')).toBeDefined()
-      expect(screen.getByText('insightmesh')).toBeDefined()
-    })
-    fireEvent.click(screen.getByText('Use This Folder'))
-    await vi.waitFor(() => {
       expect(addRepoByPath).toHaveBeenCalledWith('/home/user/repos')
-      expect(screen.queryByText('Use This Folder')).toBeNull()
+      expect(global.fetch).toHaveBeenCalledWith('/api/repos/pick-folder', { method: 'POST' })
     })
   })
 
-  it('shows error and keeps panel open when addRepoByPath fails', async () => {
+  it('shows error when addRepoByPath fails after picking a folder', async () => {
     const addRepoByPath = vi.fn().mockResolvedValue({ ok: false, error: 'not a git repository: /home/user' })
     mockUseHydraFlow.mockReturnValue(
       defaultContext({ addRepoByPath })
@@ -511,28 +467,22 @@ describe('SessionSidebar add repo button', () => {
     render(<SessionSidebar />)
     fireEvent.click(screen.getByLabelText('Add repo'))
     await vi.waitFor(() => {
-      expect(screen.getByText('Use This Folder')).toBeDefined()
-      expect(screen.getByText('repos')).toBeDefined()
-    })
-    fireEvent.click(screen.getByText('Use This Folder'))
-    await vi.waitFor(() => {
       expect(screen.getByText('not a git repository: /home/user')).toBeDefined()
-      expect(screen.getByText('Use This Folder')).toBeDefined()
     })
   })
 
-  it('shows browse error when filesystem API fails', async () => {
+  it('shows picker error when native picker API fails', async () => {
     global.fetch = vi.fn(async (url) => {
       const rawUrl = String(url || '')
-      if (rawUrl.includes('/api/fs/roots')) {
-        return { ok: false, json: async () => ({ error: 'Failed to load folders' }) }
+      if (rawUrl.includes('/api/repos/pick-folder')) {
+        return { ok: false, json: async () => ({ error: 'No folder selected' }) }
       }
-      return { ok: false, json: async () => ({ error: 'Failed to browse folders' }) }
+      return { ok: false, json: async () => ({ error: `unexpected url: ${rawUrl}` }) }
     })
     render(<SessionSidebar />)
     fireEvent.click(screen.getByLabelText('Add repo'))
     await vi.waitFor(() => {
-      expect(screen.getByText('Failed to load folders')).toBeDefined()
+      expect(screen.getByText('No folder selected')).toBeDefined()
     })
   })
 })
