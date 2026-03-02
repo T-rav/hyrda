@@ -6989,6 +6989,65 @@ class TestAddRepoByPath:
         assert data["status"] == "ok"
         assert data["labels_created"] is False
 
+    @pytest.mark.asyncio
+    async def test_supervisor_not_running_returns_503(
+        self,
+        config,
+        event_bus: EventBus,
+        state,
+        tmp_path: Path,
+    ) -> None:
+        import json as json_mod
+        import subprocess
+
+        repo_dir = tmp_path / "supervisor-down-repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init", str(repo_dir)], capture_output=True, check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/org/down.git",
+            ],
+            capture_output=True,
+            check=True,
+        )
+
+        mock_supervisor = MagicMock()
+        mock_supervisor.register_repo = MagicMock(
+            side_effect=RuntimeError(
+                "hf supervisor is not running. Run `hf run` inside a repo to start it."
+            )
+        )
+        with patch.dict("sys.modules", {"hf_cli.supervisor_client": mock_supervisor}):
+            from dashboard_routes import create_router
+            from pr_manager import PRManager
+
+            pr_mgr = PRManager(config, event_bus)
+            router = create_router(
+                config=config,
+                event_bus=event_bus,
+                state=state,
+                pr_manager=pr_mgr,
+                get_orchestrator=lambda: None,
+                set_orchestrator=lambda o: None,
+                set_run_task=lambda t: None,
+                ui_dist_dir=tmp_path / "no-dist",
+                template_dir=tmp_path / "no-templates",
+            )
+            endpoint = self._get_endpoint(router)
+            with patch("prep.ensure_labels", new_callable=AsyncMock) as ensure_labels:
+                resp = await endpoint({"path": str(repo_dir)})
+
+        data = json_mod.loads(resp.body)
+        assert resp.status_code == 503
+        assert "hf supervisor is not running" in data["error"]
+        ensure_labels.assert_not_called()
+
 
 class TestPickRepoFolder:
     """Tests for POST /api/repos/pick-folder endpoint."""
