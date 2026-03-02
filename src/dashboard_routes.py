@@ -10,7 +10,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Query, Response, WebSocket, WebSocketDisconnect
@@ -2902,9 +2902,10 @@ def create_router(
             for event in history:
                 try:
                     await ws.send_text(event.model_dump_json())
-                except Exception:
+                except Exception as exc:
                     logger.warning(
-                        "WebSocket error during history replay", exc_info=True
+                        "WebSocket error during history replay: %s",
+                        exc.__class__.__name__,
                     )
                     return
 
@@ -2915,8 +2916,11 @@ def create_router(
                     await ws.send_text(event.model_dump_json())
             except WebSocketDisconnect:
                 pass
-            except Exception:
-                logger.warning("WebSocket error during live streaming", exc_info=True)
+            except Exception as exc:
+                logger.warning(
+                    "WebSocket error during live streaming: %s",
+                    exc.__class__.__name__,
+                )
 
     # SPA catch-all: serve index.html for any path not matched above.
     # This must be registered LAST so it doesn't shadow API/WS routes.
@@ -2926,10 +2930,16 @@ def create_router(
         if path.startswith(("api/", "ws/", "assets/", "static/")) or path == "ws":
             return JSONResponse({"detail": "Not Found"}, status_code=404)
 
-        # Serve root-level static files from ui/dist/ (e.g. logos, favicon)
-        static_file = (ui_dist_dir / path).resolve()
-        if static_file.is_relative_to(ui_dist_dir.resolve()) and static_file.is_file():
-            return FileResponse(static_file)
+        # Serve only root-level static files from ui/dist/ (e.g. logos, favicon).
+        # Reject nested/relative segments to prevent path traversal.
+        path_parts = PurePosixPath(path).parts
+        if len(path_parts) == 1 and path_parts[0] not in {"", ".", ".."}:
+            static_file = (ui_dist_dir / path_parts[0]).resolve()
+            if (
+                static_file.is_relative_to(ui_dist_dir.resolve())
+                and static_file.is_file()
+            ):
+                return FileResponse(static_file)
 
         return _serve_spa_index()
 
