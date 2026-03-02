@@ -36,7 +36,6 @@ export function SessionSidebar() {
   const [browseParentPath, setBrowseParentPath] = useState(null)
   const [browseDirs, setBrowseDirs] = useState([])
   const [isBrowseLoading, setIsBrowseLoading] = useState(false)
-
   const resetBrowseState = () => {
     setBrowseRoots([])
     setBrowsePath('')
@@ -183,7 +182,6 @@ export function SessionSidebar() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [showAddRepo])
-
   const handleUseCurrentFolder = async () => {
     if (!browsePath || isAddRepoSubmitting || !addRepoByPath) return
     setIsAddRepoSubmitting(true)
