@@ -178,19 +178,19 @@ def _normalize_allowed_dir(raw_path: str) -> tuple[Path | None, str | None]:
     candidate = (raw_path or "").strip()
     if not candidate:
         return None, "path required"
-    expanded = os.path.expanduser(candidate)
-    normalized = os.path.realpath(expanded)
-    allowed = _allowed_repo_roots()
-    inside_allowed = any(
-        normalized == root or normalized.startswith(f"{root}{os.sep}")
-        for root in allowed
-    )
-    if not inside_allowed:
+    resolved = Path(candidate).expanduser().resolve()
+    allowed_root: Path | None = None
+    for root in _allowed_repo_roots():
+        root_path = Path(root).resolve()
+        with contextlib.suppress(ValueError):
+            resolved.relative_to(root_path)
+            allowed_root = root_path
+            break
+    if allowed_root is None:
         return None, "path must be inside your home directory or temp directory"
-    path = Path(normalized)
-    if not path.is_dir():
+    if not resolved.is_dir():
         return None, f"path does not exist: {candidate}"
-    return path, None
+    return resolved, None
 
 
 def _parse_iso_or_none(raw: str | None) -> datetime | None:
@@ -2794,9 +2794,8 @@ def create_router(
                     continue
                 directories.append({"name": child.name, "path": child_real})
         except OSError as exc:
-            return JSONResponse(
-                {"error": f"failed to list directory: {exc}"}, status_code=500
-            )
+            logger.warning("Failed to list directory %s: %s", target_path, exc)
+            return JSONResponse({"error": "failed to list directory"}, status_code=500)
 
         return JSONResponse(
             {
