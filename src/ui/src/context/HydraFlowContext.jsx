@@ -856,7 +856,7 @@ export function HydraFlowProvider({ children }) {
   const canonicalSlug = useCallback((value) => {
     return String(value || '').trim().replace(/[\\/]+/g, '-').toLowerCase()
   }, [])
-  const startRuntime = useCallback(async (slug) => {
+  const startRuntime = useCallback(async (slug, repoPath = null) => {
     try {
       const encodedSlug = encodeURIComponent(slug)
       const runtimeRes = await fetch(`/api/runtimes/${encodedSlug}/start`, {
@@ -876,23 +876,26 @@ export function HydraFlowProvider({ children }) {
         })
         // Older backends may not support POST /api/repos; fallback to /api/repos/add by path.
         if (repoRes.status === 404 || repoRes.status === 405) {
-          const listRes = await fetch('/api/repos')
-          if (!listRes.ok) {
-            const message = await parseApiError(
-              listRes,
-              `Failed to list repos (${listRes.status})`,
-            )
-            return { ok: false, error: message }
+          let path = String(repoPath || '').trim()
+          if (!path) {
+            const listRes = await fetch('/api/repos')
+            if (!listRes.ok) {
+              const message = await parseApiError(
+                listRes,
+                `Failed to list repos (${listRes.status})`,
+              )
+              return { ok: false, error: message }
+            }
+            const payload = await listRes.json()
+            const repos = Array.isArray(payload?.repos) ? payload.repos : []
+            const targetSlug = canonicalSlug(slug)
+            const match = repos.find((repo) => {
+              const repoSlug = canonicalSlug(repo?.slug)
+              const repoPathSlug = canonicalSlug(repo?.path)
+              return repoSlug === targetSlug || repoPathSlug.endsWith(`-${targetSlug}`)
+            })
+            path = String(match?.path || '').trim()
           }
-          const payload = await listRes.json()
-          const repos = Array.isArray(payload?.repos) ? payload.repos : []
-          const targetSlug = canonicalSlug(slug)
-          const match = repos.find((repo) => {
-            const repoSlug = canonicalSlug(repo?.slug)
-            const repoPath = canonicalSlug(repo?.path)
-            return repoSlug === targetSlug || repoPath.endsWith(`-${targetSlug}`)
-          })
-          const path = String(match?.path || '').trim()
           if (!path) {
             return { ok: false, error: `Repo not found for slug: ${slug}` }
           }
