@@ -138,11 +138,12 @@ export function SessionSidebar() {
     }
   }
 
-  const handleRuntimeToggle = async (e, slug, isRunning) => {
+  const handleRuntimeToggle = async (e, slug, isRunning, repoPath = null) => {
     e.stopPropagation()
     setRuntimeError('')
-    const action = isRunning ? stopRuntime : startRuntime
-    const result = await action(slug)
+    const result = isRunning
+      ? await stopRuntime(slug)
+      : await startRuntime(slug, repoPath)
     if (result && result.ok === false) {
       setRuntimeError(result.error || `Failed to ${isRunning ? 'stop' : 'start'} repo runtime`)
     }
@@ -211,7 +212,7 @@ export function SessionSidebar() {
                 </div>
                 <div style={styles.repoMeta}>
                   <button
-                    onClick={(e) => { handleRuntimeToggle(e, entry.slug, isRunning) }}
+                    onClick={(e) => { handleRuntimeToggle(e, entry.slug, isRunning, entry.info?.path || null) }}
                     style={isRunning ? styles.repoStopBtn : styles.repoStartBtn}
                     title={isRunning ? 'Stop this repo runtime' : 'Start this repo runtime'}
                   >

@@ -649,7 +649,7 @@ describe('SessionSidebar per-repo Start/Stop', () => {
     )
     render(<SessionSidebar />)
     fireEvent.click(screen.getByText('Start'))
-    expect(startRuntime).toHaveBeenCalledWith('demo')
+    expect(startRuntime).toHaveBeenCalledWith('demo', '/repos/demo')
   })
 
   it('calls stopRuntime when Stop button is clicked', () => {
@@ -724,7 +724,7 @@ describe('SessionSidebar per-repo Start/Stop', () => {
     )
     render(<SessionSidebar />)
     fireEvent.click(screen.getByText('Start'))
-    expect(startRuntime).toHaveBeenCalledWith('org-repo')
+    expect(startRuntime).toHaveBeenCalledWith('org-repo', null)
   })
 })
 
