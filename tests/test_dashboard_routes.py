@@ -6829,6 +6829,29 @@ class TestAddRepoByPath:
         assert "not a git repository" in data["error"]
 
     @pytest.mark.asyncio
+    async def test_disallowed_path_returns_400(
+        self,
+        config,
+        event_bus: EventBus,
+        state,
+        tmp_path: Path,
+    ) -> None:
+        import json as json_mod
+
+        from pydantic import BaseModel
+
+        router = self._make_router(config, event_bus, state, tmp_path)
+        endpoint = self._get_endpoint(router)
+
+        class FakeReq(BaseModel):
+            path: str = ""
+
+        resp = await endpoint(FakeReq(path="/"))
+        data = json_mod.loads(resp.body)
+        assert resp.status_code == 400
+        assert "inside your home directory or temp directory" in data["error"]
+
+    @pytest.mark.asyncio
     async def test_valid_path_registers_repo(
         self,
         config,
