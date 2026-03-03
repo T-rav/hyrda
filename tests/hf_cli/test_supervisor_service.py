@@ -87,6 +87,52 @@ def test_stop_repo_terminates_and_kills_after_timeout(monkeypatch) -> None:
     assert proc.killed is True
 
 
+def test_start_repo_uses_module_entrypoint_in_target_repo_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_dir = tmp_path / "insightmesh"
+    repo_dir.mkdir()
+
+    monkeypatch.setattr(supervisor_service, "_find_free_port", lambda: 43210)
+    monkeypatch.setattr(supervisor_service, "_wait_for_port", lambda *_a, **_k: None)
+    monkeypatch.setattr(supervisor_service, "STATE_DIR", tmp_path / ".hydraflow")
+
+    captured: dict[str, object] = {}
+
+    class _Proc:
+        def poll(self) -> None:
+            return None
+
+    def _popen(cmd, **kwargs):  # type: ignore[no-untyped-def]
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        return _Proc()
+
+    monkeypatch.setattr(supervisor_service.subprocess, "Popen", _popen)
+
+    port, slug, normalized, log_file = supervisor_service._start_repo(
+        str(repo_dir), slug="8thlight/insightmesh"
+    )
+
+    assert port == 43210
+    assert slug == "8thlight/insightmesh"
+    assert normalized == str(repo_dir.resolve())
+    assert log_file.endswith("8thlight-insightmesh-43210.log")
+    assert captured["cmd"] == [
+        supervisor_service.sys.executable,
+        "-m",
+        "hf_cli",
+        "start",
+        "--repo",
+        "8thlight/insightmesh",
+        "--dashboard-port",
+        "43210",
+    ]
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["cwd"] == str(repo_dir)
+
+
 @pytest.mark.asyncio
 async def test_handle_returns_missing_path_error_for_add_repo() -> None:
     class _Reader:

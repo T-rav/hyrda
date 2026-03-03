@@ -93,7 +93,11 @@ def _start_repo(path: str, *, slug: str | None = None) -> tuple[int, str, str, s
     proc = subprocess.Popen(  # noqa: S603
         [
             sys.executable,
-            str(repo_path / "src" / "cli.py"),
+            "-m",
+            "hf_cli",
+            "start",
+            "--repo",
+            slug,
             "--dashboard-port",
             str(port),
         ],
