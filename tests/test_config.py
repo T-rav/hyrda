@@ -4388,6 +4388,13 @@ class TestAdrReviewIntervalBounds:
         with pytest.raises(ValidationError):
             HydraFlowConfig(repo="test/repo", adr_review_interval=604800)
 
+    def test_adr_review_interval_env_override(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HYDRAFLOW_ADR_REVIEW_INTERVAL", "172800")
+        config = HydraFlowConfig(repo="test/repo")
+        assert config.adr_review_interval == 172800
+
 
 # ---------------------------------------------------------------------------
 # Directory properties (log_dir, plans_dir, memory_dir)

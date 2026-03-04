@@ -129,6 +129,14 @@ export const ADR_REVIEWER_PRESETS = [
 ]
 
 /**
+ * Per-worker preset overrides. Workers not listed here use INTERVAL_PRESETS.
+ */
+export const WORKER_PRESETS = {
+  pipeline_poller: PIPELINE_POLLER_PRESETS,
+  adr_reviewer: ADR_REVIEWER_PRESETS,
+}
+
+/**
  * Workers whose interval can be edited from the UI.
  */
 export const EDITABLE_INTERVAL_WORKERS = new Set(['memory_sync', 'metrics', 'pr_unsticker', 'pipeline_poller', 'report_issue', 'worktree_gc', 'adr_reviewer'])
