@@ -54,7 +54,7 @@ See the full product walkthrough and visuals at [hydraflow.ai](https://hydraflow
 
 ```bash
 # in your project root
-git submodule add https://github.com/T-rav/hyrda.git hydraflow
+git submodule add https://github.com/T-rav/hydraflow.git hydraflow
 git submodule update --init --recursive
 cd hydraflow
 

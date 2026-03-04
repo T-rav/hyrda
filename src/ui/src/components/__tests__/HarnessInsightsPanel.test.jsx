@@ -27,7 +27,7 @@ describe('HarnessInsightsPanel cache', () => {
   beforeEach(() => {
     localStorage.clear()
     mockUseHydraFlow.mockReturnValue({
-      config: { repo: 'T-rav/hyrda' },
+      config: { repo: 'T-rav/hydraflow' },
     })
   })
 
@@ -37,7 +37,7 @@ describe('HarnessInsightsPanel cache', () => {
 
   it('loads cached data when API fetch fails', async () => {
     localStorage.setItem(
-      'hydraflow:harness-insights:T-rav/hyrda',
+      'hydraflow:harness-insights:T-rav/hydraflow',
       JSON.stringify(insightsPayload({ total_failures: 7 })),
     )
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
@@ -68,7 +68,7 @@ describe('HarnessInsightsPanel cache', () => {
       expect(screen.getByText('5')).toBeInTheDocument()
     })
 
-    const raw = localStorage.getItem('hydraflow:harness-insights:T-rav/hyrda')
+    const raw = localStorage.getItem('hydraflow:harness-insights:T-rav/hydraflow')
     expect(raw).not.toBeNull()
     expect(JSON.parse(raw).total_failures).toBe(5)
   })

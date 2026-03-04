@@ -62,7 +62,7 @@ describe('InsightsPanel — LearningsSection sub-sections', () => {
   beforeEach(() => {
     localStorage.clear()
     mockUseHydraFlow.mockReturnValue({
-      config: { repo: 'T-rav/hyrda' },
+      config: { repo: 'T-rav/hydraflow' },
     })
   })
 
