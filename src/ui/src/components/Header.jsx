@@ -161,7 +161,15 @@ async function captureDashboardScreenshot(root, html2canvas) {
 }
 
 export function Header({ connected, orchestratorStatus }) {
-  const { stageStatus, config, submitReport, runtimes = [], supervisedRepos = [] } = useHydraFlow()
+  const {
+    stageStatus,
+    config,
+    submitReport,
+    startOrchestrator,
+    stopOrchestrator,
+    runtimes = [],
+    supervisedRepos = [],
+  } = useHydraFlow()
   const appVersion = config?.app_version || ''
   const latestVersion = config?.latest_version || ''
   const updateAvailable = Boolean(config?.update_available && latestVersion)
@@ -243,6 +251,27 @@ export function Header({ connected, orchestratorStatus }) {
         </div>
       </div>
       <div style={styles.controls}>
+        {orchestratorStatus === 'running' ? (
+          <button
+            style={connected ? styles.controlStopBtn : controlBtnDisabled}
+            onClick={() => stopOrchestrator?.()}
+            disabled={!connected}
+            data-testid="header-stop-button"
+          >
+            Stop
+          </button>
+        ) : orchestratorStatus === 'stopping' ? (
+          <span style={styles.controlStoppingBadge}>Stopping…</span>
+        ) : (
+          <button
+            style={connected ? styles.controlStartBtn : controlBtnDisabled}
+            onClick={() => startOrchestrator?.()}
+            disabled={!connected}
+            data-testid="header-start-button"
+          >
+            Start
+          </button>
+        )}
         {totalRepos > 0 && (
           <span
             style={runningRepos > 0 ? reposRunningBadgeActive : styles.reposRunningBadge}
@@ -339,6 +368,36 @@ const styles = {
     fontWeight: 600,
   },
   controls: { display: 'flex', alignItems: 'center', gap: 10, marginLeft: 10, flexShrink: 0 },
+  controlStartBtn: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: `1px solid ${theme.green}`,
+    background: theme.greenSubtle,
+    color: theme.green,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  controlStopBtn: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    border: `1px solid ${theme.red}`,
+    background: theme.redSubtle,
+    color: theme.red,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  controlStoppingBadge: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: theme.yellow,
+    border: `1px solid ${theme.yellow}`,
+    background: theme.yellowSubtle,
+    borderRadius: 6,
+    padding: '6px 10px',
+    whiteSpace: 'nowrap',
+  },
   reposRunningBadge: {
     fontSize: 11,
     fontWeight: 600,
@@ -375,6 +434,13 @@ export const dotDisconnected = { ...styles.dot, background: theme.red }
 
 // Pre-computed report button variant
 const reportBtnDisabled = { ...styles.reportBtn, opacity: 0.4, cursor: 'not-allowed' }
+const controlBtnDisabled = {
+  ...styles.controlStartBtn,
+  opacity: 0.4,
+  cursor: 'not-allowed',
+  borderColor: theme.border,
+  color: theme.textInactive,
+}
 
 // Pre-computed repos running badge variant
 const reposRunningBadgeActive = { ...styles.reposRunningBadge, color: theme.green, borderColor: theme.green }

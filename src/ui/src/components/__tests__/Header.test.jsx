@@ -37,7 +37,13 @@ function createRootContainer() {
 
 beforeEach(() => {
   html2canvasFn.mockReset()
-  mockUseHydraFlow.mockReturnValue({ stageStatus: mockStageStatus(), config: null, submitReport: vi.fn() })
+  mockUseHydraFlow.mockReturnValue({
+    stageStatus: mockStageStatus(),
+    config: null,
+    submitReport: vi.fn(),
+    startOrchestrator: vi.fn(),
+    stopOrchestrator: vi.fn(),
+  })
 })
 
 describe('Header pre-computed styles', () => {
@@ -113,24 +119,19 @@ describe('Header component', () => {
     expect(screen.getByText('HYDRAFLOW')).toBeInTheDocument()
   })
 
-  it('does not render Start button', () => {
+  it('renders Start button when orchestrator is idle', () => {
     render(<Header {...defaultProps} />)
-    expect(screen.queryByText('Start')).toBeNull()
+    expect(screen.getByTestId('header-start-button')).toBeInTheDocument()
   })
 
-  it('does not render Stop button when running', () => {
+  it('renders Stop button when orchestrator is running', () => {
     render(<Header {...defaultProps} orchestratorStatus="running" />)
-    expect(screen.queryByText('Stop')).toBeNull()
+    expect(screen.getByTestId('header-stop-button')).toBeInTheDocument()
   })
 
-  it('does not render Stopping badge when stopping', () => {
+  it('renders Stopping badge when orchestrator is stopping', () => {
     render(<Header {...defaultProps} orchestratorStatus="stopping" />)
-    expect(screen.queryByText('Stopping\u2026')).toBeNull()
-  })
-
-  it('does not render Credits Paused badge when credits_paused', () => {
-    render(<Header {...defaultProps} orchestratorStatus="credits_paused" />)
-    expect(screen.queryByText('Credits Paused')).toBeNull()
+    expect(screen.getByText('Stopping\u2026')).toBeInTheDocument()
   })
 
   it('does not render workload counters', () => {
@@ -206,6 +207,34 @@ describe('Header component', () => {
     const reportBtn = screen.getByTestId('report-button')
     const controlsDiv = reportBtn.parentElement
     expect(controlsDiv.style.flexShrink).toBe('0')
+  })
+
+  it('calls startOrchestrator when Start is clicked', () => {
+    const startOrchestrator = vi.fn()
+    mockUseHydraFlow.mockReturnValue({
+      stageStatus: mockStageStatus(),
+      config: null,
+      submitReport: vi.fn(),
+      startOrchestrator,
+      stopOrchestrator: vi.fn(),
+    })
+    render(<Header {...defaultProps} orchestratorStatus="idle" />)
+    fireEvent.click(screen.getByTestId('header-start-button'))
+    expect(startOrchestrator).toHaveBeenCalled()
+  })
+
+  it('calls stopOrchestrator when Stop is clicked', () => {
+    const stopOrchestrator = vi.fn()
+    mockUseHydraFlow.mockReturnValue({
+      stageStatus: mockStageStatus(),
+      config: null,
+      submitReport: vi.fn(),
+      startOrchestrator: vi.fn(),
+      stopOrchestrator,
+    })
+    render(<Header {...defaultProps} orchestratorStatus="running" />)
+    fireEvent.click(screen.getByTestId('header-stop-button'))
+    expect(stopOrchestrator).toHaveBeenCalled()
   })
 
   it('center section has minWidth 0 and overflow hidden for graceful truncation', () => {

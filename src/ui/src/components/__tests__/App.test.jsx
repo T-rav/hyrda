@@ -33,6 +33,8 @@ const { mockState } = vi.hoisted(() => {
       intents: [],
       epics: [],
       submitIntent: () => {},
+      startOrchestrator: () => {},
+      stopOrchestrator: () => {},
       toggleBgWorker: () => {},
       systemAlert: null,
       sessions: [],
@@ -227,17 +229,20 @@ describe('Main tab bar', () => {
   })
 })
 
-describe('Header does not render main Start/Stop controls', () => {
-  it('does not render Start or Stop buttons in the header', async () => {
+describe('Header renders main Start/Stop controls', () => {
+  it('renders Start when orchestrator is idle', async () => {
     mockState.orchestratorStatus = 'idle'
     const { default: App } = await import('../../App')
     render(<App />)
-
-    expect(screen.queryByText('Start')).toBeNull()
-    expect(screen.queryByText('Stop')).toBeNull()
-
-    // Restore
+    expect(screen.getByText('Start')).toBeInTheDocument()
     mockState.orchestratorStatus = 'running'
+  })
+
+  it('renders Stop when orchestrator is running', async () => {
+    mockState.orchestratorStatus = 'running'
+    const { default: App } = await import('../../App')
+    render(<App />)
+    expect(screen.getByText('Stop')).toBeInTheDocument()
   })
 })
 

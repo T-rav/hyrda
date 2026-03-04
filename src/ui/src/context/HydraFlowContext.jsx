@@ -1173,6 +1173,47 @@ export function HydraFlowProvider({ children }) {
     } catch { /* ignore */ }
   }, [])
 
+  const refreshControlStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/control/status')
+      if (!res.ok) return false
+      const data = await res.json()
+      dispatch({
+        type: 'orchestrator_status',
+        data: { status: data.status, credits_paused_until: data.credits_paused_until },
+        timestamp: new Date().toISOString(),
+      })
+      if (data.config) {
+        dispatch({ type: 'CONFIG', data: data.config })
+      }
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
+  const startOrchestrator = useCallback(async () => {
+    try {
+      const res = await fetch('/api/control/start', { method: 'POST' })
+      if (!res.ok) return false
+      await refreshControlStatus()
+      return true
+    } catch {
+      return false
+    }
+  }, [refreshControlStatus])
+
+  const stopOrchestrator = useCallback(async () => {
+    try {
+      const res = await fetch('/api/control/stop', { method: 'POST' })
+      if (!res.ok) return false
+      await refreshControlStatus()
+      return true
+    } catch {
+      return false
+    }
+  }, [refreshControlStatus])
+
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
@@ -1401,6 +1442,8 @@ export function HydraFlowProvider({ children }) {
     removeRepoShortcut,
     startRuntime,
     stopRuntime,
+    startOrchestrator,
+    stopOrchestrator,
     releaseEpic,
   }
 
