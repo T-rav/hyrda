@@ -1812,14 +1812,14 @@ def create_router(
         return JSONResponse({"status": "ok", "name": name, "enabled": bool(enabled)})
 
     # Interval bounds per editable worker.
-    # memory_sync, metrics, pr_unsticker bounds must match config.py Field constraints.
+    # memory_sync, metrics, pr_unsticker, adr_reviewer bounds must match config.py Field constraints.
     # pipeline_poller has no config Field; 5s minimum matches the hardcoded default.
     _INTERVAL_BOUNDS = {
         "memory_sync": (10, 14400),
         "metrics": (30, 14400),
         "pr_unsticker": (60, 86400),
         "pipeline_poller": (5, 14400),
-        "adr_reviewer": (3600, 604800),
+        "adr_reviewer": (28800, 432000),
     }
 
     @router.post("/api/control/bg-worker/interval")
