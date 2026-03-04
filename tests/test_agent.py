@@ -436,6 +436,56 @@ class TestBuildPrompt:
         assert "edge cases" in prompt
         assert "empty inputs" in prompt
 
+    def test_pre_quality_review_checks_dead_code(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should flag functions never called in production."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "dead code" in prompt
+
+    def test_pre_quality_review_checks_failure_paths(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should verify failure paths are tested."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "failure/error paths" in prompt
+
+    def test_pre_quality_review_checks_issue_requirements(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should verify tests cover issue requirements."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "issue requirements" in prompt
+
+    def test_prompt_includes_test_sufficiency_step(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Implementation prompt should include explicit test sufficiency verification."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Verify test sufficiency" in prompt
+        assert "Failure/error paths" in prompt
+
+    def test_self_check_includes_dead_code_check(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Self-check checklist should verify no dead code is introduced."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "New code is reachable" in prompt
+        assert "dead code" in prompt
+
+    def test_self_check_includes_issue_requirements_check(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Self-check checklist should verify tests match issue requirements."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Tests verify issue requirements" in prompt
+
     def test_prompt_forbids_already_satisfied(
         self, config, event_bus: EventBus, issue
     ) -> None:

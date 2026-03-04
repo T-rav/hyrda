@@ -42,6 +42,9 @@ class AgentRunner(BaseRunner):
 Run through this checklist before your final commit:
 
 - [ ] **Tests cover all new/changed code** — every new function, branch, and edge case has a test
+- [ ] **New code is reachable** — every new function/method is actually called from production code; no dead code
+- [ ] **Tests verify issue requirements** — tests validate the specific behavior the issue asks for, not just helper code
+- [ ] **Failure paths are tested** — error cases, rejected inputs, and unhappy paths have explicit tests
 - [ ] **No missing imports** — all new symbols are imported; removed code has imports cleaned up
 - [ ] **Type hints are correct** — function signatures match actual usage; no `Any` where a concrete type exists
 - [ ] **Edge cases handled** — empty inputs, None values, boundary conditions are addressed
@@ -410,10 +413,14 @@ Run through this checklist before your final commit:
 ## Instructions
 
 1. Understand the issue and relevant code paths.
-2. Write/adjust tests first, then implement.
-3. Run Pre-Quality Review Skill for correctness, plan adherence, and missing tests.
-4. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality`; fix and rerun.
-5. Commit with: "Fixes #{issue.id}: <concise summary>"
+2. Write/adjust tests first, then implement (TDD).
+3. Verify test sufficiency — ensure tests cover:
+   - The specific behavior the issue requires (not just helper functions).
+   - Failure/error paths, not only the happy path.
+   - That every new function is actually called from production code (no dead code).
+4. Run Pre-Quality Review Skill for correctness, plan adherence, and missing tests.
+5. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality`; fix and rerun.
+6. Commit with: "Fixes #{issue.id}: <concise summary>"
 {feedback_section}
 {self._SELF_CHECK_CHECKLIST}
 ## UI Guidelines
@@ -503,6 +510,9 @@ Attempt: {attempt}
 Scope:
 - review current branch changes for correctness and plan adherence
 - add/fix tests for missing coverage and edge cases
+- verify every new function/method is actually called from production code (flag dead code)
+- verify tests cover the specific issue requirements, not just ancillary helpers
+- verify failure/error paths have explicit tests, not only happy paths
 - verify all new functions have type hints and all imports are correct
 - check edge cases: empty inputs, None values, missing keys, boundary conditions
 - apply code fixes directly in this working tree
