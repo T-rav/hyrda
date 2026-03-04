@@ -214,18 +214,17 @@ describe('SessionSidebar supervised repo state', () => {
     render(<SessionSidebar />)
     expect(screen.getByText('demo')).toBeDefined()
     expect(screen.getByText('/repos/demo')).toBeDefined()
-    // Running repo shows Stop button instead of RUNNING label
-    expect(screen.getByText('Stop')).toBeDefined()
   })
 
-  it('shows Start button for non-running supervised repo', () => {
+  it('does not show per-repo Start/Stop controls', () => {
     mockUseHydraFlow.mockReturnValue(
       defaultContext({
         supervisedRepos: [{ ...SUPERVISED_REPO, running: false }],
       })
     )
     render(<SessionSidebar />)
-    expect(screen.getByText('Start')).toBeDefined()
+    expect(screen.queryByText('Start')).toBeNull()
+    expect(screen.queryByText('Stop')).toBeNull()
   })
 })
 
@@ -610,144 +609,6 @@ describe('SessionSidebar disconnect repo button', () => {
     selectRepo.mockClear()
     fireEvent.click(screen.getByLabelText('Disconnect repo'))
     expect(selectRepo).not.toHaveBeenCalled()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Per-repo Start/Stop always visible
-// ---------------------------------------------------------------------------
-
-describe('SessionSidebar per-repo Start/Stop', () => {
-  it('shows Start button for a stopped supervised repo without runtime data', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [{ ...SUPERVISED_REPO, running: false }],
-      })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByTitle('Start this repo runtime')).toBeDefined()
-    expect(screen.getByText('Start')).toBeDefined()
-  })
-
-  it('shows Stop button for a running supervised repo without runtime data', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [SUPERVISED_REPO],
-      })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByTitle('Stop this repo runtime')).toBeDefined()
-    expect(screen.getByText('Stop')).toBeDefined()
-  })
-
-  it('shows Start button when runtime data exists and repo is stopped', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [{ ...SUPERVISED_REPO, running: false }],
-        runtimes: [{ slug: 'demo', running: false }],
-      })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByText('Start')).toBeDefined()
-  })
-
-  it('shows Stop button when runtime data exists and repo is running', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [SUPERVISED_REPO],
-        runtimes: [{ slug: 'demo', running: true }],
-      })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByText('Stop')).toBeDefined()
-  })
-
-  it('calls startRuntime when Start button is clicked', () => {
-    const startRuntime = vi.fn()
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [{ ...SUPERVISED_REPO, running: false }],
-        startRuntime,
-      })
-    )
-    render(<SessionSidebar />)
-    fireEvent.click(screen.getByText('Start'))
-    expect(startRuntime).toHaveBeenCalledWith('demo', '/repos/demo')
-  })
-
-  it('calls stopRuntime when Stop button is clicked', () => {
-    const stopRuntime = vi.fn()
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [SUPERVISED_REPO],
-        runtimes: [{ slug: 'demo', running: true }],
-        stopRuntime,
-      })
-    )
-    render(<SessionSidebar />)
-    fireEvent.click(screen.getByText('Stop'))
-    expect(stopRuntime).toHaveBeenCalledWith('demo')
-  })
-
-  it('Start click does not trigger selectRepo', () => {
-    const selectRepo = vi.fn()
-    const startRuntime = vi.fn()
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [{ ...SUPERVISED_REPO, running: false }],
-        selectRepo,
-        startRuntime,
-      })
-    )
-    render(<SessionSidebar />)
-    selectRepo.mockClear()
-    fireEvent.click(screen.getByText('Start'))
-    expect(selectRepo).not.toHaveBeenCalled()
-  })
-
-  it('Stop click does not trigger selectRepo', () => {
-    const selectRepo = vi.fn()
-    const stopRuntime = vi.fn()
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({
-        supervisedRepos: [SUPERVISED_REPO],
-        runtimes: [{ slug: 'demo', running: true }],
-        selectRepo,
-        stopRuntime,
-      })
-    )
-    render(<SessionSidebar />)
-    selectRepo.mockClear()
-    fireEvent.click(screen.getByText('Stop'))
-    expect(selectRepo).not.toHaveBeenCalled()
-  })
-
-  it('shows Start button for session-only repo (no supervised entry)', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({ sessions: [SESSION_A] })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByText('Start')).toBeDefined()
-    expect(screen.getByTitle('Start this repo runtime')).toBeDefined()
-  })
-
-  it('session-only repo shows Start but no Disconnect button', () => {
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({ sessions: [SESSION_A] })
-    )
-    render(<SessionSidebar />)
-    expect(screen.getByText('Start')).toBeDefined()
-    expect(screen.queryByLabelText('Disconnect repo')).toBeNull()
-  })
-
-  it('session-only repo Start uses canonical runtime slug', () => {
-    const startRuntime = vi.fn()
-    mockUseHydraFlow.mockReturnValue(
-      defaultContext({ sessions: [SESSION_A], startRuntime })
-    )
-    render(<SessionSidebar />)
-    fireEvent.click(screen.getByText('Start'))
-    expect(startRuntime).toHaveBeenCalledWith('org-repo', null)
   })
 })
 

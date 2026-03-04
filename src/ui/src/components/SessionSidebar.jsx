@@ -24,8 +24,6 @@ export function SessionSidebar() {
     deleteSession,
     supervisedRepos = [],
     runtimes = [],
-    startRuntime = () => {},
-    stopRuntime = () => {},
     addRepoByPath,
     removeRepoShortcut,
   } = useHydraFlow()
@@ -33,7 +31,6 @@ export function SessionSidebar() {
   const [hoveredSession, setHoveredSession] = useState(null)
   const [hoveredDeleteId, setHoveredDeleteId] = useState(null)
   const [addRepoError, setAddRepoError] = useState('')
-  const [runtimeError, setRuntimeError] = useState('')
   const [isAddRepoSubmitting, setIsAddRepoSubmitting] = useState(false)
 
   const repoEntries = useMemo(() => {
@@ -153,17 +150,6 @@ export function SessionSidebar() {
     }
   }
 
-  const handleRuntimeToggle = async (e, slug, isRunning, repoPath = null) => {
-    e.stopPropagation()
-    setRuntimeError('')
-    const result = isRunning
-      ? await stopRuntime(slug)
-      : await startRuntime(slug, repoPath)
-    if (result && result.ok === false) {
-      setRuntimeError(result.error || `Failed to ${isRunning ? 'stop' : 'start'} repo runtime`)
-    }
-  }
-
   return (
     <div style={styles.sidebar}>
       <div style={styles.header}>
@@ -192,9 +178,6 @@ export function SessionSidebar() {
       </div>
       {addRepoError && (
         <div style={styles.addRepoErrorMsg} role="alert">{addRepoError}</div>
-      )}
-      {runtimeError && (
-        <div style={styles.addRepoErrorMsg} role="alert">{runtimeError}</div>
       )}
 
       <div style={styles.list}>
@@ -226,13 +209,6 @@ export function SessionSidebar() {
                   </div>
                 </div>
                 <div style={styles.repoMeta}>
-                  <button
-                    onClick={(e) => { handleRuntimeToggle(e, entry.slug, isRunning, entry.info?.path || null) }}
-                    style={isRunning ? styles.repoStopBtn : styles.repoStartBtn}
-                    title={isRunning ? 'Stop this repo runtime' : 'Start this repo runtime'}
-                  >
-                    {isRunning ? 'Stop' : 'Start'}
-                  </button>
                   <span style={styles.repoCount}>{repoSessions.length}</span>
                   {entry.info && (
                     <button
