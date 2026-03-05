@@ -391,12 +391,12 @@ describe('SystemPanel', () => {
   })
 
   describe('Sub-tab Navigation', () => {
-    it('shows Workers, Pipeline, Metrics, Processes, Insights, and Livestream sub-tab labels', () => {
+    it('shows Workers, Pipeline, Metrics, Insights, and Livestream sub-tab labels', () => {
       render(<SystemPanel backgroundWorkers={[]} />)
       expect(screen.getByText('Workers')).toBeInTheDocument()
       expect(screen.getByText('Pipeline')).toBeInTheDocument()
       expect(screen.getByText('Metrics')).toBeInTheDocument()
-      expect(screen.getByText('Processes')).toBeInTheDocument()
+      expect(screen.queryByText('Processes')).not.toBeInTheDocument()
       expect(screen.getByText('Insights')).toBeInTheDocument()
       expect(screen.getByText('Livestream')).toBeInTheDocument()
       expect(screen.queryByText('Event Log')).not.toBeInTheDocument()

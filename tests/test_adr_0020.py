@@ -35,8 +35,8 @@ class TestADR0020Format:
         reasons = adr_validation_reasons(content)
         assert reasons == [], f"Validation failures: {reasons}"
 
-    def test_has_status_proposed(self, content: str) -> None:
-        assert "**Status:** Proposed" in content
+    def test_has_status_superseded(self, content: str) -> None:
+        assert "**Status:** Superseded" in content
 
     def test_has_date(self, content: str) -> None:
         assert "**Date:** 2026-03-01" in content
