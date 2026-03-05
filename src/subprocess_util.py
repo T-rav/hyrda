@@ -106,6 +106,7 @@ _CREDIT_PATTERNS = (
     "usage limit reached",
     "credit balance is too low",
     "you've hit your limit",
+    "hit your usage limit",
 )
 
 # Matches e.g. "reset at 3pm (America/New_York)", "reset at 3am",
