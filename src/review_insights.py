@@ -345,7 +345,7 @@ def get_common_feedback_section(
 def get_escalation_data(
     records: list[ReviewRecord],
     top_n: int = 3,
-    threshold: int = 1,
+    threshold: int = 3,
 ) -> list[dict[str, str | int | list[str]]]:
     """Return structured escalation data for recurring feedback categories.
 

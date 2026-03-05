@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -301,8 +302,6 @@ Run through this checklist before your final commit:
         Returns an empty list on any error.
         """
         try:
-            import json as _json
-
             reviews_path = self._config.memory_dir / "reviews.jsonl"
 
             def _load_escalations(_cfg: HydraFlowConfig) -> str:
@@ -311,7 +310,7 @@ Run through this checklist before your final commit:
                     recent,
                     threshold=self._config.review_pattern_threshold,
                 )
-                return _json.dumps(data)
+                return json.dumps(data)
 
             raw, _hit = self._context_cache.get_or_load(
                 key="review_escalations",
@@ -320,7 +319,7 @@ Run through this checklist before your final commit:
             )
             if not raw:
                 return []
-            return _json.loads(raw)  # type: ignore[no-any-return]
+            return json.loads(raw)  # type: ignore[no-any-return]
         except Exception:  # noqa: BLE001
             return []
 
@@ -439,6 +438,8 @@ Run through this checklist before your final commit:
         if escalations:
             blocks = [str(e["mandatory_block"]) for e in escalations]
             escalation_section = "\n\n" + "\n\n".join(blocks)
+            history_before += len(escalation_section)
+            history_after += len(escalation_section)
 
         manifest_section, memory_section = self._inject_manifest_and_memory()
 

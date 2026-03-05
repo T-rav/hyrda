@@ -585,9 +585,16 @@ class TestGetEscalationData:
         escalations = get_escalation_data(records, top_n=3, threshold=3)
         assert escalations == []
 
-    def test_default_threshold_is_one(self) -> None:
+    def test_default_threshold_is_three(self) -> None:
+        records = [
+            _make_record(pr_number=i, categories=["missing_tests"]) for i in range(3)
+        ]
+        escalations = get_escalation_data(records, top_n=3)
+        assert len(escalations) == 1
+
+    def test_below_default_threshold_excluded(self) -> None:
         records = [
             _make_record(pr_number=1, categories=["missing_tests"]),
         ]
         escalations = get_escalation_data(records, top_n=3)
-        assert len(escalations) == 1
+        assert escalations == []
