@@ -453,7 +453,7 @@ class TestVerdictRouting:
         assert stats["accepted"] == 1
 
     @pytest.mark.asyncio
-    async def test_reject_routes_to_hitl(self, tmp_path: Path) -> None:
+    async def test_reject_routes_to_triage_first(self, tmp_path: Path) -> None:
         reviewer = _make_reviewer(tmp_path)
         result = ADRCouncilResult(
             adr_number=1,
@@ -462,15 +462,21 @@ class TestVerdictRouting:
         )
         stats = {"accepted": 0, "rejected": 0, "escalated": 0, "duplicates": 0}
 
-        with patch.object(
-            reviewer, "_escalate_to_hitl", new_callable=AsyncMock
-        ) as mock_hitl:
+        with (
+            patch.object(
+                reviewer, "_route_to_triage", new_callable=AsyncMock, return_value=True
+            ) as mock_triage,
+            patch.object(
+                reviewer, "_escalate_to_hitl", new_callable=AsyncMock
+            ) as mock_hitl,
+        ):
             await reviewer._route_result(result, MagicMock(), MagicMock(), stats)
-            mock_hitl.assert_awaited_once_with(result, reason="rejected")
+            mock_triage.assert_awaited_once_with(result, reason="rejected")
+            mock_hitl.assert_not_awaited()
         assert stats["rejected"] == 1
 
     @pytest.mark.asyncio
-    async def test_request_changes_routes_to_hitl(self, tmp_path: Path) -> None:
+    async def test_request_changes_routes_to_triage_first(self, tmp_path: Path) -> None:
         reviewer = _make_reviewer(tmp_path)
         result = ADRCouncilResult(
             adr_number=1,
@@ -479,11 +485,17 @@ class TestVerdictRouting:
         )
         stats = {"accepted": 0, "rejected": 0, "escalated": 0, "duplicates": 0}
 
-        with patch.object(
-            reviewer, "_escalate_to_hitl", new_callable=AsyncMock
-        ) as mock_hitl:
+        with (
+            patch.object(
+                reviewer, "_route_to_triage", new_callable=AsyncMock, return_value=True
+            ) as mock_triage,
+            patch.object(
+                reviewer, "_escalate_to_hitl", new_callable=AsyncMock
+            ) as mock_hitl,
+        ):
             await reviewer._route_result(result, MagicMock(), MagicMock(), stats)
-            mock_hitl.assert_awaited_once_with(result, reason="changes_requested")
+            mock_triage.assert_awaited_once_with(result, reason="changes_requested")
+            mock_hitl.assert_not_awaited()
         assert stats["escalated"] == 1
 
     @pytest.mark.asyncio
@@ -514,7 +526,7 @@ class TestVerdictRouting:
         assert stats["accepted"] == 0
 
     @pytest.mark.asyncio
-    async def test_no_consensus_routes_to_hitl(self, tmp_path: Path) -> None:
+    async def test_no_consensus_routes_to_triage_first(self, tmp_path: Path) -> None:
         reviewer = _make_reviewer(tmp_path)
         result = ADRCouncilResult(
             adr_number=1,
@@ -523,11 +535,42 @@ class TestVerdictRouting:
         )
         stats = {"accepted": 0, "rejected": 0, "escalated": 0, "duplicates": 0}
 
-        with patch.object(
-            reviewer, "_escalate_to_hitl", new_callable=AsyncMock
-        ) as mock_hitl:
+        with (
+            patch.object(
+                reviewer, "_route_to_triage", new_callable=AsyncMock, return_value=True
+            ) as mock_triage,
+            patch.object(
+                reviewer, "_escalate_to_hitl", new_callable=AsyncMock
+            ) as mock_hitl,
+        ):
             await reviewer._route_result(result, MagicMock(), MagicMock(), stats)
-            mock_hitl.assert_awaited_once_with(result, reason="no_consensus")
+            mock_triage.assert_awaited_once_with(result, reason="no_consensus")
+            mock_hitl.assert_not_awaited()
+        assert stats["escalated"] == 1
+
+    @pytest.mark.asyncio
+    async def test_triage_route_fallbacks_to_hitl_when_triage_fails(
+        self, tmp_path: Path
+    ) -> None:
+        reviewer = _make_reviewer(tmp_path)
+        result = ADRCouncilResult(
+            adr_number=1,
+            adr_title="Test",
+            final_decision="REQUEST_CHANGES",
+        )
+        stats = {"accepted": 0, "rejected": 0, "escalated": 0, "duplicates": 0}
+
+        with (
+            patch.object(
+                reviewer, "_route_to_triage", new_callable=AsyncMock, return_value=False
+            ) as mock_triage,
+            patch.object(
+                reviewer, "_escalate_to_hitl", new_callable=AsyncMock
+            ) as mock_hitl,
+        ):
+            await reviewer._route_result(result, MagicMock(), MagicMock(), stats)
+            mock_triage.assert_awaited_once_with(result, reason="changes_requested")
+            mock_hitl.assert_awaited_once_with(result, reason="changes_requested")
         assert stats["escalated"] == 1
 
 
@@ -753,6 +796,54 @@ class TestEscalateToHITL:
 
         body = reviewer._prs.create_issue.await_args.args[1]
         assert "requests changes" in body.lower() or "changes" in body.lower()
+
+
+class TestRouteToTriage:
+    """Tests for _route_to_triage."""
+
+    @pytest.mark.asyncio
+    async def test_creates_find_labeled_issue(self, tmp_path: Path) -> None:
+        reviewer = _make_reviewer(tmp_path)
+        result = ADRCouncilResult(
+            adr_number=5,
+            adr_title="Bad ADR",
+            final_decision="REQUEST_CHANGES",
+            summary="Needs revision",
+            votes=[
+                CouncilVote(
+                    role="architect",
+                    verdict=CouncilVerdict.REQUEST_CHANGES,
+                    reasoning="Clarify scope",
+                ),
+            ],
+        )
+        reviewer._prs.create_issue = AsyncMock(return_value=123)
+
+        routed = await reviewer._route_to_triage(result, reason="changes_requested")
+
+        assert routed is True
+        reviewer._prs.create_issue.assert_awaited_once()
+        call_args = reviewer._prs.create_issue.await_args
+        title = call_args.args[0]
+        body = call_args.args[1]
+        labels = call_args.kwargs["labels"]
+        assert "[ADR Follow-up]" in title
+        assert "ADR-0005" in body
+        assert labels == reviewer._config.find_label
+
+    @pytest.mark.asyncio
+    async def test_returns_false_on_invalid_issue_number(self, tmp_path: Path) -> None:
+        reviewer = _make_reviewer(tmp_path)
+        reviewer._prs.create_issue = AsyncMock(return_value=0)
+        result = ADRCouncilResult(
+            adr_number=1,
+            adr_title="Test",
+            final_decision="REJECT",
+        )
+
+        routed = await reviewer._route_to_triage(result, reason="rejected")
+
+        assert routed is False
 
 
 class TestHandleDuplicate:
