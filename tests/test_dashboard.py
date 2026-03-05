@@ -2277,6 +2277,30 @@ class TestHITLApproveProcessEndpoint:
         assert state.get_hitl_cause(42) is None
         assert state.get_hitl_origin(42) is None
 
+    def test_records_hitl_approved_outcome(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        """approve-process should record an HITL_APPROVED outcome."""
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        orch = make_orchestrator_mock()
+        orch.skip_hitl_issue = MagicMock()
+        dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        with (
+            patch("pr_manager.PRManager.swap_pipeline_labels", new_callable=AsyncMock),
+            patch("pr_manager.PRManager.post_comment", new_callable=AsyncMock),
+        ):
+            client.post("/api/hitl/42/approve-process")
+
+        outcome = state.get_outcome(42)
+        assert outcome is not None
+        assert outcome.outcome.value == "hitl_approved"
+
 
 # ---------------------------------------------------------------------------
 # GET /api/hitl enriched with status

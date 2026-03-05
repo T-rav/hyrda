@@ -1393,7 +1393,7 @@ def create_router(
         state.record_outcome(
             issue_number,
             IssueOutcomeType.HITL_APPROVED,
-            reason=(f"Operator approved issue type for processing ({target_stage})"),
+            reason=f"Operator approved issue type for processing ({target_stage})",
             phase="hitl",
         )
 

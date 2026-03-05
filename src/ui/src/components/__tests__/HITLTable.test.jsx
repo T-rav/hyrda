@@ -571,11 +571,11 @@ describe('HITLTable component', () => {
     expect(screen.queryByText('Close issue')).not.toBeInTheDocument()
   })
 
-  it('does NOT show standalone Approve button for issueTypeReview items', () => {
-    const items = [{ ...mockItems[0], issueTypeReview: true }]
+  it('does NOT show Approve as Memory button for issueTypeReview items', () => {
+    const items = [{ ...mockItems[0], issueTypeReview: true, isMemorySuggestion: true }]
     render(<HITLTable items={items} onRefresh={() => {}} />)
     fireEvent.click(screen.getByTestId('hitl-row-42'))
-    expect(screen.queryByTestId('hitl-approve-process-42')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('hitl-approve-memory-42')).not.toBeInTheDocument()
   })
 
   it('shows original buttons for non-issueTypeReview items', () => {
