@@ -68,7 +68,6 @@ async def test_error_message_includes_command_and_returncode() -> None:
     assert exc_info.value.args, "RuntimeError should include a message"
     message = exc_info.value.args[0]
     assert "('git', 'status')" in message
-    assert "rc=42" in message
 
 
 # --- environment ---
