@@ -176,9 +176,13 @@ export function HITLTable({ items, onRefresh }) {
 
   const handleApproveProcess = async (issueNum) => {
     setActionLoading({ issue: issueNum, action: 'approve-process' })
-    await approveProcess(issueNum)
+    setActionError(prev => ({ ...prev, [issueNum]: null }))
+    const ok = await approveProcess(issueNum)
+    if (!ok) {
+      setActionError(prev => ({ ...prev, [issueNum]: 'Verify failed. Try again.' }))
+    }
     setActionLoading(null)
-    setExpandedIssue(null)
+    if (ok) setExpandedIssue(null)
     onRefresh()
   }
 
