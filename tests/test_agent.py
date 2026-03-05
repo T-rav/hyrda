@@ -426,6 +426,85 @@ class TestBuildPrompt:
         assert hasattr(AgentRunner, "_SELF_CHECK_CHECKLIST")
         assert len(AgentRunner._SELF_CHECK_CHECKLIST) > 100
 
+    def test_prompt_includes_escalated_mandatory_block_when_recurring(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """When missing_tests is recurring, prompt should include mandatory block."""
+        escalation_data = [
+            {
+                "category": "missing_tests",
+                "count": 4,
+                "mandatory_block": "## Mandatory Requirements\nEvery new function MUST have a test.",
+                "checklist_items": [
+                    "- [ ] Every new/modified public function has a dedicated test",
+                ],
+                "pre_quality_guidance": "Verify all new functions have tests.",
+            }
+        ]
+        runner = AgentRunner(config, event_bus)
+        with patch.object(runner, "_get_escalation_data", return_value=escalation_data):
+            prompt = runner._build_prompt(issue)
+        assert "## Mandatory Requirements" in prompt
+        assert "Every new function MUST have a test" in prompt
+
+    def test_prompt_no_mandatory_block_when_no_escalations(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """When no escalations, prompt should not include mandatory block."""
+        runner = AgentRunner(config, event_bus)
+        with patch.object(runner, "_get_escalation_data", return_value=[]):
+            prompt = runner._build_prompt(issue)
+        assert "## Mandatory Requirements" not in prompt
+
+    def test_self_check_includes_dynamic_items_when_escalated(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Self-check should include category-specific items when escalated."""
+        escalation_data = [
+            {
+                "category": "missing_tests",
+                "count": 4,
+                "mandatory_block": "Must test.",
+                "checklist_items": [
+                    "- [ ] Every new/modified public function has a dedicated test",
+                    "- [ ] Edge cases (None, empty, boundary) are tested",
+                ],
+                "pre_quality_guidance": "Check tests.",
+            }
+        ]
+        runner = AgentRunner(config, event_bus)
+        with patch.object(runner, "_get_escalation_data", return_value=escalation_data):
+            prompt = runner._build_prompt(issue)
+        assert "Every new/modified public function has a dedicated test" in prompt
+        assert "Edge cases (None, empty, boundary) are tested" in prompt
+
+    def test_pre_quality_review_includes_escalation_guidance(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review prompt should include escalation guidance when present."""
+        escalation_data = [
+            {
+                "category": "missing_tests",
+                "count": 4,
+                "mandatory_block": "Must test.",
+                "checklist_items": [],
+                "pre_quality_guidance": "Verify every new public function has a unit test.",
+            }
+        ]
+        runner = AgentRunner(config, event_bus)
+        with patch.object(runner, "_get_escalation_data", return_value=escalation_data):
+            prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "Verify every new public function has a unit test" in prompt
+
+    def test_pre_quality_review_no_escalation_when_empty(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review prompt should not have escalation section when empty."""
+        runner = AgentRunner(config, event_bus)
+        with patch.object(runner, "_get_escalation_data", return_value=[]):
+            prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "Escalated Requirements" not in prompt
+
     def test_pre_quality_review_includes_edge_case_checks(
         self, config, event_bus: EventBus, issue
     ) -> None:
