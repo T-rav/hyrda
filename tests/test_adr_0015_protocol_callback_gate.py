@@ -21,7 +21,7 @@ def readme_content() -> str:
     return README_FILE.read_text()
 
 
-class TestAdr0009Exists:
+class TestAdr0015Exists:
     def test_adr_file_exists(self) -> None:
         assert ADR_FILE.exists(), "ADR-0015 file must exist"
 
@@ -30,7 +30,7 @@ class TestAdr0009Exists:
         assert "0015-protocol-callback-gate-pattern.md" in readme_content
 
 
-class TestAdr0009Metadata:
+class TestAdr0015Metadata:
     def test_has_status_proposed(self, adr_content: str) -> None:
         assert "**Status:** Proposed" in adr_content
 
@@ -44,7 +44,7 @@ class TestAdr0009Metadata:
         )
 
 
-class TestAdr0009RequiredSections:
+class TestAdr0015RequiredSections:
     """Validate the three sections required by the ADR format."""
 
     def test_has_context_section(self, adr_content: str) -> None:
@@ -63,7 +63,7 @@ class TestAdr0009RequiredSections:
         assert "## Related" in adr_content
 
 
-class TestAdr0009Content:
+class TestAdr0015Content:
     """Verify the ADR captures the gate pattern decision accurately."""
 
     def test_references_source_memory_issue(self, adr_content: str) -> None:
@@ -118,7 +118,7 @@ class TestAdr0009Content:
         assert "PublishFn" in adr_content
 
 
-class TestAdr0009PassesProjectValidation:
+class TestAdr0015PassesProjectValidation:
     """Validate ADR passes the same checks used by phase_utils.adr_validation_reasons."""
 
     def test_passes_adr_validation(self, adr_content: str) -> None:
