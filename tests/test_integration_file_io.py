@@ -62,6 +62,7 @@ def test_atomic_write_handles_concurrent_writers(tmp_path: Path) -> None:
             executor.submit(writer, payload)
 
     assert not errors, f"atomic_write raised: {errors}"
+    assert target.exists(), "No writer succeeded (barrier likely timed out)"
     written = target.read_text()
     assert written in payloads
 

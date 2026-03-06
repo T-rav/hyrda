@@ -7,6 +7,7 @@ import json
 import os
 import stat
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -90,7 +91,7 @@ def dry_config(tmp_path: Path) -> HydraFlowConfig:
 
 
 @pytest.fixture
-def readonly_dir(tmp_path: Path) -> Path:
+def readonly_dir(tmp_path: Path) -> Iterator[Path]:
     """Create a read-only directory for permission error simulations."""
     target = tmp_path / "readonly"
     target.mkdir()
