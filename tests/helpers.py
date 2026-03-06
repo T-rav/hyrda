@@ -31,6 +31,26 @@ class PipelineRunResult:
         return self.snapshots[label]
 
 
+def supply_once(*batches):
+    """Return batches in order, then ``[]`` forever.
+
+    Used to mock ``IssueStore.get_*`` methods for ``run_refilling_pool`` tests.
+    The pool calls ``supply_fn`` repeatedly; this ensures items are returned
+    once and the pool terminates cleanly.
+
+    Usage::
+
+        store.get_triageable = supply_once([issue])          # single item
+        store.get_triageable = supply_once(*[[i] for i in issues])  # one per call
+    """
+    items = list(batches)
+
+    def _fn(_max_count=None):
+        return items.pop(0) if items else []
+
+    return _fn
+
+
 class AsyncLineIter:
     """Async iterator yielding raw bytes lines for mock proc.stdout."""
 
@@ -292,6 +312,7 @@ class ConfigFactory:
         unstick_all_causes: bool = True,
         enable_fresh_branch_rebuild: bool = True,
         max_troubleshooting_prompt_chars: int = 3000,
+        epic_group_planning: bool = False,
         epic_auto_decompose: bool = False,
         epic_decompose_complexity_threshold: int = 8,
         epic_monitor_interval: int = 1800,
@@ -486,6 +507,7 @@ class ConfigFactory:
             unstick_all_causes=unstick_all_causes,
             enable_fresh_branch_rebuild=enable_fresh_branch_rebuild,
             max_troubleshooting_prompt_chars=max_troubleshooting_prompt_chars,
+            epic_group_planning=epic_group_planning,
             epic_auto_decompose=epic_auto_decompose,
             epic_decompose_complexity_threshold=epic_decompose_complexity_threshold,
             epic_monitor_interval=epic_monitor_interval,
@@ -821,7 +843,13 @@ class PipelineHarness:
             worker_results, _ = await self.implement_phase.run_batch()
             _capture("after_implement")
 
+            assert worker_results, (
+                "implement_phase produced no results; check task seeding and ready-queue routing"
+            )
             pr_info = worker_results[0].pr_info
+            assert pr_info is not None, (
+                "worker_results[0].pr_info is None; implement phase did not create a PR"
+            )
             review_candidates = self.store.get_reviewable(self.config.batch_size)
             review_results = await self.review_phase.review_prs(
                 [pr_info], review_candidates
@@ -990,9 +1018,9 @@ def make_implement_phase(
     mock_agents = AsyncMock()
     mock_agents.run = agent_run
 
-    # Mock IssueStore — get_implementable returns the supplied issues
+    # Mock IssueStore — get_implementable returns the supplied issues once
     mock_store = AsyncMock(spec=IssueStore)
-    mock_store.get_implementable = lambda limit: issues
+    mock_store.get_implementable = supply_once(*[[i] for i in issues])
     mock_store.mark_active = lambda num, stage: None
     mock_store.mark_complete = lambda num: None
     mock_store.is_active = lambda num: False

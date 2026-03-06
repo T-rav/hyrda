@@ -47,6 +47,9 @@ async def test_plannable_data_flow_uses_issue_store_objects(tmp_path):
 
     await harness.plan_phase.plan_issues()
 
+    assert harness.planners.plan.await_args_list, (
+        "plan() was never called; check task seeding"
+    )
     called_issue = harness.planners.plan.await_args_list[0].args[0]
     assert called_issue is task
 
