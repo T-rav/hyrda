@@ -320,6 +320,17 @@ class ScriptedHITLPhase:
     def active_hitl_issues(self) -> set[int]:
         return self._active_hitl_issues
 
+    @property
+    def hitl_corrections(self) -> dict[int, str]:
+        return self._corrections
+
+    def get_status(self, issue_number: int) -> str:
+        if issue_number in self._active_hitl_issues:
+            return "processing"
+        if issue_number in self._corrections:
+            return "pending"
+        return "unknown"
+
     def submit_correction(self, issue_number: int, correction: str) -> None:
         self._corrections[issue_number] = correction
 

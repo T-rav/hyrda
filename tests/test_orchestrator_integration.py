@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
 
-from events import EventType
+from events import EventBus, EventType, HydraFlowEvent
 from orchestrator import HydraFlowOrchestrator
 from state import StateTracker
 from subprocess_util import CreditExhaustedError
@@ -25,7 +25,9 @@ pytestmark = pytest.mark.integration
 
 
 @contextlib.contextmanager
-def scripted_orchestrator(config, script: PipelineScript) -> HydraFlowOrchestrator:
+def scripted_orchestrator(
+    config, script: PipelineScript
+) -> Iterator[HydraFlowOrchestrator]:
     """Patch build_services so HydraFlowOrchestrator uses scripted phases."""
 
     def _build_services(cfg, bus, state, stop_event, callbacks):
@@ -234,3 +236,79 @@ async def test_failed_implementation_discards_worktree(tmp_path) -> None:
         )
 
         assert issue_id in orch._worktrees.cleaned
+
+
+@pytest.mark.asyncio
+async def test_concurrent_loops_do_not_double_process_same_issue(tmp_path) -> None:
+    """Two concurrent implement workers must not process the same issue twice."""
+    issue_id = 505
+    script = PipelineScript()
+    config = _config(tmp_path)
+    with scripted_orchestrator(config, script) as orch:
+        issue = TaskFactory.create(
+            id=issue_id,
+            title="Concurrent isolation check",
+            tags=[config.ready_label[0]],
+        )
+        orch._store.enqueue_transition(issue, "ready")
+
+        # Run two concurrent implement work calls; only one should pick up the issue.
+        results = await asyncio.gather(
+            orch._do_implement_work(),
+            orch._do_implement_work(),
+        )
+
+        # Exactly one worker should have done real work.
+        assert sum(results) == 1
+        # The issue appears in the review queue exactly once.
+        assert _queue_depth(orch, "review") == 1
+
+
+@pytest.mark.asyncio
+async def test_label_transition_atomicity(tmp_path) -> None:
+    """An issue must reside in exactly one stage at every point during transitions."""
+    script = PipelineScript()
+    config = _config(tmp_path)
+    with scripted_orchestrator(config, script) as orch:
+        issue = TaskFactory.create(
+            id=606,
+            title="Atomicity check",
+            tags=[config.find_label[0]],
+        )
+
+        def _total_queue_depth() -> int:
+            stats = orch._store.get_queue_stats()
+            return sum(stats.queue_depth.values())
+
+        orch._store.enqueue_transition(issue, "find")
+        assert _total_queue_depth() == 1
+
+        orch._store.enqueue_transition(issue, "plan")
+        assert _total_queue_depth() == 1
+
+        orch._store.enqueue_transition(issue, "ready")
+        assert _total_queue_depth() == 1
+
+        orch._store.enqueue_transition(issue, "review")
+        assert _total_queue_depth() == 1
+
+        orch._store.enqueue_transition(issue, "hitl")
+        assert _total_queue_depth() == 1
+
+
+@pytest.mark.asyncio
+async def test_event_bus_delivery_under_concurrent_load() -> None:
+    """All events published concurrently must appear in the bus history."""
+    bus = EventBus()
+    n_publishers = 20
+
+    async def _publish(i: int) -> None:
+        await bus.publish(
+            HydraFlowEvent(type=EventType.PHASE_CHANGE, data={"index": i})
+        )
+
+    await asyncio.gather(*[_publish(i) for i in range(n_publishers)])
+
+    history = bus.get_history()
+    indices = {e.data["index"] for e in history if "index" in e.data}
+    assert indices == set(range(n_publishers))
