@@ -500,7 +500,7 @@ Run through this checklist before your final commit:
 2. Write tests to ensure functionality, prevent regressions, and catch bugs.
 3. Diff Sanity Check and Test Adequacy Check run automatically after your implementation.
 4. Run Pre-Quality Review Skill for correctness, plan adherence, and missing tests.
-5. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality`; fix and rerun.
+5. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality-lite`; fix and rerun.
 5. Commit with: "Fixes #{issue.id}: <concise summary>"
 {feedback_section}{escalation_section}
 {self._build_self_check_checklist(escalations)}
@@ -517,11 +517,10 @@ Run through this checklist before your final commit:
 - Write tests for all new code — tests are mandatory.
 - Do NOT push to remote. Do NOT create pull requests.
 - Do NOT run `git push` or `gh pr create`.
-- Run `make quality` and fix any issues it finds in YOUR code.
-- ALWAYS commit your work with `git add` and `git commit`, even if `make quality`
-  fails due to environment issues (missing binaries, read-only paths, etc.).
+- Run `make quality-lite` (lint + typecheck + security, no tests) as a sense check.
+  CI runs the full test suite — you do not need to run `make quality` or `make test`.
+- ALWAYS commit your work with `git add` and `git commit`.
   The system runs its own quality gate after you finish — your job is to produce commits.
-- If quality checks fail on pre-existing issues (not your code), commit anyway.
 - NEVER conclude that the issue is "already satisfied" or that no work is needed.
   The planner already verified this issue requires implementation. Your job is to
   write the code, not to second-guess the plan. Always produce commits.
@@ -579,7 +578,7 @@ Run through this checklist before your final commit:
 1. Read the failing output above carefully.
 2. Fix ALL lint, type-check, security, and test issues.
 3. Do NOT skip or disable tests, type checks, or lint rules.
-4. Run `make quality` to verify your fixes pass the full pipeline.
+4. Run `make quality-lite` to verify your fixes pass lint, typecheck, and security.
 5. Commit your fixes with message: "quality-fix: <description> (#{issue.id})"
 
 Focus on fixing the root causes, not suppressing warnings.
@@ -629,7 +628,7 @@ Attempt: {attempt}
 Run these commands in order and fix failures:
 1. `make lint`
 2. `{test_cmd}`
-3. `make quality`
+3. `make quality-lite`
 
 Rules:
 - If a command fails, fix root causes and rerun from command 1
