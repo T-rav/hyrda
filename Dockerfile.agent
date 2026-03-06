@@ -62,8 +62,8 @@ FROM base AS runtime
 # Copy Node.js global packages (Claude, Codex, Pi CLIs)
 COPY --from=tools /usr/lib/node_modules /usr/lib/node_modules
 COPY --from=tools /usr/bin/claude /usr/bin/claude
-COPY --from=tools /usr/bin/codex /usr/bin/codex
-COPY --from=tools /usr/bin/pi /usr/bin/pi
+RUN ln -s ../lib/node_modules/@openai/codex/bin/codex.js /usr/bin/codex \
+    && ln -s ../lib/node_modules/@mariozechner/pi-coding-agent/dist/cli.js /usr/bin/pi
 
 # Copy Python venv with quality tools
 COPY --from=tools /opt/hydraflow-venv /opt/hydraflow-venv
