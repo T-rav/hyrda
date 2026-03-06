@@ -19,6 +19,22 @@ from tests.helpers import make_triage_phase
 if TYPE_CHECKING:
     from config import HydraFlowConfig
 
+
+def _supply_once(*batches):
+    """Return batches in order, then [] forever.
+
+    Used to mock IssueStore.get_* methods for run_refilling_pool tests.
+    The pool calls supply_fn repeatedly; this ensures items are returned
+    once and the pool terminates cleanly.
+    """
+    items = list(batches)
+
+    def _fn(_max_count=None):
+        return items.pop(0) if items else []
+
+    return _fn
+
+
 # ---------------------------------------------------------------------------
 # Triage phase
 # ---------------------------------------------------------------------------
@@ -39,7 +55,7 @@ class TestTriagePhase:
         triage.evaluate = AsyncMock(
             return_value=TriageResult(issue_number=1, ready=True)
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -63,7 +79,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -90,7 +106,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -113,7 +129,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -140,7 +156,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=1, ready=True)
 
         triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
-        store.get_triageable = lambda _max_count: issues  # type: ignore[method-assign]
+        store.get_triageable = _supply_once(issues)
 
         await phase.triage_issues()
 
@@ -177,7 +193,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=1, ready=True)
 
         triage.evaluate = AsyncMock(side_effect=check_active)
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -213,7 +229,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=getattr(issue, "id", 0), ready=True)
 
         triage.evaluate = AsyncMock(side_effect=track_concurrency)
-        store.get_triageable = lambda _max_count: issues  # type: ignore[method-assign]
+        store.get_triageable = _supply_once(*[[i] for i in issues])
 
         processed = await phase.triage_issues()
 
@@ -240,7 +256,7 @@ class TestTriagePhase:
                 "Adds compaction complexity but improves startup and dashboard freshness."
             ),
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -258,7 +274,7 @@ class TestTriagePhase:
             title="[ADR] Simplify build graph",
             body="Need to simplify this soon.",
         )
-        store.get_triageable = lambda _max_count: [issue]  # type: ignore[method-assign]
+        store.get_triageable = _supply_once([issue])
 
         await phase.triage_issues()
 
@@ -271,13 +287,13 @@ class TestTriagePhase:
 
 
 class TestTriagePhaseBatchScaling:
-    """Batch fetch size must scale with max_triagers, not use fixed batch_size."""
+    """Pool respects max_triagers for concurrency control."""
 
     @pytest.mark.asyncio
-    async def test_batch_fetch_scales_with_max_triagers(
+    async def test_supply_called_with_one_for_pool(
         self, config: HydraFlowConfig
     ) -> None:
-        """get_triageable should be called with 2 * max_triagers."""
+        """get_triageable should be called with 1 (pool fetches one at a time)."""
         from unittest.mock import MagicMock
 
         phase, _state, _triage, _prs, store, _stop = make_triage_phase(config)
@@ -286,13 +302,11 @@ class TestTriagePhaseBatchScaling:
         config.max_triagers = 4  # type: ignore[assignment]
         await phase.triage_issues()
 
-        store.get_triageable.assert_called_once_with(8)
+        store.get_triageable.assert_called_once_with(1)
 
     @pytest.mark.asyncio
-    async def test_batch_fetch_reflects_updated_worker_count(
-        self, config: HydraFlowConfig
-    ) -> None:
-        """After bumping max_triagers, the next batch should fetch more."""
+    async def test_supply_always_called_with_one(self, config: HydraFlowConfig) -> None:
+        """Regardless of max_triagers, supply fetches 1 at a time."""
         from unittest.mock import MagicMock
 
         phase, _state, _triage, _prs, store, _stop = make_triage_phase(config)
@@ -300,8 +314,8 @@ class TestTriagePhaseBatchScaling:
 
         config.max_triagers = 1  # type: ignore[assignment]
         await phase.triage_issues()
-        store.get_triageable.assert_called_with(2)
+        store.get_triageable.assert_called_with(1)
 
         config.max_triagers = 5  # type: ignore[assignment]
         await phase.triage_issues()
-        store.get_triageable.assert_called_with(10)
+        store.get_triageable.assert_called_with(1)

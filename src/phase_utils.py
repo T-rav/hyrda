@@ -79,10 +79,12 @@ async def run_refilling_pool(
 
     try:
         while not stop_event.is_set():
-            # Fill empty slots
-            free = max_concurrent - len(pending)
-            if free > 0:
+            # Fill all empty slots — call supply repeatedly until full or dry
+            while len(pending) < max_concurrent:
                 new_items = supply_fn()
+                if not new_items:
+                    break
+                free = max_concurrent - len(pending)
                 for item in new_items[:free]:
                     task = asyncio.create_task(worker_fn(worker_id_counter, item))
                     pending[task] = worker_id_counter
