@@ -1627,3 +1627,46 @@ describe('SESSION_RESET reducer', () => {
     expect(next.mergedCount).toBe(0)
   })
 })
+
+describe('duplicate event deduplication', () => {
+  it('merge_update does not double-count on replay', () => {
+    const action = { type: 'merge_update', id: 42, timestamp: '2026-01-01T00:00:00Z', data: { pr: 10, status: 'merged' } }
+    const s1 = reducer(initialState, action)
+    expect(s1.mergedCount).toBe(1)
+    // Replay same event (same id) — should be ignored
+    const s2 = reducer(s1, action)
+    expect(s2.mergedCount).toBe(1)
+  })
+
+  it('review_update does not double-count on replay', () => {
+    const action = { type: 'review_update', id: 43, timestamp: '2026-01-01T00:00:00Z', data: { pr: 10, issue: 5, worker: 1, status: 'done', role: 'reviewer' } }
+    const s1 = reducer(initialState, action)
+    expect(s1.sessionReviewed).toBe(1)
+    const s2 = reducer(s1, action)
+    expect(s2.sessionReviewed).toBe(1)
+  })
+
+  it('worker_update does not double-count on replay', () => {
+    const action = { type: 'worker_update', id: 44, timestamp: '2026-01-01T00:00:00Z', data: { issue: 7, status: 'done', worker: 'w1', role: 'implementer' } }
+    const s1 = reducer(initialState, action)
+    expect(s1.sessionImplemented).toBe(1)
+    const s2 = reducer(s1, action)
+    expect(s2.sessionImplemented).toBe(1)
+  })
+
+  it('triage_update does not double-count on replay', () => {
+    const action = { type: 'triage_update', id: 45, timestamp: '2026-01-01T00:00:00Z', data: { issue: 8, status: 'done', worker: 'w1' } }
+    const s1 = reducer(initialState, action)
+    expect(s1.sessionTriaged).toBe(1)
+    const s2 = reducer(s1, action)
+    expect(s2.sessionTriaged).toBe(1)
+  })
+
+  it('planner_update does not double-count on replay', () => {
+    const action = { type: 'planner_update', id: 46, timestamp: '2026-01-01T00:00:00Z', data: { issue: 9, status: 'done', worker: 'w1' } }
+    const s1 = reducer(initialState, action)
+    expect(s1.sessionPlanned).toBe(1)
+    const s2 = reducer(s1, action)
+    expect(s2.sessionPlanned).toBe(1)
+  })
+})

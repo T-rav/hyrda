@@ -158,6 +158,7 @@ export function reducer(state, action) {
     }
 
     case 'worker_update': {
+      if (isDuplicate(state, action)) return state
       const { issue, status, worker, role } = action.data
       const existing = state.workers[issue] || {
         status: 'queued',
@@ -212,6 +213,7 @@ export function reducer(state, action) {
     }
 
     case 'triage_update': {
+      if (isDuplicate(state, action)) return state
       const triageKey = `triage-${action.data.issue}`
       const triageStatus = action.data.status
       const triageWorker = {
@@ -239,6 +241,7 @@ export function reducer(state, action) {
     }
 
     case 'planner_update': {
+      if (isDuplicate(state, action)) return state
       const planKey = `plan-${action.data.issue}`
       const planStatus = action.data.status
       const planWorker = {
@@ -266,6 +269,7 @@ export function reducer(state, action) {
     }
 
     case 'review_update': {
+      if (isDuplicate(state, action)) return state
       const reviewKey = `review-${action.data.pr}`
       const reviewStatus = action.data.status
       const reviewWorker = {
@@ -298,6 +302,7 @@ export function reducer(state, action) {
     }
 
     case 'merge_update': {
+      if (isDuplicate(state, action)) return state
       const isMerged = action.data.status === 'merged'
       const updatedPrs = isMerged && action.data.pr
         ? state.prs.map(p => p.pr === action.data.pr ? { ...p, merged: true } : p)
