@@ -90,16 +90,15 @@ class ReportIssueLoop(BaseBackgroundLoop):
                     report.screenshot_base64
                 )
 
-        # Build the agent prompt
-        title = f"[Bug Report] {report.description[:100]}"
-        body_parts = ["## Bug Report", "", "### Description", report.description]
+        # Build the enrichment prompt — the agent analyses the raw report,
+        # researches the codebase, and files a well-structured issue.
+        repo = self._config.repo
+        labels_list = list(self._config.planner_label)
+        labels = ",".join(labels_list)
 
+        context_parts = [f"User report: {report.description}"]
         if screenshot_url:
-            body_parts += [
-                "",
-                "### Dashboard Screenshot",
-                f"![Screenshot]({screenshot_url})",
-            ]
+            context_parts.append(f"Screenshot: {screenshot_url}")
 
         env = report.environment
         if env:
@@ -111,34 +110,49 @@ class ReportIssueLoop(BaseBackgroundLoop):
                 f"{k}={queue_depths.get(k, 0)}"
                 for k in ("triage", "plan", "implement", "review")
             )
-            body_parts += [
-                "",
-                "### Environment",
-                f"- **HydraFlow version**: {version}",
-                f"- **Status**: {status}",
-                f"- **Queue depths**: {queue_line}",
-                f"- **Source**: {source}",
-            ]
+            context_parts.append(
+                f"Environment: version={version}, status={status}, "
+                f"queues=[{queue_line}], source={source}"
+            )
 
-        body = "\n".join(body_parts)
-        repo = self._config.repo
-        labels_list = list(self._config.planner_label)
-        labels = ",".join(labels_list)
+        raw_context = "\n".join(context_parts)
 
         prompt = (
-            f"Create a GitHub issue in the repo {repo} with the following details.\n\n"
-            f"Title: {title}\n\n"
-            f"Body:\n{body}\n\n"
-            f"Labels: {labels}\n\n"
-            f"Use `gh issue create --repo {repo} "
-            f'--title "{title}" --label "{labels}" --body \'...\'` '
-            f"to create the issue. Output only the gh command and its result."
+            f"A user submitted a bug report from the HydraFlow dashboard. "
+            f"Your job is to interpret it, research the codebase, and create "
+            f"a well-structured GitHub issue.\n\n"
+            f"--- RAW REPORT ---\n{raw_context}\n--- END ---\n\n"
+            f"Instructions:\n"
+            f"1. Interpret the user's description"
+            + (f" and the screenshot at {screenshot_url}" if screenshot_url else "")
+            + ".\n"
+            f"2. Search the codebase (Grep, Glob, Read) to find the relevant "
+            f"files, components, and code paths.\n"
+            f"3. Create a GitHub issue with `gh issue create --repo {repo} "
+            f'--label "{labels}"` using the structure below.\n\n'
+            f"Issue structure:\n"
+            f"- **Title**: Short, descriptive (under 70 chars). "
+            f"Do NOT just copy the user's raw text.\n"
+            f"- **Body** (use --body-file with a temp file):\n"
+            f"  ## Problem\n"
+            f"  Clear description of what's broken. Include the screenshot "
+            f"if available.\n\n"
+            f"  ## Current State\n"
+            f"  Reference specific files and code found during research.\n\n"
+            f"  ## Proposed Solution\n"
+            f"  Concrete fix description referencing existing patterns.\n\n"
+            f"  ## Scope\n"
+            f"  List files/services involved and key integration points.\n\n"
+            f"  ## Acceptance Criteria\n"
+            f"  - [ ] Checklist of verifiable outcomes\n\n"
+            f"The body MUST be at least 200 characters. "
+            f"Output the issue URL when done."
         )
 
         cmd = build_agent_command(
             tool=self._config.report_issue_tool,
             model=self._config.report_issue_model,
-            max_turns=3,
+            max_turns=10,
         )
 
         event_data: TranscriptEventData = {
@@ -162,10 +176,16 @@ class ReportIssueLoop(BaseBackgroundLoop):
         except Exception:
             logger.exception("Report issue agent failed for report %s", report.id)
 
-        # Reliability guard: never mark a report as processed until we have a
-        # concrete issue number.
+        # Reliability guard: if the agent didn't create the issue, fall back
+        # to a basic gh issue create via PRManager.
+        fallback_title = f"[Bug Report] {report.description[:100]}"
         if issue_number <= 0:
-            issue_number = await self._pr_manager.create_issue(title, body, labels_list)
+            fallback_body = f"## Bug Report\n\n{report.description}"
+            if screenshot_url:
+                fallback_body += f"\n\n![Screenshot]({screenshot_url})"
+            issue_number = await self._pr_manager.create_issue(
+                fallback_title, fallback_body, labels_list
+            )
         if issue_number <= 0:
             logger.error(
                 "Report %s failed: issue was not created via agent or fallback",
@@ -174,7 +194,10 @@ class ReportIssueLoop(BaseBackgroundLoop):
             return {"processed": 0, "report_id": report.id, "error": True}
 
         logger.info(
-            "Processed report %s as issue #%d: %s", report.id, issue_number, title
+            "Processed report %s as issue #%d: %s",
+            report.id,
+            issue_number,
+            fallback_title,
         )
         return {"processed": 1, "report_id": report.id, "issue_number": issue_number}
 
