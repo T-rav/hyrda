@@ -7,6 +7,7 @@ command (epic #561).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -149,7 +150,7 @@ def scaffold_pre_commit_hook(
     hook_path.parent.mkdir(parents=True, exist_ok=True)
     hook_content = _HOOK_TEMPLATES.get(detected, _UNKNOWN_HOOK)
     hook_path.write_text(hook_content)
-    os.chmod(hook_path, 0o755)  # noqa: S103  # nosec B103
+    _ensure_hook_executable(hook_path, repo_root, hook_content)
 
     message = (
         f"{warn_msg}; created hook at {hook_path}"
@@ -162,6 +163,38 @@ def scaffold_pre_commit_hook(
         language=detected,
         message=message,
         hook_path=hook_path,
+    )
+
+
+def _ensure_hook_executable(hook_path: Path, repo_root: Path, content: str) -> None:
+    """Ensure *hook_path* is executable; symlink to a cache when on noexec storage."""
+    try:
+        os.chmod(hook_path, 0o755)  # noqa: S103  # nosec B103
+    except OSError as exc:  # pragma: no cover - permissions errors are rare
+        logger.warning("Failed to chmod %s executable: %s", hook_path, exc)
+
+    if os.access(hook_path, os.X_OK):
+        return
+
+    cache_root_str = os.environ.get("HYDRAFLOW_HOOK_CACHE_ROOT")
+    cache_root = (
+        Path(cache_root_str).resolve() if cache_root_str else Path.cwd().resolve()
+    )
+    cache_dir = cache_root / ".hydraflow-hook-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    digest = hashlib.sha256(str(repo_root.resolve()).encode("utf-8")).hexdigest()
+    fallback_hook = cache_dir / f"pre-commit-{digest}"
+    fallback_hook.write_text(content)
+    os.chmod(fallback_hook, 0o755)  # noqa: S103  # nosec B103
+
+    if hook_path.exists() or hook_path.is_symlink():
+        hook_path.unlink()
+    hook_path.symlink_to(fallback_hook)
+    logger.warning(
+        "Hook directory %s appears to be on a noexec filesystem; symlinked hook to %s for executability.",
+        hook_path.parent,
+        fallback_hook,
     )
 
 
