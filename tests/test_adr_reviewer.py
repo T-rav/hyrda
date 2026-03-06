@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from adr_reviewer import ADRCouncilReviewer
 from models import ADRCouncilResult, CouncilVerdict, CouncilVote
 from tests.conftest import TaskFactory
-from tests.helpers import ConfigFactory, make_triage_phase
+from tests.helpers import ConfigFactory, make_triage_phase, supply_once
 
 
 def _make_reviewer(
@@ -943,7 +943,7 @@ class TestADRTriageIntegration:
         triage_runner.evaluate = AsyncMock(
             return_value=TriageResult(issue_number=321, ready=True)
         )
-        store.get_triageable = lambda _max_count: [triage_task]  # type: ignore[method-assign]
+        store.get_triageable = supply_once([triage_task])
 
         processed = await triage_phase.triage_issues()
         assert processed == 1
@@ -982,7 +982,7 @@ class TestADRTriageIntegration:
                 reasons=["Missing concrete implementation details"],
             )
         )
-        store.get_triageable = lambda _max_count: [triage_task]  # type: ignore[method-assign]
+        store.get_triageable = supply_once([triage_task])
 
         processed = await triage_phase.triage_issues()
         assert processed == 1
@@ -1252,6 +1252,9 @@ class TestExecuteOrchestrator:
         cmd = call_args.args[0]
         assert cmd[0] == "claude"
         assert "-p" in cmd
+        # Prompt must be immediately after -p for the CLI to recognise it.
+        p_idx = cmd.index("-p")
+        assert not cmd[p_idx + 1].startswith("--"), "prompt must follow -p, not a flag"
 
     @pytest.mark.asyncio
     async def test_codex_tool(self, tmp_path: Path) -> None:
