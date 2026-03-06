@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { OutcomesPanel } from '../IssueHistoryPanel'
 
+const mockUseHydraFlow = vi.fn()
+
+vi.mock('../../context/HydraFlowContext', () => ({
+  useHydraFlow: (...args) => mockUseHydraFlow(...args),
+}))
+
 function makePayload() {
   return {
     items: [
@@ -16,7 +22,7 @@ function makePayload() {
           { target_id: 4, kind: 'duplicates', target_url: null },
         ],
         prs: [{ number: 501, url: 'https://example.com/pull/501', merged: false }],
-        session_ids: ['sess-1'],
+        session_ids: ['acme-app-20260220T000000'],
         source_calls: { implementer: 2 },
         model_calls: { 'gpt-5': 2 },
         inference: { inference_calls: 2, total_tokens: 1200, input_tokens: 800, output_tokens: 400, pruned_chars_total: 1600 },
@@ -38,7 +44,7 @@ function makePayload() {
         epic: '',
         linked_issues: [],
         prs: [{ number: 777, url: 'https://example.com/pull/777', merged: true }],
-        session_ids: ['sess-2'],
+        session_ids: ['other-repo-20260221T000000'],
         source_calls: { reviewer: 1 },
         model_calls: { sonnet: 1 },
         inference: { inference_calls: 1, total_tokens: 100, input_tokens: 70, output_tokens: 30, pruned_chars_total: 400 },
@@ -59,6 +65,7 @@ function makePayload() {
 
 describe('OutcomesPanel (merged History+Outcomes)', () => {
   beforeEach(() => {
+    mockUseHydraFlow.mockReturnValue({ selectedRepoSlug: null })
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => makePayload(),
@@ -117,6 +124,13 @@ describe('OutcomesPanel (merged History+Outcomes)', () => {
     // "failed" appears as both status and outcome badge, "merged" likewise
     expect(screen.getAllByText('failed').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('merged').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('filters rows by selected repo slug based on session ids', async () => {
+    mockUseHydraFlow.mockReturnValue({ selectedRepoSlug: 'acme-app' })
+    render(<OutcomesPanel />)
+    await waitFor(() => expect(screen.getByText('Fix auth cache')).toBeInTheDocument())
+    expect(screen.queryByText('Merge docs')).toBeNull()
   })
 
   it('shows outcome details in expanded view', async () => {

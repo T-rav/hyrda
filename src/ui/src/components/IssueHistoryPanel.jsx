@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { theme } from '../theme'
+import { useHydraFlow } from '../context/HydraFlowContext'
 
 const RANGE_PRESETS = [
   { key: '24h', label: '24h', hours: 24 },
@@ -173,6 +174,7 @@ function renderLinkedIssue(linked, index) {
 const GRID_COLUMNS = '26px 52px minmax(180px, 2fr) 84px 100px 50px minmax(80px, 1fr) 70px 100px'
 
 export function OutcomesPanel() {
+  const { selectedRepoSlug } = useHydraFlow()
   const [preset, setPreset] = useState('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -246,8 +248,14 @@ export function OutcomesPanel() {
   }, [timeRange.since, timeRange.until, fetchHistory])
 
   const filtered = useMemo(() => {
+    const slug = selectedRepoSlug
     const q = search.trim().toLowerCase()
     return (payload.items || []).filter(item => {
+      if (slug) {
+        const sessions = Array.isArray(item.session_ids) ? item.session_ids : []
+        const matchesRepo = sessions.some((id) => typeof id === 'string' && id.startsWith(slug))
+        if (!matchesRepo) return false
+      }
       if (statusFilter !== 'all' && (item.status || 'unknown') !== statusFilter) return false
       if (outcomeFilter !== 'all' && item.outcome?.outcome !== outcomeFilter) return false
       if (epicOnly && !item.epic) return false
@@ -258,7 +266,7 @@ export function OutcomesPanel() {
       if ((item.crate_title || '').toLowerCase().includes(q)) return true
       return false
     })
-  }, [payload.items, statusFilter, outcomeFilter, epicOnly, search])
+  }, [payload.items, statusFilter, outcomeFilter, epicOnly, search, selectedRepoSlug])
 
   const grouped = useMemo(() => {
     if (groupBy === 'none') return null

@@ -44,6 +44,7 @@ const initialState = {
   currentSessionId: null,
   selectedSessionId: null,
   supervisedRepos: [],
+  selectedRepoSlugRaw: null,
 }
 
 const originalFetch = global.fetch
@@ -1416,7 +1417,18 @@ describe('SELECT_REPO reducer', () => {
       data: { slug: '8thlight/insightmesh' },
     })
     expect(result.selectedRepoSlug).toBe('8thlight-insightmesh')
+     expect(result.selectedRepoSlugRaw).toBe('8thlight/insightmesh')
     expect(result.selectedSessionId).toBeNull()
+  })
+
+  it('clears raw slug when deselecting', () => {
+    const state = { ...initialState, selectedRepoSlug: 'demo', selectedRepoSlugRaw: 'demo/repo' }
+    const result = reducer(state, {
+      type: 'SELECT_REPO',
+      data: { slug: null },
+    })
+    expect(result.selectedRepoSlug).toBeNull()
+    expect(result.selectedRepoSlugRaw).toBeNull()
   })
 })
 
