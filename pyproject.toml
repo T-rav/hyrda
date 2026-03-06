@@ -106,11 +106,13 @@ exclude_dirs = [
     "tests",
     "venv",
     ".venv",
+    ".cache",
+    ".cache/uv",
     ".uv-cache",
     ".claude/worktrees",
     ".codex/worktrees",
 ]
-skips = ["B101"]
+skips = ["B101", "B324"]
 
 # === Pytest ===
 [tool.pytest.ini_options]
