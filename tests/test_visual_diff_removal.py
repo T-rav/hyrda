@@ -1,13 +1,19 @@
 """Regression test ensuring the legacy visual_diff module stays removed."""
 
-import importlib.util
+from pathlib import Path
+
+_REPO_ROOT = Path(__file__).parent.parent
 
 
-def test_visual_diff_module_is_not_importable() -> None:
-    """visual_diff module was removed; guard against re-introduction."""
+def test_visual_diff_source_file_is_removed() -> None:
+    """Guard against re-introduction of src/visual_diff.py."""
+    assert not (_REPO_ROOT / "src" / "visual_diff.py").exists(), (
+        "visual_diff.py was re-introduced; delete src/visual_diff.py (superseded by visual_validator.py)."
+    )
 
-    # find_spec("visual_diff") works because conftest.py adds src/ to sys.path
-    spec = importlib.util.find_spec("visual_diff")
-    assert spec is None, (
-        "visual_diff module still exists; delete src/visual_diff.py and references."
+
+def test_visual_diff_test_file_is_removed() -> None:
+    """Guard against re-introduction of tests/test_visual_diff.py."""
+    assert not (_REPO_ROOT / "tests" / "test_visual_diff.py").exists(), (
+        "test_visual_diff.py was re-introduced; delete tests/test_visual_diff.py."
     )
