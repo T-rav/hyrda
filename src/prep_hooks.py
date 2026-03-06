@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import BaseModel
 
@@ -151,6 +152,15 @@ def scaffold_pre_commit_hook(
     hook_content = _HOOK_TEMPLATES.get(detected, _UNKNOWN_HOOK)
     hook_path.write_text(hook_content)
     _ensure_hook_executable(hook_path, repo_root, hook_content)
+
+    if not os.access(hook_path, os.X_OK):
+        cache_dir = Path(__file__).resolve().parent.parent / ".githooks-cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_target = cache_dir / f"pre-commit-{uuid4().hex}"
+        cache_target.write_text(hook_content)
+        os.chmod(cache_target, 0o755)  # noqa: S103  # nosec B103
+        hook_path.unlink(missing_ok=True)
+        hook_path.symlink_to(cache_target)
 
     message = (
         f"{warn_msg}; created hook at {hook_path}"
