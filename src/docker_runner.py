@@ -83,8 +83,15 @@ def build_container_kwargs(config: HydraFlowConfig) -> dict[str, Any]:
         kwargs["security_opt"] = security_opt
     kwargs["cap_drop"] = ["ALL"]
 
-    # Writable tmpfs for /tmp (container-internal mount, not a host path)
-    kwargs["tmpfs"] = {"/tmp": f"size={config.docker_tmp_size}"}  # nosec B108
+    # Writable tmpfs mounts (container-internal, not host paths).
+    # /tmp: general temp files.
+    # /home/hydraflow: agent tools (uv, npm, etc.) need a writable HOME for
+    # caches and config even when the root filesystem is read-only.
+    # uid/gid=1000 matches the container's hydraflow user.
+    kwargs["tmpfs"] = {
+        "/tmp": f"size={config.docker_tmp_size}",  # nosec B108
+        _CONTAINER_HOME: f"size={config.docker_tmp_size},uid=1000,gid=1000",
+    }
 
     logger.info(
         "Container constraints: cpu=%.1f mem=%s pids=%d net=%s readonly=%s",
@@ -503,6 +510,9 @@ class DockerRunner:
             env["CLAUDE_CONFIG_DIR"] = _CONTAINER_CLAUDE_HOME
         # Ensure temp dirs use the writable tmpfs, not the readonly root fs.
         env.setdefault("TMPDIR", "/tmp")  # nosec B108  # noqa: S108
+        # HOME must point to the writable tmpfs so tools (uv, npm, git) can
+        # write caches and config without fighting a read-only root fs.
+        env.setdefault("HOME", _CONTAINER_HOME)
         return env
 
     def _get_resource_kwargs(self) -> dict[str, Any]:
