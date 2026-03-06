@@ -16,20 +16,10 @@ from typing import TYPE_CHECKING
 
 from models import PlanResult, Task
 from tests.conftest import TaskFactory
-from tests.helpers import make_plan_phase
+from tests.helpers import make_plan_phase, supply_once
 
 if TYPE_CHECKING:
     from config import HydraFlowConfig
-
-
-def _supply_once(*batches):
-    """Return batches in order, then [] forever."""
-    items = list(batches)
-
-    def _fn(_max_count=None):
-        return items.pop(0) if items else []
-
-    return _fn
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +47,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -84,7 +74,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -104,7 +94,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -155,7 +145,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -185,7 +175,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -221,7 +211,7 @@ class TestPlanPhase:
 
         phase, _state, planners, prs, store, _stop = make_plan_phase(config)
         planners.plan = fake_plan
-        store.get_plannable = _supply_once(issues)
+        store.get_plannable = supply_once(issues)
 
         await phase.plan_issues()
 
@@ -247,7 +237,7 @@ class TestPlanPhase:
             )
 
         planners.plan = AsyncMock(side_effect=check_active_plan)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -268,7 +258,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         results = await phase.plan_issues()
 
@@ -300,7 +290,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -331,7 +321,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -362,7 +352,7 @@ class TestPlanPhase:
             )
 
         planners.plan = fake_plan
-        store.get_plannable = _supply_once(issues)
+        store.get_plannable = supply_once(issues)
 
         results = await phase.plan_issues()
 
@@ -389,7 +379,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -421,7 +411,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -451,7 +441,7 @@ class TestPlanPhase:
         (repo / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -489,7 +479,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         with mock_patch.object(PlanAnalyzer, "analyze", return_value=pass_result):
             await phase.plan_issues()
@@ -526,7 +516,7 @@ class TestPlanPhase:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         with mock_patch.object(PlanAnalyzer, "analyze", return_value=warn_result):
             await phase.plan_issues()
@@ -563,7 +553,7 @@ class TestPlanPhaseAlreadySatisfied:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -599,7 +589,7 @@ class TestPlanPhaseAlreadySatisfied:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -623,7 +613,7 @@ class TestPlanPhaseAlreadySatisfied:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -664,7 +654,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -696,7 +686,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -725,7 +715,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -754,7 +744,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -786,7 +776,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -810,7 +800,7 @@ class TestPlanPhaseTranscriptSummary:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         # Should not raise
         await phase.plan_issues()
@@ -842,7 +832,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -864,7 +854,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -901,7 +891,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -925,7 +915,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -958,7 +948,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -989,7 +979,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 
@@ -1017,7 +1007,7 @@ class TestPlanPhaseEvidenceValidation:
         )
 
         planners.plan = AsyncMock(return_value=plan_result)
-        store.get_plannable = _supply_once([issue])
+        store.get_plannable = supply_once([issue])
 
         await phase.plan_issues()
 

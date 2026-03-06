@@ -14,25 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from typing import TYPE_CHECKING
 
 from tests.conftest import TaskFactory
-from tests.helpers import make_triage_phase
+from tests.helpers import make_triage_phase, supply_once
 
 if TYPE_CHECKING:
     from config import HydraFlowConfig
-
-
-def _supply_once(*batches):
-    """Return batches in order, then [] forever.
-
-    Used to mock IssueStore.get_* methods for run_refilling_pool tests.
-    The pool calls supply_fn repeatedly; this ensures items are returned
-    once and the pool terminates cleanly.
-    """
-    items = list(batches)
-
-    def _fn(_max_count=None):
-        return items.pop(0) if items else []
-
-    return _fn
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +40,7 @@ class TestTriagePhase:
         triage.evaluate = AsyncMock(
             return_value=TriageResult(issue_number=1, ready=True)
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -79,7 +64,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -106,7 +91,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -129,7 +114,7 @@ class TestTriagePhase:
                 reasons=["Body is too short or empty (minimum 50 characters)"],
             )
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -156,7 +141,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=1, ready=True)
 
         triage.evaluate = AsyncMock(side_effect=evaluate_then_stop)
-        store.get_triageable = _supply_once(issues)
+        store.get_triageable = supply_once(issues)
 
         await phase.triage_issues()
 
@@ -193,7 +178,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=1, ready=True)
 
         triage.evaluate = AsyncMock(side_effect=check_active)
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -229,7 +214,7 @@ class TestTriagePhase:
             return TriageResult(issue_number=getattr(issue, "id", 0), ready=True)
 
         triage.evaluate = AsyncMock(side_effect=track_concurrency)
-        store.get_triageable = _supply_once(*[[i] for i in issues])
+        store.get_triageable = supply_once(*[[i] for i in issues])
 
         processed = await phase.triage_issues()
 
@@ -256,7 +241,7 @@ class TestTriagePhase:
                 "Adds compaction complexity but improves startup and dashboard freshness."
             ),
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 
@@ -274,7 +259,7 @@ class TestTriagePhase:
             title="[ADR] Simplify build graph",
             body="Need to simplify this soon.",
         )
-        store.get_triageable = _supply_once([issue])
+        store.get_triageable = supply_once([issue])
 
         await phase.triage_issues()
 

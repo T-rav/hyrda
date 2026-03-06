@@ -12,6 +12,26 @@ if TYPE_CHECKING:
     from worktree import WorktreeManager
 
 
+def supply_once(*batches):
+    """Return batches in order, then ``[]`` forever.
+
+    Used to mock ``IssueStore.get_*`` methods for ``run_refilling_pool`` tests.
+    The pool calls ``supply_fn`` repeatedly; this ensures items are returned
+    once and the pool terminates cleanly.
+
+    Usage::
+
+        store.get_triageable = supply_once([issue])          # single item
+        store.get_triageable = supply_once(*[[i] for i in issues])  # one per call
+    """
+    items = list(batches)
+
+    def _fn(_max_count=None):
+        return items.pop(0) if items else []
+
+    return _fn
+
+
 class AsyncLineIter:
     """Async iterator yielding raw bytes lines for mock proc.stdout."""
 
@@ -672,9 +692,9 @@ def make_implement_phase(
     mock_agents = AsyncMock()
     mock_agents.run = agent_run
 
-    # Mock IssueStore — get_implementable returns the supplied issues
+    # Mock IssueStore — get_implementable returns the supplied issues once
     mock_store = AsyncMock(spec=IssueStore)
-    mock_store.get_implementable = lambda limit: issues
+    mock_store.get_implementable = supply_once(*[[i] for i in issues])
     mock_store.mark_active = lambda num, stage: None
     mock_store.mark_complete = lambda num: None
     mock_store.is_active = lambda num: False
