@@ -455,7 +455,10 @@ class ImplementPhase:
             "`Consequences`) using the issue draft as source material.\n"
             "3. Ensure the ADR content is actionable and concrete enough for "
             "review (explicit decision, tradeoffs, and impact).\n"
-            "4. Add/update references so the ADR links back to this issue.\n\n"
+            "4. Add/update references so the ADR links back to this issue.\n"
+            "5. **Do NOT create tests for ADR markdown content.** ADRs are "
+            "documentation — never add `test_adr_*.py` files that assert on "
+            "headings, status, or prose.\n\n"
             "## ADR Draft From Issue\n\n"
             f"{body}\n"
         )
