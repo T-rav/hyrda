@@ -106,6 +106,7 @@ _CREDIT_PATTERNS = (
     "usage limit reached",
     "credit balance is too low",
     "you've hit your limit",
+    "hit your usage limit",
 )
 
 # Matches e.g. "reset at 3pm (America/New_York)", "reset at 3am",
@@ -120,6 +121,7 @@ _RESET_TIME_RE = re.compile(
 _DOCKER_ENV_PASSTHROUGH_KEYS = (
     # Primary provider auth keys
     "ANTHROPIC_API_KEY",
+    "CLAUDE_CODE_OAUTH_TOKEN",
     "OPENAI_API_KEY",
     "OPENROUTER_API_KEY",
     "GEMINI_API_KEY",
@@ -225,7 +227,7 @@ def make_docker_env(
     Unlike :func:`make_clean_env` which inherits the full host env, this
     passes only the variables necessary for agent operation inside a container.
     """
-    env: dict[str, str] = {"HOME": "/root"}
+    env: dict[str, str] = {"HOME": "/home/hydraflow"}
 
     if gh_token:
         env["GH_TOKEN"] = gh_token
