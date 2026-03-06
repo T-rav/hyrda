@@ -16,7 +16,7 @@ from harness_insights import FailureCategory, FailureRecord, HarnessInsightStore
 from issue_store import IssueStore
 from memory import file_memory_suggestion
 from models import PipelineStage, PRInfo
-from pr_manager import PRManager
+from ports import PRPort
 from state import StateTracker
 
 logger = logging.getLogger("hydraflow.phase_utils")
@@ -69,7 +69,7 @@ def release_batch_in_flight(store: IssueStore, task_ids: set[int]) -> None:
 
 async def escalate_to_hitl(
     state: StateTracker,
-    prs: PRManager,
+    prs: PRPort,
     issue_number: int,
     *,
     cause: str,
@@ -93,7 +93,7 @@ async def safe_file_memory_suggestion(
     source: str,
     reference: str,
     config: HydraFlowConfig,
-    prs: PRManager,
+    prs: PRPort,
     state: StateTracker,
 ) -> None:
     """File a memory suggestion, swallowing and logging exceptions."""
