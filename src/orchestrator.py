@@ -1105,21 +1105,8 @@ class HydraFlowOrchestrator:
         from the queue so no capacity sits idle.
         """
         did_work = False
-        pending: set[asyncio.Task[None]] = set()
+        pending: set[asyncio.Task[bool]] = set()
         max_slots = self._config.max_reviewers
-
-        # Drain ADR issues first (quick, no PR fetch needed)
-        adr_batch = self._store.get_reviewable(max_slots)
-        if adr_batch:
-            adr_issues = [i for i in adr_batch if is_adr_issue_title(i.title)]
-            non_adr = [i for i in adr_batch if not is_adr_issue_title(i.title)]
-            if adr_issues:
-                did_work = True
-                await self._reviewer.review_adrs(adr_issues)
-            # Re-queue non-ADR issues so they are picked up below
-            for issue in non_adr:
-                self._store.enqueue_transition(issue, "review")
-            release_batch_in_flight(self._store, {i.id for i in adr_batch})
 
         while not self._stop_event.is_set():
             # Fill empty slots from the queue
@@ -1141,7 +1128,6 @@ class HydraFlowOrchestrator:
                 pending, return_when=asyncio.FIRST_COMPLETED
             )
             for task in done:
-                did_work = True
                 exc = task.exception()
                 if exc is not None:
                     if isinstance(
@@ -1156,6 +1142,8 @@ class HydraFlowOrchestrator:
                         "Review worker failed unexpectedly",
                         exc_info=exc,
                     )
+                elif task.result():
+                    did_work = True
 
         # Cancel stragglers on stop
         for task in pending:
@@ -1165,12 +1153,16 @@ class HydraFlowOrchestrator:
 
         return did_work
 
-    async def _review_single_issue(self, issue: Task) -> None:
-        """Fetch PR and run review for a single issue, handling results inline."""
+    async def _review_single_issue(self, issue: Task) -> bool:
+        """Fetch PR and run review for a single issue, handling results inline.
+
+        Returns ``True`` when a review actually ran, ``False`` when the
+        issue was only re-queued (e.g. PR not visible yet).
+        """
         try:
             if is_adr_issue_title(issue.title):
                 await self._reviewer.review_adrs([issue])
-                return
+                return True
 
             active_in_store = set(self._store.get_active_issues().keys())
             gh_issue = GitHubIssue.from_task(issue)
@@ -1180,7 +1172,7 @@ class HydraFlowOrchestrator:
             if not prs:
                 # PR not visible yet — re-queue for next cycle
                 self._store.enqueue_transition(issue, "review")
-                return
+                return False
 
             review_results = await self._reviewer.review_prs(
                 prs, [i.to_task() for i in gh_issues]
@@ -1209,6 +1201,7 @@ class HydraFlowOrchestrator:
                 await asyncio.sleep(_POST_MERGE_DELAY)
                 await self._prs.pull_main()
                 await self._crate_manager.check_and_advance()
+            return True
         finally:
             release_batch_in_flight(self._store, {issue.id})
 
