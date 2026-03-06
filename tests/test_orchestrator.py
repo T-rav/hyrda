@@ -3030,6 +3030,14 @@ class TestMemoryErrorPropagation:
         """_polling_loop should call update_bg_worker_status('error') on exception."""
         orch = HydraFlowOrchestrator(config)
         call_count = 0
+        status_calls: list[tuple[str, str]] = []
+        _orig_update = orch.update_bg_worker_status
+
+        def tracking_update(name: str, status: str) -> None:
+            status_calls.append((name, status))
+            _orig_update(name, status)
+
+        orch.update_bg_worker_status = tracking_update  # type: ignore[method-assign]
 
         async def fail_then_stop() -> bool:
             nonlocal call_count
@@ -3044,8 +3052,10 @@ class TestMemoryErrorPropagation:
 
         orch._sleep_or_stop = instant_sleep  # type: ignore[method-assign]
         await orch._polling_loop("triage", fail_then_stop, 10)
-        states = orch.get_bg_worker_states()
+        # Error heartbeat must be emitted on the exception iteration
+        assert ("triage", "error") in status_calls
         # Final heartbeat should be "ok" from the second (successful) call
+        states = orch.get_bg_worker_states()
         assert states["triage"]["status"] == "ok"
 
 
