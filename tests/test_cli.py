@@ -16,6 +16,7 @@ import cli as cli_module
 from cli import (
     _best_model_for_tool,
     _choose_prep_tool,
+    _config_from_repo_entry,
     _coverage_validation_roots,
     _detect_available_prep_tools,
     _evaluate_coverage_validation,
@@ -1111,3 +1112,92 @@ class TestRepoConfigOverlay:
         _apply_repo_config_overlay(cfg, cli_explicit={"max_workers"})
 
         assert cfg.max_workers == 2
+
+
+class TestConfigFromRepoEntry:
+    """Tests for _config_from_repo_entry helper."""
+
+    def test_returns_none_when_entry_path_missing(self, tmp_path: Path) -> None:
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=tmp_path / "data")
+        entry = RepoEntry(slug="org-repo")  # no path
+        assert _config_from_repo_entry(base, entry) is None
+
+    def test_sets_repo_root_from_entry_path(self, tmp_path: Path) -> None:
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        repo_dir = tmp_path / "my-repo"
+        repo_dir.mkdir()
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=tmp_path / "data")
+        entry = RepoEntry(slug="org-repo", path=str(repo_dir), repo="org/repo")
+        result = _config_from_repo_entry(base, entry)
+        assert result is not None
+        assert result.repo_root == repo_dir.resolve()
+
+    def test_sets_repo_from_entry(self, tmp_path: Path) -> None:
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        repo_dir = tmp_path / "proj"
+        repo_dir.mkdir()
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=tmp_path / "data")
+        entry = RepoEntry(slug="org-proj", path=str(repo_dir), repo="org/proj")
+        result = _config_from_repo_entry(base, entry)
+        assert result is not None
+        assert result.repo == "org/proj"
+
+    def test_repo_defaults_to_empty_string_when_absent(self, tmp_path: Path) -> None:
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        repo_dir = tmp_path / "proj"
+        repo_dir.mkdir()
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=tmp_path / "data")
+        entry = RepoEntry(slug="org-proj", path=str(repo_dir))
+        result = _config_from_repo_entry(base, entry)
+        assert result is not None
+        assert result.repo == ""
+
+    def test_config_file_points_to_data_root_slug_subdir(self, tmp_path: Path) -> None:
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        data_root = tmp_path / "data"
+        repo_dir = tmp_path / "proj"
+        repo_dir.mkdir()
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=data_root)
+        entry = RepoEntry(slug="org-proj", path=str(repo_dir))
+        result = _config_from_repo_entry(base, entry)
+        assert result is not None
+        assert result.config_file == data_root / "org-proj" / "config.json"
+
+    def test_returns_none_on_validation_error(self, tmp_path: Path) -> None:
+        from unittest.mock import patch
+
+        from pydantic import BaseModel, ValidationError
+
+        from config import HydraFlowConfig
+        from repo_registry_store import RepoEntry
+
+        # Build a real ValidationError instance to use as side_effect
+        class _M(BaseModel):
+            x: int
+
+        validation_err: ValidationError | None = None
+        try:
+            _M(x="not-an-int")  # type: ignore[arg-type]
+        except ValidationError as exc:
+            validation_err = exc
+        assert validation_err is not None
+
+        repo_dir = tmp_path / "proj"
+        repo_dir.mkdir()
+        base = HydraFlowConfig(repo_root=tmp_path, data_root=tmp_path / "data")
+        entry = RepoEntry(slug="org-proj", path=str(repo_dir))
+
+        with patch("cli.HydraFlowConfig", side_effect=validation_err):
+            result = _config_from_repo_entry(base, entry)
+        assert result is None

@@ -393,3 +393,115 @@ class TestRepoRuntimeRegistry:
         runtime_auto.start.assert_awaited_once()
         runtime_manual.start.assert_not_called()
         assert started == ["org-alpha"]
+
+    @pytest.mark.asyncio
+    async def test_auto_start_persisted_no_store_returns_empty(self):
+        registry = RepoRuntimeRegistry(store=None)
+        started = await registry.auto_start_persisted(lambda e: None)
+        assert started == []
+
+    @pytest.mark.asyncio
+    async def test_auto_start_persisted_skips_none_config(self, tmp_path):
+        entry = RepoEntry(
+            slug="org-gamma", path=str(tmp_path / "gamma"), auto_start=True
+        )
+
+        class FixedStore:
+            def load(self):
+                return [entry]
+
+            def add(self, e):
+                return e
+
+            def remove(self, slug):
+                return True
+
+        registry = RepoRuntimeRegistry(store=FixedStore())
+        register_mock = AsyncMock()
+        registry.register = register_mock  # type: ignore[assignment]
+
+        started = await registry.auto_start_persisted(lambda e: None)
+        assert started == []
+        register_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_start_persisted_skips_factory_exception(self, tmp_path):
+        entry = RepoEntry(slug="org-err", path=str(tmp_path / "err"), auto_start=True)
+
+        class FixedStore:
+            def load(self):
+                return [entry]
+
+            def add(self, e):
+                return e
+
+            def remove(self, slug):
+                return True
+
+        registry = RepoRuntimeRegistry(store=FixedStore())
+        register_mock = AsyncMock()
+        registry.register = register_mock  # type: ignore[assignment]
+
+        def _raise(_e: object) -> None:
+            raise RuntimeError("boom")
+
+        started = await registry.auto_start_persisted(_raise)
+        assert started == []
+        register_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_auto_start_persisted_skips_duplicate_slug(self, tmp_path):
+        entry = RepoEntry(slug="org-dup", path=str(tmp_path / "dup"), auto_start=True)
+
+        class FixedStore:
+            def load(self):
+                return [entry]
+
+            def add(self, e):
+                return e
+
+            def remove(self, slug):
+                return True
+
+        registry = RepoRuntimeRegistry(store=FixedStore())
+        register_mock = AsyncMock(side_effect=ValueError("already registered"))
+        registry.register = register_mock  # type: ignore[assignment]
+
+        config_factory = MagicMock(
+            return_value=ConfigFactory.create(
+                repo="org/dup", repo_root=tmp_path / "dup"
+            )
+        )
+        started = await registry.auto_start_persisted(config_factory)
+        assert started == []
+
+    @pytest.mark.asyncio
+    async def test_auto_start_persisted_continues_after_start_failure(self, tmp_path):
+        entry = RepoEntry(slug="org-fail", path=str(tmp_path / "fail"), auto_start=True)
+
+        class FixedStore:
+            def load(self):
+                return [entry]
+
+            def add(self, e):
+                return e
+
+            def remove(self, slug):
+                return True
+
+        registry = RepoRuntimeRegistry(store=FixedStore())
+
+        runtime_fail = MagicMock()
+        runtime_fail.start = AsyncMock(side_effect=RuntimeError("start failed"))
+
+        register_mock = AsyncMock(return_value=runtime_fail)
+        registry.register = register_mock  # type: ignore[assignment]
+
+        config_factory = MagicMock(
+            return_value=ConfigFactory.create(
+                repo="org/fail", repo_root=tmp_path / "fail"
+            )
+        )
+        started = await registry.auto_start_persisted(config_factory)
+        # start raised, so slug is not added to started list
+        assert started == []

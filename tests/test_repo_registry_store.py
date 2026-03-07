@@ -51,3 +51,74 @@ class TestRepoRegistryStore:
         assert entries == []
         backups = list(store.path.parent.glob("repos.json.corrupt*"))
         assert backups, "Expected corrupt file to be renamed"
+
+    def test_quarantine_increments_counter_when_backup_exists(
+        self, tmp_path: Path
+    ) -> None:
+        store = RepoRegistryStore(tmp_path)
+        # Pre-create the first backup name to force counter increment
+        first_backup = store.path.with_suffix(store.path.suffix + ".corrupt")
+        first_backup.write_text("old")
+        store.path.write_text("not-json")
+        store.load()
+        # Both original and incremented backup should exist
+        backups = list(store.path.parent.glob("repos.json.corrupt*"))
+        assert len(backups) >= 2  # noqa: PLR2004
+
+    def test_load_skips_invalid_entries(self, tmp_path: Path) -> None:
+        store = RepoRegistryStore(tmp_path)
+        # slug is required; write a record missing it
+        store.path.write_text('[{"path": "/foo"}]\n')
+        entries = store.load()
+        assert entries == []
+
+    def test_load_skips_non_dict_entries(self, tmp_path: Path) -> None:
+        store = RepoRegistryStore(tmp_path)
+        store.path.write_text('[{"slug": "a", "path": "/a"}, "not-an-object"]\n')
+        entries = store.load()
+        assert len(entries) == 1
+        assert entries[0].slug == "a"
+
+    def test_load_non_list_json_returns_empty(self, tmp_path: Path) -> None:
+        store = RepoRegistryStore(tmp_path)
+        store.path.write_text('{"slug": "a"}\n')
+        entries = store.load()
+        assert entries == []
+
+    def test_load_oserror_returns_empty(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock, patch
+
+        store = RepoRegistryStore(tmp_path)
+        mock_path = MagicMock(spec=Path)
+        mock_path.read_text.side_effect = OSError("perm denied")
+        mock_path.__truediv__ = lambda self, other: mock_path
+        with patch.object(store, "_path", mock_path):
+            entries = store.load()
+        assert entries == []
+
+    def test_entry_slug_whitespace_trimmed(self) -> None:
+        entry = RepoEntry(slug="  org-repo  ")
+        assert entry.slug == "org-repo"
+
+    def test_entry_slug_whitespace_only_raises(self) -> None:
+        import pytest
+        from pydantic import ValidationError as PydanticValidationError
+
+        with pytest.raises(PydanticValidationError):
+            RepoEntry(slug="   ")
+
+    def test_entry_path_whitespace_trimmed_to_none(self) -> None:
+        entry = RepoEntry(slug="a", path="   ")
+        assert entry.path is None
+
+    def test_entry_repo_whitespace_trimmed_to_none(self) -> None:
+        entry = RepoEntry(slug="a", repo="   ")
+        assert entry.repo is None
+
+    def test_entry_path_none_stays_none(self) -> None:
+        entry = RepoEntry(slug="a", path=None)
+        assert entry.path is None
+
+    def test_entry_repo_none_stays_none(self) -> None:
+        entry = RepoEntry(slug="a", repo=None)
+        assert entry.repo is None
