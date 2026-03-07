@@ -821,21 +821,26 @@ async def test_push_branch_force_true_includes_flag(config, event_bus, tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_push_branch_dry_run(dry_config, event_bus, tmp_path):
+async def test_push_branch_dry_run(dry_config, event_bus, tmp_path, caplog):
     manager = _make_manager(dry_config, event_bus)
 
-    result = await manager.push_branch(tmp_path, "agent/issue-42")
+    with caplog.at_level(logging.INFO, logger="hydraflow.pr_manager"):
+        result = await manager.push_branch(tmp_path, "agent/issue-42")
 
     assert result is True
+    assert "push" in caplog.text
+    assert "force-push" not in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_push_branch_force_dry_run(dry_config, event_bus, tmp_path):
+async def test_push_branch_force_dry_run(dry_config, event_bus, tmp_path, caplog):
     manager = _make_manager(dry_config, event_bus)
 
-    result = await manager.push_branch(tmp_path, "agent/issue-42", force=True)
+    with caplog.at_level(logging.INFO, logger="hydraflow.pr_manager"):
+        result = await manager.push_branch(tmp_path, "agent/issue-42", force=True)
 
     assert result is True
+    assert "force-push" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -986,6 +991,25 @@ class TestGhJsonQuery:
         mock_logger.log.assert_called_once()
         call_level = mock_logger.log.call_args[0][0]
         assert call_level == logging.DEBUG
+
+    @pytest.mark.asyncio
+    async def test_default_error_log_level_is_warning(self, config, event_bus):
+        mgr = _make_manager(config, event_bus)
+        mgr._run_gh = AsyncMock(side_effect=RuntimeError("gh: not found"))
+
+        with patch("pr_manager.logger") as mock_logger:
+            await mgr._gh_json_query(
+                "gh",
+                "api",
+                "/test",
+                default=None,
+                dry_run_message="Would fetch",
+                error_message="Could not fetch",
+            )
+
+        mock_logger.log.assert_called_once()
+        call_level = mock_logger.log.call_args[0][0]
+        assert call_level == logging.WARNING
 
 
 # ---------------------------------------------------------------------------
