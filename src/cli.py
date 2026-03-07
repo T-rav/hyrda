@@ -1389,6 +1389,7 @@ async def _run_main(config: HydraFlowConfig) -> None:
         finally:
             if dashboard._orchestrator and dashboard._orchestrator.running:
                 await dashboard._orchestrator.stop()
+            await registry.stop_all()
             await dashboard.stop()
     else:
         from repo_runtime import RepoRuntime
