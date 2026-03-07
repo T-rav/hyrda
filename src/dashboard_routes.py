@@ -2995,6 +2995,8 @@ def create_router(
         if rt.running:
             await rt.stop()
         registry.remove(slug)
+        if repo_store is not None:
+            repo_store.remove(slug)
         return JSONResponse({"status": "removed", "slug": slug})
 
     # --- Multi-repo supervisor endpoints ---
