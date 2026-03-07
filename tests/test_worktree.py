@@ -2720,6 +2720,57 @@ class TestPostWorkCleanup:
         assert any("config --unset core.worktree" in c for c in cmd_strs)
 
     @pytest.mark.asyncio
+    async def test_post_work_salvages_uncommitted_changes(self, config) -> None:
+        manager = WorktreeManager(config)
+
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        calls: list[tuple[str, ...]] = []
+
+        async def fake_run(*args, cwd=None, gh_token=None):
+            calls.append(args)
+            if args == ("git", "status", "--porcelain"):
+                return " M src/foo.py\n"
+            return ""
+
+        with (
+            patch("worktree.run_subprocess", side_effect=fake_run),
+            patch.object(manager, "destroy", new_callable=AsyncMock),
+        ):
+            await manager.post_work_cleanup(42)
+
+        cmd_strs = [" ".join(c) for c in calls]
+        assert any("git add -A" in c for c in cmd_strs)
+        assert any("git commit" in c for c in cmd_strs)
+        assert any("git push" in c for c in cmd_strs)
+
+    @pytest.mark.asyncio
+    async def test_post_work_skips_salvage_when_clean(self, config) -> None:
+        manager = WorktreeManager(config)
+
+        wt_path = config.worktree_path_for_issue(42)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        calls: list[tuple[str, ...]] = []
+
+        async def fake_run(*args, cwd=None, gh_token=None):
+            calls.append(args)
+            if args == ("git", "status", "--porcelain"):
+                return ""
+            return ""
+
+        with (
+            patch("worktree.run_subprocess", side_effect=fake_run),
+            patch.object(manager, "destroy", new_callable=AsyncMock),
+        ):
+            await manager.post_work_cleanup(42)
+
+        cmd_strs = [" ".join(c) for c in calls]
+        assert not any("git add -A" in c for c in cmd_strs)
+        assert not any("git commit" in c for c in cmd_strs)
+
+    @pytest.mark.asyncio
     async def test_post_work_continues_if_destroy_fails(self, config) -> None:
         manager = WorktreeManager(config)
 

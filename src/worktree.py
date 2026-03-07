@@ -308,14 +308,89 @@ class WorktreeManager:
             )
         await self._fetch_origin_with_retry(repo, self._config.main_branch)
 
+    async def _salvage_uncommitted(self, issue_number: int) -> None:
+        """Commit and push any uncommitted changes in the worktree before destroying it.
+
+        Prevents work loss when a worktree is cleaned up after a crash or
+        timeout that left uncommitted changes behind.
+        """
+        wt_path = self._config.worktree_path_for_issue(issue_number)
+        if not wt_path.exists():
+            return
+
+        gh = self._config.gh_token
+        branch = self._config.branch_for_issue(issue_number)
+
+        # Check for uncommitted changes
+        try:
+            status = await run_subprocess(
+                "git",
+                "status",
+                "--porcelain",
+                cwd=wt_path,
+                gh_token=gh,
+            )
+        except RuntimeError:
+            return
+
+        if not status.strip():
+            return
+
+        logger.info(
+            "Salvaging uncommitted changes in worktree for issue #%d",
+            issue_number,
+        )
+
+        try:
+            await run_subprocess(
+                "git",
+                "add",
+                "-A",
+                cwd=wt_path,
+                gh_token=gh,
+            )
+            await run_subprocess(
+                "git",
+                "commit",
+                "-m",
+                f"chore: salvage uncommitted changes for issue #{issue_number}",
+                "--no-verify",
+                cwd=wt_path,
+                gh_token=gh,
+            )
+            await run_subprocess(
+                "git",
+                "push",
+                "--no-verify",
+                "-u",
+                "origin",
+                branch,
+                cwd=wt_path,
+                gh_token=gh,
+            )
+            logger.info(
+                "Salvaged and pushed uncommitted work for issue #%d", issue_number
+            )
+        except RuntimeError as exc:
+            logger.warning(
+                "Could not salvage uncommitted changes for issue #%d: %s",
+                issue_number,
+                exc,
+            )
+
     async def post_work_cleanup(self, issue_number: int) -> None:
         """Clean up after an issue is done (PR created/merged/failed).
 
-        Removes the worktree, deletes the local branch, prunes refs,
-        and unsets ``core.worktree`` if corrupted.
+        Salvages any uncommitted changes, then removes the worktree,
+        deletes the local branch, prunes refs, and unsets
+        ``core.worktree`` if corrupted.
         """
         repo = self._repo_root
         gh = self._config.gh_token
+
+        # Salvage any uncommitted work before destroying
+        with contextlib.suppress(Exception):
+            await self._salvage_uncommitted(issue_number)
 
         # Destroy worktree + branch
         with contextlib.suppress(RuntimeError):
