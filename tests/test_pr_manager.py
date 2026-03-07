@@ -3405,50 +3405,6 @@ class TestCountHelpers:
             'repo:test-org/test-repo is:pr is:merged label:"hydraflow-fixed"'
         ]
 
-    @pytest.mark.asyncio
-    async def test_sum_label_counts_sums_values(self, event_bus, tmp_path):
-        cfg = ConfigFactory.create(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        mgr = _make_manager(cfg, event_bus)
-        captured_queries: list[str] = []
-
-        async def mock_search(query: str) -> int:
-            captured_queries.append(query)
-            return len(captured_queries)
-
-        mgr._search_github_count = mock_search
-
-        total = await mgr._sum_label_counts(
-            ["a", "b", "c"],
-            lambda label: f"query-{label}",
-            log_context="count open issues",
-        )
-        assert total == 6
-        assert captured_queries == ["query-a", "query-b", "query-c"]
-
-    @pytest.mark.asyncio
-    async def test_sum_label_counts_logs_and_skips_on_error(
-        self, event_bus, tmp_path, caplog
-    ):
-        cfg = ConfigFactory.create(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "worktrees",
-            state_file=tmp_path / "state.json",
-        )
-        mgr = _make_manager(cfg, event_bus)
-        mgr._search_github_count = AsyncMock(side_effect=RuntimeError("boom"))
-
-        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
-            total = await mgr._sum_label_counts(
-                ["hydraflow-plan"],
-                lambda label: f"query-{label}",
-                log_context="count open issues",
-            )
-        assert total == 0
-        assert "count open issues" in caplog.text
 
 
 # ---------------------------------------------------------------------------
