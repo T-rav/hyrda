@@ -145,6 +145,7 @@ const styles = {
   },
   input: {
     width: '100%',
+    boxSizing: 'border-box',
     padding: '8px 10px',
     borderRadius: 6,
     border: `1px solid ${theme.border}`,

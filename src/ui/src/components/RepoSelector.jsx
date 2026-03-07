@@ -91,7 +91,7 @@ export function RepoSelector({ onOpenRegister }) {
     <div ref={containerRef} style={styles.wrapper}>
       <button
         type="button"
-        style={open ? styles.triggerOpen : styles.trigger}
+        style={open ? triggerOpen : styles.trigger}
         onClick={() => setOpen(prev => !prev)}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -107,6 +107,7 @@ export function RepoSelector({ onOpenRegister }) {
             onClick={() => handleSelect(null)}
             style={selectedRepoSlug == null ? styles.optionActive : styles.option}
             role="option"
+            aria-selected={selectedRepoSlug == null}
           >
             <span style={styles.optionLabel}>All repos</span>
             <span style={styles.optionStatus}>Aggregated</span>
@@ -122,6 +123,7 @@ export function RepoSelector({ onOpenRegister }) {
                 onClick={() => handleSelect(opt.rawSlug)}
                 style={opt.filterSlug === selectedRepoSlug ? styles.optionActive : styles.option}
                 role="option"
+                aria-selected={opt.filterSlug === selectedRepoSlug}
               >
                 <span style={styles.optionLeft}>
                   <span style={statusStyles(opt.isRunning)} />
@@ -164,21 +166,6 @@ const styles = {
     borderRadius: 8,
     border: `1px solid ${theme.border}`,
     background: theme.surface,
-    color: theme.text,
-    cursor: 'pointer',
-    fontSize: 12,
-    fontWeight: 600,
-    gap: 8,
-  },
-  triggerOpen: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    padding: '8px 10px',
-    borderRadius: 8,
-    border: `1px solid ${theme.accent}`,
-    background: theme.surfaceInset,
     color: theme.text,
     cursor: 'pointer',
     fontSize: 12,
@@ -280,3 +267,6 @@ const styles = {
     cursor: 'pointer',
   },
 }
+
+// Pre-computed trigger variant for open state
+const triggerOpen = { ...styles.trigger, border: `1px solid ${theme.accent}`, background: theme.surfaceInset }

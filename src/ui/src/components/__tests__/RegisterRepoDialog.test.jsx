@@ -24,7 +24,7 @@ describe('RegisterRepoDialog', () => {
 
   it('validates when no inputs provided', () => {
     render(<RegisterRepoDialog isOpen onClose={() => {}} />)
-    fireEvent.click(screen.getByTestId('register-submit'))
+    fireEvent.submit(screen.getByTestId('register-submit').closest('form'))
     expect(screen.getByText('Enter a GitHub slug or repo path')).toBeInTheDocument()
   })
 
@@ -52,5 +52,19 @@ describe('RegisterRepoDialog', () => {
     fireEvent.change(screen.getByLabelText('Filesystem path'), { target: { value: '/repos/demo' } })
     fireEvent.click(screen.getByTestId('register-submit'))
     await waitFor(() => expect(addRepoByPath).toHaveBeenCalledWith('/repos/demo'))
+  })
+
+  it('displays error message when registration fails', async () => {
+    const addRepoBySlug = vi.fn().mockResolvedValue({ ok: false, error: 'Repo not found' })
+    mockUseHydraFlow.mockReturnValue({
+      addRepoBySlug,
+      addRepoByPath: vi.fn(),
+    })
+    const onClose = vi.fn()
+    render(<RegisterRepoDialog isOpen onClose={onClose} />)
+    fireEvent.change(screen.getByLabelText('GitHub slug'), { target: { value: 'acme/missing' } })
+    fireEvent.click(screen.getByTestId('register-submit'))
+    await waitFor(() => expect(screen.getByText('Repo not found')).toBeInTheDocument())
+    expect(onClose).not.toHaveBeenCalled()
   })
 })
