@@ -104,13 +104,13 @@ class TestReportIssueLoopDoWork:
             mock_stream.return_value = "https://github.com/acme/repo/issues/101"
             await loop._do_work()
 
-        pr_mgr.upload_screenshot_gist.assert_awaited_once_with("iVBORw0KGgo=")
         prompt = mock_stream.call_args.kwargs.get("prompt", "")
         assert ".png" in prompt
+        assert "![Screenshot](" in prompt
 
     @pytest.mark.asyncio
-    async def test_empty_screenshot_skips_gist_upload(self, tmp_path: Path) -> None:
-        """When screenshot_base64 is empty, gist upload is skipped."""
+    async def test_empty_screenshot_skips_upload(self, tmp_path: Path) -> None:
+        """When screenshot_base64 is empty, no screenshot is referenced."""
         loop, _stop, state, pr_mgr = _make_loop(tmp_path)
         report = PendingReport(description="No screenshot")
         state.enqueue_report(report)
@@ -121,7 +121,8 @@ class TestReportIssueLoopDoWork:
             mock_stream.return_value = "https://github.com/acme/repo/issues/102"
             await loop._do_work()
 
-        pr_mgr.upload_screenshot_gist.assert_not_awaited()
+        prompt = mock_stream.call_args.kwargs.get("prompt", "")
+        assert "![Screenshot](" not in prompt
 
     @pytest.mark.asyncio
     async def test_agent_failure_does_not_fall_back_to_direct_issue_create(

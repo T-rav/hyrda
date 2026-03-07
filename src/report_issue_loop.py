@@ -77,9 +77,10 @@ class ReportIssueLoop(BaseBackgroundLoop):
         if report is None:
             return None
 
-        # Save screenshot to a temp PNG so the agent can *see* it via Read.
+        # Save screenshot to a temp PNG so the agent can *see* it via Read
+        # and reference it as a markdown image in the issue body.  The `gh
+        # issue create` CLI auto-uploads local image paths used in markdown.
         screenshot_path: Path | None = None
-        screenshot_md_url = ""
         if report.screenshot_base64:
             secret_hits = (
                 scan_base64_for_secrets(report.screenshot_base64)
@@ -102,10 +103,6 @@ class ReportIssueLoop(BaseBackgroundLoop):
                         "continuing without screenshot attachment",
                         report.id,
                     )
-                else:
-                    screenshot_md_url = await self._pr_manager.upload_screenshot_gist(
-                        report.screenshot_base64
-                    )
 
         # Build prompt — invoke /hf.issue so Claude gets the full skill
         # instructions (codebase research, duplicate check, structured body).
@@ -114,11 +111,10 @@ class ReportIssueLoop(BaseBackgroundLoop):
             description += (
                 f"\n\nA screenshot of the bug is saved at {screenshot_path} "
                 f"— read it with the Read tool to see what the user saw."
-            )
-        if screenshot_md_url:
-            description += (
-                "\n\nUse this markdown image in the GitHub issue body so the screenshot "
-                f"is visible inline:\n\n![Screenshot]({screenshot_md_url})"
+                f"\n\nInclude this markdown image in the GitHub issue body so "
+                f"the screenshot is visible inline (gh issue create will "
+                f"auto-upload the local file):\n\n"
+                f"![Screenshot]({screenshot_path})"
             )
 
         prompt = f"/hf.issue {description}"
