@@ -51,6 +51,7 @@ def _mock_fetcher_noop(orch: HydraFlowOrchestrator) -> None:
     orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
     orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
     orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+    orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
 
 def make_worker_result(
@@ -1489,6 +1490,7 @@ class TestSupervisorLoops:
         orch = HydraFlowOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+        orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
         implement_calls = 0
 
@@ -1771,6 +1773,7 @@ class TestAuthFailure:
         orch = HydraFlowOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+        orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
         async def auth_failing_triage() -> None:
             raise AuthenticationError("401 Unauthorized")
@@ -1798,6 +1801,7 @@ class TestAuthFailure:
         orch = HydraFlowOrchestrator(config, event_bus=event_bus)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+        orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
         async def auth_failing_plan() -> list[PlanResult]:
             raise AuthenticationError("401 Unauthorized")
@@ -1829,6 +1833,7 @@ class TestAuthFailure:
         orch = HydraFlowOrchestrator(config)
         orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
         orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+        orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
         async def auth_failing_implement() -> tuple[list[WorkerResult], list[Task]]:
             raise AuthenticationError("401 Unauthorized")
