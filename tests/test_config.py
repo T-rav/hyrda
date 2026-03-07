@@ -1198,7 +1198,7 @@ class TestHydraFlowConfigValidationConstraints:
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_pre_quality_review_attempts == 1
+        assert cfg.max_pre_quality_review_attempts == 3
 
     def test_max_pre_quality_review_attempts_configurable(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
@@ -1823,13 +1823,13 @@ class TestHydraFlowConfigMaxPreQualityReviewAttempts:
     def test_max_pre_quality_review_attempts_env_var_override(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setenv("HYDRAFLOW_MAX_PRE_QUALITY_REVIEW_ATTEMPTS", "3")
+        monkeypatch.setenv("HYDRAFLOW_MAX_PRE_QUALITY_REVIEW_ATTEMPTS", "4")
         cfg = HydraFlowConfig(
             repo_root=tmp_path,
             worktree_base=tmp_path / "wt",
             state_file=tmp_path / "s.json",
         )
-        assert cfg.max_pre_quality_review_attempts == 3
+        assert cfg.max_pre_quality_review_attempts == 4
 
     def test_max_pre_quality_review_attempts_explicit_overrides_env_var(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

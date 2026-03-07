@@ -599,12 +599,30 @@ Focus on fixing the root causes, not suppressing warnings.
 
 Attempt: {attempt}
 
-Scope:
-- review current branch changes for correctness and plan adherence
-- add/fix tests for missing coverage and edge cases
-- verify all new functions have type hints and all imports are correct
+Review the current branch changes thoroughly for bugs, gaps, and test coverage.
+
+Bug check:
+- look for logic errors, off-by-one mistakes, wrong comparisons, swapped arguments
+- check None/null handling: are optional values dereferenced without guards?
+- verify error paths: do exceptions propagate correctly? are resources cleaned up?
+- check concurrency issues: race conditions, missing awaits, unprotected shared state
+
+Gap check:
+- compare implementation against the plan/issue description — is anything missing?
 - check edge cases: empty inputs, None values, missing keys, boundary conditions
-- apply code fixes directly in this working tree{escalation_guidance}
+- verify all new functions have type hints and all imports are correct
+- ensure no debug code, print statements, or hardcoded test values remain
+
+Test coverage check:
+- every new public function/method must have at least one test
+- verify tests cover both success and failure/error paths
+- check that edge cases (empty, None, boundary) have dedicated tests
+- ensure tests actually assert on behavior, not just that code runs without error
+- add missing tests directly in this working tree
+
+Apply fixes:
+- fix any bugs, gaps, or missing tests found above directly in this working tree
+- keep edits scoped to issue intent{escalation_guidance}
 
 Constraints:
 - Do not push or open PRs
