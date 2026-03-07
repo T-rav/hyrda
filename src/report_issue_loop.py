@@ -227,6 +227,8 @@ class ReportIssueLoop(BaseBackgroundLoop):
         payload = b64_data
         if payload.startswith("data:"):
             _, _, payload = payload.partition(",")
+        # Strip whitespace/newlines that may be introduced during transport
+        payload = payload.translate({ord(c): None for c in " \t\n\r"})
         raw = base64.b64decode(payload, validate=True)
         fd, path = tempfile.mkstemp(suffix=".png", prefix="hydraflow-report-")
         Path(path).write_bytes(raw)
