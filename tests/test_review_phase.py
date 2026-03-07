@@ -5,19 +5,20 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from typing import TYPE_CHECKING
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 if TYPE_CHECKING:
     from config import HydraFlowConfig
 
 from events import EventType
 from models import (
+    BaselineApprovalResult,
     ConflictResolutionResult,
     CriterionResult,
     CriterionVerdict,
@@ -28,8 +29,10 @@ from models import (
     ReviewVerdict,
     Task,
     VerificationCriterion,
+    VisualValidationDecision,
+    VisualValidationPolicy,
 )
-from review_phase import ReviewPhase
+from review_phase import PreReviewContext, ReviewGuardContext, ReviewPhase
 from tests.conftest import (
     PRInfoFactory,
     ReviewResultFactory,
@@ -1259,6 +1262,143 @@ class TestWaitAndFixCI:
         await phase.review_prs([pr], [issue])
 
         assert phase._state.get_hitl_origin(42) == "hydraflow-review"
+
+
+# ---------------------------------------------------------------------------
+# Post-mortem memory filing
+# ---------------------------------------------------------------------------
+
+
+class TestReviewPostMortemMemoryFiling:
+    """CI and review-fix failures file memory suggestions from transcripts."""
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_files_memory_from_review_transcript(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """CI failure escalation should file memory from review transcript."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = make_review_phase(cfg)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create()
+
+        review_result = ReviewResultFactory.create(
+            transcript="MEMORY_SUGGESTION_START\ntitle: CI insight\nlearning: check imports\nMEMORY_SUGGESTION_END",
+        )
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_path_for_issue(42)
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        create_calls = phase._prs.create_issue.call_args_list
+        assert any("[Memory]" in str(c) for c in create_calls)
+
+    @pytest.mark.asyncio
+    async def test_ci_failure_no_memory_when_no_transcript(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """CI failure with empty transcript should not attempt memory filing."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_ci_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = make_review_phase(cfg)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create()
+
+        review_result = ReviewResultFactory.create(transcript="")
+        fix_result = ReviewResult(
+            pr_number=101,
+            issue_number=42,
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._reviewers.fix_ci = AsyncMock(return_value=fix_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.merge_pr = AsyncMock(return_value=True)
+        phase._prs.wait_for_ci = AsyncMock(return_value=(False, "Failed checks: ci"))
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_path_for_issue(42)
+        wt.mkdir(parents=True, exist_ok=True)
+
+        await phase.review_prs([pr], [issue])
+
+        create_calls = phase._prs.create_issue.call_args_list
+        assert not any("[Memory]" in str(c) for c in create_calls)
+
+    @pytest.mark.asyncio
+    async def test_review_fix_cap_files_memory_from_transcript(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """Review fix cap exceeded should file memory from review transcript."""
+        from tests.helpers import ConfigFactory
+
+        cfg = ConfigFactory.create(
+            max_review_fix_attempts=1,
+            repo_root=config.repo_root,
+            worktree_base=config.worktree_base,
+            state_file=config.state_file,
+        )
+        phase = make_review_phase(cfg)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create()
+
+        review_result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            transcript="MEMORY_SUGGESTION_START\ntitle: Review insight\nlearning: check tests\nMEMORY_SUGGESTION_END",
+        )
+
+        phase._reviewers.review = AsyncMock(return_value=review_result)
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff")
+        phase._prs.push_branch = AsyncMock(return_value=True)
+        phase._prs.post_pr_comment = AsyncMock()
+        phase._prs.remove_label = AsyncMock()
+        phase._prs.add_labels = AsyncMock()
+
+        wt = config.worktree_path_for_issue(42)
+        wt.mkdir(parents=True, exist_ok=True)
+
+        # Set review attempts to cap so next review triggers escalation
+        phase._state.increment_review_attempts(42)
+
+        await phase.review_prs([pr], [issue])
+
+        create_calls = phase._prs.create_issue.call_args_list
+        assert any("[Memory]" in str(c) for c in create_calls)
 
 
 # ---------------------------------------------------------------------------
@@ -4586,6 +4726,182 @@ class TestReviewOneInner:
 
         assert "Merge conflicts" in result.summary
         assert result.merged is False
+
+
+class TestRunInitialGuards:
+    """Tests for the refactored _run_initial_guards helper."""
+
+    @pytest.mark.asyncio
+    async def test_returns_context_when_all_guards_pass(
+        self, config: HydraFlowConfig
+    ) -> None:
+        phase = make_review_phase(config)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create(issue_number=issue.id)
+
+        wt_path = config.worktree_path_for_issue(issue.id)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        phase._prepare_review_worktree = AsyncMock(return_value=wt_path)
+
+        guards = await phase._run_initial_guards(0, pr, {issue.id: issue})
+
+        assert isinstance(guards, ReviewGuardContext)
+        assert guards.task == issue
+        assert guards.worktree_path == wt_path
+        phase._prepare_review_worktree.assert_awaited_once_with(pr, issue, 0)
+
+
+class TestPreReviewChecks:
+    """Tests for the _run_pre_review_checks helper."""
+
+    @pytest.mark.asyncio
+    async def test_baseline_violation_returns_review_result(
+        self, config: HydraFlowConfig
+    ) -> None:
+        phase = make_review_phase(config)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create(issue_number=issue.id)
+
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        violation = BaselineApprovalResult(
+            approved=False,
+            requires_approval=True,
+            changed_files=["snap.png"],
+            reason="missing approval",
+        )
+        phase._check_baseline_policy = AsyncMock(return_value=violation)
+        phase._escalate_to_hitl = AsyncMock()
+
+        result = await phase._run_pre_review_checks(pr, issue)
+
+        assert isinstance(result, ReviewResult)
+        assert "Baseline" in result.summary
+        phase._escalate_to_hitl.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_context_and_posts_visual_comment(
+        self, config: HydraFlowConfig
+    ) -> None:
+        phase = make_review_phase(config)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create(issue_number=issue.id)
+
+        phase._prs.get_pr_diff = AsyncMock(return_value="diff text")
+        phase._check_baseline_policy = AsyncMock(return_value=None)
+        decision = VisualValidationDecision(
+            policy=VisualValidationPolicy.REQUIRED,
+            reason="Triggered",
+            triggered_patterns=["apps/*"],
+        )
+        phase._compute_visual_validation = MagicMock(return_value=decision)
+        alerts = [{"id": 1}]
+        phase._fetch_code_scanning_alerts = AsyncMock(return_value=alerts)
+        phase._run_delta_verification = AsyncMock()
+        phase._prs.post_pr_comment = AsyncMock()
+
+        context = await phase._run_pre_review_checks(pr, issue)
+
+        assert isinstance(context, PreReviewContext)
+        assert context.diff == "diff text"
+        assert context.visual_decision == decision
+        assert context.code_scanning_alerts == alerts
+        phase._prs.post_pr_comment.assert_awaited_once()
+        phase._run_delta_verification.assert_awaited_once_with(pr, "diff text")
+
+
+class TestRunPostReviewActions:
+    """Tests for the _run_post_review_actions helper."""
+
+    @pytest.mark.asyncio
+    async def test_self_fix_re_review_and_merge_flow(
+        self, config: HydraFlowConfig
+    ) -> None:
+        phase = make_review_phase(config)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create(issue_number=issue.id)
+        wt_path = config.worktree_path_for_issue(issue.id)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        initial = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=True,
+        )
+        upgraded = ReviewResultFactory.create(verdict=ReviewVerdict.APPROVE)
+        phase._handle_self_fix_re_review = AsyncMock(
+            return_value=(upgraded, "new diff")
+        )
+        phase._run_visual_validation = AsyncMock(return_value=None)
+        phase._handle_visual_failure = AsyncMock()
+        phase._record_review_outcome = AsyncMock()
+        phase._handle_approved_merge = AsyncMock()
+        phase._handle_rejected_review = AsyncMock(return_value=False)
+        phase._cleanup_worktree = AsyncMock()
+
+        context = PreReviewContext(
+            diff="orig diff",
+            visual_decision=None,
+            code_scanning_alerts=[{"id": 1}],
+        )
+
+        result = await phase._run_post_review_actions(
+            pr,
+            issue,
+            wt_path,
+            initial,
+            context,
+            worker_id=0,
+        )
+
+        assert result == upgraded
+        phase._handle_self_fix_re_review.assert_awaited_once()
+        phase._handle_approved_merge.assert_awaited_once()
+        phase._cleanup_worktree.assert_awaited_once_with(pr, upgraded, False)
+
+    @pytest.mark.asyncio
+    async def test_rejected_path_preserves_worktree_when_requested(
+        self, config: HydraFlowConfig
+    ) -> None:
+        phase = make_review_phase(config)
+        issue = TaskFactory.create()
+        pr = PRInfoFactory.create(issue_number=issue.id)
+        wt_path = config.worktree_path_for_issue(issue.id)
+        wt_path.mkdir(parents=True, exist_ok=True)
+
+        result = ReviewResultFactory.create(
+            verdict=ReviewVerdict.REQUEST_CHANGES,
+            fixes_made=False,
+        )
+        report = MagicMock(has_failures=False)
+
+        phase._handle_self_fix_re_review = AsyncMock()
+        phase._run_visual_validation = AsyncMock(return_value=report)
+        phase._handle_visual_failure = AsyncMock()
+        phase._record_review_outcome = AsyncMock()
+        phase._handle_approved_merge = AsyncMock()
+        phase._handle_rejected_review = AsyncMock(return_value=True)
+        phase._cleanup_worktree = AsyncMock()
+
+        context = PreReviewContext(
+            diff="diff text",
+            visual_decision=None,
+            code_scanning_alerts=None,
+        )
+
+        final = await phase._run_post_review_actions(
+            pr,
+            issue,
+            wt_path,
+            result,
+            context,
+            worker_id=1,
+        )
+
+        assert final == result
+        phase._handle_rejected_review.assert_awaited_once()
+        phase._cleanup_worktree.assert_awaited_once_with(pr, result, True)
+        phase._handle_self_fix_re_review.assert_not_awaited()
+        phase._handle_visual_failure.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

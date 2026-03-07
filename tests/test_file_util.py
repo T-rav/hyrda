@@ -1,4 +1,4 @@
-"""Tests for file_util.atomic_write."""
+"""Tests for file_util helpers: atomic_write, append_jsonl, file_lock."""
 
 from __future__ import annotations
 
@@ -106,7 +106,7 @@ class TestAppendJsonl:
     def test_appends_line_with_newline(self, tmp_path: Path) -> None:
         target = tmp_path / "events.jsonl"
         append_jsonl(target, '{"a": 1}')
-        assert target.read_text() == '{"a": 1}\n'
+        assert target.read_text() == '{"a": 1}\\n'
 
     def test_appends_multiple_lines(self, tmp_path: Path) -> None:
         target = tmp_path / "events.jsonl"
@@ -119,10 +119,11 @@ class TestAppendJsonl:
         target = tmp_path / "sub" / "dir" / "events.jsonl"
         append_jsonl(target, "line")
         assert target.exists()
+        assert target.read_text() == "line\\n"
 
     def test_calls_fsync(self, tmp_path: Path) -> None:
         target = tmp_path / "events.jsonl"
-        with patch("file_util.os.fsync") as mock_fsync:
+        with patch("file_util.os.fsync", wraps=os.fsync) as mock_fsync:
             append_jsonl(target, "data")
         mock_fsync.assert_called_once()
 
@@ -134,7 +135,9 @@ class TestAppendJsonl:
         ):
             append_jsonl(target, "data")
 
-    def test_existing_content_preserved_after_fsync_failure(self, tmp_path: Path) -> None:
+    def test_existing_content_preserved_after_fsync_failure(
+        self, tmp_path: Path
+    ) -> None:
         target = tmp_path / "events.jsonl"
         append_jsonl(target, '{"prior": true}')
         with (
@@ -142,7 +145,6 @@ class TestAppendJsonl:
             pytest.raises(OSError),
         ):
             append_jsonl(target, '{"new": true}')
-        # Prior content is intact; the failed write may or may not have flushed
         content = target.read_text()
         assert '{"prior": true}' in content
 
