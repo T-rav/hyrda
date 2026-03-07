@@ -63,6 +63,9 @@ class FakeWorktreeManager:
     def discard(self, issue_number: int) -> None:
         self.cleaned.append(issue_number)
 
+    async def sanitize_repo(self) -> None:
+        pass
+
 
 class StaticTaskFetcher:
     """Task fetcher stub used by IssueStore."""
@@ -129,6 +132,11 @@ class ScriptedReviewFetcher:
 
     def __init__(self, github: ScriptedGitHub) -> None:
         self._github = github
+
+    async def fetch_issues_by_labels(
+        self, labels: list[str], *, limit: int = 50
+    ) -> list[GitHubIssue]:
+        return []
 
     async def fetch_reviewable_prs(
         self,
@@ -338,6 +346,9 @@ class ScriptedHITLPhase:
 
     def skip_issue(self, issue_number: int) -> None:
         self._corrections.pop(issue_number, None)
+
+    async def attempt_auto_fixes(self, hitl_issues: list) -> None:
+        pass
 
     async def process_corrections(self) -> None:
         pending = dict(self._corrections)

@@ -1256,6 +1256,13 @@ def make_review_phase(
         baseline_policy=baseline_policy,
     )
 
+    # Default fix_review_findings to return no-op so _attempt_review_fix
+    # doesn't loop unexpectedly in tests that don't care about it.
+    from models import ReviewResult as _RR
+
+    _no_fix = _RR(pr_number=0, issue_number=0, fixes_made=False)
+    phase._reviewers.fix_review_findings = AsyncMock(return_value=_no_fix)
+
     if default_mocks:
         from tests.conftest import ReviewResultFactory
 
