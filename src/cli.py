@@ -1486,8 +1486,13 @@ async def _run_main(config: HydraFlowConfig) -> None:
                 await rt.start()
 
         loop = asyncio.get_running_loop()
+
+        async def _shutdown() -> None:
+            await runtime.stop()
+            await registry.stop_all()
+
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, lambda: asyncio.create_task(registry.stop_all()))
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(_shutdown()))
 
         try:
             await runtime.run()
