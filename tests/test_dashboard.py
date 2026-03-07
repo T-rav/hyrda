@@ -16,7 +16,7 @@ import contextlib
 from typing import TYPE_CHECKING
 
 from events import EventBus, EventType, HydraFlowEvent
-from models import HITLItem, PRListItem
+from models import BGWorkerHealth, HITLItem, PRListItem
 from tests.conftest import EventFactory, make_orchestrator_mock, make_state
 
 if TYPE_CHECKING:
@@ -156,6 +156,63 @@ class TestIndexRoute:
 
         assert response.status_code == 200
         assert "<h1>" in response.text
+
+
+# ---------------------------------------------------------------------------
+# GET /healthz
+# ---------------------------------------------------------------------------
+
+
+class TestHealthRoute:
+    """Tests for the GET /healthz health-check endpoint."""
+
+    def test_healthz_returns_ok_payload(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        orch = make_orchestrator_mock(running=True)
+        dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/healthz")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "ok"
+        assert payload["orchestrator_running"] is True
+        assert payload["dashboard"]["port"] == config.dashboard_port
+        assert payload["dashboard"]["host"] == config.dashboard_host
+
+    def test_healthz_reports_worker_errors(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        orch = make_orchestrator_mock(running=True)
+        state.set_worker_heartbeat(
+            "memory_sync",
+            {
+                "status": BGWorkerHealth.ERROR,
+                "last_run": None,
+                "details": {"error": "boom"},
+            },
+        )
+        dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        response = client.get("/healthz")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["status"] == "degraded"
+        assert payload["worker_errors"] == ["memory_sync"]
 
 
 # ---------------------------------------------------------------------------
@@ -796,6 +853,31 @@ class TestStartStop:
 
         assert dashboard._server_task is not None
         assert isinstance(dashboard._server_task, asyncio.Task)
+
+        if dashboard._server_task and not dashboard._server_task.done():
+            dashboard._server_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await dashboard._server_task
+
+    @pytest.mark.asyncio
+    async def test_start_uses_configured_host(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from dashboard import HydraFlowDashboard
+
+        config.dashboard_host = "0.0.0.0"
+        dashboard = HydraFlowDashboard(config, event_bus, state)
+
+        mock_server = AsyncMock()
+        mock_server.serve = AsyncMock(return_value=None)
+
+        with (
+            patch("uvicorn.Config") as mock_config,
+            patch("uvicorn.Server", return_value=mock_server),
+        ):
+            await dashboard.start()
+
+        assert mock_config.call_args.kwargs["host"] == "0.0.0.0"
 
         if dashboard._server_task and not dashboard._server_task.done():
             dashboard._server_task.cancel()

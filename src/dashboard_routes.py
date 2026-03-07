@@ -766,6 +766,49 @@ def create_router(
         finally:
             hitl_summary_inflight.discard(issue_number)
 
+    @router.get("/healthz")
+    def get_health() -> JSONResponse:
+        """Lightweight readiness response for load balancers and monitors."""
+        orchestrator = get_orchestrator()
+        orchestrator_running = bool(getattr(orchestrator, "running", False))
+        worker_states = state.get_bg_worker_states()
+
+        def _normalise_worker_health(raw_status: Any) -> BGWorkerHealth:
+            if isinstance(raw_status, BGWorkerHealth):
+                return raw_status
+            try:
+                return BGWorkerHealth(str(raw_status or "").lower())
+            except ValueError:
+                return BGWorkerHealth.DISABLED
+
+        worker_errors = sorted(
+            name
+            for name, heartbeat in worker_states.items()
+            if _normalise_worker_health(heartbeat.get("status")) == BGWorkerHealth.ERROR
+        )
+        status = "ok"
+        if orchestrator is None:
+            status = "starting"
+        elif not orchestrator_running:
+            status = "idle"
+        if worker_errors:
+            status = "degraded"
+        payload = {
+            "status": status,
+            "version": get_app_version(),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "orchestrator_running": orchestrator_running,
+            "active_issue_count": len(state.get_active_issue_numbers()),
+            "active_worktrees": len(state.get_active_worktrees()),
+            "worker_count": len(worker_states),
+            "worker_errors": worker_errors,
+            "dashboard": {
+                "host": config.dashboard_host,
+                "port": config.dashboard_port,
+            },
+        }
+        return JSONResponse(payload)
+
     @router.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
         return _serve_spa_index()

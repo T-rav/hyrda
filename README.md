@@ -242,6 +242,16 @@ make run
 # "authentication_failed" or empty transcripts.
 ```
 
+## EC2 Deployment
+
+Running HydraFlow as a 24/7 EC2 service is supported out-of-the-box:
+
+- `deploy/ec2/deploy-hydraflow.sh` bootstraps dependencies, syncs code, and restarts the orchestrator.
+- `deploy/ec2/hydraflow.service` keeps the process alive under systemd.
+- FastAPI exposes `GET /healthz` so load balancers or uptime monitors can watch liveness.
+
+See [docs/deployment/ec2.md](docs/deployment/ec2.md) for the full playbook, including how to bind the dashboard to `0.0.0.0` using the new `HYDRAFLOW_DASHBOARD_HOST` config knob and how to scope your EC2 security group safely.
+
 ## Contributing
 
 - Fork it.
