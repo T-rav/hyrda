@@ -123,7 +123,8 @@ class TestScaffoldPreCommitHook:
         scaffold_pre_commit_hook(tmp_path, language="python")
         hook = tmp_path / ".githooks" / "pre-commit"
         # Check permission bits directly; os.access(X_OK) is unreliable on noexec mounts
-        assert hook.stat().st_mode & 0o111
+        mode = hook.stat().st_mode
+        assert mode & 0o111, f"expected execute bits set, got mode {oct(mode & 0o777)}"
 
     def test_hook_starts_with_shebang(self, tmp_path: Path) -> None:
         scaffold_pre_commit_hook(tmp_path, language="python")

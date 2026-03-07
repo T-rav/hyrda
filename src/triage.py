@@ -10,7 +10,14 @@ from pathlib import Path
 from agent_cli import build_agent_command
 from base_runner import BaseRunner
 from events import EventType, HydraFlowEvent
-from models import EpicDecompResult, NewIssueSpec, Task, TriageResult, TriageStatus
+from models import (
+    EpicDecompResult,
+    IssueType,
+    NewIssueSpec,
+    Task,
+    TriageResult,
+    TriageStatus,
+)
 from prompt_stats import build_prompt_stats, truncate_with_notice
 from subprocess_util import CreditExhaustedError
 
@@ -288,10 +295,18 @@ or for truly insufficient issues:
         raw = data.get("reasons", [])
         complexity = data.get("complexity_score", 0)
         score = int(complexity) if isinstance(complexity, (int, float)) else 0
-        issue_type_raw = data.get("issue_type", "feature")
-        issue_type = str(issue_type_raw).lower() if issue_type_raw else "feature"
-        if issue_type not in ("feature", "bug", "epic"):
-            issue_type = "feature"
+        issue_type_raw = data.get("issue_type", IssueType.FEATURE)
+        if isinstance(issue_type_raw, IssueType):
+            issue_type = issue_type_raw
+        elif isinstance(issue_type_raw, str):
+            cleaned = issue_type_raw.strip().lower()
+            issue_type = (
+                IssueType(cleaned)
+                if cleaned in IssueType._value2member_map_
+                else IssueType.FEATURE
+            )
+        else:
+            issue_type = IssueType.FEATURE
         enrichment_raw = data.get("enrichment", "")
         enrichment = str(enrichment_raw).strip() if enrichment_raw else ""
         return TriageResult(
