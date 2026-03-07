@@ -7,6 +7,7 @@ import contextlib
 import importlib
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from orchestrator import HydraFlowOrchestrator
+    from repo_runtime import RepoRuntimeRegistry
+    from repo_store import RepoRecord, RepoStore
 
 logger = logging.getLogger("hydraflow.dashboard")
 
@@ -67,6 +70,15 @@ class HydraFlowDashboard:
         event_bus: EventBus,
         state: StateTracker,
         orchestrator: HydraFlowOrchestrator | None = None,
+        registry: RepoRuntimeRegistry | None = None,
+        repo_store: RepoStore | None = None,
+        register_repo_cb: Callable[
+            [Path, str | None], Awaitable[tuple[RepoRecord, HydraFlowConfig]]
+        ]
+        | None = None,
+        remove_repo_cb: Callable[[str], Awaitable[bool]] | None = None,
+        list_repos_cb: Callable[[], list[RepoRecord]] | None = None,
+        default_repo_slug: str | None = None,
     ) -> None:
         self._config = config
         self._bus = event_bus
@@ -75,6 +87,12 @@ class HydraFlowDashboard:
         self._server_task: asyncio.Task[None] | None = None
         self._run_task: asyncio.Task[None] | None = None
         self._app: FastAPI | None = None
+        self._registry = registry
+        self._repo_store = repo_store
+        self._register_repo_cb = register_repo_cb
+        self._remove_repo_cb = remove_repo_cb
+        self._list_repos_cb = list_repos_cb
+        self._default_repo_slug = default_repo_slug
 
     def create_app(self) -> FastAPI:
         """Build and return the FastAPI application."""
@@ -121,6 +139,12 @@ class HydraFlowDashboard:
             set_run_task=self._set_run_task,
             ui_dist_dir=_UI_DIST_DIR,
             template_dir=_TEMPLATE_DIR,
+            registry=self._registry,
+            repo_store=self._repo_store,
+            register_repo_cb=self._register_repo_cb,
+            remove_repo_cb=self._remove_repo_cb,
+            list_repos_cb=self._list_repos_cb,
+            default_repo_slug=self._default_repo_slug,
         )
         app.include_router(router)
 

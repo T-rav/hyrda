@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -6223,6 +6224,191 @@ class TestRuntimeLifecycleEndpoints:
         assert resp.status_code == 200
         mock_runtime.stop.assert_awaited_once()
         mock_registry.remove.assert_called_once_with("org-repo")
+
+
+class TestRepoScopedEndpoints:
+    """Tests for repo-scoped endpoints resolving runtime-specific state."""
+
+    def _make_router(
+        self,
+        config,
+        tmp_path: Path,
+        registry,
+        *,
+        remove_repo_cb=None,
+    ):
+        from dashboard_routes import create_router
+
+        event_bus = MagicMock()
+        state = MagicMock()
+        state.get_hitl_summary.return_value = ""
+        state.get_hitl_summary_updated_at.return_value = None
+        state.get_hitl_visual_evidence.return_value = None
+        pr_mgr = MagicMock()
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+            registry=registry,
+            remove_repo_cb=remove_repo_cb,
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_prs_uses_runtime_pr_manager(self, config, tmp_path) -> None:
+        runtime_config = config.model_copy()
+        runtime = SimpleNamespace(
+            config=runtime_config,
+            event_bus=MagicMock(),
+            state=MagicMock(),
+            orchestrator=None,
+        )
+        registry = MagicMock()
+        registry.get.return_value = runtime
+        router = self._make_router(config, tmp_path, registry)
+        endpoint = next(
+            r for r in router.routes if getattr(r, "path", "") == "/api/prs"
+        )
+
+        with patch("dashboard_routes.PRManager") as MockPRManager:
+            mock_mgr = MockPRManager.return_value
+            mock_mgr.list_open_prs = AsyncMock(return_value=[])
+            resp = await endpoint.endpoint(repo="org-repo")
+
+        assert resp.status_code == 200
+        MockPRManager.assert_called_once_with(runtime_config, runtime.event_bus)
+        mock_mgr.list_open_prs.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_hitl_uses_runtime_state(self, config, tmp_path) -> None:
+        class _State:
+            def __init__(self) -> None:
+                self.cause_calls: list[int] = []
+                self.origin_calls: list[int] = []
+
+            def get_hitl_cause(self, issue: int) -> str:
+                self.cause_calls.append(issue)
+                return "Manual escalation"
+
+            def get_hitl_origin(self, issue: int) -> str:
+                self.origin_calls.append(issue)
+                return config.review_label[0]
+
+        runtime = SimpleNamespace(
+            config=config.model_copy(),
+            event_bus=MagicMock(),
+            state=_State(),
+            orchestrator=None,
+        )
+        registry = MagicMock()
+        registry.get.return_value = runtime
+        router = self._make_router(config, tmp_path, registry)
+        endpoint = next(
+            r for r in router.routes if getattr(r, "path", "") == "/api/hitl"
+        )
+
+        class _Item:
+            def __init__(self, issue: int) -> None:
+                self.issue = issue
+
+            def model_dump(self) -> dict:
+                return {"issue": self.issue}
+
+        with patch("dashboard_routes.PRManager") as MockPRManager:
+            mock_mgr = MockPRManager.return_value
+            mock_mgr.list_hitl_items = AsyncMock(return_value=[_Item(42)])
+            resp = await endpoint.endpoint(repo="org-repo")
+
+        import json
+
+        assert resp.status_code == 200
+        payload = json.loads(resp.body)
+        assert isinstance(payload, list)
+        assert len(payload) == 1
+        assert payload[0]["cause"] == "Manual escalation"
+        assert runtime.state.cause_calls == [42]
+        assert runtime.state.origin_calls == [42]
+
+    @pytest.mark.asyncio
+    async def test_get_system_workers_reads_repo_state_when_idle(
+        self, config, tmp_path
+    ) -> None:
+        runtime = SimpleNamespace(
+            config=config.model_copy(),
+            event_bus=MagicMock(),
+            state=MagicMock(),
+            orchestrator=None,
+        )
+        runtime.state.get_bg_worker_states.return_value = {
+            "pipeline_poller": {"last_run": "2026-01-01T00:00:00Z", "details": {}}
+        }
+        registry = MagicMock()
+        registry.get.return_value = runtime
+        router = self._make_router(config, tmp_path, registry)
+        endpoint = next(
+            r for r in router.routes if getattr(r, "path", "") == "/api/system/workers"
+        )
+
+        resp = await endpoint.endpoint(repo="org-repo")
+
+        assert resp.status_code == 200
+        runtime.state.get_bg_worker_states.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_sessions_uses_runtime_state(self, config, tmp_path) -> None:
+        runtime = SimpleNamespace(
+            config=config.model_copy(),
+            event_bus=MagicMock(),
+            state=MagicMock(),
+            orchestrator=None,
+        )
+        runtime.state.load_sessions.return_value = []
+        registry = MagicMock()
+        registry.get.return_value = runtime
+        router = self._make_router(config, tmp_path, registry)
+        endpoint = next(
+            r for r in router.routes if getattr(r, "path", "") == "/api/sessions"
+        )
+
+        resp = await endpoint.endpoint(repo="org-repo")
+
+        assert resp.status_code == 200
+        runtime.state.load_sessions.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_remove_runtime_uses_callback(self, config, tmp_path) -> None:
+        runtime = SimpleNamespace(
+            config=config.model_copy(),
+            event_bus=MagicMock(),
+            state=MagicMock(),
+            orchestrator=None,
+            running=False,
+        )
+        registry = MagicMock()
+        registry.get.return_value = runtime
+        remove_cb = AsyncMock(return_value=True)
+        router = self._make_router(
+            config,
+            tmp_path,
+            registry,
+            remove_repo_cb=remove_cb,
+        )
+        endpoint = next(
+            r
+            for r in router.routes
+            if getattr(r, "path", "") == "/api/runtimes/{slug}"
+            and "DELETE" in getattr(r, "methods", set())
+        )
+
+        resp = await endpoint.endpoint(slug="org-repo")
+
+        assert resp.status_code == 200
+        remove_cb.assert_awaited_once_with("org-repo")
 
 
 # ---------------------------------------------------------------------------
