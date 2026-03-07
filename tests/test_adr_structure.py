@@ -12,7 +12,14 @@ ADR_DIR = Path(__file__).resolve().parent.parent / "docs" / "adr"
 REQUIRED_SECTIONS = ["## Context", "## Decision", "## Consequences"]
 OPTIONAL_SECTIONS = ["## Alternatives considered", "## Related"]
 
-STATUS_VALUES = {"Proposed", "Accepted", "Deprecated", "Superseded"}
+BASE_STATUS_VALUES = {"Proposed", "Accepted", "Deprecated", "Superseded"}
+
+
+def _is_valid_status(status: str) -> bool:
+    """Return True if the status string conforms to the ADR contract."""
+    if status in BASE_STATUS_VALUES:
+        return True
+    return bool(re.fullmatch(r"Superseded by (ADR-\d{4}|#\d+)", status))
 
 
 def _adr_files() -> list[Path]:
@@ -68,7 +75,7 @@ class TestADRFileStructure:
         match = re.search(r"\*\*Status:\*\*\s*(.+)", content)
         assert match, f"{adr_path.name} missing **Status:** metadata"
         status = match.group(1).strip()
-        assert status in STATUS_VALUES, (
+        assert _is_valid_status(status), (
             f"{adr_path.name} has unrecognised status '{status}'"
         )
 

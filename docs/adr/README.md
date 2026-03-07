@@ -30,11 +30,11 @@ and optionally **Alternatives considered** and **Related** links.
 | [0017](0017-auto-decompose-triage-counter-exclusion.md) | Auto-Decompose Triage Counter Exclusion | Accepted |
 | [0018](0018-screenshot-capture-pipeline.md) | Screenshot Capture Pipeline Architecture | Accepted |
 | [0019](0019-background-task-delegation-abstraction-layer.md) | Background Task Delegation Abstraction Layer | Accepted |
-| [0020](0020-autoApproveRow-border-context-awareness.md) | autoApproveRow Border Context Awareness | Superseded |
+| [0020](0020-autoApproveRow-border-context-awareness.md) | autoApproveRow Border Context Awareness | Superseded by #1883 |
 | [0021](0021-persistence-architecture-and-data-layout.md) | Persistence Architecture and Data Layout | Proposed |
 | [0022](0022-integration-test-architecture-cross-phase.md) | Pipeline Integration Harness for Cross-Phase Testing | Proposed |
 
 ## Adding a new ADR
 
 Copy the template, increment the number, fill in the sections.
-Mark superseded ADRs by setting `**Status:** Superseded` and adding a `Superseded by: ADR-XXXX` entry in the Related section rather than deleting them.
+Mark superseded ADRs by setting `**Status:** Superseded` (optionally `Superseded by <reference>`) and adding a `Superseded by: ADR-XXXX` entry in the Related section rather than deleting them.
