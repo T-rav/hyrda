@@ -5,6 +5,7 @@ This guide shows how to run HydraFlow as a long-lived service on Ubuntu-based EC
 - `deploy/ec2/deploy-hydraflow.sh` — bootstrap, update, and run helper
 - `deploy/ec2/hydraflow.service` — systemd unit template
 - `GET /healthz` — FastAPI health-check endpoint suitable for load balancers or uptime monitors
+- `/etc/hydraflow.env` — optional runtime environment file automatically sourced before HydraFlow starts (override with `RUNTIME_ENV_FILE`)
 
 Follow the steps below to install everything under `/opt/hydraflow`, expose the dashboard, and keep the instance healthy.
 
@@ -74,6 +75,8 @@ HYDRAFLOW_DASHBOARD_PORT=5555              # optional override
 ENV
 ```
 
+`deploy/ec2/deploy-hydraflow.sh` automatically sources `/etc/hydraflow.env` before starting HydraFlow, so manual `run` invocations match the systemd unit’s environment. Override the path with `RUNTIME_ENV_FILE=/custom/file deploy/ec2/deploy-hydraflow.sh run`.
+
 > **Security note:** Opening the dashboard publicly is equivalent to exposing your automation kernel. Always restrict the EC2 security group to the IPs/VPCs that actually need access, and prefer a TLS-terminating proxy (ALB, CloudFront, Nginx, etc.) in front of port 5555.
 
 You can also override the host on demand via CLI: `deploy/ec2/deploy-hydraflow.sh run --dashboard-host 0.0.0.0`.
@@ -104,6 +107,8 @@ curl -s http://SERVER_IP:5555/healthz | jq
 {
   "status": "ok",
   "version": "1.12.0",
+  "session_started_at": "2026-03-07T12:29:56+00:00",
+  "uptime_seconds": 960,
   "orchestrator_running": true,
   "active_issue_count": 0,
   "active_worktrees": 0,
@@ -115,6 +120,8 @@ curl -s http://SERVER_IP:5555/healthz | jq
 ```
 
 Return `200 OK` for “starting/idle/degraded” states, so you can point an ALB, Route 53 health check, or uptime monitor at `/healthz` without needing an auth token.
+
+`session_started_at` mirrors the orchestrator session boot time, while `uptime_seconds` is a wall-clock counter you can alert on if it resets unexpectedly.
 
 ## 6. Updates
 

@@ -772,6 +772,19 @@ def create_router(
         orchestrator = get_orchestrator()
         orchestrator_running = bool(getattr(orchestrator, "running", False))
         worker_states = state.get_bg_worker_states()
+        session_counters = state.get_session_counters()
+        session_started_at: str | None = session_counters.session_start or None
+        uptime_seconds: int | None = None
+        if session_started_at:
+            try:
+                started_dt = datetime.fromisoformat(session_started_at)
+            except (ValueError, TypeError):
+                session_started_at = None
+            else:
+                uptime_seconds = max(
+                    int((datetime.now(UTC) - started_dt).total_seconds()),
+                    0,
+                )
 
         def _normalise_worker_health(raw_status: Any) -> BGWorkerHealth:
             if isinstance(raw_status, BGWorkerHealth):
@@ -806,6 +819,8 @@ def create_router(
                 "host": config.dashboard_host,
                 "port": config.dashboard_port,
             },
+            "session_started_at": session_started_at,
+            "uptime_seconds": uptime_seconds,
         }
         return JSONResponse(payload)
 

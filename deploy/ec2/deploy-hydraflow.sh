@@ -19,6 +19,7 @@ GIT_REMOTE="${GIT_REMOTE:-origin}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 SERVICE_NAME="${SERVICE_NAME:-hydraflow}"
 ENV_FILE="${ENV_FILE:-${HYDRAFLOW_ROOT}/.env}"
+RUNTIME_ENV_FILE="${RUNTIME_ENV_FILE:-/etc/hydraflow.env}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
 SYSTEMCTL_ALLOW_USER="${SYSTEMCTL_ALLOW_USER:-0}"
@@ -86,6 +87,18 @@ ensure_env_file() {
   fi
 }
 
+load_runtime_env() {
+  local env_file="$1"
+  if [[ -z "${env_file}" || ! -f "${env_file}" ]]; then
+    return
+  fi
+  log "Loading runtime environment from ${env_file}"
+  # shellcheck disable=SC1090
+  set -a
+  source "${env_file}"
+  set +a
+}
+
 build_artifacts() {
   log "Syncing Python dependencies via uv"
   uv_env_cmd sync --all-extras
@@ -140,6 +153,7 @@ install_systemd_unit() {
 
 run_cli() {
   ensure_repo
+  load_runtime_env "${RUNTIME_ENV_FILE}"
   log "Starting HydraFlow via uv run"
   (cd "${HYDRAFLOW_ROOT}" && \
     VIRTUAL_ENV="${VENV_DIR}" \

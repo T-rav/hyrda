@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import threading
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -174,6 +175,8 @@ class TestHealthRoute:
         from dashboard import HydraFlowDashboard
 
         orch = make_orchestrator_mock(running=True)
+        started_at = (datetime.now(UTC) - timedelta(minutes=5)).replace(microsecond=0)
+        state.reset_session_counters(started_at.isoformat())
         dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
         app = dashboard.create_app()
 
@@ -186,6 +189,9 @@ class TestHealthRoute:
         assert payload["orchestrator_running"] is True
         assert payload["dashboard"]["port"] == config.dashboard_port
         assert payload["dashboard"]["host"] == config.dashboard_host
+        assert payload["session_started_at"] == started_at.isoformat()
+        assert isinstance(payload["uptime_seconds"], int)
+        assert payload["uptime_seconds"] >= 300
 
     def test_healthz_reports_worker_errors(
         self, config: HydraFlowConfig, event_bus: EventBus, state
@@ -213,6 +219,41 @@ class TestHealthRoute:
         payload = response.json()
         assert payload["status"] == "degraded"
         assert payload["worker_errors"] == ["memory_sync"]
+
+    def test_healthz_handles_missing_session_start(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        orch = make_orchestrator_mock(running=True)
+        dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        payload = client.get("/healthz").json()
+
+        assert payload["session_started_at"] is None
+        assert payload["uptime_seconds"] is None
+
+    def test_healthz_handles_invalid_session_start(
+        self, config: HydraFlowConfig, event_bus: EventBus, state
+    ) -> None:
+        from fastapi.testclient import TestClient
+
+        from dashboard import HydraFlowDashboard
+
+        state.reset_session_counters("not-a-date")
+        orch = make_orchestrator_mock(running=True)
+        dashboard = HydraFlowDashboard(config, event_bus, state, orchestrator=orch)
+        app = dashboard.create_app()
+
+        client = TestClient(app)
+        payload = client.get("/healthz").json()
+
+        assert payload["session_started_at"] is None
+        assert payload["uptime_seconds"] is None
 
 
 # ---------------------------------------------------------------------------
