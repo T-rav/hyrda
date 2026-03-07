@@ -39,10 +39,13 @@ from models import (
 from phase_utils import (
     adr_validation_reasons,
     is_adr_issue_title,
+    load_existing_adr_topics,
+    normalize_adr_topic,
     publish_review_status,
     record_harness_failure,
     release_batch_in_flight,
     run_concurrent_batch,
+    safe_file_memory_suggestion,
     store_lifecycle,
 )
 from post_merge_handler import PostMergeHandler
@@ -214,6 +217,29 @@ class ReviewPhase:
 
     async def _review_single_adr(self, issue: Task) -> ReviewResult:
         """Validate ADR quality and either finalize or escalate to HITL."""
+        topic_key = normalize_adr_topic(issue.title)
+        existing = load_existing_adr_topics(self._config.repo_root)
+        if topic_key and topic_key in existing:
+            await self._transitioner.post_comment(
+                issue.id,
+                f"## Closing as Duplicate\n\n"
+                f"An ADR already exists for this topic in `docs/adr/`. "
+                f"Normalized topic: *{topic_key}*",
+            )
+            await self._transitioner.close_task(issue.id)
+            self._state.mark_issue(issue.id, "completed")
+            logger.info(
+                "ADR issue #%d closed as duplicate — topic %r exists in docs/adr/",
+                issue.id,
+                topic_key,
+            )
+            return ReviewResult(
+                pr_number=0,
+                issue_number=issue.id,
+                verdict=ReviewVerdict.APPROVE,
+                summary="Closed as duplicate ADR",
+                merged=True,
+            )
         reasons = adr_validation_reasons(issue.body)
         decision_detail = self._extract_adr_section(issue.body, "decision")
         if len(decision_detail.strip()) < 60:
@@ -271,22 +297,6 @@ class ReviewPhase:
         )
         match = re.search(pattern, body)
         return match.group("section").strip() if match else ""
-
-    async def _should_skip_review(self, pr: PRInfo, last_sha: str | None) -> bool:
-        """Return True if the PR HEAD SHA is unchanged since last review."""
-        current_sha = await self._prs.get_pr_head_sha(pr.number)
-        if not isinstance(current_sha, str) or not current_sha:
-            return False
-        if last_sha and last_sha == current_sha:
-            logger.info(
-                "PR #%d (issue #%d): skipping review — no new commits since "
-                "last review (SHA %s)",
-                pr.number,
-                pr.issue_number,
-                current_sha[:12],
-            )
-            return True
-        return False
 
     async def _prepare_review_worktree(
         self, pr: PRInfo, task: Task, idx: int
@@ -406,14 +416,6 @@ class ReviewPhase:
                 pr_number=pr.number,
                 issue_number=pr.issue_number,
                 summary="Issue not found",
-            )
-
-        last_sha = self._state.get_last_reviewed_sha(pr.issue_number)
-        if await self._should_skip_review(pr, last_sha):
-            return ReviewResult(
-                pr_number=pr.number,
-                issue_number=pr.issue_number,
-                summary="Skipped — no new commits since last review",
             )
 
         wt_path = await self._prepare_review_worktree(pr, task, idx)
@@ -918,9 +920,10 @@ class ReviewPhase:
             return False
 
         if resolution.used_rebuild:
-            await self._prs.force_push_branch(
+            await self._prs.push_branch(
                 self._config.worktree_path_for_issue(pr.issue_number),
                 pr.branch,
+                force=True,
             )
         else:
             await self._prs.push_branch(wt_path, pr.branch)
@@ -1201,6 +1204,15 @@ class ReviewPhase:
                 break
 
         result.ci_passed = False
+        if result.transcript:
+            await safe_file_memory_suggestion(
+                result.transcript,
+                "ci_fix_failure",
+                f"PR #{pr.number}",
+                self._config,
+                self._prs,
+                self._state,
+            )
         await self._publish_review_status(pr, worker_id, "escalating")
         await self._escalate_ci_failure(pr, issue, summary, result.ci_fix_attempts)
         return False
@@ -1237,15 +1249,8 @@ class ReviewPhase:
                 body = build_insight_issue_body(category, count, len(recent), evidence)
                 desc = CATEGORY_DESCRIPTIONS.get(category, category)
                 title = f"[Review Insight] Recurring feedback: {desc}"
-                labels = self._config.improve_label[:1] + self._config.hitl_label[:1]
-                issue_num = await self._transitioner.create_task(title, body, labels)
-                if issue_num:
-                    self._state.set_hitl_origin(
-                        issue_num, self._config.improve_label[0]
-                    )
-                    self._state.set_hitl_cause(
-                        issue_num, f"Recurring review pattern: {desc}"
-                    )
+                labels = self._config.improve_label[:1]
+                await self._transitioner.create_task(title, body, labels)
                 self._insights.mark_category_proposed(category)
         except Exception:  # noqa: BLE001
             status = "error"
@@ -1533,6 +1538,15 @@ class ReviewPhase:
                 event_cause="review_fix_cap_exceeded",
                 task=task,
             )
+            if result.transcript:
+                await safe_file_memory_suggestion(
+                    result.transcript,
+                    "review_fix_cap_exceeded",
+                    f"PR #{pr.number}",
+                    self._config,
+                    self._prs,
+                    self._state,
+                )
             return False  # Destroy worktree
 
     def _record_harness_failure(
