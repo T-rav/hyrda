@@ -10,6 +10,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Callable, Coroutine
+from pathlib import Path
 from typing import Any
 
 from agent_cli import build_agent_command
@@ -20,7 +21,6 @@ from execution import SubprocessRunner
 from models import StatusCallback, TranscriptEventData
 from pr_manager import PRManager
 from runner_utils import stream_claude_process
-from screenshot_scanner import scan_base64_for_secrets
 from state import StateTracker
 
 logger = logging.getLogger("hydraflow.report_issue_loop")
@@ -70,113 +70,106 @@ class ReportIssueLoop(BaseBackgroundLoop):
         if report is None:
             return None
 
-        # Upload screenshot gist if present (skip if secrets detected)
-        screenshot_url = ""
+        screenshot_path = ""
         if report.screenshot_base64:
-            secret_hits = (
-                scan_base64_for_secrets(report.screenshot_base64)
-                if self._config.screenshot_redaction_enabled
-                else []
+            screenshot_path = await self._pr_manager.save_screenshot_to_temp(
+                report.screenshot_base64
             )
-            if secret_hits:
-                logger.warning(
-                    "Screenshot for report %s contains potential secrets (%s); "
-                    "stripping screenshot from report",
-                    report.id,
-                    ", ".join(secret_hits),
-                )
-            else:
-                screenshot_url = await self._pr_manager.upload_screenshot_gist(
-                    report.screenshot_base64
-                )
 
-        # Build the agent prompt
-        title = f"[Bug Report] {report.description[:100]}"
-        body_parts = ["## Bug Report", "", "### Description", report.description]
-
-        if screenshot_url:
-            body_parts += [
-                "",
-                "### Dashboard Screenshot",
-                f"![Screenshot]({screenshot_url})",
-            ]
-
-        env = report.environment
-        if env:
-            source = env.get("source", "dashboard")
-            version = env.get("app_version", "unknown")
-            status = env.get("orchestrator_status", "unknown")
-            queue_depths = env.get("queue_depths", {})
-            queue_line = ", ".join(
-                f"{k}={queue_depths.get(k, 0)}"
-                for k in ("triage", "plan", "implement", "review")
-            )
-            body_parts += [
-                "",
-                "### Environment",
-                f"- **HydraFlow version**: {version}",
-                f"- **Status**: {status}",
-                f"- **Queue depths**: {queue_line}",
-                f"- **Source**: {source}",
-            ]
-
-        body = "\n".join(body_parts)
-        repo = self._config.repo
-        labels_list = list(self._config.planner_label)
-        labels = ",".join(labels_list)
-
-        prompt = (
-            f"Create a GitHub issue in the repo {repo} with the following details.\n\n"
-            f"Title: {title}\n\n"
-            f"Body:\n{body}\n\n"
-            f"Labels: {labels}\n\n"
-            f"Use `gh issue create --repo {repo} "
-            f'--title "{title}" --label "{labels}" --body \'...\'` '
-            f"to create the issue. Output only the gh command and its result."
-        )
-
-        cmd = build_agent_command(
-            tool=self._config.report_issue_tool,
-            model=self._config.report_issue_model,
-            max_turns=3,
-        )
-
-        event_data: TranscriptEventData = {
-            "source": "report_issue",
-        }
-
-        issue_number = 0
         try:
-            transcript = await stream_claude_process(
-                cmd=cmd,
-                prompt=prompt,
-                cwd=self._config.repo_root,
-                active_procs=self._active_procs,
-                event_bus=self._bus,
-                event_data=event_data,
-                logger=logger,
-                runner=self._runner,
-                gh_token=self._config.gh_token,
-            )
-            issue_number = self._extract_issue_number_from_transcript(transcript)
-        except Exception:
-            logger.exception("Report issue agent failed for report %s", report.id)
+            title = f"[Bug Report] {report.description[:100]}"
+            body_parts = ["## Bug Report", "", "### Description", report.description]
 
-        # Reliability guard: never mark a report as processed until we have a
-        # concrete issue number.
-        if issue_number <= 0:
-            issue_number = await self._pr_manager.create_issue(title, body, labels_list)
-        if issue_number <= 0:
-            logger.error(
-                "Report %s failed: issue was not created via agent or fallback",
-                report.id,
-            )
-            return {"processed": 0, "report_id": report.id, "error": True}
+            if screenshot_path:
+                body_parts += [
+                    "",
+                    "### Dashboard Screenshot",
+                    f"![Screenshot]({screenshot_path})",
+                ]
 
-        logger.info(
-            "Processed report %s as issue #%d: %s", report.id, issue_number, title
-        )
-        return {"processed": 1, "report_id": report.id, "issue_number": issue_number}
+            env = report.environment
+            if env:
+                source = env.get("source", "dashboard")
+                version = env.get("app_version", "unknown")
+                status = env.get("orchestrator_status", "unknown")
+                queue_depths = env.get("queue_depths", {})
+                queue_line = ", ".join(
+                    f"{k}={queue_depths.get(k, 0)}"
+                    for k in ("triage", "plan", "implement", "review")
+                )
+                body_parts += [
+                    "",
+                    "### Environment",
+                    f"- **HydraFlow version**: {version}",
+                    f"- **Status**: {status}",
+                    f"- **Queue depths**: {queue_line}",
+                    f"- **Source**: {source}",
+                ]
+
+            body = "\n".join(body_parts)
+            repo = self._config.repo
+            labels_list = list(self._config.planner_label)
+            labels = ",".join(labels_list)
+
+            prompt = (
+                f"Create a GitHub issue in the repo {repo} with the following details.\n\n"
+                f"Title: {title}\n\n"
+                f"Body:\n{body}\n\n"
+                f"Labels: {labels}\n\n"
+                f"Use `gh issue create --repo {repo} "
+                f'--title "{title}" --label "{labels}" --body \'...\'` '
+                f"to create the issue. Output only the gh command and its result."
+            )
+
+            cmd = build_agent_command(
+                tool=self._config.report_issue_tool,
+                model=self._config.report_issue_model,
+                max_turns=3,
+            )
+
+            event_data: TranscriptEventData = {
+                "source": "report_issue",
+            }
+
+            issue_number = 0
+            try:
+                transcript = await stream_claude_process(
+                    cmd=cmd,
+                    prompt=prompt,
+                    cwd=self._config.repo_root,
+                    active_procs=self._active_procs,
+                    event_bus=self._bus,
+                    event_data=event_data,
+                    logger=logger,
+                    runner=self._runner,
+                    gh_token=self._config.gh_token,
+                )
+                issue_number = self._extract_issue_number_from_transcript(transcript)
+            except Exception:
+                logger.exception("Report issue agent failed for report %s", report.id)
+
+            if issue_number <= 0:
+                issue_number = await self._pr_manager.create_issue(
+                    title, body, labels_list
+                )
+            if issue_number <= 0:
+                logger.error(
+                    "Report %s failed: issue was not created via agent or fallback",
+                    report.id,
+                )
+                return {"processed": 0, "report_id": report.id, "error": True}
+
+            logger.info(
+                "Processed report %s as issue #%d: %s", report.id, issue_number, title
+            )
+            return {
+                "processed": 1,
+                "report_id": report.id,
+                "issue_number": issue_number,
+            }
+        finally:
+            if screenshot_path:
+                Path(screenshot_path).unlink(missing_ok=True)
 
     @classmethod
     def _extract_issue_number_from_transcript(cls, transcript: str) -> int:

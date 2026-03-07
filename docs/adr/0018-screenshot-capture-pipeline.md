@@ -52,57 +52,38 @@ All three attempts invoke `redactSensitiveElements()` via the `onclone`
 callback, ensuring redaction is never bypassed regardless of which attempt
 succeeds.
 
-### 3. Backend base64 secret scan (configurable)
+### 3. Backend temp-file staging + native GitHub upload
 
-Before uploading to GitHub Gist, `ReportIssueLoop` in `report_issue_loop.py`
-passes the base64 payload through `screenshot_scanner.scan_base64_for_secrets()`.
-This regex-based scanner checks for 13 known token patterns (GitHub PATs, AWS
-keys, Slack tokens, Anthropic/OpenAI API keys, PEM private keys, and generic
-secret assignments). If any pattern matches, the screenshot is **stripped** from
-the report and a warning is logged.
-
-**Important limitation:** For actual PNG screenshots, visible text undergoes
-zlib compression before base64 encoding, so rendered secrets will not produce
-recognizable substrings in the encoded payload. This scanner is primarily
-effective against non-image payloads (SVG data URIs, plain-text blobs, or
-payloads erroneously containing raw tokens). The frontend DOM redaction step
-remains the principal defense.
-
-This layer is controlled by `screenshot_redaction_enabled` (default: `True`,
-env: `HYDRAFLOW_SCREENSHOT_REDACTION_ENABLED`).
-
-### 4. Gist visibility control
-
-`PRManager.upload_screenshot_gist()` uploads the decoded PNG as a GitHub Gist.
-Visibility is controlled by `screenshot_gist_public` (default: `False`, env:
-`HYDRAFLOW_SCREENSHOT_GIST_PUBLIC`). The default creates secret/unlisted gists
-that require a direct link to access, limiting exposure if a screenshot
-inadvertently contains sensitive information.
+After dequeuing a report, `ReportIssueLoop` asks `PRManager.save_screenshot_to_temp()`
+to decode the base64 PNG and write it to a temporary file (e.g.,
+`/tmp/hydraflow-screenshot-XXXX.png`). The Markdown body handed to the reporting
+agent already includes `![Screenshot](<absolute-path>)`. When the agent runs
+`gh issue create --body-file`, the GitHub CLI detects the local reference,
+uploads the image to GitHub's CDN, rewrites the Markdown to point at the hosted
+URL, and the temp file is cleaned up at the end of the loop. No gists or
+secondary storage locations are involved.
 
 ## Consequences
 
 **Positive:**
-- Defense-in-depth: three independent layers (DOM redaction, base64 scan, gist
-  visibility) each reduce the blast radius of a missed redaction.
+- Defense-in-depth: frontend DOM redaction remains the first line, and the
+  backend writes screenshots directly to disk before GitHub uploads them — no
+  intermediate services to secure.
 - Progressive fallback ensures screenshots succeed across browser environments
   with varying CSS support, avoiding blank or broken captures.
 - The `data-sensitive` attribute convention is simple to adopt — new components
   only need a single attribute to opt in to redaction.
-- Configuration knobs (`screenshot_redaction_enabled`, `screenshot_gist_public`)
-  allow operators to tune the security/usability tradeoff per deployment.
+- Native GitHub attachments keep artifacts under the same retention and access
+  controls as the resulting bug report.
 
 **Trade-offs:**
-- The base64 secret scanner has limited effectiveness on compressed PNG payloads.
-  It is a backstop, not a primary defense. Teams must not rely on it as a
-  substitute for proper `data-sensitive` annotation.
 - Three capture attempts add latency to the screenshot flow (each failed attempt
   is caught and retried). In practice, the first attempt usually succeeds.
 - The aggressive sanitization fallback (attempt 3) produces lower-fidelity
   screenshots with stripped styles. This is acceptable as a last resort but
   means some bug reports may have less visual context.
-- Secret/unlisted gists are not truly private — anyone with the URL can view
-  them. For highly sensitive deployments, operators should consider disabling
-  screenshot uploads entirely or routing through a private artifact store.
+- Because GitHub rewrites the Markdown after upload, the backend must defer
+  temp-file cleanup until the CLI finishes successfully.
 
 ## Alternatives considered
 
@@ -116,10 +97,9 @@ inadvertently contains sensitive information.
    (Tesseract or similar). The zlib-compressed base64 scan is lightweight, and
    the primary defense (DOM redaction) operates before capture.
 
-3. **Upload screenshots as PR/issue attachments instead of Gists.**
-   Rejected: GitHub issue attachments are always public on public repos and
-   cannot be made unlisted. Gists provide the `--public` / unlisted toggle,
-   giving operators control over visibility.
+3. **External artifact store (S3, GCS, etc.)**
+   Rejected: introduces credential management, lifecycle policies, and redundant
+   infrastructure when GitHub already hosts issue attachments securely.
 
 4. **Single html2canvas configuration with no fallback.**
    Rejected: html2canvas frequently fails on modern CSS features (especially
@@ -130,14 +110,12 @@ inadvertently contains sensitive information.
 
 - **Supersedes ADR-0013** — ADR-0013 documented the original screenshot pipeline
   with hardcoded `--public` gists and no DOM redaction. This ADR adds defense-in-depth
-  security (DOM redaction, backend secret scanning, configurable gist visibility),
-  making ADR-0013's public-gist-only design obsolete.
+  security (DOM redaction plus native GitHub uploads), making ADR-0013's public-gist-only
+  design obsolete.
 - Source memory: #1734
 - ADR issue: #1749
 - `src/ui/src/components/Header.jsx` — `captureDashboardScreenshot()`, `redactSensitiveElements()`
 - `src/ui/src/components/ReportIssueModal.jsx` — annotation canvas and submission
 - `src/ui/src/constants.js` — `SENSITIVE_SELECTORS`
 - `src/report_issue_loop.py` — `ReportIssueLoop._do_work()`
-- `src/screenshot_scanner.py` — `scan_base64_for_secrets()`
-- `src/pr_manager.py` — `PRManager.upload_screenshot_gist()`
-- `src/config.py` — `screenshot_redaction_enabled`, `screenshot_gist_public`
+- `src/pr_manager.py` — `PRManager.save_screenshot_to_temp()`

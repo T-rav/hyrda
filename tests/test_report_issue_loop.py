@@ -31,8 +31,8 @@ def _make_loop(
 
     state = StateTracker(tmp_path / "state.json")
     pr_manager = MagicMock()
-    pr_manager.upload_screenshot_gist = AsyncMock(
-        return_value="https://gist.example.com/screenshot.png"
+    pr_manager.save_screenshot_to_temp = AsyncMock(
+        return_value="/tmp/hydraflow-screenshot.png"
     )
     pr_manager.create_issue = AsyncMock(return_value=123)
     runner = MagicMock()
@@ -87,8 +87,8 @@ class TestReportIssueLoopDoWork:
         assert state.dequeue_report() is None
 
     @pytest.mark.asyncio
-    async def test_screenshot_uploaded_before_agent(self, tmp_path: Path) -> None:
-        """When a screenshot is present, it is uploaded before invoking the agent."""
+    async def test_screenshot_saved_before_agent(self, tmp_path: Path) -> None:
+        """When a screenshot is present, it is saved before invoking the agent."""
         loop, _stop, state, pr_mgr = _make_loop(tmp_path)
         report = PendingReport(
             description="UI glitch",
@@ -102,11 +102,11 @@ class TestReportIssueLoopDoWork:
             mock_stream.return_value = "done"
             await loop._do_work()
 
-        pr_mgr.upload_screenshot_gist.assert_awaited_once_with("iVBORw0KGgo=")
+        pr_mgr.save_screenshot_to_temp.assert_awaited_once_with("iVBORw0KGgo=")
 
     @pytest.mark.asyncio
-    async def test_empty_screenshot_skips_gist_upload(self, tmp_path: Path) -> None:
-        """When screenshot_base64 is empty, gist upload is skipped."""
+    async def test_empty_screenshot_skips_temp_save(self, tmp_path: Path) -> None:
+        """When screenshot_base64 is empty, temp save is skipped."""
         loop, _stop, state, pr_mgr = _make_loop(tmp_path)
         report = PendingReport(description="No screenshot")
         state.enqueue_report(report)
@@ -117,7 +117,7 @@ class TestReportIssueLoopDoWork:
             mock_stream.return_value = "done"
             await loop._do_work()
 
-        pr_mgr.upload_screenshot_gist.assert_not_awaited()
+        pr_mgr.save_screenshot_to_temp.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_agent_failure_falls_back_to_direct_issue_create(
@@ -217,15 +217,14 @@ class TestReportIssueLoopDoWork:
         assert "2.0.0" in prompt
 
     @pytest.mark.asyncio
-    async def test_screenshot_with_secrets_is_stripped(self, tmp_path: Path) -> None:
-        """When the screenshot contains a secret pattern, it is not uploaded."""
+    async def test_prompt_includes_screenshot_path(self, tmp_path: Path) -> None:
+        """When a screenshot is saved, its path is embedded in the prompt markdown."""
         loop, _stop, state, pr_mgr = _make_loop(tmp_path)
-        # Include a GitHub PAT pattern in the screenshot payload
         report = PendingReport(
-            description="UI glitch",
-            screenshot_base64="ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl",
+            description="UI bug", screenshot_base64="iVBORw0KGgoAAAANSUhEUgAA"
         )
         state.enqueue_report(report)
+        pr_mgr.save_screenshot_to_temp.return_value = "/tmp/test-screenshot.png"
 
         with patch(
             "report_issue_loop.stream_claude_process", new_callable=AsyncMock
@@ -233,74 +232,8 @@ class TestReportIssueLoopDoWork:
             mock_stream.return_value = "done"
             await loop._do_work()
 
-        # Screenshot should NOT have been uploaded
-        pr_mgr.upload_screenshot_gist.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_screenshot_without_secrets_is_uploaded(self, tmp_path: Path) -> None:
-        """A clean screenshot (no secrets) is still uploaded normally."""
-        loop, _stop, state, pr_mgr = _make_loop(tmp_path)
-        report = PendingReport(
-            description="Normal bug",
-            screenshot_base64="iVBORw0KGgoAAAANSUhEUgAA",
-        )
-        state.enqueue_report(report)
-
-        with patch(
-            "report_issue_loop.stream_claude_process", new_callable=AsyncMock
-        ) as mock_stream:
-            mock_stream.return_value = "done"
-            await loop._do_work()
-
-        pr_mgr.upload_screenshot_gist.assert_awaited_once_with(
-            "iVBORw0KGgoAAAANSUhEUgAA"
-        )
-
-    @pytest.mark.asyncio
-    async def test_screenshot_with_secrets_still_creates_issue(
-        self, tmp_path: Path
-    ) -> None:
-        """Even when the screenshot is stripped, the issue is still created."""
-        loop, _stop, state, _pr = _make_loop(tmp_path)
-        report = PendingReport(
-            description="Secrets in screenshot",
-            screenshot_base64="ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl",
-        )
-        state.enqueue_report(report)
-
-        with patch(
-            "report_issue_loop.stream_claude_process", new_callable=AsyncMock
-        ) as mock_stream:
-            mock_stream.return_value = "done"
-            result = await loop._do_work()
-
-        assert result is not None
-        assert result["processed"] == 1
-        # The prompt should not include a screenshot URL
         prompt = mock_stream.call_args.kwargs.get("prompt", "")
-        assert "Screenshot" not in prompt
-
-    @pytest.mark.asyncio
-    async def test_scanner_disabled_uploads_screenshot_with_secrets(
-        self, tmp_path: Path
-    ) -> None:
-        """When screenshot_redaction_enabled=False, scan is skipped and secrets are uploaded."""
-        loop, _stop, state, pr_mgr = _make_loop(tmp_path)
-        object.__setattr__(loop._config, "screenshot_redaction_enabled", False)
-        report = PendingReport(
-            description="UI glitch",
-            screenshot_base64="ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijkl",
-        )
-        state.enqueue_report(report)
-
-        with patch(
-            "report_issue_loop.stream_claude_process", new_callable=AsyncMock
-        ) as mock_stream:
-            mock_stream.return_value = "done"
-            await loop._do_work()
-
-        # Scan is disabled — screenshot should be uploaded despite containing a token
-        pr_mgr.upload_screenshot_gist.assert_awaited_once()
+        assert "![Screenshot](/tmp/test-screenshot.png)" in prompt
 
 
 class TestReportIssueLoopInterval:
