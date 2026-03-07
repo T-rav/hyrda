@@ -15,8 +15,14 @@ export function RegisterRepoDialog({ isOpen, onClose }) {
       setPath('')
       setError('')
       setSubmitting(false)
+      return
     }
-  }, [isOpen])
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose?.()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
 
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault()
@@ -151,6 +157,7 @@ const styles = {
     border: `1px solid ${theme.border}`,
     background: theme.bg,
     color: theme.text,
+    fontSize: 12,
     marginBottom: 12,
   },
   orDivider: {

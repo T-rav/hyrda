@@ -100,7 +100,7 @@ export function RepoSelector({ onOpenRegister }) {
         <span style={styles.chevron}>{open ? '▴' : '▾'}</span>
       </button>
       {open && (
-        <div style={styles.dropdown} data-testid='repo-selector-dropdown'>
+        <div style={styles.dropdown} data-testid="repo-selector-dropdown">
           <button
             type="button"
             onClick={() => handleSelect(null)}
