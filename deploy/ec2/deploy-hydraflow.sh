@@ -34,6 +34,8 @@ SERVICE_EXEC_START="${SERVICE_EXEC_START:-${HYDRAFLOW_ROOT}/deploy/ec2/deploy-hy
 UNIT_TEMPLATE="${UNIT_TEMPLATE:-${SCRIPT_DIR}/hydraflow.service}"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-}"
 HEALTHCHECK_REQUIRE_READY="${HEALTHCHECK_REQUIRE_READY:-0}"
+HEALTH_PROBE_LAST_CODE=""
+HEALTH_PROBE_LAST_MESSAGE=""
 
 log() {
   printf '[%s] %s\n' "$(date --iso-8601=seconds 2>/dev/null || date)" "$*"
@@ -217,7 +219,14 @@ else:
 ' "${key}"
 }
 
-health_check() {
+health_probe() {
+  local quiet=0
+  if [[ "${1:-}" == "--quiet" ]]; then
+    quiet=1
+    shift
+  fi
+  HEALTH_PROBE_LAST_CODE=""
+  HEALTH_PROBE_LAST_MESSAGE=""
   local override_url="${1:-}"
   load_runtime_env "${RUNTIME_ENV_FILE}"
   local host="${HYDRAFLOW_DASHBOARD_HOST:-127.0.0.1}"
@@ -229,25 +238,75 @@ health_check() {
   local curl_cmd="${CURL_BIN}"
   if [[ "${curl_cmd}" == */* ]]; then
     if [[ ! -x "${curl_cmd}" ]]; then
-      fatal "Missing curl implementation: ${curl_cmd}"
+      HEALTH_PROBE_LAST_CODE="missing_binary"
+      HEALTH_PROBE_LAST_MESSAGE="Missing curl implementation: ${curl_cmd}"
+      return 2
     fi
   else
     if ! curl_cmd="$(command -v "${curl_cmd}")"; then
-      fatal "Missing curl implementation: ${curl_cmd}"
+      HEALTH_PROBE_LAST_CODE="missing_binary"
+      HEALTH_PROBE_LAST_MESSAGE="Missing curl implementation: ${curl_cmd}"
+      return 2
     fi
   fi
   log "Checking health endpoint at ${url}"
   local response ready status
   if ! response="$(${curl_cmd} -fsS "${url}")"; then
-    fatal "Failed to fetch ${url}"
+    HEALTH_PROBE_LAST_CODE="curl_error"
+    HEALTH_PROBE_LAST_MESSAGE="Failed to fetch ${url}"
+    return 2
   fi
   ready="$(printf '%s\n' "${response}" | extract_health_field ready)"
   status="$(printf '%s\n' "${response}" | extract_health_field status)"
   log "Health status=${status:-unknown} ready=${ready:-unknown}"
-  printf '%s\n' "${response}"
+  if [[ ${quiet} -eq 0 ]]; then
+    printf '%s\n' "${response}"
+  fi
   local require_ready="${HEALTHCHECK_REQUIRE_READY,,}"
   if [[ "${require_ready}" =~ ^(1|true|yes)$ && "${ready}" != "true" ]]; then
-    fatal "Service is not ready (ready=${ready:-unset})"
+    HEALTH_PROBE_LAST_CODE="not_ready"
+    HEALTH_PROBE_LAST_MESSAGE="Service is not ready (ready=${ready:-unset})"
+    return 1
+  fi
+  return 0
+}
+
+health_check() {
+  if ! health_probe "$@"; then
+    fatal "${HEALTH_PROBE_LAST_MESSAGE:-Health check failed}"
+  fi
+}
+
+wait_for_health_ready() {
+  local override_url="${1:-}"
+  local timeout="${HEALTHCHECK_WAIT_TIMEOUT_SECONDS:-180}"
+  local interval="${HEALTHCHECK_WAIT_INTERVAL_SECONDS:-5}"
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    fatal "HEALTHCHECK_WAIT_TIMEOUT_SECONDS must be an integer"
+  fi
+  if ! [[ "${interval}" =~ ^[0-9]+$ ]]; then
+    fatal "HEALTHCHECK_WAIT_INTERVAL_SECONDS must be an integer"
+  fi
+  local deadline=$((SECONDS + timeout))
+  log "Waiting up to ${timeout}s for HydraFlow readiness"
+  while ((SECONDS < deadline)); do
+    if HEALTHCHECK_REQUIRE_READY=1 health_probe --quiet "${override_url}"; then
+      log "HydraFlow dashboard reports ready"
+      HEALTHCHECK_REQUIRE_READY=1 health_probe "${override_url}"
+      return 0
+    fi
+    if [[ "${HEALTH_PROBE_LAST_CODE}" != "not_ready" ]]; then
+      fatal "${HEALTH_PROBE_LAST_MESSAGE:-Health probe failed}"
+    fi
+    sleep "${interval}"
+  done
+  fatal "Timed out waiting for ready=true after ${timeout}s (${HEALTH_PROBE_LAST_MESSAGE:-last probe failed})"
+}
+
+maybe_wait_for_ready() {
+  local wait_flag="${HEALTHCHECK_WAIT_FOR_READY,,}"
+  if [[ "${wait_flag}" =~ ^(1|true|yes)$ ]]; then
+    wait_for_health_ready
   fi
 }
 
@@ -268,6 +327,7 @@ case "${ACTION}" in
     sync_git
     build_artifacts
     maybe_restart_service
+    maybe_wait_for_ready
     log "Deploy step finished."
     ;;
   run)
@@ -283,18 +343,22 @@ case "${ACTION}" in
   health)
     health_check "${EXTRA_ARGS[@]:-}"
     ;;
+  wait-ready)
+    wait_for_health_ready "${EXTRA_ARGS[@]:-}"
+    ;;
   install)
     install_systemd_unit
     ;;
   *)
     cat <<USAGE
-Usage: ${0##*/} [bootstrap|deploy|run|status|health|install] [-- additional cli args]
+Usage: ${0##*/} [bootstrap|deploy|run|status|health|wait-ready|install] [-- additional cli args]
 
 bootstrap : Prepare dependencies, copy .env.sample, and build UI assets.
 deploy    : Update git checkout, rebuild assets, and restart the systemd unit.
 run       : Execute python -m cli with the provided arguments.
 status    : Show the hydraflow systemd unit status.
 health    : Query /healthz (optionally fail when not ready).
+wait-ready: Poll /healthz until ready=true (with timeout controls).
 install   : Copy the systemd unit into ${SYSTEMD_DIR} and enable it.
 USAGE
     exit 1

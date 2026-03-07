@@ -30,6 +30,44 @@ def _write_fake_curl(response: str) -> Path:
     return fake
 
 
+def _write_sequence_curl(
+    responses: list[str], tmp_path: Path
+) -> tuple[Path, Path, Path]:
+    """Create a fake curl binary that steps through multiple responses."""
+    responses_file = tmp_path / "curl-responses.txt"
+    responses_file.write_text("\n".join(responses))
+    counter_file = tmp_path / "curl-counter.txt"
+    fd, path = tempfile.mkstemp(prefix="fake-seq-curl-", suffix=".sh", dir=REPO_ROOT)
+    os.close(fd)
+    script_path = Path(path)
+    script_path.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        'if [[ -n "${CURL_CALL_LOG:-}" ]]; then\n'
+        '  printf "%s\\n" "$*" >> "${CURL_CALL_LOG}"\n'
+        "fi\n"
+        'responses_file="${FAKE_CURL_RESPONSES_FILE:?}"\n'
+        'counter_file="${FAKE_CURL_COUNTER_FILE:?}"\n'
+        "count=0\n"
+        'if [[ -f "${counter_file}" ]]; then\n'
+        '  count="$(<"${counter_file}")"\n'
+        "fi\n"
+        'mapfile -t responses < "${responses_file}"\n'
+        'total="${#responses[@]}"\n'
+        "if (( total == 0 )); then\n"
+        "  printf '{}'\n"
+        "  exit 0\n"
+        "fi\n"
+        "if (( count >= total )); then\n"
+        "  count=$((total - 1))\n"
+        "fi\n"
+        'printf "%s\\n" "${responses[count]}"\n'
+        'echo $((count + 1)) > "${counter_file}"\n'
+    )
+    script_path.chmod(0o755)
+    return script_path, responses_file, counter_file
+
+
 def _run_install(env_overrides: dict[str, str]) -> None:
     env = os.environ.copy()
     env.update(env_overrides)
@@ -147,3 +185,81 @@ def test_health_command_can_fail_when_not_ready(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "Service is not ready" in result.stdout
+
+
+def test_wait_ready_polls_until_ready(tmp_path: Path) -> None:
+    """wait-ready should retry until the payload reports ready=true."""
+    fake_curl, responses_file, counter_file = _write_sequence_curl(
+        [
+            '{"ready": false, "status": "starting"}',
+            '{"ready": false, "status": "warming"}',
+            '{"ready": true, "status": "ok"}',
+        ],
+        tmp_path,
+    )
+    log_file = tmp_path / "curl.log"
+    env = os.environ.copy()
+    env.update(
+        {
+            "CURL_BIN": str(fake_curl),
+            "FAKE_CURL_RESPONSES_FILE": str(responses_file),
+            "FAKE_CURL_COUNTER_FILE": str(counter_file),
+            "CURL_CALL_LOG": str(log_file),
+            "HEALTHCHECK_URL": "http://internal/healthz",
+            "HEALTHCHECK_WAIT_TIMEOUT_SECONDS": "5",
+            "HEALTHCHECK_WAIT_INTERVAL_SECONDS": "0",
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            ["bash", str(SCRIPT_PATH), "wait-ready"],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    finally:
+        fake_curl.unlink(missing_ok=True)
+
+    assert '"ready": true' in result.stdout
+    commands = [line for line in log_file.read_text().splitlines() if line]
+    assert len(commands) == 4, "Expected three probes plus the final payload dump"
+
+
+def test_wait_ready_times_out_when_service_never_ready(tmp_path: Path) -> None:
+    """wait-ready should exit non-zero when ready never flips to true."""
+    fake_curl, responses_file, counter_file = _write_sequence_curl(
+        [
+            '{"ready": false, "status": "starting"}',
+            '{"ready": false, "status": "starting"}',
+        ],
+        tmp_path,
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "CURL_BIN": str(fake_curl),
+            "FAKE_CURL_RESPONSES_FILE": str(responses_file),
+            "FAKE_CURL_COUNTER_FILE": str(counter_file),
+            "HEALTHCHECK_URL": "http://internal/healthz",
+            "HEALTHCHECK_WAIT_TIMEOUT_SECONDS": "1",
+            "HEALTHCHECK_WAIT_INTERVAL_SECONDS": "0",
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            ["bash", str(SCRIPT_PATH), "wait-ready"],
+            cwd=REPO_ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    finally:
+        fake_curl.unlink(missing_ok=True)
+
+    assert result.returncode != 0
+    assert "Timed out waiting for ready" in result.stdout

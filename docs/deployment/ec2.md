@@ -163,6 +163,20 @@ deploy/ec2/deploy-hydraflow.sh health https://hydraflow.example.com/healthz
 HEALTHCHECK_URL=https://internal-lb/healthz CURL_BIN=/usr/local/bin/curl deploy/ec2/deploy-hydraflow.sh health
 ```
 
+To gate restarts or CI rollouts on readiness, either run the dedicated waiter or set a flag before `deploy`:
+
+```bash
+# Block interactively until /healthz returns ready=true (default timeout: 180s)
+deploy/ec2/deploy-hydraflow.sh wait-ready
+
+# Make the deploy action wait automatically after the systemd restart
+HEALTHCHECK_WAIT_FOR_READY=1 \
+HEALTHCHECK_WAIT_TIMEOUT_SECONDS=300 \
+sudo deploy/ec2/deploy-hydraflow.sh deploy
+```
+
+`HEALTHCHECK_WAIT_TIMEOUT_SECONDS` (default `180`) and `HEALTHCHECK_WAIT_INTERVAL_SECONDS` (default `5`) control how long the waiter polls `/healthz`. The helper fails fast when the endpoint is unreachable, and it only busy-waits when the payload explicitly reports `ready=false`.
+
 `ready` flips to `false` whenever the orchestrator is missing/idle or any worker reports `degraded`, making it trivial for an ALB or uptime monitor to gate traffic without parsing internal details. `checks.dashboard.public` is `true` when `HYDRAFLOW_DASHBOARD_HOST` is not localhost/127.0.0.1, which is a quick sanity check that you actually bound to a public interface.
 
 The endpoint still returns `200 OK` for “starting/idle/degraded” states, so you can point an ALB, Route 53 health check, or uptime monitor at `/healthz` without needing an auth token. Alert when `ready=false` or when `worker_errors` is non-empty.
@@ -182,7 +196,7 @@ sudo systemctl start hydraflow
 Or let the script restart the service automatically (it calls `systemctl restart` when run as root and the unit is installed):
 
 ```bash
-sudo deploy/ec2/deploy-hydraflow.sh deploy
+HEALTHCHECK_WAIT_FOR_READY=1 sudo deploy/ec2/deploy-hydraflow.sh deploy
 ```
 
 The script honours `GIT_BRANCH`, `GIT_REMOTE`, `UV_BIN`, and `HYDRAFLOW_HOME_DIR` env vars, so you can pin to a release branch or custom fork by exporting those variables before running it.
