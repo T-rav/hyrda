@@ -7,6 +7,26 @@ import pytest
 from hf_cli import supervisor_client
 
 
+class TestSupervisorResponseError:
+    def test_stores_action_and_response(self) -> None:
+        resp = {"status": "error", "error": "boom"}
+        err = supervisor_client.SupervisorResponseError("list_repos", resp)
+        assert err.action == "list_repos"
+        assert err.response is resp
+
+    def test_message_includes_action_and_error(self) -> None:
+        err = supervisor_client.SupervisorResponseError("add_repo", {"error": "conflict"})
+        assert str(err) == "add_repo failed: conflict"
+
+    def test_missing_error_field_falls_back_to_unknown(self) -> None:
+        err = supervisor_client.SupervisorResponseError("remove_repo", {})
+        assert "unknown error" in str(err)
+
+    def test_is_runtime_error_subclass(self) -> None:
+        err = supervisor_client.SupervisorResponseError("ping", {"error": "x"})
+        assert isinstance(err, RuntimeError)
+
+
 def test_read_port_uses_default_when_file_missing(tmp_path, monkeypatch) -> None:
     missing_file = tmp_path / "missing-port-file"
     monkeypatch.setenv("HF_SUPERVISOR_PORT_FILE", str(missing_file))
@@ -78,7 +98,7 @@ def test_remove_repo_raises_supervisor_response_error_when_server_returns_error(
         supervisor_client.remove_repo(slug="missing")
 
 
-def test_supervisor_client_errors_chain_response(monkeypatch, tmp_path) -> None:
+def test_supervisor_client_errors_carry_structured_response(monkeypatch, tmp_path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
 

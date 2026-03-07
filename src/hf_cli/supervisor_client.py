@@ -82,9 +82,9 @@ def ping() -> bool:
 
 def list_repos() -> list[dict[str, Any]]:
     resp = _send({"action": "list_repos"})
-    if resp.get("status") == "ok":
-        return list(resp.get("repos", []))
-    _raise_response_error("list_repos", resp)
+    if resp.get("status") != "ok":
+        _raise_response_error("list_repos", resp)
+    return list(resp.get("repos", []))
 
 
 def add_repo(path: Path, repo_slug: str | None = None) -> dict[str, Any]:
