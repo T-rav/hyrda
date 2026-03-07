@@ -318,6 +318,55 @@ class TestBuildPrompt:
         assert "## Common Review Feedback" in prompt
         assert "Missing or insufficient test coverage" in prompt
 
+    def test_prompt_includes_recurring_insights_when_threshold_met(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include Recurring Review Insights when patterns exceed threshold."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        store = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
+        for i in range(3):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=200 + i,
+                    issue_number=50 + i,
+                    timestamp="2026-02-20T11:00:00Z",
+                    verdict=ReviewVerdict.REQUEST_CHANGES,
+                    summary="Missing coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "## Recurring Review Insights" in prompt
+        assert "**Missing or insufficient test coverage**" in prompt
+
+    def test_prompt_omits_recurring_insights_below_threshold(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        store = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
+        # Below default threshold of 3
+        for i in range(2):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=300 + i,
+                    issue_number=70 + i,
+                    timestamp="2026-02-22T11:00:00Z",
+                    verdict=ReviewVerdict.REQUEST_CHANGES,
+                    summary="Missing coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "## Recurring Review Insights" not in prompt
+
     def test_prompt_works_without_review_data(
         self, config, event_bus: EventBus, issue
     ) -> None:

@@ -12,7 +12,11 @@ from agent_cli import build_agent_command
 from base_runner import BaseRunner
 from events import EventBus, EventType, HydraFlowEvent
 from models import Task, WorkerResult, WorkerStatus
-from review_insights import ReviewInsightStore, get_common_feedback_section
+from review_insights import (
+    ReviewInsightStore,
+    get_common_feedback_section,
+    get_recurring_feedback_alerts,
+)
 from runner_constants import MEMORY_SUGGESTION_PROMPT
 from subprocess_util import CreditExhaustedError
 
@@ -270,6 +274,27 @@ Run through this checklist before your final commit:
         except Exception:  # noqa: BLE001
             return ""
 
+    def _get_recurring_feedback_alerts_section(self) -> str:
+        """Build a high-priority alert section for recurring review patterns."""
+        try:
+            reviews_path = self._config.memory_dir / "reviews.jsonl"
+
+            def _load_alerts(_cfg: HydraFlowConfig) -> str:
+                recent = self._insights.load_recent(self._config.review_insight_window)
+                return get_recurring_feedback_alerts(
+                    recent,
+                    threshold=self._config.review_pattern_threshold,
+                )
+
+            alerts, _hit = self._context_cache.get_or_load(
+                key="recurring_review_insights",
+                source_path=reviews_path,
+                loader=_load_alerts,
+            )
+            return alerts
+        except Exception:  # noqa: BLE001
+            return ""
+
     def _summarize_for_prompt(self, text: str, max_chars: int, label: str) -> str:
         """Return text trimmed for prompt efficiency with a traceable note."""
         if len(text) <= max_chars:
@@ -380,6 +405,18 @@ Run through this checklist before your final commit:
             history_after += len(compact_feedback)
             feedback_section = compact_feedback
 
+        raw_recurring_section = self._get_recurring_feedback_alerts_section()
+        recurring_section = ""
+        if raw_recurring_section:
+            history_before += len(raw_recurring_section)
+            compact_alerts = self._summarize_for_prompt(
+                raw_recurring_section,
+                max_chars=self._MAX_COMMON_FEEDBACK_CHARS,
+                label="Recurring review insights",
+            )
+            history_after += len(compact_alerts)
+            recurring_section = compact_alerts
+
         manifest_section, memory_section = self._inject_manifest_and_memory()
 
         # Runtime log injection (opt-in)
@@ -421,7 +458,7 @@ Run through this checklist before your final commit:
 4. Run Pre-Quality Review Skill for correctness, plan adherence, and missing tests.
 5. Run Run-Tool Skill: `make lint` → `{test_cmd}` → `make quality`; fix and rerun.
 6. Commit with: "Fixes #{issue.id}: <concise summary>"
-{feedback_section}
+{feedback_section}{recurring_section}
 {self._SELF_CHECK_CHECKLIST}
 ## UI Guidelines
 
