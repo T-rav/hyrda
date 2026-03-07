@@ -17,7 +17,15 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, Body, Query, Response, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Body,
+    HTTPException,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import ValidationError
 
@@ -62,6 +70,7 @@ from models import (
 )
 from pr_manager import PRManager
 from prompt_telemetry import PromptTelemetry
+from repo_store import RepoRecord, RepoRegistryStore, clone_config_for_record
 from state import StateTracker
 from timeline import TimelineBuilder
 from transcript_summarizer import TranscriptSummarizer
@@ -413,6 +422,8 @@ def create_router(
     template_dir: Path,
     *,
     registry: RepoRuntimeRegistry | None = None,
+    default_repo_slug: str | None = None,
+    repo_store: RepoRegistryStore | None = None,
 ) -> APIRouter:
     """Create an APIRouter with all dashboard route handlers.
 
@@ -529,13 +540,87 @@ def create_router(
         When *slug* is ``None`` or no registry is configured, returns the
         single-repo closure defaults for backward compatibility.
         """
-        if slug and registry is not None:
-            rt: RepoRuntime | None = registry.get(slug)
+        slug_value = slug.strip() if isinstance(slug, str) and slug.strip() else None
+        target_slug = slug_value or default_repo_slug
+        if registry is not None and target_slug:
+            rt: RepoRuntime | None = registry.get(target_slug)
             if rt is None:
-                msg = f"Unknown repo: {slug}"
-                raise ValueError(msg)
+                raise HTTPException(
+                    status_code=404, detail=f"Unknown repo: {target_slug}"
+                )
             return rt.config, rt.state, rt.event_bus, lambda: rt.orchestrator
+        if slug_value and registry is not None:
+            raise HTTPException(status_code=404, detail=f"Unknown repo: {slug_value}")
         return config, state, event_bus, get_orchestrator
+
+    def _require_runtime(slug: str | None) -> RepoRuntime:
+        if registry is None:
+            raise HTTPException(
+                status_code=501, detail="Runtime registry not configured"
+            )
+        slug_value = slug.strip() if isinstance(slug, str) and slug.strip() else None
+        target_slug = slug_value or default_repo_slug
+        if not target_slug:
+            raise HTTPException(status_code=400, detail="Repo slug required")
+        rt = registry.get(target_slug)
+        if rt is None:
+            raise HTTPException(status_code=404, detail=f"Unknown repo: {target_slug}")
+        return rt
+
+    def _persist_repo(record: RepoRecord) -> RepoRecord:
+        if repo_store is None:
+            raise HTTPException(
+                status_code=501,
+                detail="Repo registry store not configured",
+            )
+        stored = repo_store.upsert(record)
+        return stored
+
+    def _require_repo_record(slug: str) -> RepoRecord:
+        if repo_store is None:
+            raise HTTPException(status_code=404, detail=f"Unknown repo: {slug}")
+        record = repo_store.get(slug)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Unknown repo: {slug}")
+        return record
+
+    async def _register_runtime_for_record(record: RepoRecord) -> RepoRuntime:
+        if registry is None:
+            raise HTTPException(
+                status_code=501, detail="Runtime registry not configured"
+            )
+        existing = registry.get(record.slug)
+        if existing is not None:
+            return existing
+        repo_path = Path(record.path)
+        if not repo_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Repo path does not exist: {record.path}",
+            )
+        try:
+            repo_config = clone_config_for_record(config, record)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to build config for repo %s", record.slug)
+            raise HTTPException(
+                status_code=500, detail=f"Failed to configure repo {record.slug}"
+            ) from exc
+        if repo_store is not None and repo_config.repo_slug != record.slug:
+            updated = RepoRecord(
+                slug=repo_config.repo_slug,
+                repo=repo_config.repo,
+                path=record.path,
+                overrides=record.overrides,
+                auto_registered=record.auto_registered,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+            record = repo_store.upsert(updated)
+        try:
+            runtime = await registry.register(repo_config)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return runtime
 
     try:
         supervisor_client = importlib.import_module("hf_cli.supervisor_client")
@@ -1477,7 +1562,18 @@ def create_router(
         return JSONResponse({"status": "no orchestrator"}, status_code=400)
 
     @router.post("/api/control/start")
-    async def start_orchestrator() -> JSONResponse:
+    async def start_orchestrator(
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
+        if registry is not None:
+            runtime = _require_runtime(repo)
+            if runtime.running:
+                return JSONResponse({"error": "already running"}, status_code=409)
+            await runtime.start()
+            return JSONResponse({"status": "started", "slug": runtime.slug})
+
         orch = get_orchestrator()
         if orch and orch.running:
             return JSONResponse({"error": "already running"}, status_code=409)
@@ -1500,7 +1596,18 @@ def create_router(
         return JSONResponse({"status": "started"})
 
     @router.post("/api/control/stop")
-    async def stop_orchestrator() -> JSONResponse:
+    async def stop_orchestrator(
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
+        if registry is not None:
+            runtime = _require_runtime(repo)
+            if not runtime.running:
+                return JSONResponse({"error": "not running"}, status_code=400)
+            await runtime.stop()
+            return JSONResponse({"status": "stopped", "slug": runtime.slug})
+
         orch = get_orchestrator()
         if not orch or not orch.running:
             return JSONResponse({"error": "not running"}, status_code=400)
@@ -1598,15 +1705,21 @@ def create_router(
     }
 
     @router.patch("/api/control/config")
-    async def patch_config(body: dict[str, Any]) -> JSONResponse:
+    async def patch_config(
+        body: dict[str, Any],
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
         """Update runtime config fields. Pass ``persist: true`` to save to disk."""
         persist = body.pop("persist", False)
+        _cfg, _, _, _ = _resolve_runtime(repo)
         updates: dict[str, Any] = {}
 
         for key, value in body.items():
             if key not in _MUTABLE_FIELDS:
                 continue
-            if not hasattr(config, key):
+            if not hasattr(_cfg, key):
                 continue
             updates[key] = value
 
@@ -1614,7 +1727,7 @@ def create_router(
             return JSONResponse({"status": "ok", "updated": {}})
 
         # Validate updates through Pydantic field constraints
-        test_values = config.model_dump()
+        test_values = _cfg.model_dump()
         test_values.update(updates)
         try:
             validated = HydraFlowConfig.model_validate(test_values)
@@ -1632,11 +1745,14 @@ def create_router(
         applied: dict[str, Any] = {}
         for key in updates:
             validated_value = getattr(validated, key)
-            object.__setattr__(config, key, validated_value)
+            object.__setattr__(_cfg, key, validated_value)
             applied[key] = validated_value
 
-        if persist and applied:
-            save_config_file(config.config_file, applied)
+        if applied and repo_store is not None:
+            repo_store.update_overrides(_cfg.repo_slug, applied)
+
+        if persist and applied and _cfg.config_file:
+            save_config_file(_cfg.config_file, applied)
 
         return JSONResponse({"status": "ok", "updated": applied})
 
@@ -1720,8 +1836,10 @@ def create_router(
         "review": ("reviewer", "merge_conflict", "fresh_rebuild"),
     }
 
-    def _build_system_worker_inference_stats() -> dict[str, dict[str, int]]:
-        telemetry = PromptTelemetry(config)
+    def _build_system_worker_inference_stats(
+        target_config: HydraFlowConfig,
+    ) -> dict[str, dict[str, int]]:
+        telemetry = PromptTelemetry(target_config)
         source_totals = telemetry.get_source_totals()
 
         worker_totals: dict[str, dict[str, int]] = {}
@@ -1768,17 +1886,22 @@ def create_router(
             return None
 
     @router.get("/api/system/workers")
-    async def get_system_workers() -> JSONResponse:
+    async def get_system_workers(
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
         """Return last known status of each background worker."""
-        orch = get_orchestrator()
+        _cfg, scoped_state, _, _get_orch = _resolve_runtime(repo)
+        orch = _get_orch()
         bg_states = orch.get_bg_worker_states() if orch else {}
         persisted_states: dict[str, BackgroundWorkerState] = {}
         if not orch:
             try:
-                persisted_states = state.get_bg_worker_states()
+                persisted_states = scoped_state.get_bg_worker_states()
             except Exception:  # pragma: no cover - defensive guard
                 logger.exception("Failed to load persisted bg worker states")
-        inference_by_worker = _build_system_worker_inference_stats()
+        inference_by_worker = _build_system_worker_inference_stats(_cfg)
         workers = []
         for name, label, description in _bg_worker_defs:
             enabled = orch.is_bg_worker_enabled(name) if orch else True
@@ -1789,15 +1912,15 @@ def create_router(
                 interval = orch.get_bg_worker_interval(name)
             elif name in _INTERVAL_WORKERS:
                 if name == "memory_sync":
-                    interval = config.memory_sync_interval
+                    interval = _cfg.memory_sync_interval
                 elif name == "metrics":
-                    interval = config.metrics_sync_interval
+                    interval = _cfg.metrics_sync_interval
                 elif name == "pr_unsticker":
-                    interval = config.pr_unstick_interval
+                    interval = _cfg.pr_unstick_interval
                 elif name == "pipeline_poller":
                     interval = 5
             elif name in _PIPELINE_WORKERS:
-                interval = config.poll_interval
+                interval = _cfg.poll_interval
 
             entry = bg_states.get(name) or persisted_states.get(name)
             if entry:
@@ -1838,7 +1961,12 @@ def create_router(
         return JSONResponse(BackgroundWorkersResponse(workers=workers).model_dump())
 
     @router.post("/api/control/bg-worker")
-    async def toggle_bg_worker(body: dict[str, Any]) -> JSONResponse:
+    async def toggle_bg_worker(
+        body: dict[str, Any],
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
         """Enable or disable a background worker."""
         name = body.get("name")
         enabled = body.get("enabled")
@@ -1846,7 +1974,8 @@ def create_router(
             return JSONResponse(
                 {"error": "name and enabled are required"}, status_code=400
             )
-        orch = get_orchestrator()
+        _cfg, _, _, _get_orch = _resolve_runtime(repo)
+        orch = _get_orch()
         if not orch:
             return JSONResponse({"error": "no orchestrator"}, status_code=400)
         orch.set_bg_worker_enabled(name, bool(enabled))
@@ -1864,7 +1993,12 @@ def create_router(
     }
 
     @router.post("/api/control/bg-worker/interval")
-    async def set_bg_worker_interval(body: dict[str, Any]) -> JSONResponse:
+    async def set_bg_worker_interval(
+        body: dict[str, Any],
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
         """Update the polling interval for a background worker."""
         name = body.get("name")
         interval = body.get("interval_seconds")
@@ -1888,7 +2022,8 @@ def create_router(
                 {"error": f"interval_seconds must be between {lo} and {hi}"},
                 status_code=422,
             )
-        orch = get_orchestrator()
+        _cfg, _, _, _get_orch = _resolve_runtime(repo)
+        orch = _get_orch()
         if not orch:
             return JSONResponse({"error": "no orchestrator"}, status_code=400)
         orch.set_bg_worker_interval(name, interval)
@@ -2818,6 +2953,13 @@ def create_router(
                 {"error": "No runtime registry configured"}, status_code=501
             )
         rt = registry.get(slug)
+        if rt is None and repo_store is not None:
+            try:
+                record = _require_repo_record(slug)
+            except HTTPException:
+                record = None
+            if record is not None:
+                rt = await _register_runtime_for_record(record)
         if rt is None:
             return JSONResponse({"error": f"Unknown repo: {slug}"}, status_code=404)
         if rt.running:
@@ -2864,6 +3006,22 @@ def create_router(
 
     @router.get("/api/repos")
     async def list_supervised_repos() -> JSONResponse:
+        if repo_store is not None:
+            entries = repo_store.load()
+            payload: list[dict[str, Any]] = []
+            for entry in entries:
+                rt = registry.get(entry.slug) if registry is not None else None
+                payload.append(
+                    {
+                        "slug": entry.slug,
+                        "repo": entry.repo,
+                        "path": entry.path,
+                        "running": bool(rt.running) if rt else False,
+                        "auto_registered": entry.auto_registered,
+                    }
+                )
+            return JSONResponse({"repos": payload})
+
         if supervisor_client is None:
             return JSONResponse({"repos": []})
         try:
@@ -2993,6 +3151,18 @@ def create_router(
 
     @router.delete("/api/repos/{slug}")
     async def remove_repo(slug: str) -> JSONResponse:
+        if repo_store is not None:
+            record = _require_repo_record(slug)
+            if registry is not None:
+                runtime = registry.get(record.slug)
+                if runtime is not None:
+                    if runtime.running:
+                        await runtime.stop()
+                    registry.remove(record.slug)
+            removed = repo_store.remove(record.slug)
+            if not removed:
+                return JSONResponse({"error": "Repo not found"}, status_code=404)
+            return JSONResponse({"status": "ok", "slug": record.slug})
         if supervisor_client is None:
             return JSONResponse({"error": "supervisor unavailable"}, status_code=503)
         try:
@@ -3092,9 +3262,61 @@ def create_router(
                 {"error": f"not a git repository: {raw_path}"},
                 status_code=400,
             )
-        # Detect slug
         slug = await _detect_repo_slug_from_path(repo_path)
-        # Register with supervisor
+        if repo_store is not None:
+            if not slug:
+                return JSONResponse(
+                    {
+                        "error": (
+                            "Unable to detect GitHub remote. "
+                            "Set origin to https://github.com/owner/repo."
+                        )
+                    },
+                    status_code=400,
+                )
+            repo_identifier = slug.strip()
+            if not repo_identifier or "/" not in repo_identifier:
+                return JSONResponse(
+                    {"error": "GitHub repo must be in owner/repo format"},
+                    status_code=400,
+                )
+            record = RepoRecord(
+                slug=repo_identifier.replace("/", "-"),
+                repo=repo_identifier,
+                path=str(repo_path),
+                auto_registered=False,
+            )
+            stored = _persist_repo(record)
+            runtime = None
+            if registry is not None:
+                runtime = await _register_runtime_for_record(stored)
+            labels_created = False
+            target_cfg: HydraFlowConfig | None = runtime.config if runtime else None
+            if target_cfg is None:
+                try:
+                    target_cfg = clone_config_for_record(config, stored)
+                except Exception:  # noqa: BLE001
+                    target_cfg = None
+            if target_cfg is not None:
+                try:
+                    from prep import ensure_labels  # noqa: PLC0415
+
+                    await ensure_labels(target_cfg)
+                    labels_created = True
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "Label creation failed for %s", stored.repo, exc_info=True
+                    )
+            return JSONResponse(
+                {
+                    "status": "ok",
+                    "slug": stored.slug,
+                    "repo": stored.repo,
+                    "path": stored.path,
+                    "labels_created": labels_created,
+                }
+            )
+        # Register with supervisor (legacy path)
         if supervisor_client is None:
             return JSONResponse(
                 {
@@ -3156,7 +3378,6 @@ def create_router(
                     {"error": "Failed to register repo"},
                     status_code=500,
                 )
-        # Create labels (best-effort, only after successful registration)
         labels_created = False
         if slug:
             try:
@@ -3229,9 +3450,16 @@ def create_router(
         return JSONResponse(response.model_dump())
 
     @router.get("/api/sessions")
-    async def get_sessions(repo: str | None = None) -> JSONResponse:
+    async def get_sessions(
+        repo: str | None = Query(
+            default=None, description="Repo slug to scope the request"
+        ),
+    ) -> JSONResponse:
         """Return session logs, optionally filtered by repo."""
-        sessions = state.load_sessions(repo=repo)
+        repo_value = repo if isinstance(repo, str) and repo else None
+        _cfg, scoped_state, _, _ = _resolve_runtime(repo_value)
+        repo_filter = repo_value if registry is None else None
+        sessions = scoped_state.load_sessions(repo=repo_filter)
         return JSONResponse([s.model_dump() for s in sessions])
 
     @router.get("/api/sessions/{session_id}")

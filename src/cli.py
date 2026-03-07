@@ -17,6 +17,7 @@ from typing import Any
 from config import HydraFlowConfig, load_config_file
 from file_util import atomic_write
 from log import setup_logging
+from repo_store import RepoRecord, RepoRegistryStore, clone_config_for_record
 
 _PREP_COVERAGE_MIN_REQUIRED = 20.0
 _PREP_COVERAGE_TARGET = 70.0
@@ -1312,29 +1313,83 @@ def _run_replay(config: HydraFlowConfig, issue_number: int, latest_only: bool) -
 
 async def _run_main(config: HydraFlowConfig) -> None:
     """Launch the orchestrator, optionally with the dashboard."""
+    from repo_runtime import RepoRuntime, RepoRuntimeRegistry
+
+    logger = logging.getLogger("hydraflow")
+    registry = RepoRuntimeRegistry()
+    repo_store = RepoRegistryStore(config.data_root)
+    persisted = {record.slug: record for record in repo_store.load()}
+    default_slug = config.repo_slug if config.repo else None
+    default_runtime: RepoRuntime | None = None
+
+    def _is_git_repo(path: Path) -> bool:
+        return (path / ".git").exists()
+
+    if default_slug and _is_git_repo(config.repo_root):
+        default_runtime = await registry.register(config)
+        repo_store.upsert(
+            RepoRecord(
+                slug=default_slug,
+                repo=config.repo,
+                path=str(config.repo_root),
+                auto_registered=True,
+            )
+        )
+        persisted.pop(default_slug, None)
+    else:
+        default_slug = None
+
+    for record in persisted.values():
+        repo_path = Path(record.path)
+        if not repo_path.exists():
+            logger.warning("Repo path missing for %s (%s)", record.slug, repo_path)
+            continue
+        try:
+            cloned = clone_config_for_record(config, record)
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to build config for repo %s", record.slug)
+            continue
+        await registry.register(cloned)
+
+    runtime_for_dashboard = default_runtime
+    if runtime_for_dashboard is None and registry.all:
+        runtime_for_dashboard = registry.all[0]
+        default_slug = runtime_for_dashboard.slug
+
     if config.dashboard_enabled:
         from dashboard import HydraFlowDashboard
         from events import EventBus, EventLog, EventType, HydraFlowEvent
         from models import Phase
         from state import StateTracker
 
-        event_log = EventLog(config.event_log_path)
-        bus = EventBus(event_log=event_log)
-        await bus.rotate_log(
-            config.event_log_max_size_mb * 1024 * 1024,
-            config.event_log_retention_days,
-        )
-        await bus.load_history_from_disk()
-        state = StateTracker(config.state_file)
+        if runtime_for_dashboard:
+            bus = runtime_for_dashboard.event_bus
+            state = runtime_for_dashboard.state
+            dash_config = runtime_for_dashboard.config
+            orchestrator = runtime_for_dashboard.orchestrator
+        else:
+            event_log = EventLog(config.event_log_path)
+            bus = EventBus(event_log=event_log)
+            await bus.rotate_log(
+                config.event_log_max_size_mb * 1024 * 1024,
+                config.event_log_retention_days,
+            )
+            await bus.load_history_from_disk()
+            state = StateTracker(config.state_file)
+            dash_config = config
+            orchestrator = None
 
         dashboard = HydraFlowDashboard(
-            config=config,
+            config=dash_config,
             event_bus=bus,
             state=state,
+            orchestrator=orchestrator,
+            registry=registry,
+            default_repo_slug=default_slug,
+            repo_store=repo_store,
         )
         await dashboard.start()
 
-        # Publish idle phase so the UI shows the Start button
         await bus.publish(
             HydraFlowEvent(
                 type=EventType.PHASE_CHANGE,
@@ -1352,11 +1407,10 @@ async def _run_main(config: HydraFlowConfig) -> None:
         finally:
             if dashboard._orchestrator and dashboard._orchestrator.running:
                 await dashboard._orchestrator.stop()
+            await registry.stop_all()
             await dashboard.stop()
     else:
-        from repo_runtime import RepoRuntime
-
-        runtime = await RepoRuntime.create(config)
+        runtime = default_runtime or await RepoRuntime.create(config)
 
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):

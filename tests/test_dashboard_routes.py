@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from events import EventBus, EventType, HydraFlowEvent
 from models import HITLItem, SessionStatus
+from repo_store import RepoRecord, RepoRegistryStore
 
 
 @pytest.fixture(autouse=True)
@@ -1446,6 +1448,125 @@ class TestPatchConfigMaxTriagers:
         assert data["status"] == "ok"
         assert data["updated"]["max_triagers"] == 3
         assert config.max_triagers == 3
+
+
+class TestPatchConfigWithRegistry:
+    """Tests that PATCH /api/control/config updates repo-specific configs via registry."""
+
+    def _make_runtime(self, cfg, event_bus, state):
+        class _StubRuntime:
+            def __init__(self, config, bus, tracker):
+                self.config = config
+                self.event_bus = bus
+                self.state = tracker
+                self._orchestrator = None
+                self.slug = config.repo_slug
+                self._running = False
+
+            @property
+            def orchestrator(self):
+                return self._orchestrator
+
+            @property
+            def running(self):
+                return self._running
+
+            async def start(self):
+                self._running = True
+
+            async def stop(self):
+                self._running = False
+
+        return _StubRuntime(cfg, event_bus, state)
+
+    def _make_router(self, config, runtime, repo_store, event_bus, state, tmp_path):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        class _StubRegistry:
+            def __init__(self, rt):
+                self._runtime = rt
+
+            def get(self, slug):
+                return self._runtime if slug == self._runtime.slug else None
+
+            @property
+            def all(self):
+                return [self._runtime]
+
+            def remove(self, slug):
+                return None
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+            registry=_StubRegistry(runtime),
+            default_repo_slug=runtime.slug,
+            repo_store=repo_store,
+        )
+
+    def _find_endpoint(self, router, path):
+        for route in router.routes:
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        return None
+
+    @pytest.mark.asyncio
+    async def test_patch_config_updates_repo_store(
+        self, event_bus: EventBus, tmp_path: Path
+    ) -> None:
+        """PATCH /api/control/config with repo slug should persist overrides."""
+        import json
+
+        from state import StateTracker
+        from tests.helpers import ConfigFactory
+
+        base_cfg = ConfigFactory.create(
+            repo_root=tmp_path / "base-repo",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        repo_cfg = ConfigFactory.create(
+            repo="acme/widgets",
+            repo_root=tmp_path / "widgets",
+            worktree_base=tmp_path / "widgets-worktrees",
+            state_file=tmp_path / "widgets-state.json",
+        )
+        runtime_state = StateTracker(repo_cfg.state_file)
+        runtime = self._make_runtime(repo_cfg, event_bus, runtime_state)
+
+        repo_store = RepoRegistryStore(tmp_path)
+        repo_store.upsert(
+            RepoRecord(
+                slug=runtime.slug, repo=repo_cfg.repo, path=str(repo_cfg.repo_root)
+            )
+        )
+
+        router = self._make_router(
+            base_cfg, runtime, repo_store, event_bus, runtime_state, tmp_path
+        )
+        patch_config = self._find_endpoint(router, "/api/control/config")
+        assert patch_config is not None
+
+        response = await patch_config({"max_workers": 4}, repo=runtime.slug)
+        data = json.loads(response.body)
+        assert data["status"] == "ok"
+        assert runtime.config.max_workers == 4
+
+        stored = repo_store.load()
+        assert stored[0].overrides["max_workers"] == 4
 
 
 class TestHITLEndpointCause:
@@ -4583,6 +4704,205 @@ class TestEnsureRepoCompatibilityEndpoint:
         assert data["status"] == "ok"
 
 
+class _StubRuntime:
+    def __init__(self, config):
+        self.config = config
+        self.slug = config.repo_slug
+        self.running = False
+        self.event_bus = MagicMock()
+        self.state = MagicMock()
+        self._orchestrator = MagicMock()
+
+    @property
+    def orchestrator(self):
+        return self._orchestrator
+
+    async def start(self):
+        self.running = True
+
+    async def stop(self):
+        self.running = False
+
+
+class _StubRegistry:
+    def __init__(self):
+        self._items: dict[str, _StubRuntime] = {}
+
+    async def register(self, config):
+        runtime = _StubRuntime(config)
+        self._items[runtime.slug] = runtime
+        return runtime
+
+    def get(self, slug):
+        return self._items.get(slug)
+
+    def remove(self, slug):
+        return self._items.pop(slug, None)
+
+    @property
+    def all(self):
+        return list(self._items.values())
+
+
+class TestRepoStoreRuntimeIntegration:
+    """Ensure repo_store-backed endpoints persist repos and manage runtimes."""
+
+    def _make_router(
+        self,
+        config,
+        event_bus: EventBus,
+        state,
+        tmp_path: Path,
+        registry,
+        repo_store,
+    ):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+            registry=registry,
+            repo_store=repo_store,
+            default_repo_slug=config.repo_slug,
+        )
+
+    def _find_route(self, router, path, method="POST"):
+        for route in router.routes:
+            methods = getattr(route, "methods", set())
+            if (
+                getattr(route, "path", None) == path
+                and method in methods
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        raise AssertionError(f"{method} {path} not found")
+
+    def _init_repo(self, repo_path: Path) -> None:
+        repo_path.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "-C", str(repo_path), "init"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/widgets.git",
+            ],
+            check=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_add_repo_persists_record_and_registers_runtime(
+        self, event_bus: EventBus, state, tmp_path: Path, monkeypatch
+    ) -> None:
+        from tests.helpers import ConfigFactory
+
+        registry = _StubRegistry()
+        repo_store = RepoRegistryStore(tmp_path / "repos-data")
+        base_config = ConfigFactory.create(
+            repo_root=tmp_path / "base",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        router = self._make_router(
+            base_config, event_bus, state, tmp_path, registry, repo_store
+        )
+        add_endpoint = self._find_route(router, "/api/repos/add", method="POST")
+        repo_path = tmp_path / "widgets"
+        self._init_repo(repo_path)
+        import prep
+
+        monkeypatch.setattr(prep, "ensure_labels", AsyncMock())
+
+        response = await add_endpoint(
+            {"path": str(repo_path)},
+            None,
+            None,
+            None,
+        )
+        assert response.status_code == 200
+        stored = repo_store.get("acme-widgets")
+        assert stored is not None
+        assert stored.repo == "acme/widgets"
+        runtime = registry.get("acme-widgets")
+        assert runtime is not None
+        assert runtime.config.repo == "acme/widgets"
+
+    @pytest.mark.asyncio
+    async def test_start_runtime_registers_missing_runtime_from_store(
+        self, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        from tests.helpers import ConfigFactory
+
+        registry = _StubRegistry()
+        repo_store = RepoRegistryStore(tmp_path / "repos-data")
+        base_config = ConfigFactory.create(
+            repo_root=tmp_path / "base",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        repo_path = tmp_path / "widgets"
+        self._init_repo(repo_path)
+        repo_store.upsert(
+            RepoRecord(slug="acme-widgets", repo="acme/widgets", path=str(repo_path))
+        )
+        router = self._make_router(
+            base_config, event_bus, state, tmp_path, registry, repo_store
+        )
+        start_endpoint = self._find_route(
+            router, "/api/runtimes/{slug}/start", method="POST"
+        )
+
+        response = await start_endpoint("acme-widgets")
+        assert response.status_code == 200
+        runtime = registry.get("acme-widgets")
+        assert runtime is not None and runtime.running is True
+
+    @pytest.mark.asyncio
+    async def test_remove_repo_stops_runtime_and_updates_store(
+        self, event_bus: EventBus, state, tmp_path: Path
+    ) -> None:
+        from tests.helpers import ConfigFactory
+
+        registry = _StubRegistry()
+        repo_store = RepoRegistryStore(tmp_path / "repos-data")
+        base_config = ConfigFactory.create(
+            repo_root=tmp_path / "base",
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        repo_path = tmp_path / "widgets"
+        self._init_repo(repo_path)
+        record = RepoRecord(
+            slug="acme-widgets", repo="acme/widgets", path=str(repo_path)
+        )
+        repo_store.upsert(record)
+        runtime = await registry.register(base_config.model_copy())
+        runtime.slug = "acme-widgets"
+        runtime.running = True
+        registry._items["acme-widgets"] = runtime
+        router = self._make_router(
+            base_config, event_bus, state, tmp_path, registry, repo_store
+        )
+        delete_endpoint = self._find_route(router, "/api/repos/{slug}", method="DELETE")
+
+        response = await delete_endpoint("acme-widgets")
+        assert response.status_code == 200
+        assert repo_store.get("acme-widgets") is None
+        assert registry.get("acme-widgets") is None
+
+
 # ---------------------------------------------------------------------------
 # GET /api/sessions and /api/sessions/{session_id}
 # ---------------------------------------------------------------------------
@@ -6040,15 +6360,18 @@ class TestResolveRuntime:
     async def test_state_endpoint_with_unknown_repo_raises(
         self, config, event_bus, state, tmp_path
     ) -> None:
-        """GET /api/state?repo=unknown should raise ValueError."""
+        """GET /api/state?repo=unknown should raise 404 HTTPException."""
         mock_registry = MagicMock()
         mock_registry.get.return_value = None  # Unknown repo
         router = self._make_router_with_registry(
             config, event_bus, state, tmp_path, registry=mock_registry
         )
         ep = next(r for r in router.routes if getattr(r, "path", "") == "/api/state")
-        with pytest.raises(ValueError, match="Unknown repo"):
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as excinfo:
             await ep.endpoint(repo="unknown-slug")
+        assert excinfo.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_state_endpoint_with_valid_repo_uses_runtime(

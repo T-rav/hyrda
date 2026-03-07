@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from fastapi import FastAPI
 
     from orchestrator import HydraFlowOrchestrator
+    from repo_runtime import RepoRuntimeRegistry
+    from repo_store import RepoRegistryStore
 
 logger = logging.getLogger("hydraflow.dashboard")
 
@@ -67,6 +69,10 @@ class HydraFlowDashboard:
         event_bus: EventBus,
         state: StateTracker,
         orchestrator: HydraFlowOrchestrator | None = None,
+        *,
+        registry: RepoRuntimeRegistry | None = None,
+        default_repo_slug: str | None = None,
+        repo_store: RepoRegistryStore | None = None,
     ) -> None:
         self._config = config
         self._bus = event_bus
@@ -75,6 +81,9 @@ class HydraFlowDashboard:
         self._server_task: asyncio.Task[None] | None = None
         self._run_task: asyncio.Task[None] | None = None
         self._app: FastAPI | None = None
+        self._registry = registry
+        self._default_repo_slug = default_repo_slug
+        self._repo_store = repo_store
 
     def create_app(self) -> FastAPI:
         """Build and return the FastAPI application."""
@@ -121,6 +130,9 @@ class HydraFlowDashboard:
             set_run_task=self._set_run_task,
             ui_dist_dir=_UI_DIST_DIR,
             template_dir=_TEMPLATE_DIR,
+            registry=self._registry,
+            default_repo_slug=self._default_repo_slug,
+            repo_store=self._repo_store,
         )
         app.include_router(router)
 

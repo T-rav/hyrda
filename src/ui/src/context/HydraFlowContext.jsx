@@ -723,15 +723,21 @@ export function HydraFlowProvider({ children }) {
   const reconnectTimer = useRef(null)
   const lastEventTsRef = useRef(null)
   const bgWorkersRef = useRef(state.backgroundWorkers)
+  const repoQuery = useCallback((path) => {
+    const slug = state.selectedRepoSlug
+    if (!slug) return path
+    const separator = path.includes('?') ? '&' : '?'
+    return `${path}${separator}repo=${encodeURIComponent(slug)}`
+  }, [state.selectedRepoSlug])
 
   bgWorkersRef.current = state.backgroundWorkers
 
   const fetchLifetimeStats = useCallback(() => {
-    fetch('/api/stats')
+    fetch(repoQuery('/api/stats'))
       .then(r => r.json())
       .then(data => dispatch({ type: 'LIFETIME_STATS', data }))
       .catch(() => {})
-  }, [])
+  }, [repoQuery])
 
   const fetchHitlItems = useCallback(() => {
     fetch('/api/hitl')
@@ -741,18 +747,18 @@ export function HydraFlowProvider({ children }) {
   }, [])
 
   const fetchPipeline = useCallback(() => {
-    fetch('/api/pipeline')
+    fetch(repoQuery('/api/pipeline'))
       .then(r => r.json())
       .then(data => dispatch({ type: 'PIPELINE_SNAPSHOT', data: data.stages || {} }))
       .catch(() => {})
-  }, [])
+  }, [repoQuery])
 
   const fetchPipelineStats = useCallback(() => {
-    fetch('/api/pipeline/stats')
+    fetch(repoQuery('/api/pipeline/stats'))
       .then(r => r.json())
       .then(data => dispatch({ type: 'PIPELINE_STATS', data }))
       .catch(() => {})
-  }, [])
+  }, [repoQuery])
 
   const fetchGithubMetrics = useCallback(() => {
     fetch('/api/metrics/github')
@@ -776,11 +782,11 @@ export function HydraFlowProvider({ children }) {
   }, [])
 
   const fetchSessions = useCallback(() => {
-    fetch('/api/sessions')
+    fetch(repoQuery('/api/sessions'))
       .then(r => r.json())
       .then(data => dispatch({ type: 'SESSIONS', data }))
       .catch(() => {})
-  }, [])
+  }, [repoQuery])
 
   const selectSession = useCallback((sessionId) => {
     dispatch({ type: 'SELECT_SESSION', data: { sessionId } })
@@ -1102,25 +1108,25 @@ export function HydraFlowProvider({ children }) {
     // Optimistic local update — works even when backend is down
     dispatch({ type: 'TOGGLE_BG_WORKER', data: { name, enabled } })
     try {
-      await fetch('/api/control/bg-worker', {
+      await fetch(repoQuery('/api/control/bg-worker'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, enabled }),
       })
     } catch { /* ignore — local state already updated */ }
-  }, [])
+  }, [repoQuery])
 
   const updateBgWorkerInterval = useCallback(async (name, intervalSeconds) => {
     // Optimistic local update
     dispatch({ type: 'UPDATE_BG_WORKER_INTERVAL', data: { name, interval_seconds: intervalSeconds } })
     try {
-      await fetch('/api/control/bg-worker/interval', {
+      await fetch(repoQuery('/api/control/bg-worker/interval'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, interval_seconds: intervalSeconds }),
       })
     } catch { /* ignore — local state already updated */ }
-  }, [])
+  }, [repoQuery])
 
   const requestChanges = useCallback(async (issueNumber, feedback, stage) => {
     try {
@@ -1151,7 +1157,7 @@ export function HydraFlowProvider({ children }) {
 
   const refreshControlStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/control/status')
+      const res = await fetch(repoQuery('/api/control/status'))
       if (!res.ok) return false
       const data = await res.json()
       dispatch({
@@ -1166,29 +1172,29 @@ export function HydraFlowProvider({ children }) {
     } catch {
       return false
     }
-  }, [])
+  }, [repoQuery])
 
   const startOrchestrator = useCallback(async () => {
     try {
-      const res = await fetch('/api/control/start', { method: 'POST' })
+      const res = await fetch(repoQuery('/api/control/start'), { method: 'POST' })
       if (!res.ok) return false
       await refreshControlStatus()
       return true
     } catch {
       return false
     }
-  }, [refreshControlStatus])
+  }, [refreshControlStatus, repoQuery])
 
   const stopOrchestrator = useCallback(async () => {
     try {
-      const res = await fetch('/api/control/stop', { method: 'POST' })
+      const res = await fetch(repoQuery('/api/control/stop'), { method: 'POST' })
       if (!res.ok) return false
       await refreshControlStatus()
       return true
     } catch {
       return false
     }
-  }, [refreshControlStatus])
+  }, [refreshControlStatus, repoQuery])
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -1196,7 +1202,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onopen = () => {
       dispatch({ type: 'CONNECTED' })
-      fetch('/api/control/status')
+      fetch(repoQuery('/api/control/status'))
         .then(r => r.json())
         .then(data => {
           dispatch({
@@ -1215,7 +1221,7 @@ export function HydraFlowProvider({ children }) {
         .then(data => dispatch({ type: 'EXISTING_PRS', data }))
         .catch(() => {})
       fetchHitlItems()
-      fetch('/api/system/workers')
+      fetch(repoQuery('/api/system/workers'))
         .then(r => r.json())
         .then(data => {
           // Sync local toggle overrides to backend
@@ -1224,7 +1230,7 @@ export function HydraFlowProvider({ children }) {
             const backendMap = Object.fromEntries(data.workers.map(w => [w.name, w.enabled]))
             for (const lw of localWorkers) {
               if (lw.enabled !== undefined && backendMap[lw.name] !== undefined && lw.enabled !== backendMap[lw.name]) {
-                fetch('/api/control/bg-worker', {
+                fetch(repoQuery('/api/control/bg-worker'), {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ name: lw.name, enabled: lw.enabled }),
@@ -1235,7 +1241,7 @@ export function HydraFlowProvider({ children }) {
           dispatch({ type: 'BACKGROUND_WORKERS', data: data.workers })
         })
         .catch(() => {})
-      fetch('/api/queue')
+      fetch(repoQuery('/api/queue'))
         .then(r => r.json())
         .then(data => dispatch({ type: 'QUEUE_STATS', data }))
         .catch(() => {})
@@ -1307,7 +1313,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchPipelineStats, fetchEpics, fetchSessions, fetchRepos, fetchRuntimes])
+  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchPipelineStats, fetchEpics, fetchSessions, fetchRepos, fetchRuntimes, repoQuery])
 
   useEffect(() => {
     if (isSeeded) return
