@@ -43,6 +43,7 @@ class TestCreate:
             patch.object(
                 manager, "_assert_origin_matches_repo", new_callable=AsyncMock
             ),
+            patch.object(manager, "pre_work_check", new_callable=AsyncMock),
             patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
@@ -77,6 +78,7 @@ class TestCreate:
             patch.object(
                 manager, "_assert_origin_matches_repo", new_callable=AsyncMock
             ),
+            patch.object(manager, "pre_work_check", new_callable=AsyncMock),
             patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(
                 manager, "_remote_branch_exists", return_value=True
@@ -117,6 +119,7 @@ class TestCreate:
             patch.object(
                 manager, "_assert_origin_matches_repo", new_callable=AsyncMock
             ),
+            patch.object(manager, "pre_work_check", new_callable=AsyncMock),
             patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
@@ -242,6 +245,7 @@ class TestCreate:
             patch.object(
                 manager, "_assert_origin_matches_repo", new_callable=AsyncMock
             ),
+            patch.object(manager, "pre_work_check", new_callable=AsyncMock),
             patch.object(manager, "_delete_local_branch", new_callable=AsyncMock),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             patch.object(manager, "_setup_env"),
@@ -399,6 +403,7 @@ class TestCreate:
             patch.object(
                 manager, "_assert_origin_matches_repo", new_callable=AsyncMock
             ),
+            patch.object(manager, "pre_work_check", new_callable=AsyncMock),
             patch.object(manager, "_delete_local_branch", delete_branch),
             patch.object(manager, "_remote_branch_exists", return_value=False),
             pytest.raises(RuntimeError, match="worktree add failed"),
