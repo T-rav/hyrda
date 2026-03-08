@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import importlib
 import json
 import logging
@@ -877,8 +878,6 @@ def create_router(
             already_enriched.update(enrich_candidates)
             _history_cache["enriched_issues"] = already_enriched
             if use_unfiltered and _history_cache["issue_rows"] is not None:
-                import copy
-
                 _history_cache["issue_rows"] = copy.deepcopy(issue_rows)
                 _save_history_cache()
             # Rebuild items after enrichment changed the underlying rows.
@@ -910,8 +909,6 @@ def create_router(
                     and use_unfiltered
                     and _history_cache.get("issue_rows") is not None
                 ):
-                    import copy
-
                     _history_cache["issue_rows"] = copy.deepcopy(issue_rows)
                     _save_history_cache()
             except Exception:
