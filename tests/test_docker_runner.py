@@ -1170,7 +1170,8 @@ class TestBuildContainerKwargs:
         from docker_runner import build_container_kwargs
         from tests.helpers import ConfigFactory
 
-        config = ConfigFactory.create(execution_mode="docker")
+        with patch("shutil.which", return_value="/usr/bin/docker"):
+            config = ConfigFactory.create(execution_mode="docker")
         kwargs = build_container_kwargs(config)
         tmpfs = kwargs["tmpfs"]
         assert "/tmp" in tmpfs
