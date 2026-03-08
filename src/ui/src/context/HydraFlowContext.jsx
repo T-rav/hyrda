@@ -1192,7 +1192,8 @@ export function HydraFlowProvider({ children }) {
 
   const connect = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`)
+    const repoParam = state.selectedRepoSlug ? `?repo=${encodeURIComponent(state.selectedRepoSlug)}` : ''
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws${repoParam}`)
 
     ws.onopen = () => {
       dispatch({ type: 'CONNECTED' })
@@ -1307,7 +1308,7 @@ export function HydraFlowProvider({ children }) {
 
     ws.onerror = () => ws.close()
     wsRef.current = ws
-  }, [fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchPipelineStats, fetchEpics, fetchSessions, fetchRepos, fetchRuntimes])
+  }, [state.selectedRepoSlug, fetchLifetimeStats, fetchHitlItems, fetchGithubMetrics, fetchMetricsHistory, fetchPipeline, fetchPipelineStats, fetchEpics, fetchSessions, fetchRepos, fetchRuntimes])
 
   useEffect(() => {
     if (isSeeded) return
