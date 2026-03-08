@@ -2019,5 +2019,5 @@ def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
     existing.update(values)
     try:
         file_util.atomic_write(path, json.dumps(existing, indent=2) + "\n")
-    except OSError:
-        logger.warning("Failed to write config file %s", path)
+    except OSError as exc:
+        logger.warning("Failed to write config file %s: %s", path, exc)

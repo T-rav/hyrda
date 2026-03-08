@@ -1165,7 +1165,7 @@ class TestStartupWorkerCountLogging:
                 }
             )
         )
-        monkeypatch.setattr("cli.asyncio.run", lambda _coro: None)
+        monkeypatch.setattr("cli.asyncio.run", lambda _coro: _coro.close())
         monkeypatch.setattr("cli.setup_logging", lambda **_kw: None)
 
         with caplog.at_level(logging.INFO, logger="hydraflow.cli"):
