@@ -5836,6 +5836,7 @@ class TestWebSocketEndpoint:
         await endpoint(mock_ws)
 
         mock_ws.accept.assert_called_once()
+        mock_registry.get.assert_called_once_with("nonexistent-repo")
         mock_ws.close.assert_called_once_with(
             code=1008, reason="Unknown repo: nonexistent-repo"
         )

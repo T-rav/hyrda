@@ -1301,13 +1301,16 @@ export function HydraFlowProvider({ children }) {
       } catch { /* ignore parse errors */ }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       // Guard against stale connections: when selectedRepoSlug changes, the
-      // useEffect cleanup closes the old WS and immediately opens a new one
+      // useEffect cleanup closes the old WS and connect() opens a new one
       // (wsRef.current = new_ws). If this onclose fires after that, skip the
       // reconnect to avoid opening a second connection to the wrong repo.
       if (wsRef.current !== ws) return
       dispatch({ type: 'DISCONNECTED' })
+      // 1008 = Policy Violation — server explicitly rejected our repo slug.
+      // Don't reconnect; the slug is invalid and retrying would loop forever.
+      if (event.code === 1008) return
       reconnectTimer.current = setTimeout(connect, 2000)
     }
 
