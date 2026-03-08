@@ -554,15 +554,13 @@ def create_router(
     ) -> JSONResponse:
         try:
             runtime_config, _, _, _ = _resolve_runtime(slug)
-        except ValueError as exc:
-            return JSONResponse({"error": str(exc)}, status_code=404)
+        except ValueError:
+            return JSONResponse({"error": "Unknown repo"}, status_code=404)
         try:
             result = await task_fn(runtime_config)
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             logger.exception("%s task failed", task_name)
-            return JSONResponse(
-                {"error": f"{task_name} failed: {exc}"}, status_code=500
-            )
+            return JSONResponse({"error": f"{task_name} failed"}, status_code=500)
         payload = {"status": "ok", "result": result.as_dict()}
         status_code = 200
         if not result.success:
