@@ -1119,17 +1119,21 @@ class TestRepoConfigOverlay:
         repo_cfg_dir = tmp_path / ".hydraflow" / "org-repo"
         repo_cfg_dir.mkdir(parents=True)
         repo_cfg_file = repo_cfg_dir / "config.json"
-        repo_cfg_file.write_text(json.dumps({"max_workers": 5}))
+        repo_cfg_file.write_text(json.dumps({"max_workers": 5, "max_reviewers": 4}))
 
         cfg = HydraFlowConfig(
             repo_root=tmp_path,
             repo="org/repo",
             max_workers=2,
+            max_reviewers=3,
             config_file=repo_cfg_file,
         )
         _apply_repo_config_overlay(cfg, cli_explicit={"max_workers"})
 
+        # CLI-explicit max_workers beats repo config; max_reviewers not in cli_explicit
+        # so repo config (4) should override the constructed value (3)
         assert cfg.max_workers == 2
+        assert cfg.max_reviewers == 4
 
 
 # ---------------------------------------------------------------------------

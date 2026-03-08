@@ -13,6 +13,8 @@ from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+import file_util
+
 logger = logging.getLogger("hydraflow.config")
 
 # Data-driven env-var override tables.
@@ -2002,8 +2004,6 @@ def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
     if path is None:
         return
 
-    from file_util import atomic_write  # noqa: PLC0415
-
     existing: dict[str, Any] = {}
     try:
         existing = json.loads(path.read_text())
@@ -2018,6 +2018,6 @@ def save_config_file(path: Path | None, values: dict[str, Any]) -> None:
         logger.warning("Failed to read config file %s: %s; starting fresh", path, exc)
     existing.update(values)
     try:
-        atomic_write(path, json.dumps(existing, indent=2) + "\n")
+        file_util.atomic_write(path, json.dumps(existing, indent=2) + "\n")
     except OSError:
         logger.warning("Failed to write config file %s", path)
