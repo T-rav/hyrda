@@ -370,32 +370,35 @@ class DockerRunner:
 
         # Determine the current branch
         try:
-            branch = subprocess.run(
+            branch: str | None = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
                 cwd=cwd,
                 capture_output=True,
                 text=True,
                 check=True,
             ).stdout.strip()
+            if branch == "HEAD":
+                # Detached HEAD — can't use --branch with "HEAD"
+                branch = None
         except (subprocess.CalledProcessError, OSError):
-            branch = "HEAD"
+            branch = None
 
         # Clone the repo locally, then swap .git/ into the workspace
         import shutil  # noqa: PLC0415
 
         clone_tmp = Path(cwd) / ".git-clone-tmp"
         try:
+            clone_cmd = [
+                "git",
+                "clone",
+                "--local",
+                "--no-checkout",
+            ]
+            if branch:
+                clone_cmd += ["--branch", branch]
+            clone_cmd += [str(self._repo_root), str(clone_tmp)]
             subprocess.run(
-                [
-                    "git",
-                    "clone",
-                    "--local",
-                    "--no-checkout",
-                    "--branch",
-                    branch,
-                    str(self._repo_root),
-                    str(clone_tmp),
-                ],
+                clone_cmd,
                 check=True,
                 capture_output=True,
             )
