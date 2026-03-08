@@ -20,13 +20,13 @@ from pathlib import Path
 from config import HydraFlowConfig
 from subprocess_util import run_subprocess
 
-logger = logging.getLogger("hydraflow.worktree")
+logger = logging.getLogger("hydraflow.workspace")
 
 _FETCH_LOCKS: dict[str, asyncio.Lock] = {}
 _WORKTREE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-class WorktreeManager:
+class WorkspaceManager:
     """Creates, configures, and destroys isolated workspaces via local clones.
 
     Each workspace gets:

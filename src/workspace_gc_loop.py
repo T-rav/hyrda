@@ -15,15 +15,15 @@ from models import StatusCallback
 from pr_manager import PRManager
 from state import StateTracker
 from subprocess_util import run_subprocess
-from worktree import WorktreeManager
+from workspace import WorkspaceManager
 
-logger = logging.getLogger("hydraflow.worktree_gc_loop")
+logger = logging.getLogger("hydraflow.workspace_gc_loop")
 
 # Maximum worktrees to GC per cycle to avoid long-running passes.
 _MAX_GC_PER_CYCLE = 20
 
 
-class WorktreeGCLoop(BaseBackgroundLoop):
+class WorkspaceGCLoop(BaseBackgroundLoop):
     """Periodically garbage-collects stale worktrees and orphaned branches.
 
     Catches worktrees that leak when PRs are merged manually, via HITL,
@@ -33,7 +33,7 @@ class WorktreeGCLoop(BaseBackgroundLoop):
     def __init__(
         self,
         config: HydraFlowConfig,
-        worktrees: WorktreeManager,
+        worktrees: WorkspaceManager,
         prs: PRManager,
         state: StateTracker,
         event_bus: EventBus,

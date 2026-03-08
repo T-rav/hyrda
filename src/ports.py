@@ -11,11 +11,11 @@ infrastructure (GitHub API, git CLI, agent subprocesses).
         │
         ├─► TaskFetcher / TaskTransitioner (task_source.py — already formal)
         ├─► PRPort                          (GitHub PR / label / CI operations)
-        └─► WorktreePort                   (git worktree lifecycle)
+        └─► WorkspacePort                   (git workspace lifecycle)
 
 Concrete adapters:
   - PRPort      → pr_manager.PRManager
-  - WorktreePort → worktree.WorktreeManager
+  - WorkspacePort → workspace.WorkspaceManager
 
 Both concrete classes satisfy their respective protocols via structural
 subtyping (typing.runtime_checkable).  No changes to the concrete classes
@@ -43,7 +43,7 @@ from typing_extensions import Protocol
 
 from models import GitHubIssue, HITLItem, PRInfo, ReviewVerdict
 
-__all__ = ["PRPort", "WorktreePort"]
+__all__ = ["PRPort", "WorkspacePort"]
 
 
 @runtime_checkable
@@ -182,10 +182,10 @@ class PRPort(Protocol):
 
 
 @runtime_checkable
-class WorktreePort(Protocol):
+class WorkspacePort(Protocol):
     """Port for git worktree lifecycle operations.
 
-    Implemented by: ``worktree.WorktreeManager``
+    Implemented by: ``worktree.WorkspaceManager``
     """
 
     async def create(self, issue_number: int, branch: str) -> Path:

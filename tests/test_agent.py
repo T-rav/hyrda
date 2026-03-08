@@ -923,7 +923,7 @@ class TestForceCommitUncommitted:
             result = await runner._force_commit_uncommitted(task, tmp_path)
 
         assert result is True
-        assert call_count == 4  # unset core.worktree, status, add, commit
+        assert call_count == 3  # status, add, commit
 
     @pytest.mark.asyncio
     async def test_force_commit_noop_when_clean(
@@ -945,7 +945,7 @@ class TestForceCommitUncommitted:
             result = await runner._force_commit_uncommitted(task, tmp_path)
 
         assert result is False
-        assert mock_host.run_simple.await_count == 2  # unset core.worktree, status
+        assert mock_host.run_simple.await_count == 1  # status
 
     @pytest.mark.asyncio
     async def test_force_commit_handles_error_gracefully(
@@ -966,119 +966,6 @@ class TestForceCommitUncommitted:
 
 class TestForceCommitE2E:
     """End-to-end tests using real git repos to verify the salvage-commit flow."""
-
-    @pytest.mark.asyncio
-    async def test_force_commit_with_docker_corrupted_worktree(
-        self, config, event_bus: EventBus, tmp_path: Path
-    ) -> None:
-        """Simulate Docker corruption: core.worktree=/workspace + dirty files.
-
-        This is the exact scenario that causes zero-commit failures in production:
-        1. Docker container sets core.worktree=/workspace in git config
-        2. Agent exits without committing
-        3. Host-side git status sees nothing (looks at /workspace, not worktree)
-        4. _force_commit_uncommitted should fix the config and commit the work
-        """
-        import subprocess
-
-        # Create a real git repo with an initial commit
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        subprocess.run(["git", "init", repo], check=True, capture_output=True)
-        subprocess.run(
-            ["git", "-C", str(repo), "config", "user.email", "test@test.com"],
-            check=True,
-            capture_output=True,
-        )
-        subprocess.run(
-            ["git", "-C", str(repo), "config", "user.name", "Test"],
-            check=True,
-            capture_output=True,
-        )
-        (repo / "README.md").write_text("# Hello")
-        subprocess.run(
-            ["git", "-C", str(repo), "add", "."], check=True, capture_output=True
-        )
-        subprocess.run(
-            ["git", "-C", str(repo), "commit", "-m", "Initial commit"],
-            check=True,
-            capture_output=True,
-        )
-
-        # Simulate Docker corruption: set core.worktree to /workspace
-        subprocess.run(
-            ["git", "-C", str(repo), "config", "core.worktree", "/workspace"],
-            check=True,
-            capture_output=True,
-        )
-
-        # Verify corruption: git status sees nothing because /workspace doesn't exist
-        result = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.stdout.strip() == "", (
-            "Corruption setup failed — status should be empty"
-        )
-
-        # Simulate agent leaving uncommitted work
-        (repo / "src").mkdir()
-        (repo / "src" / "fix.py").write_text("def fix(): pass\n")
-
-        # Verify corruption still hides the new file
-        result = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.stdout.strip() == "", "Corruption should hide new files"
-
-        # Now run _force_commit_uncommitted — it should fix config + commit
-        runner = AgentRunner(config, event_bus)
-        task = TaskFactory.create(id=42, title="Fix the bug")
-
-        committed = await runner._force_commit_uncommitted(task, repo)
-
-        assert committed is True
-
-        # Verify the commit exists
-        log = subprocess.run(
-            ["git", "-C", str(repo), "log", "--oneline"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        assert "Fix the bug" in log.stdout
-        assert (
-            "Auto-committed by HydraFlow"
-            in subprocess.run(
-                ["git", "-C", str(repo), "log", "-1", "--format=%b"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout
-        )
-
-        # Verify core.worktree is unset
-        cfg_result = subprocess.run(
-            ["git", "-C", str(repo), "config", "core.worktree"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert cfg_result.returncode != 0, "core.worktree should be unset"
-
-        # Verify working tree is clean
-        status = subprocess.run(
-            ["git", "-C", str(repo), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        assert status.stdout.strip() == ""
 
     @pytest.mark.asyncio
     async def test_force_commit_clean_repo_no_corruption(

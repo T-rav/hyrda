@@ -327,7 +327,7 @@ class DockerRunner:
             mounts[repo_str] = {"bind": "/repo", "mode": "ro"}
 
         # NOTE: The host .git directory is NOT mounted.  Workspaces are
-        # standalone local clones (created by WorktreeManager), each with
+        # standalone local clones (created by WorkspaceManager), each with
         # their own .git/ directory.  This prevents Docker containers from
         # corrupting the host repo.
 
@@ -409,6 +409,7 @@ class DockerRunner:
             gh_token=self._gh_token,
             git_user_name=self._git_user_name,
             git_user_email=self._git_user_email,
+            repo_root=self._repo_root,
         )
         if env.get("PI_CODING_AGENT_DIR"):
             env["PI_CODING_AGENT_DIR"] = f"{_CONTAINER_PI_HOME}/agent"
