@@ -1399,7 +1399,7 @@ async def _run_main(config: HydraFlowConfig) -> None:
     ) -> tuple[RepoRecord, HydraFlowConfig]:
         normalized = repo_path.expanduser().resolve()
         repo_label = (repo_name or normalized.name or "repo").strip()
-        slug = repo_label.replace("/", "-")
+        slug = re.sub(r"[^a-zA-Z0-9_-]+", "-", repo_label).strip("-") or "repo"
         if registry.get(slug):
             raise ValueError(f"Repo '{slug}' already registered")
         record = RepoRecord(slug=slug, repo=repo_label, path=str(normalized))

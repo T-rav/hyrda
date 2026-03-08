@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from config import HydraFlowConfig
 from file_util import atomic_write
 
 logger = logging.getLogger("hydraflow.repo_store")
@@ -21,19 +20,6 @@ def _now_iso() -> str:
 
 def _normalize_path(path: str | Path) -> str:
     return str(Path(path).expanduser().resolve())
-
-
-def _strip_repo_specific_fields(payload: dict[str, Any]) -> None:
-    """Remove repo-scoped fields so HydraFlowConfig can rebuild them."""
-    for attr in (
-        "repo",
-        "repo_root",
-        "state_file",
-        "event_log_path",
-        "config_file",
-        "repo_slug",
-    ):
-        payload.pop(attr, None)
 
 
 @dataclass
@@ -176,20 +162,6 @@ class RepoRegistryStore:
         return None
 
 
-def clone_config_for_record(
-    base_config: HydraFlowConfig,
-    record: RepoRecord,
-) -> HydraFlowConfig:
-    """Build a HydraFlowConfig for *record* based on *base_config*."""
-    payload = base_config.model_dump()
-    _strip_repo_specific_fields(payload)
-    payload.update(record.overrides or {})
-    payload["repo"] = record.repo
-    payload["repo_root"] = record.path
-    config = HydraFlowConfig.model_validate(payload)
-    return config
-
-
 # Backwards-compatibility alias until call-sites migrate.
 RepoStore = RepoRegistryStore
 
@@ -197,5 +169,4 @@ __all__ = [
     "RepoRecord",
     "RepoRegistryStore",
     "RepoStore",
-    "clone_config_for_record",
 ]
