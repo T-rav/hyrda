@@ -1297,6 +1297,7 @@ def create_router(
 
     async def _resolve_hitl_item(
         issue_number: int,
+        orch: HydraFlowOrchestrator,
         *,
         action: str,
         comment_heading: str,
@@ -1309,11 +1310,11 @@ def create_router(
         Shared implementation for hitl_skip, hitl_close, and
         hitl_approve_process which all follow the same
         cleanup → outcome → comment → event → response pattern.
-        """
-        orch = get_orchestrator()
-        if not orch:
-            return JSONResponse({"status": "no orchestrator"}, status_code=400)
 
+        ``orch`` must be the already-fetched, non-None orchestrator from the
+        caller so that state cleanup is always paired with the side effects the
+        caller already performed (label swaps, issue close, etc.).
+        """
         _clear_hitl_state(orch, issue_number)
         state.record_outcome(
             issue_number,
@@ -1355,7 +1356,8 @@ def create_router(
     @router.post("/api/hitl/{issue_number}/skip")
     async def hitl_skip(issue_number: int, body: HITLSkipRequest) -> JSONResponse:
         """Remove a HITL issue from the queue without action (reason required)."""
-        if not get_orchestrator():
+        orch = get_orchestrator()
+        if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
 
         # Read origin before clearing state
@@ -1371,6 +1373,7 @@ def create_router(
 
         return await _resolve_hitl_item(
             issue_number,
+            orch,
             action="skip",
             comment_heading="HITL Skip",
             comment_body=f"Operator skipped this issue.\n\n**Reason:** {body.reason}",
@@ -1381,12 +1384,14 @@ def create_router(
     @router.post("/api/hitl/{issue_number}/close")
     async def hitl_close(issue_number: int, body: HITLCloseRequest) -> JSONResponse:
         """Close a HITL issue on GitHub (reason required)."""
-        if not get_orchestrator():
+        orch = get_orchestrator()
+        if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
         await pr_manager.close_issue(issue_number)
 
         return await _resolve_hitl_item(
             issue_number,
+            orch,
             action="close",
             comment_heading="HITL Close",
             comment_body=f"Operator closed this issue.\n\n**Reason:** {body.reason}",
@@ -1420,7 +1425,8 @@ def create_router(
 
         All issue types (bugs, epics, etc.) route to triage first.
         """
-        if not get_orchestrator():
+        orch = get_orchestrator()
+        if not orch:
             return JSONResponse({"status": "no orchestrator"}, status_code=400)
 
         target_label = config.find_label[0]
@@ -1430,6 +1436,7 @@ def create_router(
 
         return await _resolve_hitl_item(
             issue_number,
+            orch,
             action="approved_for_processing",
             comment_heading="Approved for processing",
             comment_body=(
