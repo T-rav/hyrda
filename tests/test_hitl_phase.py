@@ -395,6 +395,14 @@ class TestHITLGetStatus:
         state.set_hitl_origin(42, "hydraflow-review")
         assert phase.get_status(42) != "approval"
 
+    def test_get_status_returns_from_review_for_review_origin(
+        self, config: HydraFlowConfig
+    ) -> None:
+        """Verification issues with review origin should show 'from review'."""
+        phase, state, *_ = make_hitl_phase(config)
+        state.set_hitl_origin(42, "hydraflow-review")
+        assert phase.get_status(42) == "from review"
+
 
 class TestHITLPhaseCorrections:
     """Direct unit tests for submit_correction() and skip_issue()."""
