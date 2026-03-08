@@ -166,7 +166,7 @@ class BaseBackgroundLoop(abc.ABC):
             if triggered:
                 self._trigger_event.clear()
             return triggered
-        except Exception:
+        except BaseException:
             sleep_task.cancel()
             trigger_task.cancel()
             raise
@@ -185,8 +185,9 @@ class BaseBackgroundLoop(abc.ABC):
                 if not self._enabled_cb(self._worker_name) and not triggered:
                     continue
             elif not self._enabled_cb(self._worker_name):
-                await self._sleep_or_trigger(interval)
-                continue
+                triggered = await self._sleep_or_trigger(interval)
+                if not triggered:
+                    continue
             await self._execute_cycle()
             if not self._run_on_startup:
                 await self._sleep_or_trigger(interval)

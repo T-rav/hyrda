@@ -163,6 +163,7 @@ class HydraFlowOrchestrator:
             "manifest_refresh": self._manifest_refresh_loop,
             "report_issue": self._report_issue_loop,
             "epic_monitor": self._epic_monitor_loop,
+            "epic_sweeper": self._epic_sweeper_loop,
             "worktree_gc": self._worktree_gc_loop,
             "runs_gc": self._runs_gc_loop,
             "adr_reviewer": self._adr_reviewer_loop,

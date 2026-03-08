@@ -269,6 +269,44 @@ class TestBaseBackgroundLoopTrigger:
         assert triggered is True
 
     @pytest.mark.asyncio
+    async def test_trigger__non_startup_disabled_worker_still_runs(
+        self, tmp_path: Path
+    ) -> None:
+        """With run_on_startup=False, trigger bypasses disabled check and runs work."""
+        config = ConfigFactory.create(repo_root=tmp_path / "repo")
+        bus = EventBus()
+        stop_event = asyncio.Event()
+        call_count = 0
+
+        def counting_work() -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            return {"n": call_count}
+
+        async def single_sleep(_seconds: int | float) -> None:
+            # Stop after first sleep so the loop exits
+            stop_event.set()
+            await asyncio.sleep(0)
+
+        loop = _StubLoop(
+            work_fn=counting_work,
+            worker_name="test_worker",
+            config=config,
+            bus=bus,
+            stop_event=stop_event,
+            status_cb=MagicMock(),
+            enabled_cb=lambda _: False,  # always disabled
+            sleep_fn=single_sleep,
+            run_on_startup=False,
+        )
+        # Trigger before run so _sleep_or_trigger returns True during disabled check
+        loop.trigger()
+        await loop.run()
+
+        # Trigger bypasses disabled check and work executes once
+        assert call_count == 1
+
+    @pytest.mark.asyncio
     async def test_trigger__run_on_startup_disabled_worker_still_runs(
         self, tmp_path: Path
     ) -> None:
