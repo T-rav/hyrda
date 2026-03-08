@@ -328,6 +328,66 @@ class TestBuildPrompt:
         assert "## Common Review Feedback" in prompt
         assert "Missing or insufficient test coverage" in prompt
 
+    def test_prompt_includes_escalation_block_when_threshold_met(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include mandatory escalation block when patterns exceed threshold."""
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        store = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
+        for i in range(3):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=200 + i,
+                    issue_number=50 + i,
+                    timestamp="2026-02-20T11:00:00Z",
+                    verdict=ReviewVerdict.REQUEST_CHANGES,
+                    summary="Missing coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Mandatory Requirements: Test Coverage" in prompt
+        assert "missing or insufficient test coverage" in prompt
+
+    def test_prompt_omits_escalation_below_threshold(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        from review_insights import ReviewInsightStore, ReviewRecord
+
+        store = ReviewInsightStore(config.repo_root / ".hydraflow" / "memory")
+        # Below default threshold of 3
+        for i in range(2):
+            store.append_review(
+                ReviewRecord(
+                    pr_number=300 + i,
+                    issue_number=70 + i,
+                    timestamp="2026-02-22T11:00:00Z",
+                    verdict=ReviewVerdict.REQUEST_CHANGES,
+                    summary="Missing coverage",
+                    fixes_made=False,
+                    categories=["missing_tests"],
+                )
+            )
+
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Mandatory Requirements" not in prompt
+        assert "## Common Review Feedback" in prompt
+
+    def test_prompt_includes_new_self_check_items(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Prompt should include the new dead-code and failure-path checklist items."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "New code is reachable" in prompt
+        assert "Tests verify issue requirements" in prompt
+        assert "Failure paths are tested" in prompt
+
     def test_prompt_works_without_review_data(
         self, config, event_bus: EventBus, issue
     ) -> None:
@@ -524,6 +584,56 @@ class TestBuildPrompt:
         assert "type hints" in prompt
         assert "edge cases" in prompt
         assert "empty inputs" in prompt
+
+    def test_pre_quality_review_checks_logic_errors(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should check for logic errors."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "logic errors" in prompt
+
+    def test_pre_quality_review_checks_failure_paths(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should verify failure paths are tested."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "failure/error paths" in prompt
+
+    def test_pre_quality_review_checks_missing_implementation(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Pre-quality review should check for gaps vs plan/issue description."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_pre_quality_review_prompt(issue, attempt=1)
+        assert "is anything missing" in prompt
+
+    def test_prompt_includes_test_step(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Implementation prompt should include a test-writing step."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Write tests" in prompt
+        assert "prevent regressions" in prompt
+
+    def test_self_check_includes_dead_code_check(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Self-check checklist should verify no dead code is introduced."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "New code is reachable" in prompt
+        assert "dead code" in prompt
+
+    def test_self_check_includes_issue_requirements_check(
+        self, config, event_bus: EventBus, issue
+    ) -> None:
+        """Self-check checklist should verify tests match issue requirements."""
+        runner = AgentRunner(config, event_bus)
+        prompt = runner._build_prompt(issue)
+        assert "Tests verify issue requirements" in prompt
 
     def test_prompt_forbids_already_satisfied(
         self, config, event_bus: EventBus, issue

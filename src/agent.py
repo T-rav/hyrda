@@ -49,6 +49,9 @@ class AgentRunner(BaseRunner):
 Run through this checklist before your final commit:
 
 - [ ] **Tests cover all new/changed code** — every new function, branch, and edge case has a test
+- [ ] **New code is reachable** — every new function/method is actually called from production code; no dead code
+- [ ] **Tests verify issue requirements** — tests validate the specific behavior the issue asks for, not just helper code
+- [ ] **Failure paths are tested** — error cases, rejected inputs, and unhappy paths have explicit tests
 - [ ] **No missing imports** — all new symbols are imported; removed code has imports cleaned up
 - [ ] **Type hints are correct** — function signatures match actual usage; no `Any` where a concrete type exists
 - [ ] **Edge cases handled** — empty inputs, None values, boundary conditions are addressed
