@@ -192,6 +192,8 @@ async def test_handle_returns_missing_path_error_for_add_repo() -> None:
 
     assert b'"status": "error"' in writer.buffer
     assert b'"Missing path"' in writer.buffer
+    assert writer.closed is True
+    assert writer.wait_closed_called is True
 
 
 @pytest.mark.asyncio
@@ -223,6 +225,8 @@ async def test_handle_returns_unknown_action_error() -> None:
 
     assert b'"status": "error"' in writer.buffer
     assert b'"unknown action"' in writer.buffer
+    assert writer.closed is True
+    assert writer.wait_closed_called is True
 
 
 @pytest.mark.asyncio
