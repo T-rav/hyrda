@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import sys
 from pathlib import Path
@@ -748,6 +749,132 @@ class TestUploadScreenshotGist:
 
 
 # ---------------------------------------------------------------------------
+# _gh_json_query
+# ---------------------------------------------------------------------------
+
+
+class TestGhJsonQuery:
+    """Unit tests for the shared JSON gh helper."""
+
+    @pytest.mark.asyncio
+    async def test_successful_query_returns_parsed_payload(self, event_bus, tmp_path):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._run_gh = AsyncMock(return_value='{"value": 42}')
+
+        result = await mgr._gh_json_query(
+            "gh",
+            "api",
+            "/test",
+            dry_run_return={},
+            error_log="unused",
+        )
+
+        assert result == {"value": 42}
+        mgr._run_gh.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_dry_run_short_circuits_and_logs(self, dry_config, event_bus, caplog):
+        mgr = _make_manager(dry_config, event_bus)
+        mgr._run_gh = AsyncMock()
+
+        with caplog.at_level(logging.INFO, logger="hydraflow.pr_manager"):
+            result = await mgr._gh_json_query(
+                "gh",
+                "api",
+                "/test",
+                dry_run_return=[],
+                dry_run_log="[dry-run] Would fetch data",
+                error_log="unused",
+            )
+
+        assert result == []
+        assert "[dry-run] Would fetch data" in caplog.text
+        mgr._run_gh.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_errors_log_warning_and_return_default(
+        self, event_bus, tmp_path, caplog
+    ):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._run_gh = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with caplog.at_level(logging.WARNING, logger="hydraflow.pr_manager"):
+            result = await mgr._gh_json_query(
+                "gh",
+                "api",
+                "/test",
+                dry_run_return=[],
+                error_log="Failed to fetch test payload",
+            )
+
+        assert result == []
+        assert "Failed to fetch test payload" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_log_exc_info_true_passes_exc_info_to_logger(
+        self, event_bus, tmp_path, caplog
+    ):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._run_gh = AsyncMock(side_effect=RuntimeError("traceable error"))
+
+        with caplog.at_level(logging.WARNING, logger="hydraflow.pr_manager"):
+            result = await mgr._gh_json_query(
+                "gh",
+                "api",
+                "/test",
+                dry_run_return={},
+                error_log="Fetch failed",
+                log_exc_info=True,
+            )
+
+        assert result == {}
+        assert "Fetch failed" in caplog.text
+        # exc_info=True causes traceback to appear in log record
+        assert any(r.exc_info is not None for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_error_level_debug_uses_debug_logger(
+        self, event_bus, tmp_path, caplog
+    ):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._run_gh = AsyncMock(side_effect=RuntimeError("minor error"))
+
+        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
+            result = await mgr._gh_json_query(
+                "gh",
+                "api",
+                "/test",
+                dry_run_return=[],
+                error_log="Minor fetch failure",
+                error_level="debug",
+            )
+
+        assert result == []
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        assert any("Minor fetch failure" in r.message for r in debug_records)
+
+
+# ---------------------------------------------------------------------------
 # push_branch
 # ---------------------------------------------------------------------------
 
@@ -768,6 +895,7 @@ async def test_push_branch_calls_git_push(config, event_bus, tmp_path):
     assert "-u" in args
     assert "origin" in args
     assert "agent/issue-42" in args
+    assert "--force-with-lease" not in args
 
 
 @pytest.mark.asyncio
@@ -786,50 +914,25 @@ async def test_push_branch_failure_returns_false(config, event_bus, tmp_path):
     assert result is False
 
 
-# ---------------------------------------------------------------------------
-# force_push_branch
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
-async def test_force_push_branch_success(config, event_bus, tmp_path):
+async def test_push_branch_force_true_adds_force_with_lease(
+    config, event_bus, tmp_path
+):
     manager = _make_manager(config, event_bus)
     mock_create = SubprocessMockBuilder().with_stdout("").build()
 
     with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await manager.force_push_branch(tmp_path, "agent/issue-42")
+        result = await manager.push_branch(tmp_path, "agent/issue-42", force=True)
 
     assert result is True
     args = mock_create.call_args[0]
-    assert args[0] == "git"
-    assert args[1] == "push"
     assert "--force-with-lease" in args
-    assert "--no-verify" in args
-    assert "-u" in args
-    assert "origin" in args
-    assert "agent/issue-42" in args
 
 
 @pytest.mark.asyncio
-async def test_force_push_branch_failure(config, event_bus, tmp_path):
-    manager = _make_manager(config, event_bus)
-    mock_create = (
-        SubprocessMockBuilder()
-        .with_returncode(1)
-        .with_stderr("error: failed to push")
-        .build()
-    )
-
-    with patch("asyncio.create_subprocess_exec", mock_create):
-        result = await manager.force_push_branch(tmp_path, "agent/issue-99")
-
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_force_push_branch_dry_run(dry_config, event_bus, tmp_path):
+async def test_push_branch_force_true_dry_run(dry_config, event_bus, tmp_path):
     manager = _make_manager(dry_config, event_bus)
-    result = await manager.force_push_branch(tmp_path, "agent/issue-42")
+    result = await manager.push_branch(tmp_path, "agent/issue-42", force=True)
     assert result is True
 
 
@@ -1419,6 +1522,98 @@ async def test_wait_for_ci_publishes_ci_check_events(event_bus, tmp_path):
     assert len(ci_events) >= 1
     assert ci_events[0].data["pr"] == 101
     assert ci_events[0].data["status"] == "passed"
+
+
+# ---------------------------------------------------------------------------
+# _sum_label_counts
+# ---------------------------------------------------------------------------
+
+
+class TestSumLabelCounts:
+    """Unit tests for the _sum_label_counts helper."""
+
+    @pytest.mark.asyncio
+    async def test_sums_counts_for_each_label(self, event_bus, tmp_path):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._search_github_count = AsyncMock(side_effect=[3, 7])
+
+        result = await mgr._sum_label_counts(
+            ["label-a", "label-b"],
+            query_builder=lambda label: f"repo:org/repo label:{label}",
+            log_context="count test labels",
+        )
+
+        assert result == 10
+        assert mgr._search_github_count.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_skips_failed_label_and_continues(self, event_bus, tmp_path, caplog):
+        """Errors from _search_github_count should be swallowed and logged at debug."""
+        import logging
+
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._search_github_count = AsyncMock(
+            side_effect=[RuntimeError("API rate limit"), 5]
+        )
+
+        with caplog.at_level(logging.DEBUG, logger="hydraflow.pr_manager"):
+            result = await mgr._sum_label_counts(
+                ["label-a", "label-b"],
+                query_builder=lambda label: f"repo:org/repo label:{label}",
+                log_context="count test labels",
+            )
+
+        assert result == 5
+        assert "count test labels" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_all_fail(self, event_bus, tmp_path):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._search_github_count = AsyncMock(side_effect=RuntimeError("network error"))
+
+        result = await mgr._sum_label_counts(
+            ["label-a", "label-b"],
+            query_builder=lambda label: f"repo:org/repo label:{label}",
+            log_context="count test labels",
+        )
+
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_and_makes_no_calls_for_empty_label_list(
+        self, event_bus, tmp_path
+    ):
+        cfg = ConfigFactory.create(
+            repo_root=tmp_path,
+            worktree_base=tmp_path / "worktrees",
+            state_file=tmp_path / "state.json",
+        )
+        mgr = _make_manager(cfg, event_bus)
+        mgr._search_github_count = AsyncMock()
+
+        result = await mgr._sum_label_counts(
+            [],
+            query_builder=lambda label: f"repo:org/repo label:{label}",
+            log_context="count empty labels",
+        )
+
+        assert result == 0
+        mgr._search_github_count.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,7 @@ def _mock_fetcher_noop(orch: HydraFlowOrchestrator) -> None:
     orch._fetcher.fetch_issue_by_number = AsyncMock(return_value=None)  # type: ignore[method-assign]
     orch._fetcher.fetch_reviewable_prs = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
     orch._enable_rerere = AsyncMock()  # type: ignore[method-assign]
+    orch._worktrees.sanitize_repo = AsyncMock()  # type: ignore[method-assign]
 
 
 def make_worker_result(
@@ -84,10 +85,10 @@ class TestInit:
         assert isinstance(orch._state, StateTracker)
 
     def test_creates_worktree_manager(self, config: HydraFlowConfig) -> None:
-        from worktree import WorktreeManager
+        from workspace import WorkspaceManager
 
         orch = HydraFlowOrchestrator(config)
-        assert isinstance(orch._worktrees, WorktreeManager)
+        assert isinstance(orch._worktrees, WorkspaceManager)
 
     def test_creates_agent_runner(self, config: HydraFlowConfig) -> None:
         from agent import AgentRunner
@@ -354,6 +355,33 @@ class TestRunLoop:
 
         assert "plan" in started
         assert "implement" in started
+
+
+class TestRunCallsSanitizeRepo:
+    """Verify run() calls sanitize_repo at startup and shutdown."""
+
+    @pytest.mark.asyncio
+    async def test_sanitize_repo_called_on_startup(
+        self, config: HydraFlowConfig
+    ) -> None:
+        orch = HydraFlowOrchestrator(config)
+        orch._prs.ensure_labels_exist = AsyncMock()  # type: ignore[method-assign]
+        _mock_fetcher_noop(orch)
+
+        async def plan_and_stop() -> list[PlanResult]:
+            orch._stop_event.set()
+            return []
+
+        orch._planner_phase.plan_issues = plan_and_stop  # type: ignore[method-assign]
+        orch._implementer.run_batch = AsyncMock(return_value=([], []))  # type: ignore[method-assign]
+
+        with patch.object(
+            orch._worktrees, "sanitize_repo", new_callable=AsyncMock
+        ) as mock_sanitize:
+            await orch.run()
+
+        # Called at startup + shutdown = at least 2 times
+        assert mock_sanitize.await_count >= 2
 
 
 # ---------------------------------------------------------------------------
