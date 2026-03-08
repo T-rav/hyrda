@@ -310,6 +310,8 @@ async def test_handle_logs_exception(caplog: pytest.LogCaptureFixture) -> None:
     class _Writer:
         def __init__(self):
             self.buffer = b""
+            self.closed = False
+            self.wait_closed_called = False
 
         def write(self, data: bytes) -> None:
             self.buffer += data
@@ -318,10 +320,10 @@ async def test_handle_logs_exception(caplog: pytest.LogCaptureFixture) -> None:
             return None
 
         def close(self) -> None:
-            pass
+            self.closed = True
 
         async def wait_closed(self) -> None:
-            pass
+            self.wait_closed_called = True
 
     writer = _Writer()
     with caplog.at_level("ERROR", logger="hf_cli.supervisor_service"):
@@ -330,6 +332,8 @@ async def test_handle_logs_exception(caplog: pytest.LogCaptureFixture) -> None:
     assert any("Unhandled error" in r.message for r in caplog.records)
     resp = json.loads(writer.buffer.decode())
     assert resp["status"] == "error"
+    assert writer.closed is True
+    assert writer.wait_closed_called is True
 
 
 @pytest.mark.asyncio
