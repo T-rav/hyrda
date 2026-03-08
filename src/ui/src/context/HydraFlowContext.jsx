@@ -1302,6 +1302,11 @@ export function HydraFlowProvider({ children }) {
     }
 
     ws.onclose = () => {
+      // Guard against stale connections: when selectedRepoSlug changes, the
+      // useEffect cleanup closes the old WS and immediately opens a new one
+      // (wsRef.current = new_ws). If this onclose fires after that, skip the
+      // reconnect to avoid opening a second connection to the wrong repo.
+      if (wsRef.current !== ws) return
       dispatch({ type: 'DISCONNECTED' })
       reconnectTimer.current = setTimeout(connect, 2000)
     }
