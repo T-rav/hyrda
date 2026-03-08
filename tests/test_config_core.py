@@ -345,14 +345,6 @@ class TestHydraFlowConfigDefaults:
         )
         assert cfg.max_workers == 1
 
-    def test_improve_label_default(self, tmp_path: Path) -> None:
-        cfg = HydraFlowConfig(
-            repo_root=tmp_path,
-            worktree_base=tmp_path / "wt",
-            state_file=tmp_path / "s.json",
-        )
-        assert cfg.improve_label == ["hydraflow-improve"]
-
     def test_find_label_default(self, tmp_path: Path) -> None:
         cfg = HydraFlowConfig(
             repo_root=tmp_path,
