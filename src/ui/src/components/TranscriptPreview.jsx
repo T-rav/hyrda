@@ -94,6 +94,7 @@ const styles = {
     fontWeight: 600,
     color: theme.accent,
     cursor: 'pointer',
+    transition: 'opacity 0.15s',
   },
   copyBtn: {
     fontSize: 10,
@@ -101,5 +102,6 @@ const styles = {
     color: theme.accent,
     cursor: 'pointer',
     marginLeft: 'auto',
+    transition: 'opacity 0.15s',
   },
 }
