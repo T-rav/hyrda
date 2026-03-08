@@ -2140,10 +2140,10 @@ class TestPriorFailureFeedback:
 
         phase, _, _ = make_implement_phase(config, [issue], agent_run=capturing_agent)
         phase._state.set_worker_result_meta(
-            42, {"error": "TDD red phase modified non-test files"}
+            issue.id, {"error": "TDD red phase modified non-test files"}
         )
 
-        await phase._run_implementation(issue, "agent/issue-42", 0, "")
+        await phase._run_implementation(issue, f"agent/issue-{issue.id}", 0, "")
 
         assert captured[0] == "TDD red phase modified non-test files"
 

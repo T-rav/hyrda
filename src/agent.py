@@ -445,6 +445,13 @@ Run through this checklist before your final commit:
 
         prior_failure_section = ""
         if prior_failure:
+            history_before += len(prior_failure)
+            prior_failure = self._summarize_for_prompt(
+                prior_failure,
+                max_chars=self._config.error_output_max_chars,
+                label="Prior failure",
+            )
+            history_after += len(prior_failure)
             prior_failure_section = (
                 f"\n\n## Prior Attempt Failure\n\n"
                 f"Your previous implementation attempt failed with the following error. "
