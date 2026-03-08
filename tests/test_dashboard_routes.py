@@ -11,6 +11,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from admin_tasks import TaskResult
+from dashboard_routes import _SUPERVISOR_UNAVAILABLE_MESSAGE
 from events import EventBus, EventType, HydraFlowEvent
 from models import HITLItem, SessionStatus
 
@@ -1195,8 +1197,8 @@ class TestControlStatusAppVersion:
         import json
 
         from dashboard_routes import create_router
-        from hf_cli.update_check import UpdateCheckResult
         from pr_manager import PRManager
+        from update_check import UpdateCheckResult
 
         monkeypatch.setattr(
             "dashboard_routes.load_cached_update_result",
@@ -4432,9 +4434,7 @@ class TestListSupervisedReposEndpoint:
         from types import SimpleNamespace
 
         def _raise_down():
-            raise RuntimeError(
-                "hf supervisor is not running. Run `hf run` inside a repo to start it."
-            )
+            raise RuntimeError(_SUPERVISOR_UNAVAILABLE_MESSAGE)
 
         router = self._make_router(
             config,
@@ -4581,6 +4581,130 @@ class TestEnsureRepoCompatibilityEndpoint:
         data = json.loads(resp.body)
         assert resp.status_code == 200
         assert data["status"] == "ok"
+
+
+class TestAdminTaskEndpoints:
+    """Tests for POST /api/admin/{task} endpoints."""
+
+    def _make_router(self, config, event_bus, state, tmp_path, registry=None):
+        from dashboard_routes import create_router
+        from pr_manager import PRManager
+
+        pr_mgr = PRManager(config, event_bus)
+        return create_router(
+            config=config,
+            event_bus=event_bus,
+            state=state,
+            pr_manager=pr_mgr,
+            get_orchestrator=lambda: None,
+            set_orchestrator=lambda o: None,
+            set_run_task=lambda t: None,
+            ui_dist_dir=tmp_path / "no-dist",
+            template_dir=tmp_path / "no-templates",
+            registry=registry,
+        )
+
+    def _find_post_endpoint(self, router, path):
+        for route in router.routes:
+            methods = getattr(route, "methods", set())
+            if (
+                hasattr(route, "path")
+                and route.path == path
+                and "POST" in methods
+                and hasattr(route, "endpoint")
+            ):
+                return route.endpoint
+        raise AssertionError(f"Route {path} not found")
+
+    @pytest.mark.asyncio
+    async def test_admin_prep_returns_task_payload(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        result = TaskResult(success=True, log=["ok"], warnings=[])
+        with patch(
+            "dashboard_routes.run_prep", new_callable=AsyncMock, return_value=result
+        ) as mock_prep:
+            router = self._make_router(config, event_bus, state, tmp_path)
+            endpoint = self._find_post_endpoint(router, "/api/admin/prep")
+            response = await endpoint(repo=None)
+        data = json.loads(response.body)
+        assert response.status_code == 200
+        assert data["status"] == "ok"
+        assert data["result"] == result.as_dict()
+        mock_prep.assert_awaited_once_with(config)
+
+    @pytest.mark.asyncio
+    async def test_admin_clean_failure_sets_error_status(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        result = TaskResult(success=False, log=["fail"], warnings=["warn"])
+        with patch(
+            "dashboard_routes.run_clean", new_callable=AsyncMock, return_value=result
+        ) as mock_clean:
+            router = self._make_router(config, event_bus, state, tmp_path)
+            endpoint = self._find_post_endpoint(router, "/api/admin/clean")
+            response = await endpoint(repo=None)
+        data = json.loads(response.body)
+        assert response.status_code == 500
+        assert data["status"] == "error"
+        assert data["result"] == result.as_dict()
+        mock_clean.assert_awaited_once_with(config)
+
+    @pytest.mark.asyncio
+    async def test_admin_task_unknown_repo_returns_404(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+
+        registry = MagicMock()
+        registry.get.return_value = None
+        with patch("dashboard_routes.run_prep", new_callable=AsyncMock) as mock_prep:
+            router = self._make_router(
+                config, event_bus, state, tmp_path, registry=registry
+            )
+            endpoint = self._find_post_endpoint(router, "/api/admin/prep")
+            response = await endpoint(repo="missing/repo")
+        data = json.loads(response.body)
+        assert response.status_code == 404
+        assert "Unknown repo" in data["error"]
+        mock_prep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_scaffold_targets_runtime_from_registry(
+        self, config, event_bus, state, tmp_path
+    ) -> None:
+        import json
+        from types import SimpleNamespace
+
+        from tests.helpers import ConfigFactory
+
+        other_config = ConfigFactory.create()
+        runtime = SimpleNamespace(
+            config=other_config,
+            state=state,
+            event_bus=event_bus,
+            orchestrator=None,
+        )
+        registry = MagicMock()
+        registry.get.return_value = runtime
+
+        result = TaskResult(success=True, log=["done"], warnings=[])
+        with patch(
+            "dashboard_routes.run_scaffold", new_callable=AsyncMock, return_value=result
+        ) as mock_scaffold:
+            router = self._make_router(
+                config, event_bus, state, tmp_path, registry=registry
+            )
+            endpoint = self._find_post_endpoint(router, "/api/admin/scaffold")
+            response = await endpoint(repo="owner/other-repo")
+        data = json.loads(response.body)
+        assert response.status_code == 200
+        assert data["status"] == "ok"
+        mock_scaffold.assert_awaited_once_with(other_config)
 
 
 # ---------------------------------------------------------------------------
@@ -7414,9 +7538,7 @@ class TestAddRepoByPath:
 
         mock_supervisor = MagicMock()
         mock_supervisor.register_repo = MagicMock(
-            side_effect=RuntimeError(
-                "hf supervisor is not running. Run `hf run` inside a repo to start it."
-            )
+            side_effect=RuntimeError(_SUPERVISOR_UNAVAILABLE_MESSAGE)
         )
         mock_supervisor_manager = MagicMock()
         mock_supervisor_manager.ensure_running = MagicMock(return_value=None)
@@ -7453,7 +7575,7 @@ class TestAddRepoByPath:
 
         data = json_mod.loads(resp.body)
         assert resp.status_code == 503
-        assert "hf supervisor is not running" in data["error"]
+        assert data["error"] == _SUPERVISOR_UNAVAILABLE_MESSAGE
         mock_supervisor_manager.ensure_running.assert_called_once()
         ensure_labels.assert_not_called()
 
@@ -7473,9 +7595,7 @@ class TestAddRepoByPath:
         mock_supervisor = MagicMock()
         mock_supervisor.register_repo = MagicMock(
             side_effect=[
-                RuntimeError(
-                    "hf supervisor is not running. Run `hf run` inside a repo to start it."
-                ),
+                RuntimeError(_SUPERVISOR_UNAVAILABLE_MESSAGE),
                 {"status": "ok"},
             ]
         )
