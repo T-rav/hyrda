@@ -1394,6 +1394,16 @@ def main(argv: list[str] | None = None) -> None:
         _run_replay(config, args.replay, args.replay_latest)
         sys.exit(0)
 
+    _logger = logging.getLogger("hydraflow.cli")
+    _logger.info(
+        "Loaded worker counts: triagers=%d planners=%d workers=%d reviewers=%d hitl=%d (config_file=%s)",
+        config.max_triagers,
+        config.max_planners,
+        config.max_workers,
+        config.max_reviewers,
+        config.max_hitl_workers,
+        config.config_file,
+    )
     asyncio.run(_run_main(config))
 
 
