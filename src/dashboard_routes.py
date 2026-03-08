@@ -722,7 +722,7 @@ def create_router(
             issue_number=issue_number,
             title=title,
             issue_url=str(row.get("issue_url", "")),
-            status=row_status,
+            status=_coerce_history_status(row_status),
             epic=str(row.get("epic", "")),
             crate_number=row.get("crate_number"),
             crate_title=str(row.get("crate_title", "")),
